@@ -1,0 +1,27 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*local"],
+  "tasks": {
+    "@sqd-pipes/pipes#build": {
+      "inputs": [
+        "src/**/*.ts",
+        "scripts/**/*.ts",
+        "package.json",
+        "README.md",
+        "../README.md",
+        "tsconfig.json",
+        "tsconfig.*.json",
+        "tsup.config.ts",
+        "../tsconfig.json"
+      ],
+      "outputs": ["dist/**", "dist-dts/**"],
+      "outputLogs": "new-only"
+    },
+    "pack": {
+      "dependsOn": ["build", "test:types"],
+      "inputs": ["dist/**"],
+      "outputs": ["package.tgz"],
+      "outputLogs": "new-only"
+    }
+  }
+}

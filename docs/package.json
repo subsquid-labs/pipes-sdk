@@ -1,0 +1,47 @@
+{
+  "name": "@sqd-pipes/streams",
+  "version": "0.0.13-alpha",
+  "main": "dist/index.js",
+  "license": "MIT",
+  "scripts": {
+    "build": "rm -rf dist/ && tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "watch": "tsc -w",
+    "prepublish": "yarn build",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.17.16",
+    "@types/node": "^22.13.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@sqd-pipes/pipes": "workspace:*",
+    "@subsquid/borsh": "^0.3.0",
+    "@subsquid/evm-abi": "^0.3.1",
+    "@subsquid/evm-codec": "^0.3.0",
+    "@subsquid/http-client": "^1.6.0",
+    "@subsquid/portal-client": "0.0.1-portal-api.da1f68",
+    "@subsquid/solana-objects": "^0.0.3",
+    "@subsquid/solana-stream": "1.0.0-portal-api.da1f68",
+    "@subsquid/util-internal": "^3.2.0",
+    "@subsquid/util-internal-hex": "1.2.2",
+    "lodash": "^4.17.21",
+    "pino": "^9.6.0",
+    "@solana/web3.js": "1.98.4"
+  },
+  "peerDependencies": {
+    "@clickhouse/client": "^1.11.2"
+  },
+  "peerDependenciesMeta": {
+    "@clickhouse/client": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": "<=23.9.0"
+  }
+}

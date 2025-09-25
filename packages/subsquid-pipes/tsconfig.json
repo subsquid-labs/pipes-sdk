@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "types": ["bun-types"],
+    "lib": ["dom"],
+    "paths": {
+      "~/*": ["src/*"]
+    },
+    "declaration": true,
+    "outDir": "dist",
+    "noEmit": true
+  },
+  "include": ["src", "scripts"]
+}
