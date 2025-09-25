@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  test_clickhouse:
+    image: bitnami/clickhouse:25.5.2
+    logging:
+      driver: none
+    ports:
+      - "10123:8123"
+    environment:
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=default
+      - ALLOW_EMPTY_PASSWORD=yes
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]

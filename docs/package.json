@@ -1,0 +1,19 @@
+{
+  "name": "@sqd-pipes/streams",
+  "private": true,
+  "module": "commonjs",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/lodash": "^4.17.16",
+    "@types/node": "^22.13.10",
+    "pino": "^9.10.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@clickhouse/client": "^1.11.2",
+    "@sqd-pipes/pipes": "workspace:*",
+    "@subsquid/evm-abi": "0.3.1",
+    "@subsquid/evm-codec": "0.3.0"
+  }
+}
