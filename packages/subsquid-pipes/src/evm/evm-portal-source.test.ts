@@ -3,7 +3,7 @@ import { EvmQueryBuilder } from '~/evm/evm-query-builder.js'
 import { closeMockPortal, createMockPortal, MockPortal } from '../tests/index.js'
 import { createEvmPortalSource, EvmPortalData } from './evm-portal-source.js'
 
-describe('Portal abstract stream', () => {
+describe('createEvmPortalSource', () => {
   let mockPortal: MockPortal
 
   afterEach(async () => {
@@ -39,10 +39,12 @@ describe('Portal abstract stream', () => {
     })
 
     for await (const { data } of stream) {
-      expect(data.blocks[0].logs).toBeInstanceOf(Array)
-      expect(data.blocks[0].traces).toBeInstanceOf(Array)
-      expect(data.blocks[0].transactions).toBeInstanceOf(Array)
-      expect(data.blocks[0].stateDiffs).toBeInstanceOf(Array)
+      const [block] = data.blocks
+
+      expect(block.logs).toBeInstanceOf(Array)
+      expect(block.traces).toBeInstanceOf(Array)
+      expect(block.transactions).toBeInstanceOf(Array)
+      expect(block.stateDiffs).toBeInstanceOf(Array)
     }
   })
 })

@@ -1,5 +1,4 @@
 import { createEvmPortalSource, sqliteFactoryDatabase } from '@sqd-pipes/pipes/evm'
-import { sqliteCacheAdapter } from '@sqd-pipes/pipes/portal-cache'
 import { erc20Transfers, uniswapV3, uniswapV3Decoder } from './decoders'
 
 /**

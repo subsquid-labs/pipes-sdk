@@ -34,14 +34,13 @@ export function createEvmPortalSource({
   }).pipe({
     profiler: { id: 'normalize_data' },
     transform: (data) => {
-      data.blocks =
-        data.blocks.map((block) => ({
-          ...block,
-          logs: block.logs || [],
-          transactions: block.transactions || [],
-          stateDiffs: block.stateDiffs || [],
-          traces: block.traces || [],
-        })) || []
+      data.blocks = data.blocks.map((block) => ({
+        ...block,
+        logs: block.logs || [],
+        transactions: block.transactions || [],
+        stateDiffs: block.stateDiffs || [],
+        traces: block.traces || [],
+      }))
 
       return data
     },

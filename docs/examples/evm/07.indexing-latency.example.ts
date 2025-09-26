@@ -21,7 +21,7 @@ import { createEvmPortalSource, createEvmRpcLatencyWatcher } from '@sqd-pipes/pi
 async function main() {
   // Create a stream of new blocks from the Base mainnet portal
   const stream = createEvmPortalSource({
-    portal: 'https://portal.sqd.dev/datasets/base-mainnet',
+    portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
     query: { from: 'latest' }, // Start from the latest block
   }).pipe(
     createEvmRpcLatencyWatcher({

@@ -1,8 +1,8 @@
-import { applyRangeBound, concatQueryLists, mergeRangeRequests, Range, RangeRequest } from '../core/query-builder.js'
+import { applyRangeBound, concatQueryLists, mergeRangeRequests, NaturalRange, Range } from '../core/query-builder.js'
 import { mergeDeep } from '../internal/object/merge-deep.js'
 import { PortalClient, solana } from '../portal-client/index.js'
 
-export type RequestOptions<R> = { range?: Range; request: R }
+export type RequestOptions<R> = { range: NaturalRange; request: R }
 export type LogRequestOptions = RequestOptions<solana.LogRequest>
 export type TransactionRequestOptions = RequestOptions<solana.TransactionRequest>
 export type InstructionRequestOptions = RequestOptions<solana.InstructionRequest>
@@ -10,12 +10,15 @@ export type TokenBalanceRequestOptions = RequestOptions<solana.TokenBalanceReque
 export type BalanceRequestOptions = RequestOptions<solana.BalanceRequest>
 export type RewardRequestOptions = RequestOptions<solana.RewardRequest>
 
-export type SolanaDataRequest = solana.DataRequest
+export type DataRequestRange = RangeRequest<solana.DataRequest>
 
-export type DataRequestRange = RangeRequest<SolanaDataRequest>
+export interface RangeRequest<Req, R = Range> {
+  range: R
+  request: Req
+}
 
 export class SolanaQueryBuilder {
-  private requests: RangeRequest<SolanaDataRequest>[] = []
+  protected requests: RangeRequest<solana.DataRequest, NaturalRange>[] = []
   protected fields: solana.FieldSelection = {}
 
   getType() {
@@ -42,7 +45,7 @@ export class SolanaQueryBuilder {
 
   private addRequest(type: keyof solana.DataRequest, options: RequestOptions<any>): this {
     this.requests.push({
-      range: options.range ?? { from: 0 },
+      range: options.range,
       request: {
         [type]: [...options.request],
       },
@@ -79,7 +82,7 @@ export class SolanaQueryBuilder {
     return this.addRequest('instructions', options)
   }
 
-  addRange(range: Range): this {
+  addRange(range: NaturalRange): this {
     this.requests.push({
       range,
     } as any)
@@ -93,7 +96,16 @@ export class SolanaQueryBuilder {
     bound: Range
     portal: PortalClient
   }): Promise<DataRequestRange[]> {
-    const ranges = mergeRangeRequests(this.requests, mergeDataRequests)
+    const latest = this.requests.some((r) => r.range.from === 'latest') ? await portal.getHead() : undefined
+
+    const ranges = mergeRangeRequests(
+      this.requests.map((r) => ({
+        range: r.range.from === 'latest' ? { from: latest?.number || 0 } : r.range,
+        request: r.request || {},
+      })),
+      mergeDataRequests,
+    )
+
     if (!ranges.length) {
       // FIXME request should be optional
       return [{ range: bound } as any]

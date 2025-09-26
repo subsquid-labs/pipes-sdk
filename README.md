@@ -59,10 +59,12 @@ void cli()
 ```
 
 See also:
-- [Combining pipes example](./docs/examples/02.combining-pipes.example.ts)
-- [Factory example](./docs/examples/03.factory.example.ts)
-- [Clickhouse integration](./docs/examples/04.clickhouse.example.ts)
-- [And many others](./docs/examples)
+
+- [EVM examples](./docs/examples/evm)
+  - [Combining pipes example](docs/examples/evm/02.combining-pipes.example.ts)
+  - [Factory example](docs/examples/evm/03.factory.example.ts)
+  - [Clickhouse integration](docs/examples/evm/04.clickhouse.example.ts)
+- [Solana examples](./docs/examples/solana)
 
 ## Licensing
 

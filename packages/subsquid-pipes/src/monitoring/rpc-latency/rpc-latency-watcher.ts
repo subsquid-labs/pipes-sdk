@@ -72,7 +72,7 @@ type Latency = {
   rpc: {
     url: string
     portalDelayMs: number
-    receivedAt: Date
+    receivedAt?: Date
   }[]
 }
 
