@@ -2,9 +2,9 @@ import { isForkException, PortalClient, PortalClientOptions } from '~/portal-cli
 import { last } from '../internal/array.js'
 import { createPortalCache, PortalCacheOptions } from '../portal-cache/portal-cache.js'
 import { createDefaultLogger, Logger } from './logger.js'
+import { createMetricsServer, Metrics, MetricsServer } from './metrics-server.js'
 import { Profiler, Span } from './profiling.js'
 import { ProgressState, progressTracker, StartState } from './progress-tracker.js'
-import { createPrometheusMetrics, Metrics } from './prometheus-metrics.js'
 import { hashQuery, QueryBuilder } from './query-builder.js'
 import { Target } from './target.js'
 import { ExtensionOut, extendTransformer, Transformer, TransformerOptions } from './transformer.js'
@@ -25,6 +25,8 @@ export type BatchCtx = {
      * and enabling rollback to a valid chain state when a fork is detected.
      */
     rollbackChain: BlockCursor[]
+
+    progress?: ProgressState
   }
   bytes: number
   lastBlockReceivedAt: Date
@@ -39,6 +41,8 @@ export type PortalBatch<T = any> = { data: T; ctx: BatchCtx }
 export function cursorFromHeader(block: { header: { number: number; hash: string; timestamp?: number } }): BlockCursor {
   return { number: block.header.number, hash: block.header.hash, timestamp: block.header.timestamp }
 }
+
+const noop = () => {}
 
 export type PortalSourceOptions<Query> = {
   portal: string | PortalClientOptions | PortalClient
@@ -64,7 +68,7 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
   readonly #queryBuilder: Q
   readonly #logger: Logger
   readonly #portal: PortalClient
-  readonly #metrics: Metrics
+  readonly #metricServer: MetricsServer
 
   #started = false
   #transformers: Transformer<any, any>[] = []
@@ -85,17 +89,23 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
       ...options,
       profiler: typeof options.profiler === 'undefined' ? process.env.NODE_ENV !== 'production' : options.profiler,
     }
-    this.#metrics = createPrometheusMetrics()
+    this.#metricServer = createMetricsServer()
 
-    if (progress !== false && progress !== null) {
-      this.#transformers.push(
-        progressTracker({
-          logger: this.#logger,
-          interval: 5000,
-          ...progress,
-        }),
-      )
+    if (progress === false || progress === null) {
+      progress = {
+        interval: -1,
+      }
     }
+
+    // Built-in transformers
+    this.#transformers.push(
+      progressTracker({
+        logger: this.#logger,
+        interval: progress?.interval,
+        onStart: progress?.onStart,
+        onProgress: progress?.onProgress,
+      }),
+    )
   }
 
   async *read(cursor?: BlockCursor): AsyncIterable<PortalBatch<T>> {
@@ -170,7 +180,7 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
 
             // Context for transformers
             profiler: batchSpan,
-            metrics: this.#metrics,
+            metrics: this.#metricServer.metrics,
             logger: this.#logger,
           }
 
@@ -256,13 +266,13 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
 
     const span = profiler.start('transformers')
     const ctx = this.context(span, {
-      metrics: this.#metrics,
+      metrics: this.#metricServer.metrics,
       state,
     })
     await Promise.all(this.#transformers.map((t) => t.start(ctx)))
     span.end()
 
-    this.#metrics.start()
+    this.#metricServer.start()
 
     profiler.end()
 
@@ -281,9 +291,9 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
     await Promise.all(this.#transformers.map((t) => t.stop(ctx)))
     span.end()
 
-    await this.#metrics.stop()
-
     profiler.end()
+
+    await this.#metricServer.stop()
   }
 
   pipeTo(target: Target<T>) {
@@ -298,8 +308,7 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
           try {
             for await (const batch of self.read(cursor)) {
               yield batch as PortalBatch<T>
-
-              batch.ctx.profiler.end()
+              self.batchEnd(batch.ctx)
             }
             return
           } catch (e) {
@@ -337,12 +346,17 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
     })
   }
 
+  batchEnd(ctx: BatchCtx) {
+    ctx.profiler.end()
+    this.#metricServer.registerBatchEnd(ctx)
+  }
+
   async *[Symbol.asyncIterator](): AsyncIterator<PortalBatch<T>> {
     await this.configure()
 
     try {
       for await (const batch of this.read()) {
-        batch.ctx.profiler.end()
+        this.batchEnd(batch.ctx)
         yield batch
       }
     } catch (e) {

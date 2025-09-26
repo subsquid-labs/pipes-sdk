@@ -1,5 +1,6 @@
 packages:
   - packages/subsquid-pipes
+  - packages/pipe-ui
   - docs
 
 onlyBuiltDependencies:

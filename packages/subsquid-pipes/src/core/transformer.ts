@@ -1,11 +1,15 @@
 import { PortalClient } from '~/portal-client/index.js'
 import { Logger } from './logger.js'
+import { Metrics } from './metrics-server.js'
 import { BatchCtx } from './portal-source.js'
 import { ProfilerOptions } from './profiling.js'
-import { Metrics } from './prometheus-metrics.js'
 import { BlockCursor, Ctx } from './types.js'
 
-export type StartCtx = { state: { current?: BlockCursor; initial: number }; logger: Logger; metrics: Metrics }
+export type StartCtx = {
+  state: { current?: BlockCursor; initial: number }
+  logger: Logger
+  metrics: Metrics
+}
 export type QueryCtx<Query> = { queryBuilder: Query; portal: PortalClient; logger: Logger }
 
 export interface TransformerOptions<In, Out, Query = any> {

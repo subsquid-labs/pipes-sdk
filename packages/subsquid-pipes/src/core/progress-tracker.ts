@@ -44,8 +44,8 @@ class ProgressHistory {
 
   constructor(options?: ProgressHistoryOptions) {
     this.#options = {
-      maxHistory: 50,
-      maxStaleSeconds: 30,
+      maxHistory: 100,
+      maxStaleSeconds: 10,
 
       ...options,
     }
@@ -125,8 +125,11 @@ export type ProgressTrackerOptions = {
   logger?: Logger
 }
 
-export function progressTracker<T>({ onProgress, onStart, interval, logger }: ProgressTrackerOptions) {
+export function progressTracker<T>({ onProgress, onStart, interval = 5000, logger }: ProgressTrackerOptions) {
   let ticker: NodeJS.Timeout
+  let currentBlock: Gauge
+  let lastState: ProgressState
+
   const history = new ProgressHistory()
 
   if (!onStart) {
@@ -155,12 +158,12 @@ export function progressTracker<T>({ onProgress, onStart, interval, logger }: Pr
     }
   }
 
-  let currentBlock: Gauge
-
   return createTransformer<T, T>({
     profiler: { id: 'progress_tracker' },
     start: ({ metrics, state }) => {
-      ticker = setInterval(() => onProgress(history.calculate()), interval)
+      if (interval > 0) {
+        ticker = setInterval(() => onProgress(lastState), interval)
+      }
 
       onStart(state)
 
@@ -179,6 +182,10 @@ export function progressTracker<T>({ onProgress, onStart, interval, logger }: Pr
       if (state.current?.number) {
         currentBlock.set(state.current.number)
       }
+
+      lastState = history.calculate()
+
+      state.progress = lastState
 
       return data
     },

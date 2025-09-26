@@ -28,11 +28,8 @@ async function cli() {
     }),
   )
 
-  for await (const { data, ctx } of stream) {
-    // console.log('-------------------------------------')
+  for await (const { data } of stream) {
     console.log(`parsed ${data.swaps.length} swaps`)
-    console.log(ctx.profiler.toString())
-    // console.log('-------------------------------------')
   }
 }
 
