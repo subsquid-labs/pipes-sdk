@@ -22,7 +22,6 @@
     "@types/better-sqlite3": "7.6.13",
     "@types/express": "4.17.17",
     "@types/node": "22.13.10",
-    "@types/ws": "8.18.1",
     "@vitest/coverage-v8": "3.2.4",
     "typescript": "5.9.2",
     "vitest": "3.2.4"
@@ -40,17 +39,13 @@
   },
   "peerDependencies": {
     "@clickhouse/client": "^1.12.1",
-    "better-sqlite3": "^12.2.0",
-    "ws": "^8.18.3"
+    "better-sqlite3": "^12.2.0"
   },
   "peerDependenciesMeta": {
     "@clickhouse/client": {
       "optional": true
     },
     "better-sqlite3": {
-      "optional": true
-    },
-    "ws": {
       "optional": true
     }
   },

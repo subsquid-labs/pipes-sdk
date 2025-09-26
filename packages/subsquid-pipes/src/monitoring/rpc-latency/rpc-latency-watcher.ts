@@ -1,13 +1,12 @@
-import WebSocket from 'ws'
-import { createTransformer, Transformer } from '~/core/index.js'
-import { PortalBatch } from '~/core/portal-source.js'
-import { arrayify } from '~/internal/array.js'
+import { createTransformer } from '~/core/index.js'
+import { arrayify, last } from '~/internal/array.js'
+import { WebSocketListener } from '~/monitoring/rpc-latency/ws-client.js'
 
 type RpcHead = { number: number; timestamp: Date; receivedAt: Date }
 
-class RpcLatencyWatcher {
+export abstract class RpcLatencyWatcher {
   nodes: Map<string, Map<number, RpcHead>> = new Map()
-  watchers: (() => void)[] = []
+  watchers: WebSocketListener[] = []
 
   constructor(protected rpcUrl: string | string[]) {
     this.rpcUrl = arrayify(rpcUrl)
@@ -19,8 +18,8 @@ class RpcLatencyWatcher {
   }
 
   stop() {
-    for (const stop of this.watchers) {
-      stop()
+    for (const listener of this.watchers) {
+      listener.stop()
     }
   }
 
@@ -37,16 +36,18 @@ class RpcLatencyWatcher {
   }
 
   lookup(number: number) {
-    const res: { url: string; timestamp?: Date; receivedAt?: Date }[] = []
+    const res: { url: string; timestamp: Date; receivedAt: Date }[] = []
 
     for (const [url, blocks] of this.nodes) {
       const block = blocks.get(number)
 
-      res.push({
-        url,
-        timestamp: block?.timestamp,
-        receivedAt: block?.receivedAt,
-      })
+      if (block) {
+        res.push({
+          url,
+          timestamp: block.timestamp,
+          receivedAt: block.receivedAt,
+        })
+      }
     }
 
     return res
@@ -59,156 +60,67 @@ class RpcLatencyWatcher {
     chain.set(block.number, block)
   }
 
-  watch(url: string) {
-    let ws: WebSocket | undefined
-    let subscriptionId: string | undefined
-    let stopped = false
-    let reconnectAttempts = 0
-    const subscribeRequestId = 1
-    const unsubscribeRequestId = 2
-    let reconnectTimer: NodeJS.Timeout | undefined
-
-    const scheduleReconnect = () => {
-      if (stopped) return
-      const baseDelayMs = 500
-      const maxDelayMs = 15_000
-      const delay = Math.min(maxDelayMs, baseDelayMs * 2 ** reconnectAttempts)
-      const jitter = Math.floor(Math.random() * 250)
-      reconnectTimer = setTimeout(connect, delay + jitter)
-      reconnectAttempts += 1
-    }
-
-    const connect = () => {
-      if (stopped) return
-      try {
-        ws = new WebSocket(url)
-      } catch {
-        scheduleReconnect()
-        return
-      }
-
-      const sendSubscribe = () => {
-        if (!ws || ws.readyState !== WebSocket.OPEN) return
-        const payload = {
-          jsonrpc: '2.0',
-          id: subscribeRequestId,
-          method: 'eth_subscribe',
-          params: ['newHeads'],
-        }
-        ws.send(JSON.stringify(payload))
-      }
-
-      ws.on('open', () => {
-        reconnectAttempts = 0
-        subscriptionId = undefined
-        sendSubscribe()
-      })
-
-      ws.on('message', (data) => {
-        try {
-          const message = JSON.parse(data.toString()) as any
-
-          if (message?.id === subscribeRequestId && message?.result && !subscriptionId) {
-            subscriptionId = message.result as string
-            return
-          }
-
-          if (
-            message?.method === 'eth_subscription' &&
-            message?.params?.subscription &&
-            (subscriptionId == null || message.params.subscription === subscriptionId)
-          ) {
-            const head = message.params.result
-
-            this.addBlock(url, {
-              number: parseInt(head.number),
-              timestamp: new Date(parseInt(head.timestamp) * 1000),
-              receivedAt: new Date(),
-            })
-          }
-        } catch {
-          // ignore malformed messages
-        }
-      })
-
-      ws.on('error', () => {
-        // Let 'close' drive reconnection
-      })
-
-      ws.on('close', () => {
-        subscriptionId = undefined
-        if (!stopped) scheduleReconnect()
-      })
-    }
-
-    connect()
-
-    // Return a stop function that unsubscribes and closes the socket and cancels retries
-    return () => {
-      stopped = true
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer)
-        reconnectTimer = undefined
-      }
-      const current = ws
-      ws = undefined
-      try {
-        if (current && current.readyState === WebSocket.OPEN && subscriptionId) {
-          const payload = {
-            jsonrpc: '2.0',
-            id: unsubscribeRequestId,
-            method: 'eth_unsubscribe',
-            params: [subscriptionId],
-          }
-          current.send(JSON.stringify(payload))
-        }
-      } catch {}
-      try {
-        current?.close()
-      } catch {}
-    }
-  }
+  abstract watch(url: string): WebSocketListener
 }
 
-export function rpcLatencyWatcher({ rpcUrl }: { rpcUrl: string[] }): Transformer<
-  PortalBatch<{ blocks: { header: { number: number; timestamp: number } }[] }>,
-  {
-    number: number
-    timestamp: Date
-    portal: { receivedAt: Date }
-    rpc: { url: string; receivedAt?: Date; portalDelay?: string }[]
+type Latency = {
+  number: number
+  timestamp: Date
+  portal: {
+    receivedAt: Date
+  }
+  rpc: {
+    url: string
+    portalDelayMs: number
+    receivedAt: Date
   }[]
-> {
-  const cache = new RpcLatencyWatcher(rpcUrl)
+}
 
-  return createTransformer({
-    profiler: { id: 'rpc-latency' },
-    transform: ({ data }) => {
-      // FIXME!
-      return data.blocks.flatMap((b: any) => {
-        return {
-          number: b.header.number,
-          timestamp: new Date(b.header.timestamp * 1000),
-          portal: {
-            receivedAt: new Date(b.meta.receivedAt),
-          },
-          rpc: cache.lookup(b.header.number).map((r) => {
-            if (!r.receivedAt) return { url: r.url, portalDelay: 'unknown' }
-
-            const portalDelay = b.meta.receivedAt.getTime() - r.receivedAt.getTime()
-
-            return {
-              url: r.url,
-              receivedAt: r.receivedAt,
-              timestamp: r.timestamp,
-              portalDelay: portalDelay < 0 ? `${portalDelay}ms` : `+${portalDelay}ms`,
-            }
-          }),
+export function rpcLatencyWatcher(watcher: RpcLatencyWatcher) {
+  return createTransformer<
+    {
+      blocks: {
+        header: {
+          number: number
+          timestamp: number
         }
+      }[]
+    },
+    Latency | null
+  >({
+    profiler: { id: 'rpc-latency' },
+    query: ({ queryBuilder }) => {
+      queryBuilder.addFields({
+        block: {
+          number: true,
+          timestamp: true,
+        },
       })
     },
+    transform: (data, ctx): Latency | null => {
+      const receivedAt = ctx.lastBlockReceivedAt
+      const block = last(data.blocks)
+
+      if (!block) return null
+
+      const lookup = watcher.lookup(block.header.number)
+      if (lookup.length === 0) return null
+
+      return {
+        number: block.header.number,
+        timestamp: new Date(block.header.timestamp * 1000),
+        portal: { receivedAt },
+        rpc: lookup.map((r) => {
+          return {
+            url: r.url,
+            receivedAt: r.receivedAt,
+            portalDelayMs: receivedAt.getTime() - r.receivedAt.getTime(),
+          }
+        }),
+      }
+    },
     stop() {
-      cache.stop()
+      watcher.stop()
     },
   })
 }

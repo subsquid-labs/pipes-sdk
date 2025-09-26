@@ -27,6 +27,7 @@ export type BatchCtx = {
     rollbackChain: BlockCursor[]
   }
   bytes: number
+  lastBlockReceivedAt: Date
   query: { hash: string; raw: any }
   profiler: Profiler
   metrics: Metrics
@@ -137,6 +138,7 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
         readSpan.end()
 
         if (rawBatch.blocks.length > 0) {
+          // TODO WTF with any?
           const lastBatchBlock: { header: { number: number } } = last(rawBatch.blocks as any)
           const finalized = rawBatch.finalizedHead?.number
 
@@ -146,13 +148,17 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
           )
 
           const ctx: BatchCtx = {
+            // Batch metadata
+            bytes: rawBatch.meta.bytes,
+            lastBlockReceivedAt: rawBatch.lastBlockReceivedAt,
             head: {
               finalized: rawBatch.finalizedHead,
               // TODO expose from portal
               unfinalized: undefined,
             },
-            metrics: this.#metrics,
-            bytes: rawBatch.meta.bytes,
+            query: { hash: hashQuery(query), raw: query },
+
+            // State of the stream at the moment of this batch processing
             state: {
               initial: initial,
               current: cursorFromHeader(lastBatchBlock as any),
@@ -161,11 +167,10 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
                 ? rawBatch.blocks.filter((b) => b.header.number >= finalized).map(cursorFromHeader)
                 : [],
             },
+
+            // Context for transformers
             profiler: batchSpan,
-            query: {
-              hash: hashQuery(query),
-              raw: query,
-            },
+            metrics: this.#metrics,
             logger: this.#logger,
           }
 

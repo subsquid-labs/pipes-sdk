@@ -76,6 +76,7 @@ export type PortalStreamData<B> = {
   meta: {
     bytes: number
   }
+  lastBlockReceivedAt: Date
 }
 
 export interface PortalStream<B> extends AsyncIterable<PortalStreamData<B>> {}
@@ -313,7 +314,7 @@ function createPortalStream<Q extends Query>(
 
     // we are on head
     if (!('stream' in res)) {
-      await buffer.put({ blocks: [], meta: { bytes: 0 }, finalizedHead })
+      await buffer.put({ blocks: [], meta: { bytes: 0 }, finalizedHead, lastBlockReceivedAt: new Date() })
       buffer.flush()
       if (headPollInterval > 0) {
         await wait(headPollInterval, buffer.signal)
@@ -330,6 +331,8 @@ function createPortalStream<Q extends Query>(
         let data = await iterator.next()
         if (data.done) break
 
+        const lastBlockReceivedAt = new Date()
+
         let blocks: GetBlock<Q>[] = []
         let bytes = 0
 
@@ -342,7 +345,7 @@ function createPortalStream<Q extends Query>(
           parentBlockHash = block.header.hash
         }
 
-        await buffer.put({ blocks, finalizedHead, meta: { bytes } })
+        await buffer.put({ blocks, finalizedHead, meta: { bytes }, lastBlockReceivedAt })
       }
     } catch (err) {
       if (buffer.signal.aborted || isStreamAbortedError(err)) {
@@ -438,12 +441,13 @@ class PortalStreamBuffer<B> {
     }
 
     if (this.buffer == null) {
-      this.buffer = { blocks: [], meta: { bytes: 0 } }
+      this.buffer = { blocks: [], meta: { bytes: 0 }, lastBlockReceivedAt: new Date() }
     }
 
     this.buffer.blocks.push(...data.blocks)
     this.buffer.finalizedHead = data.finalizedHead
     this.buffer.meta.bytes += data.meta.bytes
+    this.buffer.lastBlockReceivedAt = data.lastBlockReceivedAt
 
     this.putFuture.resolve()
 

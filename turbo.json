@@ -4,8 +4,8 @@
   "tasks": {
     "@sqd-pipes/pipes#build": {
       "inputs": [
-        "src/**/*.js",
-        "scripts/**/*.js",
+        "src/**/*.ts",
+        "scripts/**/*.ts",
         "package.json",
         "README.md",
         "../README.md",
