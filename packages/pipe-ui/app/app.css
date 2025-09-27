@@ -135,3 +135,12 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+.bg-gradient-primary {
+  background: linear-gradient(180deg, #191c23, #131315);
+  border: 1px solid oklch(1 0 0 / 2%);
+  padding: 1px;
+}
+.gradient-primary {
+  background: linear-gradient(#d0a9e2, transparent 85%), linear-gradient(90deg, #433485, #b53cdd);
+}

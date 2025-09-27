@@ -1,8 +1,11 @@
 import NumberFlow from '@number-flow/react'
+
+// @ts-ignore
+import { Sparklines, SparklinesLine, SparklinesNormalBand } from 'react-sparklines'
+
 import { useMetrics } from '~/api/prometheus'
 import { Button } from '~/components/ui/button'
 import { Logo } from '~/components/ui/logo'
-import { Progress } from '~/components/ui/progress'
 import { displayEstimatedTime, humanBytes } from '~/dashboard/formatters'
 
 export function Dashboard() {
@@ -51,16 +54,38 @@ export function Dashboard() {
               </div>
             </div>
 
-            <Progress className="h-3 mb-2" value={data.progress.percent} />
-
-            <div className="mb-2 flex items-center justify-between text-sm font-medium text-muted-foreground">
-              <div>{data.speed.blocksPerSecond.toFixed(data.speed.blocksPerSecond > 1 ? 0 : 2)} blocks/seconds</div>
-              <div>{humanBytes(data.speed.bytesPerSecond)}/s</div>
+            <div className="w-full h-4 overflow-hidden rounded-full bg-gradient-primary mb-2">
+              <div
+                style={{
+                  width: data.progress.percent.toFixed(0) + '%',
+                }}
+                className="h-full gradient-primary rounded-full"
+              />
             </div>
 
-            <div className="mb-2 flex text-secondary-foreground gap-2">
-              <div>Memory</div>
-              <div>{humanBytes(data.usage.memory)}</div>
+            <div className="mb-2 flex items-center justify-between text-sm font-medium text-muted-foreground">
+              <div className="flex items-center gap-1">
+                <div className="w-[100px] mr-2 bg-primary/2 rounded-md overflow-hidden border">
+                  <Sparklines min={0} data={data.history.map((v) => v.blocksPerSecond)} width={100} height={32}>
+                    <SparklinesLine color="rgba(255,255,255,0.5)" />
+                  </Sparklines>
+                </div>
+                <div className="text-xs">
+                  <div>{data.speed.blocksPerSecond.toFixed(data.speed.blocksPerSecond > 1 ? 0 : 2)} blocks/sec</div>
+                  <div>{humanBytes(data.speed.blocksPerSecond)}/sec</div>
+                </div>
+              </div>
+              <div className="flex">
+                <div className="w-[100px] mr-2 bg-primary/2 rounded-md overflow-hidden border">
+                  <Sparklines min={0} data={data.history.map((v) => v.memory)} width={100} height={32}>
+                    <SparklinesLine color="rgba(255,255,255,0.5)" />
+                  </Sparklines>
+                </div>
+                <div className="text-xs">
+                  <div>Memory</div>
+                  <div>{humanBytes(data.usage.memory)}</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
