@@ -1,0 +1,21 @@
+import { commonAbis, createEvmDecoder, createEvmPortalSource } from '@sqd-pipes/pipes/evm'
+
+async function cli() {
+  const stream = createEvmPortalSource({
+    portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
+  }).pipe(
+    createEvmDecoder({
+      profiler: { id: 'erc20_transfers' },
+      range: { from: '12,000,000' },
+      events: {
+        transfers: commonAbis.erc20.events.Transfer,
+      },
+    }),
+  )
+
+  for await (const { data } of stream) {
+    console.log(`parsed ${data.transfers.length} transfers`)
+  }
+}
+
+void cli()

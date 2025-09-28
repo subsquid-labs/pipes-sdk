@@ -55,8 +55,13 @@ function calcStats({
 }
 
 export function ProfilerResult({ profiler, useSelfTime }: { profiler: ProfilerResult; useSelfTime: boolean }) {
-  const fontSize = 10 + 4 * (profiler.percent / 100)
-  const opacity = 0.5 + 0.5 * (profiler.percent / 100)
+  // Use square root scale for better visualization
+  // so that small differences are more visible
+  // and large differences are less dominant
+  const threshold = Math.pow(profiler.percent / 100, 0.5)
+
+  const fontSize = 9 + 6 * threshold
+  const opacity = 0.3 + 0.7 * threshold
 
   const time = useSelfTime ? profiler.selfTime : profiler.totalTime
   return (
