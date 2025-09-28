@@ -11,6 +11,7 @@ import client, {
   SummaryConfiguration,
 } from 'prom-client'
 import { BatchCtx } from '~/core/portal-source.js'
+import { Profiler } from '~/core/profiling.js'
 import { npmVersion } from '~/version.js'
 
 // re-export types
@@ -52,6 +53,37 @@ export type Stats = {
   }
 }
 
+function parseDate(date: any): Date | null {
+  date = Array.isArray(date) ? date[0] : date
+
+  if (typeof date !== 'string') {
+    return null
+  }
+
+  const parsed = new Date(date)
+  if (isNaN(parsed.getTime())) {
+    return null
+  }
+
+  return parsed
+}
+
+type ProfilerResult = {
+  name: string
+  totalTime: number
+  children: ProfilerResult[]
+}
+
+function transformProfiler(profiler: Profiler): ProfilerResult {
+  return {
+    name: profiler.name,
+    totalTime: profiler.elapsed,
+    children: profiler.children.map((c) => transformProfiler(c)),
+  }
+}
+
+const MAX_HISTORY = 50
+
 export function createMetricsServer(): MetricsServer {
   const registry = new client.Registry()
   const app = express()
@@ -81,6 +113,7 @@ export function createMetricsServer(): MetricsServer {
   })
 
   let lastBatch: BatchCtx
+  let profilers: { profiler: ProfilerResult; collectedAt: Date }[] = []
 
   app.get('/stats', async (req, res) => {
     const memory = await registry.getSingleMetric('process_resident_memory_bytes')?.get()
@@ -108,6 +141,14 @@ export function createMetricsServer(): MetricsServer {
     res.json(data)
   })
 
+  app.get('/profiler', async (req, res) => {
+    const from = parseDate(req.query['from']) || new Date(0)
+
+    return res.json({
+      profilers: profilers.filter((p) => p.collectedAt >= from).map((p) => p.profiler),
+    })
+  })
+
   app.get('/metrics', async (req, res) => {
     res.set('Content-Type', registry.contentType)
     res.end(await registry.metrics())
@@ -130,6 +171,10 @@ export function createMetricsServer(): MetricsServer {
     },
     registerBatchEnd(ctx: BatchCtx) {
       lastBatch = ctx
+
+      profilers.push({ profiler: transformProfiler(ctx.profiler), collectedAt: new Date() })
+
+      profilers = profilers.slice(-MAX_HISTORY)
     },
     metrics: {
       counter<T extends string>(options: CounterConfiguration<T>): Counter<T> {

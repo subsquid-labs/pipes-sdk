@@ -4,9 +4,23 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
+  /*"IBM Plex Mono", !**! */
+
   --font-sans:
     "JetBrains Mono", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
     "Noto Color Emoji";
+
+  /*--font-sans:*/
+  /*  "Anonymous Pro", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",*/
+  /*  "Noto Color Emoji";*/
+
+  /*--font-sans:*/
+  /*  "Share Tech Mono", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",*/
+  /*  "Noto Color Emoji";*/
+
+  /*--font-sans:*/
+  /*  "Fira Code", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",*/
+  /*  "Noto Color Emoji";*/
 }
 
 html,
@@ -143,4 +157,23 @@ body {
 }
 .gradient-primary {
   background: linear-gradient(#d0a9e2, transparent 85%), linear-gradient(90deg, #433485, #b53cdd);
+}
+
+.test {
+  position: relative;
+  overflow: hidden;
+}
+.test:after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 1));
+  opacity: 0.6;
+}
+
+.text-xxs {
+  font-size: 0.7rem;
 }

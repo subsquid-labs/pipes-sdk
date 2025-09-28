@@ -64,3 +64,30 @@ export function useMetrics() {
     refetchInterval: 1000,
   })
 }
+
+export type ApiProfilerResult = {
+  name: string
+  totalTime: number
+  children: ApiProfilerResult[]
+}
+
+export function useProfilers() {
+  const url = 'http://127.0.0.1:9090/profiler'
+
+  return useQuery({
+    queryKey: ['profiler'],
+    queryFn: async () => {
+      try {
+        const res = await client<{ profilers: ApiProfilerResult[] }>(url, {
+          withCredentials: true,
+        })
+
+        return res.data
+      } catch (error) {
+        return null
+      }
+    },
+
+    refetchInterval: 1000,
+  })
+}

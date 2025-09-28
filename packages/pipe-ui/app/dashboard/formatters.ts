@@ -22,7 +22,7 @@ export function displayEstimatedTime(seconds?: number) {
   }
 
   if (seconds < 1) {
-    return 'IN SYNC'
+    return 'Synced'
   }
 
   // less than an hour
@@ -30,7 +30,7 @@ export function displayEstimatedTime(seconds?: number) {
     const minutes = Math.floor(seconds / 60)
     const remainingSeconds = Math.floor(seconds % 60)
 
-    return `, ~${minutes}m ${remainingSeconds}s`
+    return `ETA: ${minutes}m ${remainingSeconds}s`
   }
 
   // less than a day
@@ -38,12 +38,12 @@ export function displayEstimatedTime(seconds?: number) {
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
 
-    return `, ~${hours}h ${minutes}m`
+    return `ETA: ${hours}h ${minutes}m`
   }
 
   // days....:(
   const days = Math.floor(seconds / 86400)
   const hours = Math.floor((seconds % 86400) / 3600)
 
-  return `, ~${days}d ${hours}h`
+  return `ETA: ${days}d ${hours}h`
 }

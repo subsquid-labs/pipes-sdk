@@ -3,6 +3,9 @@
   "private": true,
   "module": "commonjs",
   "license": "MIT",
+  "scripts": {
+    "build": "tsc"
+  },
   "devDependencies": {
     "@types/lodash": "^4.17.16",
     "@types/node": "^22.13.10",

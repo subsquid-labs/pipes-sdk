@@ -3,9 +3,9 @@
   "compilerOptions": {
     "baseUrl": ".",
     "module": "commonjs",
+    "moduleResolution": "node",
     "declaration": true,
-    "outDir": "dist",
-    "noEmit": true
+    "outDir": "dist"
   },
   "include": ["examples"]
 }

@@ -6,9 +6,14 @@ import { arrayify } from '../internal/array.js'
 export type ProfilerOptions = { id: string } | null
 
 export interface Profiler {
+  name: string
+  elapsed: number
+  children: Profiler[]
+
   start(name: string): Profiler
   addLabels(labels: string | string[]): Profiler
   end(): Profiler
+  transform<T>(transformer: (span: Span, level: number) => T, level?: number): T[]
 }
 
 export class Span implements Profiler {
@@ -54,6 +59,10 @@ export class Span implements Profiler {
 }
 
 export class DummyProfiler implements Profiler {
+  name: string = ''
+  elapsed: number = 0
+  children: DummyProfiler[] = []
+
   start(name: string | null) {
     return this
   }
@@ -62,5 +71,8 @@ export class DummyProfiler implements Profiler {
   }
   end() {
     return this
+  }
+  transform<T>(transformer: (span: Span, level: number) => T, level: number = 0): T[] {
+    return []
   }
 }
