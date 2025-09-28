@@ -210,7 +210,7 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
   }
 
   async applyTransformers(ctx: BatchCtx, data: T) {
-    const span = ctx.profiler.start('transformers')
+    const span = ctx.profiler.start('apply transformers')
 
     for (const transformer of this.#transformers) {
       data = await transformer.transform(data, {

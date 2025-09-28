@@ -177,3 +177,9 @@ body {
 .text-xxs {
   font-size: 0.7rem;
 }
+
+.dotted-background {
+  background-image: radial-gradient(circle at center, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px; /* Controls the spacing between dots */
+  background-repeat: repeat; /* Ensures the pattern repeats */
+}

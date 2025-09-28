@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { type ApiProfilerResult, useProfilers } from '~/api/metrics'
-import { Switch } from '~/components/ui/switch'
 
 type ProfilerResult = {
   name: string
@@ -66,19 +65,19 @@ export function ProfilerResult({ profiler, useSelfTime }: { profiler: ProfilerRe
   const time = useSelfTime ? profiler.selfTime : profiler.totalTime
   return (
     <div className="my-1">
-      <div style={{ fontSize }} className=" p-2 relative">
+      <div style={{ fontSize }} className="p-2 relative">
         <div
-          className="absolute top-0 left-0 right-0 bottom-0 bg-[#b53cdd]/10 rounded-md"
-          style={{ maxWidth: `${profiler.percent}%` }}
-        >
-          {' '}
-        </div>
-        <div className="font-medium" style={{ opacity }}>
-          {profiler.name}
-        </div>
-        <div style={{ opacity }} className="flex leading-none text-muted-foreground gap-2">
-          <div>{time.toFixed(2)}ms</div>
-          <div>{profiler.percent.toFixed(2)}%</div>
+          className="absolute top-0 left-0 bottom-0 bg-[#b53cdd]/10 rounded-md z-1 transition-width duration-300 ease-out"
+          style={{ width: `${profiler.percent}%` }}
+        />
+        <div className="relative">
+          <div className="font-medium" style={{ opacity }}>
+            {profiler.name}
+          </div>
+          <div style={{ opacity }} className="flex leading-none text-muted-foreground gap-2">
+            <div>{time.toFixed(2)}ms</div>
+            <div>{profiler.percent.toFixed(2)}%</div>
+          </div>
         </div>
       </div>
       <div className="pl-6">
@@ -106,10 +105,13 @@ export function Profiler() {
     },
   })
 
+  const totalSamples = (data?.profilers || []).length
+
   return (
-    <div>
-      <h2 className="flex font-medium text-sm mb-0 gap-2">
+    <div className="mb-4">
+      <h2 className="flex justify-between font-medium text-sm mb-1 gap-2">
         <div>Profiler</div>
+
         {/*<Switch*/}
         {/*  onCheckedChange={(checked) => {*/}
         {/*    setUseSelfTime(checked)*/}
@@ -120,10 +122,14 @@ export function Profiler() {
         {/*</Switch>*/}
       </h2>
 
-      <div className="max-h-[400px] overflow-auto mb-4 border rounded-md px-1">
+      <div className="max-h-[400px] overflow-auto border rounded-md px-1 dotted-background">
         {res.map((profiler) => (
           <ProfilerResult key={profiler.name} profiler={profiler} useSelfTime={useSelfTime} />
         ))}
+      </div>
+
+      <div className="text-xxs mt-1 flex justify-end">
+        <div className="text-muted">{totalSamples} samples</div>
       </div>
     </div>
   )

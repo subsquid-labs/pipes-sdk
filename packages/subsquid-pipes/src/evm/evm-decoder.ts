@@ -86,7 +86,7 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
   const decodedRange = parsePortalRange(range)
 
   return createTransformer({
-    profiler: profiler || { id: 'evm-decoder' },
+    profiler: profiler || { id: 'EVM decoder' },
     query: async ({ queryBuilder, logger, portal }) => {
       if (!Factory.isFactory(contracts)) {
         queryBuilder.addFields(decodedEventFields).addLog({
@@ -104,7 +104,7 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
       if (preIndexRange) {
         await contracts.startPreIndex({
           portal,
-          logger: logger.child({ module: 'pre-index' }),
+          logger: logger.child({ module: 'pre index' }),
         })
 
         queryBuilder.addLog({
@@ -171,7 +171,7 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
       }
 
       if (Factory.isFactory(contracts)) {
-        const span = ctx.profiler.start('factory decode')
+        const span = ctx.profiler.start('factory event decode')
         for (const block of data.blocks) {
           if (!block.logs) continue
           for (const log of block.logs) {
@@ -183,7 +183,7 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
         span.end()
       }
 
-      const span = Factory.isFactory(contracts) ? ctx.profiler.start('child decode') : undefined
+      const span = Factory.isFactory(contracts) ? ctx.profiler.start('child events decode') : undefined
       for (const block of data.blocks) {
         if (!block.logs) continue
 
@@ -234,7 +234,7 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
       span?.end()
 
       if (Factory.isFactory(contracts)) {
-        const span = ctx.profiler.start('factory persist')
+        const span = ctx.profiler.start('persist factory state')
         await contracts.persist()
         span.end()
       }

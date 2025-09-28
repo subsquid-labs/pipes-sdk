@@ -159,7 +159,7 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
   }
 
   return createTransformer<T, T>({
-    profiler: { id: 'progress_tracker' },
+    profiler: { id: 'track progress' },
     start: ({ metrics, state }) => {
       if (interval > 0) {
         ticker = setInterval(() => onProgress(lastState), interval)
