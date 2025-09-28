@@ -65,15 +65,23 @@ export function ProfilerResult({ profiler, useSelfTime }: { profiler: ProfilerRe
 
   const time = useSelfTime ? profiler.selfTime : profiler.totalTime
   return (
-    <div className="my-2">
-      <div style={{ opacity, fontSize }} className="font-medium p-2 bg-[#b53cdd]/10 rounded-md">
-        <div>{profiler.name}</div>
-        <div className="flex leading-none text-muted-foreground gap-2">
+    <div className="my-1">
+      <div style={{ fontSize }} className=" p-2 relative">
+        <div
+          className="absolute top-0 left-0 right-0 bottom-0 bg-[#b53cdd]/10 rounded-md"
+          style={{ maxWidth: `${profiler.percent}%` }}
+        >
+          {' '}
+        </div>
+        <div className="font-medium" style={{ opacity }}>
+          {profiler.name}
+        </div>
+        <div style={{ opacity }} className="flex leading-none text-muted-foreground gap-2">
           <div>{time.toFixed(2)}ms</div>
           <div>{profiler.percent.toFixed(2)}%</div>
         </div>
       </div>
-      <div className="pl-4">
+      <div className="pl-6">
         {profiler.children.map((child) => (
           <ProfilerResult key={child.name} profiler={child} useSelfTime={useSelfTime} />
         ))}
@@ -112,7 +120,7 @@ export function Profiler() {
         {/*</Switch>*/}
       </h2>
 
-      <div className="max-h-[400px] overflow-auto mb-4">
+      <div className="max-h-[400px] overflow-auto mb-4 border rounded-md px-1">
         {res.map((profiler) => (
           <ProfilerResult key={profiler.name} profiler={profiler} useSelfTime={useSelfTime} />
         ))}
