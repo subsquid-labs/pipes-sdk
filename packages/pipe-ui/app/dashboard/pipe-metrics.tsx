@@ -30,7 +30,7 @@ export function PipeMetrics() {
           <h1 className="mt-4 mb-2 font-medium">Get started with Pipes SDK</h1>
 
           <div className="mt-4">
-            <h4 className="mb-1">Install npm package</h4>
+            <h4 className="mb-1">1. Install npm package</h4>
             <div className="text-xs bg-gray-900 rounded-md p-2">
               <SyntaxHighlighter customStyle={{ background: 'transparent' }} language="bash" style={theme}>
                 npm install @sqd-pipes/pipes
@@ -39,12 +39,17 @@ export function PipeMetrics() {
           </div>
 
           <div className="mt-4">
-            <h4 className="mb-1">Run a simple pipe</h4>
+            <h4 className="mb-1">2. Run a simple pipe</h4>
             <div className="text-xs bg-gray-900 rounded-md p-2">
               <SyntaxHighlighter customStyle={{ background: 'transparent' }} language="typescript" style={theme}>
                 {example}
               </SyntaxHighlighter>
             </div>
+          </div>
+
+          <div className="mt-4">
+            <h4 className="mb-1">3. Explore docs</h4>
+            <div className="text-xs text-muted">// TODO</div>
           </div>
         </div>
       </div>

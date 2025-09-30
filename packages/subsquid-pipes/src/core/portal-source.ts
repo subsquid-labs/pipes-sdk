@@ -356,8 +356,8 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
 
     try {
       for await (const batch of this.read()) {
-        this.batchEnd(batch.ctx)
         yield batch
+        this.batchEnd(batch.ctx)
       }
     } catch (e) {
       throw e
