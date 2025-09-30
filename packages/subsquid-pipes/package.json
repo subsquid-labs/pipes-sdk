@@ -16,12 +16,13 @@
   "scripts": {
     "build": "tsx scripts/build.js",
     "lint": "biome check . --write",
-    "test": "vitest run"
+    "test": "vitest run",
+    "coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@types/better-sqlite3": "7.6.13",
     "@types/express": "4.17.23",
-    "@types/node": "22.18.7",
+    "@types/node": "22.14.1",
     "@vitest/coverage-v8": "3.2.4",
     "typescript": "5.9.2",
     "vitest": "3.2.4"

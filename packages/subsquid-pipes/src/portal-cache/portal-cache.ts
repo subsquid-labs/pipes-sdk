@@ -5,7 +5,9 @@ import { hashQuery } from '../core/query-builder.js'
 import { last } from '../internal/array.js'
 import { GetBlock, PortalClient, PortalStream, PortalStreamData, Query } from '../portal-client/index.js'
 
+// @ts-ignore
 const compressAsync = promisify('zstdCompress' in zlib ? (zlib.zstdCompress as any) : zlib.gzip)
+// @ts-ignore
 const decompressAsync = promisify('zstdDecompress' in zlib ? (zlib.zstdDecompress as any) : zlib.gunzip)
 
 export type SaveBatch = { queryHash: string; cursors: { first: BlockCursor; last: BlockCursor }; data: Buffer }

@@ -12,7 +12,9 @@ const transformBatch = ({
     head,
     query,
     bytes,
-    state,
+    // exclude progress as it contains timers and dynamic data
+    state: { progress, ...state },
+
     // do not include it in the test
     metrics,
     logger,
