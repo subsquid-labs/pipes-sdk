@@ -17,11 +17,9 @@
       "outputs": ["dist/**", "dist-dts/**"],
       "outputLogs": "new-only"
     },
-    "pack": {
-      "dependsOn": ["build"],
-      "inputs": ["dist/**"],
-      "outputs": ["package.tgz"],
-      "outputLogs": "new-only"
+    "@sqd-pipes/docs#build": {
+      "inputs": ["examples/**/*.ts", "tsconfig.json"],
+      "outputs": ["dist/**"]
     }
   }
 }

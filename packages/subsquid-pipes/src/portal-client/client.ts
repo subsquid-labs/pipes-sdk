@@ -1,5 +1,5 @@
 import { HttpBody, HttpClient, HttpClientOptions, HttpError, HttpResponse, RequestOptions } from '@subsquid/http-client'
-import { createFuture, Future, last, unexpectedCase, wait, withErrorContext } from '@subsquid/util-internal'
+import { createFuture, Future, unexpectedCase, wait, withErrorContext } from '@subsquid/util-internal'
 import { Readable } from 'stream'
 
 import { npmVersion } from '~/version.js'
@@ -234,11 +234,7 @@ export class PortalClient {
         ...options,
         json: query,
         stream: true,
-      }).catch(
-        withErrorContext({
-          query: query,
-        }),
-      )
+      }).catch(withErrorContext({ query }))
 
       switch (res.status) {
         case 200:
@@ -537,40 +533,41 @@ class PortalStreamBuffer<B> {
   }
 }
 
-async function* splitLines(chunks: AsyncIterable<Uint8Array>) {
-  let splitter = new LineSplitter()
+export async function* splitLines(chunks: AsyncIterable<Uint8Array>) {
+  const splitter = new LineSplitter()
+
   for await (let chunk of chunks) {
-    let lines = splitter.push(chunk)
-    if (lines) yield lines
+    const lines = splitter.push(chunk)
+    if (lines.length) {
+      yield lines
+    }
   }
-  let lastLine = splitter.end()
-  if (lastLine) yield [lastLine]
+
+  const lastLine = splitter.end()
+  if (lastLine) {
+    yield [lastLine]
+  }
 }
 
 class LineSplitter {
   private decoder = new TextDecoder('utf8')
   private line = ''
 
-  push(data: Uint8Array): string[] | undefined {
+  push(data: Uint8Array): string[] {
     let s = this.decoder.decode(data)
-    if (!s) return
+    if (!s) return []
+
     let lines = s.split('\n')
     if (lines.length === 1) {
       this.line += lines[0]
     } else {
-      let result: string[] = []
       lines[0] = this.line + lines[0]
-      this.line = last(lines)
-      for (let i = 0; i < lines.length - 1; i++) {
-        let line = lines[i]
-        if (line) {
-          result.push(line)
-        }
-      }
-      if (result.length > 0) return result
+      this.line = lines.pop() || ''
+
+      return lines.filter((l) => l)
     }
 
-    return
+    return []
   }
 
   end(): string | undefined {
