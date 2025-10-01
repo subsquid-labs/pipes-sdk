@@ -30,7 +30,7 @@ export function uniswapV3Decoder({
   }
 }) {
   return createEvmDecoder({
-    profiler: { id: 'uniswap_v3_decode' },
+    profiler: { id: 'UniswapV3 decode' },
     range: parsePortalRange(range),
     contracts: createFactory({
       address: factory.address,

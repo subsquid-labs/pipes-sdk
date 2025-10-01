@@ -88,7 +88,7 @@ export function rpcLatencyWatcher(watcher: RpcLatencyWatcher) {
     },
     Latency | null
   >({
-    profiler: { id: 'rpc-latency' },
+    profiler: { id: 'rpc latency' },
     query: ({ queryBuilder }) => {
       queryBuilder.addFields({
         block: {
