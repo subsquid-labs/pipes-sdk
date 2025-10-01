@@ -1,7 +1,7 @@
 packages:
   - packages/subsquid-pipes
   - packages/pipe-ui
-  - docs
+#  - docs
 
 onlyBuiltDependencies:
   - better-sqlite3
