@@ -1,0 +1,56 @@
+name: Test @subsquid/pipes
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'packages/subsquid-pipes/**'
+      - '.github/workflows/test-subsquid-pipes.yml'
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'packages/subsquid-pipes/**'
+      - '.github/workflows/test-subsquid-pipes.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:23.3
+        ports:
+          - 8123:8123
+          - 9000:9000
+        options: >-
+          --health-cmd "clickhouse-client --query 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build packages
+        run: pnpm run build
+
+      - name: Run subsquid-pipes tests
+        working-directory: packages/subsquid-pipes
+        env:
+          TEST_CLICKHOUSE_URL: http://localhost:8123
+          TEST_CLICKHOUSE_USERNAME: default
+        run: pnpm test
