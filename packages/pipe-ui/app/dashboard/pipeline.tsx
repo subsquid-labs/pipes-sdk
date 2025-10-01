@@ -1,59 +1,21 @@
 import NumberFlow from '@number-flow/react'
-import { Terminal } from 'lucide-react'
 // @ts-ignore
 import { Sparklines, SparklinesLine } from 'react-sparklines'
-import SyntaxHighlighter from 'react-syntax-highlighter'
-import theme from 'react-syntax-highlighter/dist/esm/styles/hljs/hybrid'
 import { useMetrics } from '~/api/metrics'
-import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { displayEstimatedTime, humanBytes } from '~/dashboard/formatters'
+import { PipelineDisconnected } from '~/dashboard/pipeline-disconnected'
 import { Profiler } from '~/dashboard/profiler'
-import example from './code.example?raw'
+import { TransformationExemplar } from '~/dashboard/transformation-exemplar'
 
 const sparklineStyle = { fill: '#d0a9e2' }
 // const sparklineStyle = { fill: 'rgba(255,255,255,1)' }
 const sparklineColor = 'rgba(255,255,255,0.5)'
 
-export function PipeMetrics() {
+export function Pipeline() {
   const { data } = useMetrics()
 
-  if (!data)
-    return (
-      <div className="w-full ">
-        <Alert variant="destructive">
-          <Terminal />
-          <AlertTitle>Your pipe is offline!</AlertTitle>
-          <AlertDescription>Please ensure that you run a pipeline and expose the metrics server</AlertDescription>
-        </Alert>
-
-        <div className="mt-10">
-          <h1 className="mt-4 mb-2 font-medium">Get started with Pipes SDK</h1>
-
-          <div className="mt-4">
-            <h4 className="mb-1">1. Install npm package</h4>
-            <div className="text-xs bg-gray-900 rounded-md p-2">
-              <SyntaxHighlighter customStyle={{ background: 'transparent' }} language="bash" style={theme}>
-                npm install @sqd-pipes/pipes
-              </SyntaxHighlighter>
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <h4 className="mb-1">2. Run a simple pipe</h4>
-            <div className="text-xs bg-gray-900 rounded-md p-2">
-              <SyntaxHighlighter customStyle={{ background: 'transparent' }} language="typescript" style={theme}>
-                {example}
-              </SyntaxHighlighter>
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <h4 className="mb-1">3. Explore docs</h4>
-            <div className="text-xs text-muted">// TODO</div>
-          </div>
-        </div>
-      </div>
-    )
+  if (!data) return <PipelineDisconnected />
 
   return (
     <div className="w-full">
@@ -83,7 +45,20 @@ export function PipeMetrics() {
           <div>{data.progress.percent.toFixed(2)}%</div>
         </div>
 
-        <Profiler />
+        <Tabs className="mt-4 mb-6" defaultValue="profiler">
+          <TabsList className="bg-gray-950">
+            <TabsTrigger className="" value="profiler">
+              Profiler
+            </TabsTrigger>
+            <TabsTrigger value="data-flow">Data flow</TabsTrigger>
+          </TabsList>
+          <TabsContent value="profiler">
+            <Profiler />
+          </TabsContent>
+          <TabsContent value="data-flow">
+            <TransformationExemplar />
+          </TabsContent>
+        </Tabs>
 
         <div className="flex items-center justify-between font-medium text-muted-foreground text-xs opacity-60">
           <div className="flex items-center gap-1">

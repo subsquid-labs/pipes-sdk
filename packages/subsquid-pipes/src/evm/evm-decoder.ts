@@ -17,9 +17,7 @@ type DecodedEvent<D, C> = {
   event: D
   contract: string
   blockNumber: number
-  transactionHash: string
   timestamp: Date
-  logIndex: number
   rawEvent: Log<{
     address: true
     topics: true
@@ -213,12 +211,10 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
 
               eventArray.push({
                 event: decoded,
-                rawEvent: log,
-                factory: factoryEvent,
                 contract: log.address,
+                rawEvent: log,
                 blockNumber: block.header.number,
-                logIndex: log.logIndex,
-                transactionHash: log.transactionHash,
+                factory: factoryEvent,
                 timestamp: new Date(block.header.timestamp * 1000),
               })
             } catch (error) {

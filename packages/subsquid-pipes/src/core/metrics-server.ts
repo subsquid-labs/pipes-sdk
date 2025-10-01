@@ -27,7 +27,7 @@ export type Metrics = {
 export type MetricsServer = {
   start(): void
   stop(): Promise<void>
-  registerBatchEnd(ctx: BatchCtx): void
+  addBatchContext(ctx: BatchCtx): void
   metrics: Metrics
 }
 
@@ -82,6 +82,29 @@ function transformProfiler(profiler: Profiler): ProfilerResult {
   }
 }
 
+type TransformationResult = {
+  name: string
+  data: any
+  children: TransformationResult[]
+}
+
+function transformExemplar(profiler: Profiler): TransformationResult {
+  return {
+    name: profiler.name,
+    data: JSON.stringify(profiler.data, (k: string, v: any) => {
+      if (typeof v === 'bigint') {
+        return v.toString() + 'n'
+      }
+      if (v instanceof Date) {
+        return v.toISOString()
+      }
+
+      return v
+    }),
+    children: profiler.children.map((c) => transformExemplar(c)),
+  }
+}
+
 const MAX_HISTORY = 50
 
 export function createMetricsServer(): MetricsServer {
@@ -114,6 +137,7 @@ export function createMetricsServer(): MetricsServer {
 
   let lastBatch: BatchCtx
   let profilers: { profiler: ProfilerResult; collectedAt: Date }[] = []
+  let transformationExemplar: TransformationResult
 
   app.get('/stats', async (req, res) => {
     const memory = await registry.getSingleMetric('process_resident_memory_bytes')?.get()
@@ -138,14 +162,26 @@ export function createMetricsServer(): MetricsServer {
       },
     }
 
-    res.json(data)
+    res.json({ payload: data })
   })
 
   app.get('/profiler', async (req, res) => {
     const from = parseDate(req.query['from']) || new Date(0)
 
     return res.json({
-      profilers: profilers.filter((p) => p.collectedAt >= from).map((p) => p.profiler),
+      // FIXME: remove hardcoded field
+      payload: {
+        enabled: true,
+        profilers: profilers.filter((p) => p.collectedAt >= from).map((p) => p.profiler),
+      },
+    })
+  })
+
+  app.get('/exemplars/transformation', async (req, res) => {
+    return res.json({
+      payload: {
+        exemplar: transformationExemplar,
+      },
     })
   })
 
@@ -169,13 +205,20 @@ export function createMetricsServer(): MetricsServer {
         server?.close((_) => done())
       })
     },
-    registerBatchEnd(ctx: BatchCtx) {
+
+    addBatchContext(ctx: BatchCtx) {
       lastBatch = ctx
 
-      profilers.push({ profiler: transformProfiler(ctx.profiler), collectedAt: new Date() })
+      transformationExemplar = transformExemplar(ctx.profiler)
+
+      profilers.push({
+        profiler: transformProfiler(ctx.profiler),
+        collectedAt: new Date(),
+      })
 
       profilers = profilers.slice(-MAX_HISTORY)
     },
+
     metrics: {
       counter<T extends string>(options: CounterConfiguration<T>): Counter<T> {
         const exits = metrics.get(options.name)

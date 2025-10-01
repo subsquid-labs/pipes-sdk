@@ -27,6 +27,7 @@ async function main() {
     createEvmRpcLatencyWatcher({
       rpcUrl: ['https://base.drpc.org', 'https://base-rpc.publicnode.com'], // RPC endpoints to monitor
     }).pipe({
+      profiler: { id: 'expose metrics' },
       transform: (latency, { metrics }) => {
         if (!latency) return // Skip if no latency data
 

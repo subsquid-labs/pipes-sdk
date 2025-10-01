@@ -10,6 +10,8 @@ export type StartCtx = {
   logger: Logger
   metrics: Metrics
 }
+
+export type StopCtx = { logger: Logger }
 export type QueryCtx<Query> = { queryBuilder: Query; portal: PortalClient; logger: Logger }
 
 export interface TransformerOptions<In, Out, Query = any> {
@@ -18,7 +20,7 @@ export interface TransformerOptions<In, Out, Query = any> {
   start?: (ctx: StartCtx) => Promise<void> | void
   transform: (data: In, ctx: BatchCtx) => Promise<Out> | Out
   fork?: (cursor: BlockCursor, ctx: Ctx) => Promise<void> | void
-  stop?: (ctx: { logger: Logger }) => Promise<void> | void
+  stop?: (ctx: StopCtx) => Promise<void> | void
 }
 
 export class Transformer<In, Out, Query = any> {
@@ -57,6 +59,7 @@ export class Transformer<In, Out, Query = any> {
   async transform(data: In, ctx: BatchCtx): Promise<Out> {
     const span = ctx.profiler.start(this.options.profiler?.id || 'anonymous')
     let res = await this.options.transform(data, { ...ctx, profiler: span })
+    span.addTransformerExemplar(res)
 
     if (this.children.length === 0) {
       span.end()

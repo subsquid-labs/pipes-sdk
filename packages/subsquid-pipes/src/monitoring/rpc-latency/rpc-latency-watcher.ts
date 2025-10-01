@@ -98,9 +98,9 @@ export function rpcLatencyWatcher(watcher: RpcLatencyWatcher) {
       })
     },
     transform: (data, ctx): Latency | null => {
-      const receivedAt = ctx.lastBlockReceivedAt
-      const block = last(data.blocks)
+      const receivedAt = ctx.meta.lastBlockReceivedAt
 
+      const block = last(data.blocks)
       if (!block) return null
 
       const lookup = watcher.lookup(block.header.number)

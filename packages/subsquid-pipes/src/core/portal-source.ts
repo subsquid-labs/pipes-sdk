@@ -1,10 +1,10 @@
 import { isForkException, PortalClient, PortalClientOptions } from '~/portal-client/index.js'
 import { last } from '../internal/array.js'
 import { createPortalCache, PortalCacheOptions } from '../portal-cache/portal-cache.js'
-import { createDefaultLogger, Logger } from './logger.js'
+import { Logger } from './logger.js'
 import { createMetricsServer, Metrics, MetricsServer } from './metrics-server.js'
 import { Profiler, Span } from './profiling.js'
-import { ProgressState, progressTracker, StartState } from './progress-tracker.js'
+import { ProgressState, StartState } from './progress-tracker.js'
 import { hashQuery, QueryBuilder } from './query-builder.js'
 import { Target } from './target.js'
 import { ExtensionOut, extendTransformer, Transformer, TransformerOptions } from './transformer.js'
@@ -28,8 +28,10 @@ export type BatchCtx = {
 
     progress?: ProgressState
   }
-  bytes: number
-  lastBlockReceivedAt: Date
+  meta: {
+    bytesSize: number
+    lastBlockReceivedAt: Date
+  }
   query: { hash: string; raw: any }
   profiler: Profiler
   metrics: Metrics
@@ -41,8 +43,6 @@ export type PortalBatch<T = any> = { data: T; ctx: BatchCtx }
 export function cursorFromHeader(block: { header: { number: number; hash: string; timestamp?: number } }): BlockCursor {
   return { number: block.header.number, hash: block.header.hash, timestamp: block.header.timestamp }
 }
-
-const noop = () => {}
 
 export type PortalSourceOptions<Query> = {
   portal: string | PortalClientOptions | PortalClient
@@ -128,13 +128,13 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
 
       let batchSpan = Span.root('batch', this.#options.profiler)
       let readSpan = batchSpan.start('fetch data')
-      for await (const rawBatch of source) {
+      for await (const batch of source) {
         readSpan.end()
 
-        if (rawBatch.blocks.length > 0) {
+        if (batch.blocks.length > 0) {
           // TODO WTF with any?
-          const lastBatchBlock: { header: { number: number } } = last(rawBatch.blocks as any)
-          const finalized = rawBatch.finalizedHead?.number
+          const lastBatchBlock: { header: { number: number } } = last(batch.blocks as any)
+          const finalized = batch.finalizedHead?.number
 
           const lastBlockNumber = Math.max(
             Math.min(last(ranges)?.range?.to || finalized || Infinity),
@@ -143,10 +143,12 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
 
           const ctx: BatchCtx = {
             // Batch metadata
-            bytes: rawBatch.meta.bytes,
-            lastBlockReceivedAt: rawBatch.lastBlockReceivedAt,
+            meta: {
+              bytesSize: batch.meta.bytes,
+              lastBlockReceivedAt: batch.lastBlockReceivedAt,
+            },
             head: {
-              finalized: rawBatch.finalizedHead,
+              finalized: batch.finalizedHead,
               // TODO expose from portal
               unfinalized: undefined,
             },
@@ -158,7 +160,7 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
               current: cursorFromHeader(lastBatchBlock as any),
               last: lastBlockNumber,
               rollbackChain: finalized
-                ? rawBatch.blocks.filter((b) => b.header.number >= finalized).map(cursorFromHeader)
+                ? batch.blocks.filter((b) => b.header.number >= finalized).map(cursorFromHeader)
                 : [],
             },
 
@@ -168,7 +170,7 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
             logger: this.#logger,
           }
 
-          const data = await this.applyTransformers(ctx, { blocks: rawBatch.blocks } as T)
+          const data = await this.applyTransformers(ctx, { blocks: batch.blocks } as T)
 
           yield { data, ctx }
         }
@@ -341,7 +343,7 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
 
   batchEnd(ctx: BatchCtx) {
     ctx.profiler.end()
-    this.#metricServer.registerBatchEnd(ctx)
+    this.#metricServer.addBatchContext(ctx)
   }
 
   async *[Symbol.asyncIterator](): AsyncIterator<PortalBatch<T>> {

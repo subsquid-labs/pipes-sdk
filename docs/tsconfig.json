@@ -2,10 +2,12 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "baseUrl": ".",
-    "module": "commonjs",
+    "module": "esnext",
     "moduleResolution": "node",
-    "declaration": true,
-    "outDir": "dist"
+    "declaration": false,
+    "outDir": "dist",
+    "skipLibCheck": true
   },
-  "include": ["examples"]
+  "include": ["examples"],
+  "exclude": ["node_modules", "dist"]
 }

@@ -11,16 +11,34 @@ const transformBatch = ({
   ctx: {
     head,
     query,
-    bytes,
-    // exclude progress as it contains timers and dynamic data
-    state: { progress, ...state },
+    meta: {
+      bytesSize,
+      // exclude other dynamic meta fields
+      ...meta
+    },
+
+    state: {
+      progress,
+      // exclude progress as it contains timers and dynamic data
+      ...state
+    },
 
     // do not include it in the test
     metrics,
     logger,
     profiler,
   },
-}: PortalBatch) => ({ data, meta: { head, query, bytes, state } })
+}: PortalBatch) => ({
+  data,
+  meta: {
+    head,
+    query,
+    meta: {
+      bytesSize,
+    },
+    state,
+  },
+})
 
 export async function readAllChunks<T>(stream: AsyncIterable<T>) {
   const res: T[] = []
@@ -104,13 +122,15 @@ describe('Portal cache', () => {
               },
             ],
             "meta": {
-              "bytes": 265,
               "head": {
                 "finalized": {
                   "hash": "0x2",
                   "number": 2,
                 },
                 "unfinalized": undefined,
+              },
+              "meta": {
+                "bytesSize": 265,
               },
               "query": {
                 "hash": "87052be918a68207740211f7eb8c2725",

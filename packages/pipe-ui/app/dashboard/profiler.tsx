@@ -60,15 +60,18 @@ export function ProfilerResult({ profiler, useSelfTime }: { profiler: ProfilerRe
   const threshold = Math.pow(profiler.percent / 100, 0.5)
 
   const fontSize = 9 + 6 * threshold
-  const opacity = 0.3 + 0.7 * threshold
+  const opacity = 0.4 + 0.7 * threshold
 
   const time = useSelfTime ? profiler.selfTime : profiler.totalTime
   return (
-    <div className="my-1">
+    <div className="tree">
       <div style={{ fontSize }} className="p-2 relative">
         <div
-          className="absolute top-0 left-0 bottom-0 bg-[#b53cdd]/10 rounded-md z-1 transition-width duration-300 ease-out"
-          style={{ width: `${profiler.percent}%` }}
+          className={`absolute top-1 left-0 bottom-0 bg-fuchsia-300/5 rounded-md z-1 transition-width duration-300 ease-out`}
+          style={{
+            width: `${profiler.percent}%`,
+            minWidth: 1,
+          }}
         />
         <div className="relative">
           <div className="font-medium" style={{ opacity }}>
@@ -81,7 +84,7 @@ export function ProfilerResult({ profiler, useSelfTime }: { profiler: ProfilerRe
         </div>
       </div>
       <div className="pl-6">
-        {profiler.children.map((child) => (
+        {profiler.children.map((child, index) => (
           <ProfilerResult key={child.name} profiler={child} useSelfTime={useSelfTime} />
         ))}
       </div>
@@ -108,20 +111,7 @@ export function Profiler() {
   const totalSamples = (data?.profilers || []).length
 
   return (
-    <div className="mb-4">
-      <h2 className="flex justify-between font-medium text-sm mb-1 gap-2">
-        <div>Profiler</div>
-
-        {/*<Switch*/}
-        {/*  onCheckedChange={(checked) => {*/}
-        {/*    setUseSelfTime(checked)*/}
-        {/*  }}*/}
-        {/*  checked={useSelfTime}*/}
-        {/*>*/}
-        {/*  Use self time*/}
-        {/*</Switch>*/}
-      </h2>
-
+    <div>
       <div className="max-h-[400px] overflow-auto border rounded-md px-1 dotted-background">
         {res.map((profiler) => (
           <ProfilerResult key={profiler.name} profiler={profiler} useSelfTime={useSelfTime} />

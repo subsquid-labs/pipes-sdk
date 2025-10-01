@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { client } from '~/api/client'
 
+type HttpResponse<T> = {
+  payload: T
+}
+
 export type Stats = {
   sdk: {
     version: string
@@ -22,7 +26,6 @@ export type Stats = {
 }
 
 const MAX_HISTORY = 30
-
 let history: {
   blocksPerSecond: number
   bytesPerSecond: number
@@ -33,27 +36,31 @@ let history: {
   memory: 0,
 })
 
+function getUrl(host: string, path: string) {
+  return `${host}${path.startsWith('/') ? path : `/${path}`}`
+}
+
 export function useMetrics() {
-  const url = 'http://127.0.0.1:9090/stats'
+  const url = getUrl('http://127.0.0.1:9090', '/stats')
 
   return useQuery({
-    queryKey: ['metrics'],
+    queryKey: ['stats'],
     queryFn: async () => {
       try {
-        const res = await client<Stats>(url, {
+        const res = await client<HttpResponse<Stats>>(url, {
           withCredentials: true,
         })
 
         history.push({
-          bytesPerSecond: res.data.speed.bytesPerSecond,
-          blocksPerSecond: res.data.speed.blocksPerSecond,
-          memory: res.data.usage.memory,
+          bytesPerSecond: res.data.payload.speed.bytesPerSecond,
+          blocksPerSecond: res.data.payload.speed.blocksPerSecond,
+          memory: res.data.payload.usage.memory,
         })
 
         history = history.slice(-MAX_HISTORY)
 
         return {
-          ...res.data,
+          ...res.data.payload,
           history,
         }
       } catch (error) {
@@ -72,17 +79,53 @@ export type ApiProfilerResult = {
 }
 
 export function useProfilers() {
-  const url = 'http://127.0.0.1:9090/profiler'
+  const url = getUrl('http://127.0.0.1:9090', '/profiler')
 
   return useQuery({
     queryKey: ['profiler'],
     queryFn: async () => {
       try {
-        const res = await client<{ profilers: ApiProfilerResult[] }>(url, {
+        const res = await client<
+          HttpResponse<{
+            enabled: boolean
+            profilers: ApiProfilerResult[]
+          }>
+        >(url, {
           withCredentials: true,
         })
 
-        return res.data
+        return res.data.payload
+      } catch (error) {
+        return null
+      }
+    },
+
+    refetchInterval: 1000,
+  })
+}
+
+export type ApiExemplarResult = {
+  name: string
+  data: any
+  children: ApiExemplarResult[]
+}
+
+export function useTransformationExemplar() {
+  const url = getUrl('http://127.0.0.1:9090', '/exemplars/transformation')
+
+  return useQuery({
+    queryKey: ['/exemplars/transformation'],
+    queryFn: async () => {
+      try {
+        const res = await client<
+          HttpResponse<{
+            exemplar: ApiExemplarResult
+          }>
+        >(url, {
+          withCredentials: true,
+        })
+
+        return res.data.payload
       } catch (error) {
         return null
       }
