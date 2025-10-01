@@ -90,7 +90,7 @@ export class Factory<T extends EventArgs> {
     })
       .pipe(
         createEvmDecoder({
-          profiler: { id: 'pre-index' },
+          profiler: { id: 'pre index factory' },
           contracts: [this.options.address],
           range: parsePortalRange(this.options._experimental_preindex),
           events: {

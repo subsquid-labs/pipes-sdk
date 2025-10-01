@@ -11,14 +11,14 @@ export type Erc20Event = {
 
 export function erc20Transfers({ range, contracts }: { range?: PortalRange; contracts?: string[] } = {}) {
   return createEvmDecoder({
-    profiler: { id: 'erc20_transfers' },
+    profiler: { id: 'ERC20 transfers' },
     range: parsePortalRange(range || { from: 'latest' }),
     contracts,
     events: {
       transfers: commonAbis.erc20.events.Transfer,
     },
   }).pipe({
-    profiler: { id: 'rename_fields' },
+    profiler: { id: 'rename ields' },
     transform: async ({ transfers }) => {
       return transfers.map(
         ({ event, timestamp, contract }): Erc20Event => ({

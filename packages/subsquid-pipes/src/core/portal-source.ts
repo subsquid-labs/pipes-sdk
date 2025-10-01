@@ -47,17 +47,16 @@ const noop = () => {}
 export type PortalSourceOptions<Query> = {
   portal: string | PortalClientOptions | PortalClient
   query: Query
-  logger?: Logger
+  logger: Logger
   profiler?: boolean
   cache?: PortalCacheOptions
-  progress?:
-    | {
-        interval?: number
-        onStart?: (data: StartState) => void
-        onProgress?: (progress: ProgressState) => void
-      }
-    | false
-    | null
+  transformers?: Transformer<any, any>[]
+  metricServer?: MetricsServer
+  progress?: {
+    interval?: number
+    onStart?: (data: StartState) => void
+    onProgress?: (progress: ProgressState) => void
+  }
 }
 
 export class PortalSource<Q extends QueryBuilder, T = any> {
@@ -69,9 +68,9 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
   readonly #logger: Logger
   readonly #portal: PortalClient
   readonly #metricServer: MetricsServer
+  readonly #transformers: Transformer<any, any>[]
 
   #started = false
-  #transformers: Transformer<any, any>[] = []
 
   constructor({ portal, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
     this.#portal =
@@ -84,28 +83,13 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
           )
 
     this.#queryBuilder = query
-    this.#logger = logger || createDefaultLogger()
+    this.#logger = logger
     this.#options = {
-      ...options,
+      cache: options.cache,
       profiler: typeof options.profiler === 'undefined' ? process.env.NODE_ENV !== 'production' : options.profiler,
     }
-    this.#metricServer = createMetricsServer()
-
-    if (progress === false || progress === null) {
-      progress = {
-        interval: -1,
-      }
-    }
-
-    // Built-in transformers
-    this.#transformers.push(
-      progressTracker({
-        logger: this.#logger,
-        interval: progress?.interval,
-        onStart: progress?.onStart,
-        onProgress: progress?.onProgress,
-      }),
-    )
+    this.#metricServer = options.metricServer || createMetricsServer()
+    this.#transformers = options.transformers || []
   }
 
   async *read(cursor?: BlockCursor): AsyncIterable<PortalBatch<T>> {
@@ -200,9 +184,18 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
   pipe<Out>(transformer: TransformerOptions<T, Out, Q> | Transformer<T, Out, Q>): PortalSource<Q, Out> {
     if (this.#started) throw new Error('Source closed')
 
-    this.#transformers.push(transformer instanceof Transformer ? transformer : new Transformer(transformer))
-
-    return this as unknown as PortalSource<Q, Out>
+    return new PortalSource<Q, Out>({
+      portal: this.#portal,
+      query: this.#queryBuilder,
+      logger: this.#logger,
+      profiler: this.#options.profiler,
+      cache: this.#options.cache,
+      metricServer: this.#metricServer,
+      transformers: [
+        ...this.#transformers,
+        transformer instanceof Transformer ? transformer : new Transformer(transformer),
+      ],
+    })
   }
 
   extend<Arg extends Record<string, Transformer<any, any>>>(extend: Arg): PortalSource<Q, ExtensionOut<T, Arg>> {
@@ -332,7 +325,7 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
 
             if (!forkedCursor) {
               // TODO how to explain this error? what to do next?
-              throw Error(`Fork has been detected, but pipeline couldn't find the cursor to continue from`)
+              throw Error(`Fork detected, but target did not return a new cursor`)
             }
 
             await self.forkTransformers(forkProfiler, forkedCursor)
