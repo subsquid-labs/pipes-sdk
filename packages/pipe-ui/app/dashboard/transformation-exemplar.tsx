@@ -20,8 +20,11 @@ export function TransformerExample({ transformer }: { transformer: TransformerEx
     const res = JSON.stringify(json, null, open ? 2 : 0)
 
     return open
-      ? res.replace(/"\.\.\.\s+(\d+)\s+more\s+\.\.\."/gm, '// ... truncated $1 items ...')
-      : res.substring(0, 100) + '...'
+      ? // Truncated arrays are received as [value, "... N more ..."]
+        // Convert the second element into a TypeScript comment showing the number of truncated items
+        res.replace(/"\.\.\.\s+(\d+)\s+more\s+\.\.\."/gm, '// ... truncated $1 items ...')
+      : // If not open, just truncate to 100 characters
+        res.substring(0, 100) + '...'
   }, [transformer.data, open])
 
   return (
