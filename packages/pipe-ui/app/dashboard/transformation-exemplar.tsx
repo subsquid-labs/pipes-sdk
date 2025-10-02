@@ -25,14 +25,14 @@ export function TransformerExample({ transformer }: { transformer: TransformerEx
   }, [transformer.data, open])
 
   return (
-    <div>
-      <div className="cursor-pointer" onClick={() => setOpen(!open)}>
-        <div className="font-medium" style={{ opacity, fontSize }}>
+    <div className="tree">
+      <div className={data ? 'cursor-pointer' : undefined} onClick={() => setOpen(!open)}>
+        <div className="pt-3 pl-1" style={{ opacity, fontSize }}>
           {transformer.name}
         </div>
         <div className="text-xxs text-nowrap">
           {data ? (
-            <Code hideCopyButton={!open} className="bg-secondary/15 rounded-md p-2" language="json">
+            <Code hideCopyButton={!open} className="bg-secondary/30 rounded-md p-1" language="json">
               {data}
             </Code>
           ) : null}
