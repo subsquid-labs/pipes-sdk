@@ -1,11 +1,13 @@
 import NumberFlow from '@number-flow/react'
+import { useMemo } from 'react'
 // @ts-ignore
 import { Sparklines, SparklinesLine } from 'react-sparklines'
-import { useMetrics } from '~/api/metrics'
+import { useStats } from '~/api/metrics'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { displayEstimatedTime, humanBytes } from '~/dashboard/formatters'
 import { PipelineDisconnected } from '~/dashboard/pipeline-disconnected'
 import { Profiler } from '~/dashboard/profiler'
+import { QueryExemplar } from '~/dashboard/query-exemplar'
 import { TransformationExemplar } from '~/dashboard/transformation-exemplar'
 
 const sparklineStyle = { fill: '#d0a9e2' }
@@ -13,7 +15,10 @@ const sparklineStyle = { fill: '#d0a9e2' }
 const sparklineColor = 'rgba(255,255,255,0.5)'
 
 export function Pipeline() {
-  const { data } = useMetrics()
+  const { data } = useStats()
+  const dataset = useMemo(() => {
+    return data?.portal.url.replace(/^[\w.\/:]+datasets\//, '')
+  }, [data?.portal.url])
 
   if (!data) return <PipelineDisconnected />
 
@@ -21,7 +26,7 @@ export function Pipeline() {
     <div className="w-full">
       <div className="p-4 border rounded-xl">
         <div className="flex justify-between">
-          <div>ethereum-mainnet</div>
+          <div>{dataset}</div>
           <div className="justify-end">
             <div className="flex gap-1">
               <NumberFlow value={data.progress.current}></NumberFlow>
@@ -50,13 +55,17 @@ export function Pipeline() {
             <TabsTrigger className="" value="profiler">
               Profiler
             </TabsTrigger>
-            <TabsTrigger value="data-flow">Data flow</TabsTrigger>
+            <TabsTrigger value="data-flow">Data samples</TabsTrigger>
+            <TabsTrigger value="query">Query</TabsTrigger>
           </TabsList>
           <TabsContent value="profiler">
             <Profiler />
           </TabsContent>
           <TabsContent value="data-flow">
             <TransformationExemplar />
+          </TabsContent>
+          <TabsContent value="query">
+            <QueryExemplar />
           </TabsContent>
         </Tabs>
 

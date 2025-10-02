@@ -13,7 +13,7 @@ export function Dashboard() {
           </div>
           <Button variant="outline">Documentation</Button>
         </div>
-        <div className="flex gap-20">
+        <div className="flex gap-10">
           <Sidebar />
           <Pipeline />
         </div>

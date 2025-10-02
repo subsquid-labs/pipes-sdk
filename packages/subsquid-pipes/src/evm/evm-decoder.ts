@@ -1,5 +1,6 @@
 import type { AbiEvent } from '@subsquid/evm-abi'
 import {
+  BatchCtx,
   createTransformer,
   formatBlock,
   formatNumber,
@@ -46,6 +47,7 @@ type DecodedEventPipeArgs<T extends Events, C extends Contracts> = {
   contracts?: C
   events: EventArgs<T>
   profiler?: ProfilerOptions
+  onError?: (ctx: BatchCtx, error: any) => unknown | Promise<unknown>
 }
 
 const decodedEventFields = {
@@ -75,6 +77,7 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
   contracts,
   events,
   profiler,
+  onError,
 }: DecodedEventPipeArgs<T, C>): Transformer<
   EvmPortalData<typeof decodedEventFields>,
   EventResponse<T, C>,
@@ -218,10 +221,11 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
                 timestamp: new Date(block.header.timestamp * 1000),
               })
             } catch (error) {
-              ctx.logger.warn({
-                message: `Failed to decode log for event ${eventName}:`,
-                error,
-              })
+              if (onError) {
+                await onError(ctx, error)
+              }
+
+              throw error
             }
             break
           }

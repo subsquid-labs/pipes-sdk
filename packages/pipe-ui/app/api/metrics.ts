@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { client } from '~/api/client'
+import { client, getUrl } from '~/api/client'
 
 type HttpResponse<T> = {
   payload: T
@@ -8,6 +8,10 @@ type HttpResponse<T> = {
 export type Stats = {
   sdk: {
     version: string
+  }
+  portal: {
+    url: string
+    query: any
   }
   progress: {
     from: number
@@ -36,15 +40,11 @@ let history: {
   memory: 0,
 })
 
-function getUrl(host: string, path: string) {
-  return `${host}${path.startsWith('/') ? path : `/${path}`}`
-}
-
-export function useMetrics() {
+export function useStats() {
   const url = getUrl('http://127.0.0.1:9090', '/stats')
 
   return useQuery({
-    queryKey: ['stats'],
+    queryKey: ['pipe/stats'],
     queryFn: async () => {
       try {
         const res = await client<HttpResponse<Stats>>(url, {
@@ -78,11 +78,11 @@ export type ApiProfilerResult = {
   children: ApiProfilerResult[]
 }
 
-export function useProfilers() {
+export function useProfilers({ enabled = true }: { enabled?: boolean } = {}) {
   const url = getUrl('http://127.0.0.1:9090', '/profiler')
 
   return useQuery({
-    queryKey: ['profiler'],
+    queryKey: ['pipe/profiler'],
     queryFn: async () => {
       try {
         const res = await client<
@@ -99,8 +99,8 @@ export function useProfilers() {
         return null
       }
     },
-
-    refetchInterval: 1000,
+    enabled,
+    refetchInterval: 2000,
   })
 }
 
@@ -110,16 +110,16 @@ export type ApiExemplarResult = {
   children: ApiExemplarResult[]
 }
 
-export function useTransformationExemplar() {
+export function useTransformationExemplar({ enabled = true }: { enabled?: boolean } = {}) {
   const url = getUrl('http://127.0.0.1:9090', '/exemplars/transformation')
 
   return useQuery({
-    queryKey: ['/exemplars/transformation'],
+    queryKey: ['pipe/exemplars/transformation'],
     queryFn: async () => {
       try {
         const res = await client<
           HttpResponse<{
-            exemplar: ApiExemplarResult
+            transformation: ApiExemplarResult
           }>
         >(url, {
           withCredentials: true,
@@ -130,7 +130,7 @@ export function useTransformationExemplar() {
         return null
       }
     },
-
-    refetchInterval: 1000,
+    enabled,
+    refetchInterval: 1500,
   })
 }

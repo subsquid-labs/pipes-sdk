@@ -17,16 +17,16 @@ export function PipelineDisconnected() {
 
         <div className="mt-4">
           <h4 className="mb-1">1. Install npm package</h4>
-          <div className="text-xs bg-gray-900 rounded-md p-2">
-            <Code language="bash">npm install @sqd-pipes/pipes</Code>
-          </div>
+          <Code language="bash" className="text-xs">
+            npm install @sqd-pipes/pipes
+          </Code>
         </div>
 
         <div className="mt-4">
           <h4 className="mb-1">2. Run a simple pipe</h4>
-          <div className="text-xs bg-gray-900 rounded-md p-2">
-            <Code language="typescript">{example}</Code>
-          </div>
+          <Code language="typescript" className="text-xs">
+            {example}
+          </Code>
         </div>
 
         <div className="mt-4">

@@ -47,7 +47,7 @@ export class SolanaQueryBuilder {
     this.requests.push({
       range: options.range,
       request: {
-        [type]: [...options.request],
+        [type]: [{ ...options.request }],
       },
     })
     return this
@@ -83,9 +83,7 @@ export class SolanaQueryBuilder {
   }
 
   addRange(range: NaturalRange): this {
-    this.requests.push({
-      range,
-    } as any)
+    this.requests.push({ range } as any)
     return this
   }
 

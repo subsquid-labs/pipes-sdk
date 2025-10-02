@@ -23,7 +23,7 @@ export const Code = memo(function Code({
   wrapLongLines = false,
   wrapLines = false,
 }: {
-  children: string
+  children?: string
   language: Lang
   className?: string
   hideCopyButton?: boolean
@@ -32,8 +32,8 @@ export const Code = memo(function Code({
   wrapLines?: boolean
 }) {
   return (
-    <div className={cn('relative', className)}>
-      {!hideCopyButton ? <CopyButton className="absolute right-2 top-2" content={children} /> : null}
+    <div className={cn('relative border rounded-md p-1 text-xs', className)}>
+      {!hideCopyButton ? <CopyButton className="absolute right-0 top-0.5" content={children} /> : null}
       <SyntaxHighlighter
         wrapLongLines={wrapLongLines}
         wrapLines={wrapLines}
@@ -42,7 +42,7 @@ export const Code = memo(function Code({
         customStyle={{ background: 'transparent' }}
         style={theme}
       >
-        {children}
+        {children || ''}
       </SyntaxHighlighter>
     </div>
   )

@@ -1,6 +1,6 @@
 import { createEvmDecoder, createEvmPortalSource, createFactory, sqliteFactoryDatabase } from '@sqd-pipes/pipes/evm'
-import { events as factoryAbi } from './contracts/uniswap.v3/factory'
-import { events as swapsAbi } from './contracts/uniswap.v3/swaps'
+import { events as factoryAbi } from './abi/uniswap.v3/factory'
+import { events as swapsAbi } from './abi/uniswap.v3/swaps'
 
 /**
  THIS IS FOR TESTING ONLY!

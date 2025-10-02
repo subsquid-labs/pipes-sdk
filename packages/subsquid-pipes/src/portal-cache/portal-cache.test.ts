@@ -10,7 +10,11 @@ const transformBatch = ({
   data,
   ctx: {
     head,
-    query,
+    query: {
+      // exclude other dynamic, i.e. URL
+      url,
+      ...query
+    },
     meta: {
       bytesSize,
       // exclude other dynamic meta fields

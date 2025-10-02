@@ -32,7 +32,7 @@ export type BatchCtx = {
     bytesSize: number
     lastBlockReceivedAt: Date
   }
-  query: { hash: string; raw: any }
+  query: { url: string; hash: string; raw: any }
   profiler: Profiler
   metrics: Metrics
   logger: Logger
@@ -152,7 +152,11 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
               // TODO expose from portal
               unfinalized: undefined,
             },
-            query: { hash: hashQuery(query), raw: query },
+            query: {
+              url: this.#portal.getUrl(),
+              hash: hashQuery(query),
+              raw: query,
+            },
 
             // State of the stream at the moment of this batch processing
             state: {

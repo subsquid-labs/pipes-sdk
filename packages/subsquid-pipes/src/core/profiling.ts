@@ -21,17 +21,17 @@ export interface Profiler {
 function packExemplar(value: any): any {
   if (Array.isArray(value)) {
     if (
-      value.length <= 5 &&
+      value.length <= 10 &&
       !value.some((v) => typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean')
     ) {
       return value
     }
 
-    if (value.length > 1) {
+    if (value.length > 10) {
       return [packExemplar(value[0]), `... ${value.length - 1} more ...`]
     }
 
-    return [packExemplar(value[0])]
+    return value.map(packExemplar)
   }
 
   if (value === null || value instanceof Date) return value

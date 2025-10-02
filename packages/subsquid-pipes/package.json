@@ -1,7 +1,7 @@
 {
   "name": "@sqd-pipes/pipes",
   "type": "module",
-  "version": "0.0.1-alpha.19",
+  "version": "0.0.1-alpha.20",
   "sideEffects": false,
   "author": "Subsquid Team",
   "files": [
@@ -31,7 +31,9 @@
     "@subsquid/evm-abi": "0.3.1",
     "@subsquid/evm-codec": "0.3.0",
     "@subsquid/http-client": "1.7.0",
+    "@subsquid/solana-stream": "0.3.1",
     "@subsquid/util-internal": "3.2.0",
+    "@subsquid/util-internal-hex": "0.0.2",
     "@subsquid/util-internal-validation": "0.8.0",
     "express": "5.1.0",
     "pino": "9.12.0",
