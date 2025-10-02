@@ -63,6 +63,7 @@ export function createClickhouseTarget<T>({
       if (cursor) {
         await onRollback?.({ type: 'offset_check', store, cursor: cursor })
       }
+
       for await (const { data, ctx: batchCtx } of read(cursor)) {
         const userSpan = ctx.profiler.start('data handler')
         await onData({

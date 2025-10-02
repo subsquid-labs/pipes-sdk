@@ -1,6 +1,6 @@
 import { Button } from '~/components/ui/button'
 import { Logo } from '~/components/ui/logo'
-import { PipeMetrics } from '~/dashboard/pipe-metrics'
+import { Pipeline } from '~/dashboard/pipeline'
 import { Sidebar } from '~/dashboard/sidebar'
 
 export function Dashboard() {
@@ -15,7 +15,7 @@ export function Dashboard() {
         </div>
         <div className="flex gap-20">
           <Sidebar />
-          <PipeMetrics />
+          <Pipeline />
         </div>
       </div>
     </div>

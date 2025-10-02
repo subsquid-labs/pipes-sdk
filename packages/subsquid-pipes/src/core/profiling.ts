@@ -9,11 +9,42 @@ export interface Profiler {
   name: string
   elapsed: number
   children: Profiler[]
+  data?: any
 
   start(name: string): Profiler
   addLabels(labels: string | string[]): Profiler
   end(): Profiler
+  addTransformerExemplar(dataExample: any): Profiler
   transform<T>(transformer: (span: Span, level: number) => T, level?: number): T[]
+}
+
+function packExemplar(value: any): any {
+  if (Array.isArray(value)) {
+    if (
+      value.length <= 5 &&
+      !value.some((v) => typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean')
+    ) {
+      return value
+    }
+
+    if (value.length > 1) {
+      return [packExemplar(value[0]), `... ${value.length - 1} more ...`]
+    }
+
+    return [packExemplar(value[0])]
+  }
+
+  if (value === null || value instanceof Date) return value
+
+  if (typeof value === 'object') {
+    const res: any = {}
+    for (const key in value) {
+      res[key] = packExemplar(value[key])
+    }
+    return res
+  }
+
+  return value
 }
 
 export class Span implements Profiler {
@@ -21,6 +52,7 @@ export class Span implements Profiler {
   elapsed = 0
   started = 0
   labels: string[] = []
+  data?: any
 
   static root(name: string, enabled: boolean): Profiler {
     if (!enabled) return new DummyProfiler()
@@ -43,6 +75,17 @@ export class Span implements Profiler {
     return this
   }
 
+  addTransformerExemplar(data: any) {
+    this.data = packExemplar(data)
+    return this
+  }
+
+  /**
+   Marks the end of the span and calculates the elapsed time.
+   Optionally accepts a snapshot object that can store how the span changed the state.
+
+   Returns the current span instance for chaining.
+   */
   end() {
     this.elapsed = performance.now() - this.started
 
@@ -72,6 +115,11 @@ export class DummyProfiler implements Profiler {
   end() {
     return this
   }
+
+  addTransformerExemplar() {
+    return this
+  }
+
   transform<T>(transformer: (span: Span, level: number) => T, level: number = 0): T[] {
     return []
   }

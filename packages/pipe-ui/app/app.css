@@ -114,7 +114,7 @@ body {
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.21 0.006 285.885);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.541 0.281 293.009);
+  --primary: #b53cdd;
   --primary-foreground: oklch(0.969 0.016 293.756);
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
@@ -125,7 +125,7 @@ body {
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.541 0.281 293.009);
+  --ring: #b53cdd;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -133,12 +133,12 @@ body {
   --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: oklch(0.21 0.006 285.885);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.541 0.281 293.009);
+  --sidebar-primary: #b53cdd;
   --sidebar-primary-foreground: oklch(0.969 0.016 293.756);
   --sidebar-accent: oklch(0.274 0.006 286.033);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.541 0.281 293.009);
+  --sidebar-ring: #b53cdd;
 }
 
 @layer base {
@@ -182,4 +182,35 @@ body {
   background-image: radial-gradient(circle at center, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
   background-size: 20px 20px; /* Controls the spacing between dots */
   background-repeat: repeat; /* Ensures the pattern repeats */
+}
+
+.tree {
+  position: relative;
+}
+
+.tree:before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: -10px;
+  width: 1px;
+  height: 100%;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tree:after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 20px;
+  left: -9px;
+  width: 9px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tree:last-child:before {
+  height: 20px;
 }

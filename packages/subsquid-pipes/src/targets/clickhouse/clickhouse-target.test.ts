@@ -270,7 +270,6 @@ describe('Clickhouse state', () => {
       await client.query({
         query: `
             CREATE TABLE  IF NOT EXISTS test
-
             (
                 timestamp        DateTime,
                 block_number     Int32,

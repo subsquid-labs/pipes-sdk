@@ -27,6 +27,7 @@ async function main() {
     createSolanaRpcLatencyWatcher({
       rpcUrl: ['https://api.mainnet-beta.solana.com'], // RPC endpoints to monitor
     }).pipe({
+      profiler: { id: 'expose metrics' },
       transform: (latency, { metrics }) => {
         if (!latency) return // Skip if no latency data
 

@@ -173,19 +173,19 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
       })
       currentBlock.set(-1)
     },
-    transform: async (data, { state, bytes }) => {
+    transform: async (data, ctx) => {
       history.addState({
-        state: state,
-        bytes: bytes,
+        state: ctx.state,
+        bytes: ctx.meta.bytesSize,
       })
 
-      if (state.current?.number) {
-        currentBlock.set(state.current.number)
+      if (ctx.state.current?.number) {
+        currentBlock.set(ctx.state.current.number)
       }
 
       lastState = history.calculate()
 
-      state.progress = lastState
+      ctx.state.progress = lastState
 
       return data
     },

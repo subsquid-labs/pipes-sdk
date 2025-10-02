@@ -20,6 +20,7 @@ async function cli() {
         transfers: commonAbis.erc20.events.Transfer,
       },
     }).pipe({
+      profiler: { id: 'add type field' },
       transform: ({ transfers }) => {
         return {
           transfers: transfers.map((e) => ({
