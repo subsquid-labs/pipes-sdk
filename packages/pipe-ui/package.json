@@ -1,18 +1,23 @@
 {
   "name": "@sqd-pipes/pipe-ui",
-  "private": true,
+  "version": "0.0.1-alpha.11",
   "type": "module",
   "scripts": {
     "build": "react-router build",
+    "pack": "node scripts/package.js",
     "dev": "react-router dev",
-    "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc"
+  },
+  "bin": {
+    "pipe-ui": "bin.js"
   },
   "dependencies": {
     "@number-flow/react": "^0.5.10",
+    "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
+    "@radix-ui/react-toggle": "^1.1.10",
     "@react-router/node": "^7.9.2",
     "@react-router/serve": "^7.9.2",
     "@tanstack/react-query": "^5.90.2",
@@ -28,10 +33,10 @@
     "react-sparklines": "^1.7.0",
     "react-syntax-highlighter": "^15.6.6",
     "recharts": "2.15.4",
-    "tailwind-merge": "^3.3.1"
+    "tailwind-merge": "^3.3.1",
+    "@react-router/dev": "^7.9.2"
   },
   "devDependencies": {
-    "@react-router/dev": "^7.9.2",
     "@tailwindcss/vite": "^4.1.13",
     "@types/node": "^22",
     "@types/react": "^19.1.13",

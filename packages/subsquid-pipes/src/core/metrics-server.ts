@@ -37,6 +37,10 @@ export type Stats = {
   sdk: {
     version: string
   }
+  portal: {
+    url: string
+    query: any
+  }
   progress: {
     from: number
     current: number
@@ -146,8 +150,12 @@ export function createMetricsServer(): MetricsServer {
       sdk: {
         version: npmVersion,
       },
+      portal: {
+        url: lastBatch.query.url,
+        query: lastBatch.query.raw,
+      },
       progress: {
-        from: lastBatch?.state.initial || 0,
+        from: lastBatch.state.initial || 0,
         current: lastBatch?.state.current.number || 0,
         to: lastBatch?.state.last || 0,
         percent: lastBatch?.state.progress?.state.percent || 0,
@@ -180,7 +188,7 @@ export function createMetricsServer(): MetricsServer {
   app.get('/exemplars/transformation', async (req, res) => {
     return res.json({
       payload: {
-        exemplar: transformationExemplar,
+        transformation: transformationExemplar,
       },
     })
   })

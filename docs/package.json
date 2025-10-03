@@ -1,7 +1,7 @@
 {
   "name": "@sqd-pipes/docs",
   "private": true,
-  "type": "module",
+  "type": "commonjs",
   "license": "MIT",
   "scripts": {
     "build": "tsc"
@@ -16,7 +16,9 @@
   "dependencies": {
     "@clickhouse/client": "^1.11.2",
     "@sqd-pipes/pipes": "workspace:*",
+    "@subsquid/borsh": "0.3.0",
     "@subsquid/evm-abi": "0.3.1",
-    "@subsquid/evm-codec": "0.3.0"
+    "@subsquid/evm-codec": "0.3.0",
+    "@subsquid/solana-stream": "0.3.1"
   }
 }

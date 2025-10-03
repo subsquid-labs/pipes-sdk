@@ -19,7 +19,9 @@
     },
     "@sqd-pipes/docs#build": {
       "inputs": ["examples/**/*.ts", "tsconfig.json"],
-      "outputs": ["dist/**"]
+      "dependsOn": ["@sqd-pipes/pipes#build"],
+      "outputs": ["dist/**"],
+      "outputLogs": "new-only"
     }
   }
 }

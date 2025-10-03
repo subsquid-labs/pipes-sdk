@@ -1,3 +1,5 @@
+import { Toggle } from '@radix-ui/react-toggle'
+import { Play } from 'lucide-react'
 import { useState } from 'react'
 import { type ApiProfilerResult, useProfilers } from '~/api/metrics'
 
