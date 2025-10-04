@@ -1,7 +1,6 @@
 import type { AbiEvent } from '@subsquid/evm-abi'
 import {
   BatchCtx,
-  createTransformer,
   formatBlock,
   formatNumber,
   PortalRange,
@@ -86,7 +85,7 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
   const eventTopics = Object.values(events).map((event) => event.topic)
   const decodedRange = parsePortalRange(range)
 
-  return createTransformer({
+  return new Transformer({
     profiler: profiler || { id: 'EVM decoder' },
     query: async ({ queryBuilder, logger, portal }) => {
       if (!Factory.isFactory(contracts)) {

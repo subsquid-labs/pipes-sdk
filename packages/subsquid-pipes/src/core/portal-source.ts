@@ -187,8 +187,41 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
     await this.stop()
   }
 
-  pipe<Out>(transformer: TransformerOptions<T, Out, Q> | Transformer<T, Out, Q>): PortalSource<Q, Out> {
+  pipe<Out>(
+    transformerOrOptions: /*
+        Simplified usage - just the transform function that processes data
+        .pipe((data) => data)
+      */
+      | TransformerOptions<T, Out, Q>['transform']
+      /*
+        Complete transformer configuration object with transform function and additional options
+        .pipe({ profiler: { id: 'my transformer' }, transform: (data) => data })
+       */
+      | TransformerOptions<T, Out, Q>
+      /*
+        Pre-configured transformer instance with all required methods implemented
+        .pipe(new MyCustomTransformer())
+       */
+      | Transformer<T, Out, Q>,
+  ): PortalSource<Q, Out> {
     if (this.#started) throw new Error('Source closed')
+
+    const transformer =
+      transformerOrOptions instanceof Transformer
+        ? transformerOrOptions
+        : typeof transformerOrOptions === 'function'
+          ? new Transformer({ transform: transformerOrOptions })
+          : new Transformer(transformerOrOptions)
+
+    const id = transformer.id()
+
+    // If there are multiple transformers with the same ID, we append a numeric suffix to make them unique
+    // This is important for profiling and logging to avoid confusion between transformers
+    // when analyzing performance or debugging issues
+    const exists = this.#transformers.filter((t) => t.id() === id)
+    if (exists.length) {
+      transformer.setId(`${id} ${exists.length + 1}`)
+    }
 
     return new PortalSource<Q, Out>({
       portal: this.#portal,
@@ -197,10 +230,7 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
       profiler: this.#options.profiler,
       cache: this.#options.cache,
       metricServer: this.#metricServer,
-      transformers: [
-        ...this.#transformers,
-        transformer instanceof Transformer ? transformer : new Transformer(transformer),
-      ],
+      transformers: [...this.#transformers, transformer],
     })
   }
 

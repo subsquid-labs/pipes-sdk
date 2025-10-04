@@ -1,3 +1,4 @@
+import { findDuplicates } from '~/internal/array.js'
 import { PortalClient } from '~/portal-client/index.js'
 import { Logger } from './logger.js'
 import { Metrics } from './metrics-server.js'
@@ -27,6 +28,14 @@ export class Transformer<In, Out, Query = any> {
   constructor(public options: TransformerOptions<In, Out, Query>) {}
 
   children: Transformer<any, any>[] = []
+
+  id() {
+    return this.options.profiler?.id || 'anonymous'
+  }
+
+  setId(profilerId: string) {
+    this.options.profiler = { id: profilerId }
+  }
 
   async query(ctx: QueryCtx<Query>) {
     await this.options.query?.(ctx)
@@ -148,6 +157,14 @@ export function extendTransformer<
   Query,
   Res = { [K in keyof Arg]: Arg[K] extends Transformer<any, infer Out> ? Out : never },
 >(extend: Arg) {
+  const duplicates = findDuplicates(Object.values(extend).map((v) => v.id()))
+  for (const key in extend) {
+    const id = extend[key].id()
+    if (duplicates.includes(id)) {
+      extend[key].setId(`${key} / ${id}`)
+    }
+  }
+
   return new Transformer<In, Res, Query>({
     profiler: { id: 'extend' },
     query: (ctx) => {

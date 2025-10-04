@@ -139,7 +139,7 @@ export function createMetricsServer(): MetricsServer {
     next()
   })
 
-  let lastBatch: BatchCtx
+  let lastBatch: BatchCtx | null = null
   let profilers: { profiler: ProfilerResult; collectedAt: Date }[] = []
   let transformationExemplar: TransformationResult
 
@@ -151,11 +151,11 @@ export function createMetricsServer(): MetricsServer {
         version: npmVersion,
       },
       portal: {
-        url: lastBatch.query.url,
-        query: lastBatch.query.raw,
+        url: lastBatch?.query.url || '',
+        query: lastBatch?.query.raw || {},
       },
       progress: {
-        from: lastBatch.state.initial || 0,
+        from: lastBatch?.state.initial || 0,
         current: lastBatch?.state.current.number || 0,
         to: lastBatch?.state.last || 0,
         percent: lastBatch?.state.progress?.state.percent || 0,
