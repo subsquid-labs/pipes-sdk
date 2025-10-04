@@ -13,7 +13,7 @@ import { EvmPortalData } from './evm-portal-source.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
 import { Factory, FactoryEvent } from './factory.js'
 
-type DecodedEvent<D, C> = {
+export type DecodedEvent<D, C> = {
   event: D
   contract: string
   blockNumber: number
@@ -44,6 +44,7 @@ type Contracts = Factory<any> | string[]
 type DecodedEventPipeArgs<T extends Events, C extends Contracts> = {
   range: PortalRange
   contracts?: C
+  transformer?: (event: DecodedEvent<unknown, C>) => unknown | Promise<unknown>
   events: EventArgs<T>
   profiler?: ProfilerOptions
   onError?: (ctx: BatchCtx, error: any) => unknown | Promise<unknown>

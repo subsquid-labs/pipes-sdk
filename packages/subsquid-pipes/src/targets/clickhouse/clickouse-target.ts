@@ -42,9 +42,9 @@ export function createClickhouseTarget<T>({
 }: {
   client: ClickHouseClient
   settings?: Settings
-  onStart?: (batch: { store: ClickhouseStore; logger: Logger }) => unknown | Promise<unknown>
-  onData: (batch: { store: ClickhouseStore; data: T; ctx: Ctx }) => unknown | Promise<unknown>
-  onRollback?: (batch: {
+  onStart?: (ctx: { store: ClickhouseStore; logger: Logger }) => unknown | Promise<unknown>
+  onData: (ctx: { store: ClickhouseStore; data: T; ctx: Ctx }) => unknown | Promise<unknown>
+  onRollback?: (ctx: {
     type: 'offset_check' | 'blockchain_fork'
     store: ClickhouseStore
     cursor: BlockCursor
