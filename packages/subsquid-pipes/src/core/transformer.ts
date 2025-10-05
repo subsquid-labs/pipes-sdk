@@ -112,8 +112,19 @@ export class Transformer<In, Out, Query = any> {
    * Otherwise, type information about the very first input would be lost,
    * and downstream code would see only the immediate `Out` type.
    */
-  pipe<Res>(transformer: TransformerOptions<Out, Res, Query>): Transformer<In, Res, Query> {
-    this.children.push(transformer instanceof Transformer ? transformer : createTransformer(transformer))
+  pipe<Res>(
+    transformer:
+      | Transformer<Out, Res, Query>
+      | TransformerOptions<Out, Res, Query>
+      | TransformerOptions<Out, Res, Query>['transform'],
+  ): Transformer<In, Res, Query> {
+    this.children.push(
+      transformer instanceof Transformer
+        ? transformer
+        : typeof transformer === 'function'
+          ? createTransformer({ transform: transformer })
+          : createTransformer(transformer),
+    )
 
     return this as unknown as Transformer<In, Res, Query>
   }

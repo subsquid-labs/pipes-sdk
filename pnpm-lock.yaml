@@ -56,6 +56,9 @@ importers:
       '@subsquid/solana-stream':
         specifier: 0.3.1
         version: 0.3.1
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
     devDependencies:
       '@types/lodash':
         specifier: ^4.17.16

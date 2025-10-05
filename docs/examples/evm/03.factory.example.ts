@@ -1,5 +1,10 @@
-import { createEvmDecoder, createEvmPortalSource, createFactory, sqliteFactoryDatabase } from '@sqd-pipes/pipes/evm'
-
+import {
+  createEvmDecoder,
+  createEvmPortalSource,
+  createFactory,
+  DecodedEvent,
+  sqliteFactoryDatabase,
+} from '@sqd-pipes/pipes/evm'
 import { events as factoryAbi } from './abi/uniswap.v3/factory'
 import { events as swapsAbi } from './abi/uniswap.v3/swaps'
 
@@ -9,6 +14,13 @@ import { events as swapsAbi } from './abi/uniswap.v3/swaps'
  * to track pool creation events, and decodes swap events from the created pools.
  * The pool addresses are stored in an SQLite database for efficient lookup.
  */
+
+export function flattenEvent<T, F>(event: DecodedEvent<T, F>) {
+  return {
+    ...event.event,
+    factoryEvent: event.factory?.event,
+  }
+}
 
 async function cli() {
   const stream = createEvmPortalSource({
@@ -24,12 +36,16 @@ async function cli() {
       }),
       events: {
         swaps: swapsAbi.Swap,
+        fees: swapsAbi.SetFeeProtocol,
       },
-    }),
+    }).pipe(({ swaps, fees }) => ({
+      swaps: swaps.map(flattenEvent),
+      fees: fees.map(flattenEvent),
+    })),
   )
 
   for await (const { data } of stream) {
-    console.log(`parsed ${data.swaps.length} swaps`)
+    console.log(`parsed ${data.swaps.length} swaps and ${data.fees.length} fees`)
   }
 }
 
