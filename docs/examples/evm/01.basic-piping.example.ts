@@ -14,26 +14,20 @@ async function cli() {
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
   }).pipe(
     createEvmDecoder({
-      profiler: { id: 'ERC20 transfers' },
       range: { from: 'latest' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,
       },
-    }).pipe({
-      profiler: { id: 'add type field' },
-      transform: ({ transfers }) => {
-        return {
-          transfers: transfers.map((e) => ({
-            ...e,
-            type: 'transfer',
-          })),
-        }
-      },
-    }),
+    }).pipe(({ transfers }) => ({
+      transfers: transfers.map((e) => ({
+        ...e,
+        type: 'transfer',
+      })),
+    })),
   )
 
   for await (const { data } of stream) {
-    // console.log(data.transfers.length)
+    console.log(data.transfers.length)
   }
 }
 

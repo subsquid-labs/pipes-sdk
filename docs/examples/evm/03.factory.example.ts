@@ -15,7 +15,7 @@ import { events as swapsAbi } from './abi/uniswap.v3/swaps'
  * The pool addresses are stored in an SQLite database for efficient lookup.
  */
 
-export function flattenEvent<T, F>(event: DecodedEvent<T, F>) {
+export function transform<T, F>(event: DecodedEvent<T, F>) {
   return {
     ...event.event,
     factoryEvent: event.factory?.event,
@@ -39,8 +39,8 @@ async function cli() {
         fees: swapsAbi.SetFeeProtocol,
       },
     }).pipe(({ swaps, fees }) => ({
-      swaps: swaps.map(flattenEvent),
-      fees: fees.map(flattenEvent),
+      swaps: swaps.map(transform),
+      fees: fees.map(transform),
     })),
   )
 

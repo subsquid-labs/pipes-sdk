@@ -11,14 +11,15 @@ import {
 import { Log } from '../portal-client/query/evm.js'
 import { EvmPortalData } from './evm-portal-source.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
-import { EventArgs, Factory, FactoryEvent } from './factory.js'
+import { DecodedAbiEvent, Factory } from './factory.js'
 
+export type FactoryEvent<T> = { contract: string; blockNumber: number; event: T }
 export type DecodedEvent<D = object, F = unknown> = {
   event: D
   contract: string
   blockNumber: number
   timestamp: Date
-  factory?: F extends EventArgs ? FactoryEvent<F> : never
+  factory?: F extends object ? FactoryEvent<F> : never
   rawEvent: Log<{
     address: true
     topics: true
@@ -30,13 +31,17 @@ export type DecodedEvent<D = object, F = unknown> = {
 }
 
 export type Events = Record<string, AbiEvent<any>>
-
 type EventsMap<T extends Events> = {
   readonly [K in keyof T]: T[K] extends AbiEvent<any> ? T[K] : never
 }
 
-export type EventResponse<T extends Events, Factory> = {
-  [K in keyof T]: DecodedEvent<ReturnType<T[K]['decode']>, Factory>[]
+export type EventResponse<T extends Events, F> = {
+  [K in keyof T]: DecodedEvent<
+    // child event
+    ReturnType<T[K]['decode']>,
+    // factory event
+    F extends Factory<infer R> ? DecodedAbiEvent<R> : never
+  >[]
 }
 
 type Contracts = Factory<any> | string[]
@@ -79,7 +84,7 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
   onError,
 }: DecodedEventPipeArgs<T, C>): Transformer<
   EvmPortalData<typeof decodedEventFields>,
-  EventResponse<T, C extends Factory<infer F> ? F : never>,
+  EventResponse<T, C>,
   EvmQueryBuilder
 > {
   const eventTopics = Object.values(events).map((event) => event.topic)
@@ -165,7 +170,7 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
       })
     },
     transform: async (data, ctx) => {
-      const result = {} as EventResponse<T, C extends Factory<infer F> ? F : never>
+      const result = {} as EventResponse<T, C>
       for (const eventName in events) {
         ;(result[eventName as keyof T] as ReturnType<T[keyof T]['decode']>[]) = []
       }

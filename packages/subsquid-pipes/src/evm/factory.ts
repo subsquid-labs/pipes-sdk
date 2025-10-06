@@ -3,21 +3,20 @@ import type { Codec } from '@subsquid/evm-codec'
 
 import { createTarget, Logger, parsePortalRange } from '~/core/index.js'
 import { PortalClient } from '~/portal-client/client.js'
-import { createEvmDecoder } from './evm-decoder.js'
+import { createEvmDecoder, FactoryEvent } from './evm-decoder.js'
 import { createEvmPortalSource } from './evm-portal-source.js'
 
 export type EventArgs = {
   [key: string]: Codec<any> & { indexed?: boolean }
 }
 
-export interface FactoryPersistentAdapter<T extends { contract: string; blockNumber: number }> {
+export interface FactoryPersistentAdapter<T extends FactoryEvent<any>> {
   all(): Promise<T[]>
   lookup(parameter: string): Promise<T | null>
   save(entities: T[]): Promise<void>
 }
 
 export type DecodedAbiEvent<T extends EventArgs> = ReturnType<AbiEvent<T>['decode']>
-export type FactoryEvent<T extends EventArgs> = { contract: string; blockNumber: number; event: DecodedAbiEvent<T> }
 
 // TODO FORKS!
 
@@ -26,13 +25,13 @@ export type FactoryOptions<T extends EventArgs> = {
   event: AbiEvent<T>
   _experimental_preindex?: { from: number | string; to: number | string }
   parameter: string | ((data: DecodedAbiEvent<T>) => string)
-  database: FactoryPersistentAdapter<FactoryEvent<T>>
+  database: FactoryPersistentAdapter<FactoryEvent<DecodedAbiEvent<T>>>
 }
 
 export class Factory<T extends EventArgs> {
   constructor(private options: FactoryOptions<T>) {}
 
-  #batch: FactoryEvent<T>[] = []
+  #batch: FactoryEvent<DecodedAbiEvent<T>>[] = []
 
   factoryAddress() {
     return this.options.address
@@ -60,7 +59,7 @@ export class Factory<T extends EventArgs> {
     })
   }
 
-  async getContract(address: string): Promise<FactoryEvent<T> | null> {
+  async getContract(address: string): Promise<FactoryEvent<DecodedAbiEvent<T>> | null> {
     const memory = this.#batch.find((b) => b.contract === address)
     if (memory) {
       return memory
@@ -102,7 +101,7 @@ export class Factory<T extends EventArgs> {
         createTarget({
           write: async ({ read }) => {
             for await (const { data } of read()) {
-              const res: FactoryEvent<T>[] = []
+              const res: FactoryEvent<DecodedAbiEvent<T>>[] = []
 
               for (const event of data.factory) {
                 res.push({
@@ -121,7 +120,7 @@ export class Factory<T extends EventArgs> {
     logger.info('Finished pre-index stage')
   }
 
-  async getAllContracts(): Promise<FactoryEvent<T>[]> {
+  async getAllContracts() {
     return this.options.database.all()
   }
 
