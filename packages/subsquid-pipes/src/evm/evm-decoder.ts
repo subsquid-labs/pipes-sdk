@@ -11,14 +11,14 @@ import {
 import { Log } from '../portal-client/query/evm.js'
 import { EvmPortalData } from './evm-portal-source.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
-import { Factory, FactoryEvent } from './factory.js'
+import { EventArgs, Factory, FactoryEvent } from './factory.js'
 
 export type DecodedEvent<D = object, F = unknown> = {
   event: D
   contract: string
   blockNumber: number
   timestamp: Date
-  factory?: F extends EventArgs<any> ? FactoryEvent<F> : never
+  factory?: F extends EventArgs ? FactoryEvent<F> : never
   rawEvent: Log<{
     address: true
     topics: true
@@ -31,12 +31,12 @@ export type DecodedEvent<D = object, F = unknown> = {
 
 export type Events = Record<string, AbiEvent<any>>
 
-type EventArgs<T extends Events> = {
+type EventsMap<T extends Events> = {
   readonly [K in keyof T]: T[K] extends AbiEvent<any> ? T[K] : never
 }
 
-export type EventResponse<T extends Events, FactoryEvent> = {
-  [K in keyof T]: DecodedEvent<ReturnType<T[K]['decode']>, FactoryEvent>[]
+export type EventResponse<T extends Events, Factory> = {
+  [K in keyof T]: DecodedEvent<ReturnType<T[K]['decode']>, Factory>[]
 }
 
 type Contracts = Factory<any> | string[]
@@ -44,7 +44,7 @@ type Contracts = Factory<any> | string[]
 type DecodedEventPipeArgs<T extends Events, C extends Contracts> = {
   range: PortalRange
   contracts?: C
-  events: EventArgs<T>
+  events: EventsMap<T>
   profiler?: ProfilerOptions
   onError?: (ctx: BatchCtx, error: any) => unknown | Promise<unknown>
 }
@@ -165,7 +165,7 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
       })
     },
     transform: async (data, ctx) => {
-      const result = {} as EventResponse<T, C>
+      const result = {} as EventResponse<T, C extends Factory<infer F> ? F : never>
       for (const eventName in events) {
         ;(result[eventName as keyof T] as ReturnType<T[keyof T]['decode']>[]) = []
       }
