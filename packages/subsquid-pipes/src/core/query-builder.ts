@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { RangeRequestList } from '~/evm/index.js'
-import { PortalClient, Query } from '~/portal-client/index.js'
+import { mergeDeep } from '~/internal/object/merge-deep.js'
+import { Query } from '~/portal-client/index.js'
 import { Heap } from '../internal/heap.js'
 
 /**
@@ -18,12 +18,60 @@ export interface RangeRequest<Req, R = Range> {
   request: Req
 }
 
-export interface QueryBuilder {
-  getType(): string
-  addFields(fields: unknown): QueryBuilder
-  getFields(): unknown
-  merge(query?: QueryBuilder): QueryBuilder
-  calculateRanges(req: { bound?: Range; portal: PortalClient }): Promise<RangeRequest<any>[]>
+export type RequestOptions<R> = { range: NaturalRange; request: R }
+
+export abstract class QueryBuilder<F extends {}, R = any> {
+  protected fields: F = {} as F
+  protected requests: RangeRequest<R, NaturalRange>[] = []
+
+  abstract getType(): string
+  abstract mergeDataRequests(...requests: R[]): R
+
+  addFields(fields: F): this {
+    this.fields = mergeDeep(this.fields, fields)
+    return this
+  }
+
+  getFields() {
+    return this.fields
+  }
+
+  addRange(range: NaturalRange): this {
+    this.requests.push({ range } as any)
+    return this
+  }
+
+  merge(query?: QueryBuilder<F, R>) {
+    if (!query) return this
+
+    this.requests = [...query.requests, ...this.requests]
+    this.addFields(query.getFields())
+
+    return this
+  }
+
+  async calculateRanges({ portal, bound }: { bound?: Range; portal: Portal }): Promise<RangeRequest<R>[]> {
+    const latest = this.requests.some((r) => r.range.from === 'latest') ? await portal.getHead() : undefined
+
+    const ranges = mergeRangeRequests(
+      this.requests.map((r) => ({
+        range: r.range.from === 'latest' ? { from: Math.min(latest?.number || 0, bound?.from || Infinity) } : r.range,
+        request: r.request || ({} as R),
+      })),
+      this.mergeDataRequests,
+    )
+
+    if (!ranges.length) {
+      // FIXME request should be optional
+      return [{ range: bound } as any]
+    }
+
+    return applyRangeBound(ranges, bound)
+  }
+}
+
+export interface Portal {
+  getHead(): Promise<{ number: number; hash: string } | undefined>
 }
 
 // TODO generate unit tests for this
@@ -65,7 +113,7 @@ export interface QueryBuilder {
  * //   { range: { from: 100 }, request: { logs: [{address: '0x1'}, {address: '0x2'}] } }
  * // ]
  */
-export function mergeRangeRequests<R>(requests: RangeRequest<R>[], merge: (r1: R, r2: R) => R): RangeRequestList<R> {
+export function mergeRangeRequests<R>(requests: RangeRequest<R>[], merge: (r1: R, r2: R) => R): RangeRequest<R>[] {
   if (requests.length <= 1) return requests
 
   let union: RangeRequest<R>[] = []
@@ -135,7 +183,7 @@ export function mergeRangeRequests<R>(requests: RangeRequest<R>[], merge: (r1: R
  * //   { range: { from: 100, to: 150 }, request: { logs: [{address: '0x2'}] } }
  * // ]
  */
-export function applyRangeBound<R>(requests: RangeRequestList<R>, range?: Range): RangeRequestList<R> {
+export function applyRangeBound<R>(requests: RangeRequest<R>[], range?: Range): RangeRequest<R>[] {
   if (range == null) return requests
   let result: RangeRequest<R>[] = []
   for (let req of requests) {

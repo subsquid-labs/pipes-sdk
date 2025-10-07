@@ -26,24 +26,21 @@ async function main() {
   }).pipe(
     createEvmRpcLatencyWatcher({
       rpcUrl: ['https://base.drpc.org', 'https://base-rpc.publicnode.com'], // RPC endpoints to monitor
-    }).pipe({
-      profiler: { id: 'expose metrics' },
-      transform: (latency, { metrics }) => {
-        if (!latency) return // Skip if no latency data
+    }).pipe((latency, { metrics }) => {
+      if (!latency) return // Skip if no latency data
 
-        // For each RPC endpoint, update the latency gauge metric
-        for (const rpc of latency.rpc) {
-          metrics
-            .gauge({
-              name: 'rpc_latency_ms',
-              help: 'RPC Latency in ms',
-              labelNames: ['url'],
-            })
-            .set({ url: rpc.url }, latency.rpc[0].portalDelayMs)
-        }
+      // For each RPC endpoint, update the latency gauge metric
+      for (const rpc of latency.rpc) {
+        metrics
+          .gauge({
+            name: 'rpc_latency_ms',
+            help: 'RPC Latency in ms',
+            labelNames: ['url'],
+          })
+          .set({ url: rpc.url }, latency.rpc[0].portalDelayMs)
+      }
 
-        return latency
-      },
+      return latency
     }),
   )
 

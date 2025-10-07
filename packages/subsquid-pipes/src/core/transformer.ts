@@ -1,4 +1,3 @@
-import { findDuplicates } from '~/internal/array.js'
 import { PortalClient } from '~/portal-client/index.js'
 import { Logger } from './logger.js'
 import { Metrics } from './metrics-server.js'
@@ -132,72 +131,4 @@ export class Transformer<In, Out, Query = any> {
 
 export function createTransformer<In, Out, Query = any>(options: TransformerOptions<In, Out, Query>) {
   return new Transformer<In, Out, Query>(options)
-}
-
-export type ExtensionOut<In, Arg extends Record<string, Transformer<any, any>>> = In & {
-  [K in keyof Arg]: Arg[K] extends Transformer<any, infer Out> ? Out : never
-}
-
-/**
- * Combines multiple named transformers into a single transformer whose output is an object
- * with the same keys as the input transformers and values containing each transformer's output.
- *
- * This is useful for running several transformers in parallel on the same input and merging their
- * results into a single object. Each transformer receives the same input, and their outputs are
- * collected under their respective keys.
- *
- * @param extend - An object whose values are Transformer instances to be combined.
- * @returns A new Transformer that, when run, calls each sub-transformer and returns an object with their results.
- *
- * Example:
- * ```ts
- * const t1 = createTransformer<string, number>({ transform: s => s.length });
- * const t2 = createTransformer<string, boolean>({ transform: s => s.startsWith('a') });
- * const combined = extendTransformer<{ input: string }, { len: typeof t1, isA: typeof t2 }, any>({
- *   len: t1,
- *   isA: t2,
- * });
- * // combined.transform('apple') yields: { len: 5, isA: true }
- * ```
- *
- * All lifecycle methods (`query`, `start`, `stop`, `fork`) are forwarded to each sub-transformer.
- */
-export function extendTransformer<
-  In,
-  Arg extends Record<string, Transformer<any, any>>,
-  Query,
-  Res = { [K in keyof Arg]: Arg[K] extends Transformer<any, infer Out> ? Out : never },
->(extend: Arg) {
-  const duplicates = findDuplicates(Object.values(extend).map((v) => v.id()))
-  for (const key in extend) {
-    const id = extend[key].id()
-    if (duplicates.includes(id)) {
-      extend[key].setId(`${key} / ${id}`)
-    }
-  }
-
-  return new Transformer<In, Res, Query>({
-    profiler: { id: 'extend' },
-    query: (ctx) => {
-      for (const key in extend) {
-        extend[key].query?.(ctx)
-      }
-    },
-    start: async (ctx) => {
-      await Promise.all(Object.values(extend).map((e) => e.start?.(ctx)))
-    },
-    stop: async (ctx) => {
-      await Promise.all(Object.values(extend).map((e) => e.stop?.(ctx)))
-    },
-    fork: async (cursor, ctx) => {
-      await Promise.all(Object.values(extend).map((e) => e.fork?.(cursor, ctx)))
-    },
-    transform: async (data, ctx) => {
-      const res = data as any
-      for (const key in extend) {
-        res[key] = await extend[key].transform(data, ctx)
-      }
-      return res
-    },
-  })
 }

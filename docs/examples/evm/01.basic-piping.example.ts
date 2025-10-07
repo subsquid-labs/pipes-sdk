@@ -5,7 +5,6 @@ import { commonAbis, createEvmDecoder, createEvmPortalSource } from '@sqd-pipes/
  * This example shows how to:
  * - Create a data stream from Base Mainnet using Portal API
  * - Decode ERC20 transfer events
- * - Transform the decoded events by adding a custom type field
  * - Process the transformed events in a streaming fashion
  */
 
@@ -18,12 +17,7 @@ async function cli() {
       events: {
         transfers: commonAbis.erc20.events.Transfer,
       },
-    }).pipe(({ transfers }) => ({
-      transfers: transfers.map((e) => ({
-        ...e,
-        type: 'transfer',
-      })),
-    })),
+    }),
   )
 
   for await (const { data } of stream) {

@@ -1,3 +1,4 @@
+import { CompositePipe, compositeTransformer } from '~/core/composite-transformer.js'
 import { isForkException, PortalClient, PortalClientOptions } from '~/portal-client/index.js'
 import { last } from '../internal/array.js'
 import { createPortalCache, PortalCacheOptions } from '../portal-cache/portal-cache.js'
@@ -7,7 +8,7 @@ import { Profiler, Span } from './profiling.js'
 import { ProgressState, StartState } from './progress-tracker.js'
 import { hashQuery, QueryBuilder } from './query-builder.js'
 import { Target } from './target.js'
-import { ExtensionOut, extendTransformer, Transformer, TransformerOptions } from './transformer.js'
+import { Transformer, TransformerOptions } from './transformer.js'
 import { BlockCursor, Ctx } from './types.js'
 
 export type BatchCtx = {
@@ -59,7 +60,7 @@ export type PortalSourceOptions<Query> = {
   }
 }
 
-export class PortalSource<Q extends QueryBuilder, T = any> {
+export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   readonly #options: {
     profiler: boolean
     cache?: PortalCacheOptions
@@ -234,8 +235,10 @@ export class PortalSource<Q extends QueryBuilder, T = any> {
     })
   }
 
-  extend<Arg extends Record<string, Transformer<any, any>>>(extend: Arg): PortalSource<Q, ExtensionOut<T, Arg>> {
-    return this.pipe(extendTransformer(extend))
+  pipeComposite<Arg extends Record<string, Transformer<any, any>>>(
+    composite: Arg,
+  ): PortalSource<Q, CompositePipe<Arg>> {
+    return this.pipe(compositeTransformer(composite))
   }
 
   async applyTransformers(ctx: BatchCtx, data: T) {

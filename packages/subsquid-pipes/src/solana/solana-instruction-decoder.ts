@@ -1,6 +1,6 @@
 import { BatchCtx, createTransformer, PortalRange, ProfilerOptions, parsePortalRange } from '~/core/index.js'
 import { arrayify } from '~/internal/array.js'
-import { Instruction, Transaction } from '~/portal-client/query/solana.js'
+import { Instruction, TokenBalance, Transaction } from '~/portal-client/query/solana.js'
 import { SolanaPortalData, SolanaTransformer } from '~/solana/solana-portal-source.js'
 import { getInstructionD1, getInstructionD2, getInstructionD4, getInstructionD8 } from '~/solana/types.js'
 
@@ -24,19 +24,27 @@ const decodedEventFields = {
   tokenBalance: {
     transactionIndex: true,
     account: true,
+
     preMint: true,
+    preAmount: true,
+    preDecimals: true,
     postMint: true,
+    postAmount: true,
+    postDecimals: true,
   },
 } as const
+
+type SelectedFields = Required<typeof decodedEventFields>
 
 type DecodedInstruction<D> = {
   instruction: D
   programId: string
   blockNumber: number
   timestamp: Date
-  transaction: Transaction<(typeof decodedEventFields)['transaction']>
-  innerInstructions: Instruction<(typeof decodedEventFields)['instruction']>[]
-  rawInstruction: Instruction<(typeof decodedEventFields)['instruction']>
+  transaction: Transaction<SelectedFields['transaction']>
+  innerInstructions: Instruction<SelectedFields['instruction']>[]
+  rawInstruction: Instruction<SelectedFields['instruction']>
+  tokenBalances: TokenBalance<SelectedFields['tokenBalance']>[]
 }
 
 interface AbiInstruction<A, D> {
@@ -95,6 +103,35 @@ export function createSolanaInstructionDecoder<T extends Instructions>(
         if (i.d8) d8.push(i.d8)
       }
 
+      if (!d1.length && !d2.length && !d4.length && !d8.length) {
+        throw new Error(
+          [
+            'No valid instruction discriminators found. It looks like one or more instructions in your ABI are missing their decoder configuration.',
+            'This usually happens when you accidentally pass an event instead of an instruction, or when your ABI instruction definitions are incomplete.',
+            'Please check that you are passing correct instruction definitions to "createSolanaInstructionDecoder":',
+            '--------------------------------------------------',
+            'Example',
+            '',
+
+            'import { events as orcaWhirlpool } from "./orca_abi";',
+
+            '',
+            ' // ... omitted logic ....',
+            '',
+
+            'createSolanaInstructionDecoder({',
+            '  range: { from: 371602677 },',
+            '  programId: orcaWhirlpool.programId,',
+            '  instructions: {',
+            '    initializeConfig: abi.instructions.InitializeConfig,',
+            '    swap: abi.instructions.Swap,',
+            '  },',
+            '})',
+            // TODO add docs link
+          ].join('\n'),
+        )
+      }
+
       if (d1.length) {
         queryBuilder.addInstruction({
           range,
@@ -107,8 +144,7 @@ export function createSolanaInstructionDecoder<T extends Instructions>(
             transactionTokenBalances: true,
           },
         })
-      }
-      if (d2.length) {
+      } else if (d2.length) {
         queryBuilder.addInstruction({
           range,
           request: {
@@ -120,8 +156,7 @@ export function createSolanaInstructionDecoder<T extends Instructions>(
             transactionTokenBalances: true,
           },
         })
-      }
-      if (d4.length) {
+      } else if (d4.length) {
         queryBuilder.addInstruction({
           range,
           request: {
@@ -133,8 +168,7 @@ export function createSolanaInstructionDecoder<T extends Instructions>(
             transactionTokenBalances: true,
           },
         })
-      }
-      if (d8.length) {
+      } else if (d8.length) {
         queryBuilder.addInstruction({
           range,
           request: {
@@ -179,12 +213,14 @@ export function createSolanaInstructionDecoder<T extends Instructions>(
                 rawInstruction: instruction,
                 blockNumber: block.header.number,
                 transaction,
+                tokenBalances: block.tokenBalances.filter((b) => b.transactionIndex === instruction.transactionIndex),
                 innerInstructions: block.instructions.filter((inner) => {
                   if (inner.transactionIndex !== instruction.transactionIndex) return false
                   if (inner.instructionAddress.length <= instruction.instructionAddress.length) return false
 
                   return instruction.instructionAddress.every((v: any, i: any) => v === inner.instructionAddress[i])
                 }),
+
                 timestamp: new Date(block.header.timestamp * 1000),
               }
 

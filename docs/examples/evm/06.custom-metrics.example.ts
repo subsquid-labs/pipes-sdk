@@ -12,7 +12,6 @@ async function cli() {
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
   }).pipe(
     createEvmDecoder({
-      profiler: { id: 'ERC20 transfers' },
       range: { from: 'latest' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,

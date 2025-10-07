@@ -20,7 +20,6 @@ async function cli() {
   })
     .pipe(
       createEvmDecoder({
-        profiler: { id: 'ERC20 transfers' },
         range: { from: 'latest' },
         events: {
           transfers: commonAbis.erc20.events.Transfer,

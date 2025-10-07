@@ -18,7 +18,7 @@ export function erc20Transfers({ range, contracts }: { range?: PortalRange; cont
       transfers: commonAbis.erc20.events.Transfer,
     },
   }).pipe({
-    profiler: { id: 'rename ields' },
+    profiler: { id: 'rename fields' },
     transform: async ({ transfers }) => {
       return transfers.map(
         ({ event, timestamp, contract }): Erc20Event => ({
