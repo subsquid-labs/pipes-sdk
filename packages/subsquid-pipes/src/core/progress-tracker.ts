@@ -126,9 +126,9 @@ export type ProgressTrackerOptions = {
 }
 
 export function progressTracker<T>({ onProgress, onStart, interval = 5000, logger }: ProgressTrackerOptions) {
-  let ticker: NodeJS.Timeout
-  let currentBlock: Gauge
-  let lastState: ProgressState
+  let ticker: NodeJS.Timeout | null = null
+  let currentBlock: Gauge | null = null
+  let lastState: ProgressState | null = null
 
   const history = new ProgressHistory()
 
@@ -162,7 +162,11 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
     profiler: { id: 'track progress' },
     start: ({ metrics, state }) => {
       if (interval > 0) {
-        ticker = setInterval(() => onProgress(lastState), interval)
+        ticker = setInterval(() => {
+          if (!lastState) return
+
+          onProgress(lastState)
+        }, interval)
       }
 
       onStart(state)
@@ -180,7 +184,7 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
       })
 
       if (ctx.state.current?.number) {
-        currentBlock.set(ctx.state.current.number)
+        currentBlock?.set(ctx.state.current.number)
       }
 
       lastState = history.calculate()
@@ -190,7 +194,9 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
       return data
     },
     stop: () => {
-      clearInterval(ticker)
+      if (ticker) {
+        clearInterval(ticker)
+      }
     },
   })
 }

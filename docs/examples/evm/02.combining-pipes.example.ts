@@ -17,7 +17,7 @@ async function cli() {
     portal: 'https://portal.sqd.dev/datasets/base-mainnet',
   }).pipeComposite({
     transfers: erc20Transfers({
-      range,
+      range: { from: '20,000,000', to: '+1,000' },
     }),
     uniswapV3: uniswapV3Decoder({
       range,

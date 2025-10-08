@@ -28,21 +28,21 @@ async function main() {
       rpcUrl: ['https://api.mainnet-beta.solana.com'], // RPC endpoints to monitor
     }).pipe({
       profiler: { id: 'expose metrics' },
-      transform: (latency, { metrics }) => {
-        if (!latency) return // Skip if no latency data
+      transform: (data, { metrics }) => {
+        if (!data) return // Skip if no latency data
 
         // For each RPC endpoint, update the latency gauge metric
-        for (const rpc of latency.rpc) {
+        for (const rpc of data.rpc) {
           metrics
             .gauge({
               name: 'rpc_latency_ms',
               help: 'RPC Latency in ms',
               labelNames: ['url'],
             })
-            .set({ url: rpc.url }, latency.rpc[0].portalDelayMs)
+            .set({ url: rpc.url }, data.rpc[0].portalDelayMs)
         }
 
-        return latency
+        return data
       },
     }),
   )

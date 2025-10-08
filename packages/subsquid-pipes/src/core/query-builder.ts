@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
+import { PortalRange, parsePortalRange } from '~/core/portal-range.js'
 import { mergeDeep } from '~/internal/object/merge-deep.js'
-import { Query } from '~/portal-client/index.js'
+import { Query, solana } from '~/portal-client/index.js'
 import { Heap } from '../internal/heap.js'
 
 /**
@@ -18,7 +19,10 @@ export interface RangeRequest<Req, R = Range> {
   request: Req
 }
 
-export type RequestOptions<R> = { range: NaturalRange; request: R }
+export type RequestOptions<R> = {
+  range: PortalRange
+  request: R
+}
 
 export abstract class QueryBuilder<F extends {}, R = any> {
   protected fields: F = {} as F
@@ -36,8 +40,8 @@ export abstract class QueryBuilder<F extends {}, R = any> {
     return this.fields
   }
 
-  addRange(range: NaturalRange): this {
-    this.requests.push({ range } as any)
+  addRange(range: PortalRange): this {
+    this.requests.push({ range: parsePortalRange(range) } as any)
     return this
   }
 
@@ -55,7 +59,12 @@ export abstract class QueryBuilder<F extends {}, R = any> {
 
     const ranges = mergeRangeRequests(
       this.requests.map((r) => ({
-        range: r.range.from === 'latest' ? { from: Math.min(latest?.number || 0, bound?.from || Infinity) } : r.range,
+        range:
+          r.range.from === 'latest'
+            ? {
+                from: Math.min(latest?.number || 0, bound?.from || Infinity),
+              }
+            : r.range,
         request: r.request || ({} as R),
       })),
       this.mergeDataRequests,

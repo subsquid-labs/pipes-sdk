@@ -1,4 +1,4 @@
-import { PortalRange, parsePortalRange } from '@sqd-pipes/pipes'
+import { PortalRange } from '@sqd-pipes/pipes'
 import { commonAbis, createEvmDecoder } from '@sqd-pipes/pipes/evm'
 
 export type Erc20Event = {
@@ -12,14 +12,14 @@ export type Erc20Event = {
 export function erc20Transfers({ range, contracts }: { range?: PortalRange; contracts?: string[] } = {}) {
   return createEvmDecoder({
     profiler: { id: 'ERC20 transfers' },
-    range: parsePortalRange(range || { from: 'latest' }),
+    range: range || { from: 'latest' },
     contracts,
     events: {
       transfers: commonAbis.erc20.events.Transfer,
     },
   }).pipe({
     profiler: { id: 'rename fields' },
-    transform: async ({ transfers }) => {
+    transform: ({ transfers }) => {
       return transfers.map(
         ({ event, timestamp, contract }): Erc20Event => ({
           from: event.from,

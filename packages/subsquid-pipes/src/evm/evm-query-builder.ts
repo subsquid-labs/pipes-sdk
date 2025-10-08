@@ -1,3 +1,4 @@
+import { parsePortalRange } from '~/core/index.js'
 import { concatQueryLists, QueryBuilder, RequestOptions } from '../core/query-builder.js'
 import { evm } from '../portal-client/index.js'
 
@@ -17,7 +18,7 @@ export class EvmQueryBuilder extends QueryBuilder<evm.FieldSelection, evm.DataRe
 
   private addRequest(type: keyof evm.DataRequest, options: RequestOptions<any>): this {
     this.requests.push({
-      range: options.range,
+      range: parsePortalRange(options.range),
       request: {
         [type]: [{ ...options.request }],
       },

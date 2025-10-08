@@ -1,12 +1,6 @@
+import { parsePortalRange } from '~/core/index.js'
 import { concatQueryLists, QueryBuilder, Range, RequestOptions } from '../core/query-builder.js'
 import { solana } from '../portal-client/index.js'
-
-export type LogRequestOptions = RequestOptions<solana.LogRequest>
-export type TransactionRequestOptions = RequestOptions<solana.TransactionRequest>
-export type InstructionRequestOptions = RequestOptions<solana.InstructionRequest>
-export type TokenBalanceRequestOptions = RequestOptions<solana.TokenBalanceRequest>
-export type BalanceRequestOptions = RequestOptions<solana.BalanceRequest>
-export type RewardRequestOptions = RequestOptions<solana.RewardRequest>
 
 export class SolanaQueryBuilder extends QueryBuilder<solana.FieldSelection, solana.DataRequest> {
   getType() {
@@ -15,7 +9,7 @@ export class SolanaQueryBuilder extends QueryBuilder<solana.FieldSelection, sola
 
   private addRequest(type: keyof solana.DataRequest, options: RequestOptions<any>): this {
     this.requests.push({
-      range: options.range,
+      range: parsePortalRange(options.range),
       request: {
         [type]: [{ ...options.request }],
       },
@@ -28,27 +22,27 @@ export class SolanaQueryBuilder extends QueryBuilder<solana.FieldSelection, sola
     return this
   }
 
-  addLog(options: LogRequestOptions): this {
+  addLog(options: RequestOptions<solana.LogRequest>): this {
     return this.addRequest('logs', options)
   }
 
-  addTransaction(options: TransactionRequestOptions): this {
+  addTransaction(options: RequestOptions<solana.TransactionRequest>): this {
     return this.addRequest('transactions', options)
   }
 
-  addReward(options: RewardRequestOptions): this {
+  addReward(options: RequestOptions<solana.RewardRequest>): this {
     return this.addRequest('rewards', options)
   }
 
-  addBalance(options: BalanceRequestOptions): this {
+  addBalance(options: RequestOptions<solana.BalanceRequest>): this {
     return this.addRequest('balances', options)
   }
 
-  addTokenBalance(options: TokenBalanceRequestOptions): this {
+  addTokenBalance(options: RequestOptions<solana.TokenBalanceRequest>): this {
     return this.addRequest('tokenBalances', options)
   }
 
-  addInstruction(options: InstructionRequestOptions): this {
+  addInstruction(options: RequestOptions<solana.InstructionRequest>): this {
     return this.addRequest('instructions', options)
   }
 

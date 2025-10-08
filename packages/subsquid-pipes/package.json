@@ -1,7 +1,7 @@
 {
   "name": "@sqd-pipes/pipes",
   "type": "module",
-  "version": "0.0.1-alpha.25",
+  "version": "0.0.1-alpha.26",
   "sideEffects": false,
   "author": "Subsquid Team",
   "files": [
@@ -52,15 +52,12 @@
       "optional": true
     }
   },
-
   "engines": {
     "node": ">=22.15.0"
   },
-
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.js",
-
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -77,13 +74,16 @@
       "import": "./dist/solana/index.js",
       "require": "./dist/solana/index.cjs"
     },
-
+    "./portal-client": {
+      "types": "./dist/portal-client/index.d.ts",
+      "import": "./dist/portal-client/index.js",
+      "require": "./dist/portal-client/index.cjs"
+    },
     "./portal-cache": {
       "types": "./dist/portal-cache/index.d.ts",
       "import": "./dist/portal-cache/index.js",
       "require": "./dist/portal-cache/index.cjs"
     },
-
     "./targets/clickhouse": {
       "types": "./dist/targets/clickhouse/index.d.ts",
       "import": "./dist/targets/clickhouse/index.js",
@@ -100,6 +100,9 @@
       ],
       "solana": [
         "./dist/solana/index.d.ts"
+      ],
+      "portal-client": [
+        "./dist/portal-client/index.d.ts"
       ],
       "portal-cache": [
         "./dist/portal-cache/index.d.ts"

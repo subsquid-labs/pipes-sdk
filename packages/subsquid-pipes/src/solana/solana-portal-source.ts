@@ -9,12 +9,12 @@ import {
   Transformer,
 } from '../core/index.js'
 import { PortalCacheOptions } from '../portal-cache/portal-cache.js'
-import { evm, PortalClientOptions, solana } from '../portal-client/index.js'
+import { PortalClientOptions, solana } from '../portal-client/index.js'
 import { SolanaQueryBuilder } from './solana-query-builder.js'
 
 export type SolanaTransformer<In, Out> = Transformer<In, Out, SolanaQueryBuilder>
 
-export type SolanaPortalData<F extends evm.FieldSelection> = { blocks: solana.Block<F>[] }
+export type SolanaPortalData<F extends solana.FieldSelection> = { blocks: solana.Block<F>[] }
 
 type DefaultData = { blocks: any[] }
 
