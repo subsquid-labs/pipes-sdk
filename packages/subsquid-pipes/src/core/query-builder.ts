@@ -24,17 +24,17 @@ export type RequestOptions<R> = {
   request: R
 }
 
+export type Subset<T, U> = {
+  [K in keyof T]: K extends keyof U ? T[K] : never
+}
+
 export abstract class QueryBuilder<F extends {}, R = any> {
   protected fields: F = {} as F
   protected requests: RangeRequest<R, NaturalRange>[] = []
 
   abstract getType(): string
   abstract mergeDataRequests(...requests: R[]): R
-
-  addFields(fields: F): this {
-    this.fields = mergeDeep(this.fields, fields)
-    return this
-  }
+  abstract addFields(fields: F): QueryBuilder<F, R>
 
   getFields() {
     return this.fields

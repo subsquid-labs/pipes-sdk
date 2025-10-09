@@ -16,9 +16,7 @@ export type EvmTransformer<In, Out> = Transformer<In, Out, EvmQueryBuilder>
 
 export type EvmPortalData<F extends evm.FieldSelection> = { blocks: evm.Block<F>[] }
 
-type DefaultData = { blocks: any[] }
-
-export function createEvmPortalSource({
+export function createEvmPortalSource<F extends evm.FieldSelection = any>({
   portal,
   query,
   cache,
@@ -26,20 +24,20 @@ export function createEvmPortalSource({
   progress,
 }: {
   portal: string | PortalClientOptions | PortalClient
-  query?: PortalRange | EvmQueryBuilder
+  query?: PortalRange | EvmQueryBuilder<F>
   cache?: PortalCacheOptions
   logger?: Logger
   progress?: ProgressTrackerOptions
 }) {
-  if (query && !(query instanceof EvmQueryBuilder)) {
-    query = new EvmQueryBuilder().addRange(parsePortalRange(query))
-  }
-
   logger = logger || createDefaultLogger()
 
-  return new PortalSource<EvmQueryBuilder, DefaultData>({
+  return new PortalSource<EvmQueryBuilder<F>, EvmPortalData<F>>({
     portal,
-    query: query || new EvmQueryBuilder(),
+    query: !query
+      ? new EvmQueryBuilder<F>()
+      : query instanceof EvmQueryBuilder
+        ? query
+        : new EvmQueryBuilder<F>().addRange(parsePortalRange(query)),
     cache,
     logger,
     transformers: [
@@ -49,7 +47,7 @@ export function createEvmPortalSource({
         onStart: progress?.onStart,
         onProgress: progress?.onProgress,
       }),
-      createTransformer<DefaultData, DefaultData>({
+      createTransformer<EvmPortalData<F>, EvmPortalData<F>>({
         profiler: { id: 'normalize data' },
         transform: (data) => {
           data.blocks = data.blocks.map((block) => ({

@@ -1,19 +1,18 @@
 import { parsePortalRange } from '~/core/index.js'
-import { concatQueryLists, QueryBuilder, RequestOptions } from '../core/query-builder.js'
+import { mergeDeep } from '~/internal/object/merge-deep.js'
+import { concatQueryLists, QueryBuilder, RequestOptions, Subset } from '../core/query-builder.js'
 import { evm } from '../portal-client/index.js'
 
-/**
- * An ordered list of non-overlapping range requests
- */
-
-export type LogRequestOptions = RequestOptions<evm.LogRequest>
-export type TransactionRequestOptions = RequestOptions<evm.TransactionRequest>
-export type TraceRequestOptions = RequestOptions<evm.TraceRequest>
-export type StateDiffRequestOptions = RequestOptions<evm.StateDiffRequest>
-
-export class EvmQueryBuilder extends QueryBuilder<evm.FieldSelection, evm.DataRequest> {
+// biome-ignore lint/complexity/noBannedTypes: <it is a default generic constraint>
+export class EvmQueryBuilder<F extends evm.FieldSelection = {}> extends QueryBuilder<F, evm.DataRequest> {
   getType() {
     return 'evm'
+  }
+
+  addFields<T extends Subset<T, evm.FieldSelection>>(fields: T): EvmQueryBuilder<F & T> {
+    this.fields = mergeDeep(this.fields, fields)
+
+    return this as unknown as EvmQueryBuilder<F & T>
   }
 
   private addRequest(type: keyof evm.DataRequest, options: RequestOptions<any>): this {
@@ -26,19 +25,19 @@ export class EvmQueryBuilder extends QueryBuilder<evm.FieldSelection, evm.DataRe
     return this
   }
 
-  addLog(options: LogRequestOptions): this {
+  addLog(options: RequestOptions<evm.LogRequest>): this {
     return this.addRequest('logs', options)
   }
 
-  addTransaction(options: TransactionRequestOptions): this {
+  addTransaction(options: RequestOptions<evm.TransactionRequest>): this {
     return this.addRequest('transactions', options)
   }
 
-  addTrace(options: TraceRequestOptions): this {
+  addTrace(options: RequestOptions<evm.TraceRequest>): this {
     return this.addRequest('traces', options)
   }
 
-  addStateDiff(options: StateDiffRequestOptions): this {
+  addStateDiff(options: RequestOptions<evm.StateDiffRequest>): this {
     return this.addRequest('stateDiffs', options)
   }
 

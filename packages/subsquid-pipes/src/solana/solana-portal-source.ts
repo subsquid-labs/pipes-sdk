@@ -16,9 +16,7 @@ export type SolanaTransformer<In, Out> = Transformer<In, Out, SolanaQueryBuilder
 
 export type SolanaPortalData<F extends solana.FieldSelection> = { blocks: solana.Block<F>[] }
 
-type DefaultData = { blocks: any[] }
-
-export function createSolanaPortalSource({
+export function createSolanaPortalSource<F extends solana.FieldSelection = any>({
   portal,
   query,
   cache,
@@ -26,20 +24,20 @@ export function createSolanaPortalSource({
   progress,
 }: {
   portal: string | PortalClientOptions
-  query?: PortalRange | SolanaQueryBuilder
+  query?: PortalRange | SolanaQueryBuilder<F>
   cache?: PortalCacheOptions
   logger?: Logger
   progress?: ProgressTrackerOptions
 }) {
-  if (query && !(query instanceof SolanaQueryBuilder)) {
-    query = new SolanaQueryBuilder().addRange(parsePortalRange(query))
-  }
-
   logger = logger || createDefaultLogger()
 
-  return new PortalSource<SolanaQueryBuilder, { blocks: any[] }>({
+  return new PortalSource<SolanaQueryBuilder<F>, SolanaPortalData<F>>({
     portal,
-    query: query || new SolanaQueryBuilder(),
+    query: !query
+      ? new SolanaQueryBuilder<F>()
+      : query instanceof SolanaQueryBuilder
+        ? query
+        : new SolanaQueryBuilder<F>().addRange(parsePortalRange(query)),
     cache,
     logger,
     transformers: [
@@ -49,7 +47,7 @@ export function createSolanaPortalSource({
         onStart: progress?.onStart,
         onProgress: progress?.onProgress,
       }),
-      createTransformer<DefaultData, DefaultData>({
+      createTransformer<SolanaPortalData<F>, SolanaPortalData<F>>({
         profiler: { id: 'normalize data' },
         transform: (data) => {
           data.blocks = data.blocks.map((block) => ({

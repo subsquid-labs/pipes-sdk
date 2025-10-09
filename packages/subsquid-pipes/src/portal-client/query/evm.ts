@@ -201,7 +201,7 @@ export type StateDiffDeleteFields = StateDiffBaseFields & {
   next?: undefined
 }
 
-export type BlockHeaderFieldSelection = Selector<keyof BlockHeaderFields, 'number' | 'hash'>
+export type BlockHeaderFieldSelection = Selector<keyof BlockHeaderFields>
 export type BlockHeader<T extends BlockHeaderFieldSelection = Trues<BlockHeaderFieldSelection>> = Select<
   BlockHeaderFields,
   T
