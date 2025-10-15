@@ -193,9 +193,6 @@ importers:
       '@subsquid/evm-codec':
         specifier: 0.3.0
         version: 0.3.0
-      '@subsquid/http-client':
-        specifier: 1.7.0
-        version: 1.7.0
       '@subsquid/solana-stream':
         specifier: 0.3.1
         version: 0.3.1
@@ -208,6 +205,9 @@ importers:
       '@subsquid/util-internal-validation':
         specifier: 0.8.0
         version: 0.8.0(@subsquid/logger@1.4.0)
+      '@subsquid/util-timeout':
+        specifier: ^2.3.2
+        version: 2.3.2
       better-sqlite3:
         specifier: ^12.4.1
         version: 12.4.1
@@ -1297,6 +1297,9 @@ packages:
 
   '@subsquid/util-internal@3.2.0':
     resolution: {integrity: sha512-foNCjOmZaP8MKMa9sNe2GXTjFSDM9UqA0I0C0/ZvCxM1lCmG3mxZb70f8Wyi7TePXC/eV8eARbIqFyz0GjQmzA==}
+
+  '@subsquid/util-timeout@2.3.2':
+    resolution: {integrity: sha512-DVUnuiWAX7/4ZvbzuHENUShEEV4G0M38mQ/+R8DpHxwpCSrtEaSRaUMwdyUSn/WVqR7wo9+jkLCxFjE5feCURQ==}
 
   '@tailwindcss/node@4.1.13':
     resolution: {integrity: sha512-eq3ouolC1oEFOAvOMOBAmfCIqZBJuvWvvYWh5h5iOYfe1HFC6+GZ6EIL0JdM3/niGRJmnrOc+8gl9/HGUaaptw==}
@@ -4777,6 +4780,8 @@ snapshots:
       '@subsquid/logger': 1.4.0
 
   '@subsquid/util-internal@3.2.0': {}
+
+  '@subsquid/util-timeout@2.3.2': {}
 
   '@tailwindcss/node@4.1.13':
     dependencies:

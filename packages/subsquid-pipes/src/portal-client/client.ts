@@ -1,7 +1,14 @@
-import { HttpBody, HttpClient, HttpClientOptions, HttpError, HttpResponse, RequestOptions } from '@subsquid/http-client'
 import { createFuture, Future, unexpectedCase, wait, withErrorContext } from '@subsquid/util-internal'
 import { Readable } from 'stream'
 
+import {
+  HttpBody,
+  HttpClient,
+  HttpClientOptions,
+  HttpError,
+  HttpResponse,
+  RequestOptions,
+} from '~/http-client/index.js'
 import { npmVersion } from '~/version.js'
 import { ForkException } from './fork-exception.js'
 import { evm, GetBlock, PortalBlock, PortalQuery, Query, solana, substrate } from './query/index.js'
@@ -50,14 +57,10 @@ export interface PortalClientOptions {
   headPollInterval?: number
 }
 
-export interface PortalRequestOptions {
-  headers?: HeadersInit
-  retryAttempts?: number
-  retrySchedule?: number[]
-  httpTimeout?: number
-  bodyTimeout?: number
-  abort?: AbortSignal
-}
+export type PortalRequestOptions = Pick<
+  RequestOptions,
+  'headers' | 'retryAttempts' | 'retrySchedule' | 'httpTimeout' | 'bodyTimeout' | 'abort'
+>
 
 export interface PortalStreamOptions {
   request?: Omit<PortalRequestOptions, 'abort'>
@@ -265,8 +268,9 @@ export class PortalClient {
   }
 
   private request<T = any>(method: string, url: string, options: RequestOptions & HttpBody = {}) {
-    return this.client.request<T>(method, url, {
+    return this.client.request<T>(url, {
       ...options,
+      method,
       headers: {
         'User-Agent': USER_AGENT,
         ...options?.headers,
@@ -281,7 +285,10 @@ function createPortalStream<Q extends Query>(
   requestStream: (
     query: Q,
     options?: PortalRequestOptions,
-  ) => Promise<{ finalizedHead?: BlockRef; stream?: AsyncIterable<string[]> | null | undefined }>,
+  ) => Promise<{
+    finalizedHead?: BlockRef
+    stream?: AsyncIterable<string[]> | null | undefined
+  }>,
 ): PortalStream<GetBlock<Q>> {
   let { headPollInterval, request, ...bufferOptions } = options
 
@@ -310,7 +317,12 @@ function createPortalStream<Q extends Query>(
 
     // we are on head
     if (!('stream' in res)) {
-      await buffer.put({ blocks: [], meta: { bytes: 0 }, finalizedHead, lastBlockReceivedAt: new Date() })
+      await buffer.put({
+        blocks: [],
+        meta: { bytes: 0 },
+        finalizedHead,
+        lastBlockReceivedAt: new Date(),
+      })
       buffer.flush()
       if (headPollInterval > 0) {
         await wait(headPollInterval, buffer.signal)
@@ -341,7 +353,12 @@ function createPortalStream<Q extends Query>(
           parentBlockHash = block.header.hash
         }
 
-        await buffer.put({ blocks, finalizedHead, meta: { bytes }, lastBlockReceivedAt })
+        await buffer.put({
+          blocks,
+          finalizedHead,
+          meta: { bytes },
+          lastBlockReceivedAt,
+        })
       }
     } catch (err) {
       if (buffer.signal.aborted || isStreamAbortedError(err)) {
@@ -387,7 +404,12 @@ class PortalStreamBuffer<B> {
     return this.abortController.signal
   }
 
-  constructor(options: { maxWaitTime: number; maxBytes: number; maxIdleTime: number; minBytes: number }) {
+  constructor(options: {
+    maxWaitTime: number
+    maxBytes: number
+    maxIdleTime: number
+    minBytes: number
+  }) {
     this.maxWaitTime = options.maxWaitTime
     this.minBytes = options.minBytes
     this.maxBytes = Math.max(options.maxBytes, options.minBytes)
@@ -437,7 +459,11 @@ class PortalStreamBuffer<B> {
     }
 
     if (this.buffer == null) {
-      this.buffer = { blocks: [], meta: { bytes: 0 }, lastBlockReceivedAt: new Date() }
+      this.buffer = {
+        blocks: [],
+        meta: { bytes: 0 },
+        lastBlockReceivedAt: new Date(),
+      }
     }
 
     this.buffer.blocks.push(...data.blocks)
@@ -550,7 +576,7 @@ export async function* splitLines(chunks: AsyncIterable<Uint8Array>) {
 }
 
 class LineSplitter {
-  private decoder = new TextDecoder('utf8')
+  private decoder = new TextDecoder('utf-8')
   private line = ''
 
   push(data: Uint8Array): string[] {
