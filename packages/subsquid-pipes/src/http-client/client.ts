@@ -78,7 +78,7 @@ export class HttpClient implements BaseHttpClient {
   }
 
   async get<T = any>(url: string, options?: Omit<RequestOptions, 'method'>): Promise<T> {
-    const res = await this.request(url, { ...options, method: 'put' })
+    const res = await this.request(url, { ...options, method: 'get' })
     return res.body
   }
 
