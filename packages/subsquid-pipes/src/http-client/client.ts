@@ -1,7 +1,7 @@
 import { addErrorContext, ensureError, wait } from '@subsquid/util-internal'
 import { addTimeout } from '@subsquid/util-timeout'
 
-import { type Logger, createDefaultLogger } from '~/core/logger.js'
+import { createDefaultLogger, type Logger } from '~/core/logger.js'
 import type { HttpBody } from './body.js'
 
 export type { HttpBody }
@@ -83,7 +83,7 @@ export class HttpClient implements BaseHttpClient {
   }
 
   async post<T = any>(url: string, options?: Omit<RequestOptions, 'method'> & HttpBody): Promise<T> {
-    const res = await this.request(url, { ...options, method: 'put' })
+    const res = await this.request(url, { ...options, method: 'post' })
     return res.body
   }
 
@@ -500,4 +500,3 @@ function addStreamTimeout<T>(
     },
   })
 }
-
