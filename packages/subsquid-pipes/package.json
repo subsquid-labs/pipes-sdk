@@ -30,11 +30,11 @@
   "dependencies": {
     "@subsquid/evm-abi": "0.3.1",
     "@subsquid/evm-codec": "0.3.0",
-    "@subsquid/http-client": "1.7.0",
     "@subsquid/solana-stream": "0.3.1",
     "@subsquid/util-internal": "3.2.0",
     "@subsquid/util-internal-hex": "0.0.2",
     "@subsquid/util-internal-validation": "0.8.0",
+    "@subsquid/util-timeout": "^2.3.2",
     "express": "5.1.0",
     "pino": "9.12.0",
     "pino-pretty": "13.1.1",
