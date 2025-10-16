@@ -55,16 +55,26 @@ export interface BaseHttpClient {
   request<T>(url: string, options?: RequestOptions & HttpBody): Promise<HttpResponse<T>>
 }
 
+const statusTexts: Record<number, string> = {
+  429: 'rate limit exceeded',
+  500: 'internal server error',
+  502: 'bad gateway',
+  503: 'service unavailable',
+  504: 'gateway timeout',
+  524: 'timeout occurred',
+}
+
 export class HttpClient implements BaseHttpClient {
   protected log?: Logger
   protected headers?: Record<string, string | number | bigint>
   private baseUrl?: string
-  private retrySchedule: number[]
-  private retryAttempts: number
-  private httpTimeout: number
-  private bodyTimeout?: number
   private requestCounter = 0
-  private keepalive?: boolean
+
+  private readonly retrySchedule: number[]
+  private readonly retryAttempts: number
+  private readonly httpTimeout: number
+  private readonly bodyTimeout?: number
+  private readonly keepalive?: boolean
 
   constructor(options: HttpClientOptions = {}) {
     this.log = options.log == null ? createDefaultLogger().child({ module: 'http-client' }) : options.log
@@ -122,11 +132,15 @@ export class HttpClient implements BaseHttpClient {
     if (this.log?.isLevelEnabled('debug')) {
       this.log.debug(
         {
-          httpRequestId: req.id,
-          httpRequestUrl: req.url,
-          httpRequestMethod: req.method,
-          httpRequestHeaders: Array.from(req.headers),
-          httpRequestBody: req.body,
+          http: {
+            request: {
+              id: req.id,
+              url: req.url,
+              method: req.method,
+              headers: Array.from(req.headers),
+              body: req.body,
+            },
+          },
         },
         'http request',
       )
@@ -136,20 +150,29 @@ export class HttpClient implements BaseHttpClient {
   protected beforeRetryPause(req: FetchRequest, reason: Error | HttpResponse, pause: number): void {
     if (this.log?.isLevelEnabled('warn')) {
       let info: any = {
-        httpRequestId: req.id,
-        httpRequestUrl: req.url,
-        httpRequestMethod: req.method,
-        httpRequestBody: req.body,
+        reason:
+          reason instanceof Error
+            ? reason.toString()
+            : `got ${reason.status} response status${statusTexts[reason.status] ? `: ${statusTexts[reason.status]}` : ''}`,
+        http: {
+          request: {
+            id: req.id,
+            url: req.url,
+            method: req.method,
+            body: req.body,
+          },
+        },
       }
-      if (reason instanceof Error) {
-        info.reason = reason.toString()
-      } else {
-        info.reason = `got ${reason.status}`
-        info.httpResponseUrl = reason.url
-        info.httpResponseStatus = reason.status
-        info.httpResponseHeaders = Array.from(reason.headers)
-        info.httpResponseBody = reason.body
+
+      if (!(reason instanceof Error)) {
+        info.http.response = {
+          url: reason.url,
+          status: reason.status,
+          headers: Array.from(reason.headers),
+          body: reason.body,
+        }
       }
+
       this.log.warn(info, `request will be retried in ${pause} ms`)
     }
   }
@@ -158,10 +181,14 @@ export class HttpClient implements BaseHttpClient {
     if (this.log?.isLevelEnabled('debug')) {
       this.log.debug(
         {
-          httpRequestId: req.id,
-          httpResponseUrl: url,
-          httpResponseStatus: status,
-          httpResponseHeaders: Array.from(headers),
+          http: {
+            request: {
+              id: req.id,
+              url: url,
+              status: status,
+              headers: Array.from(headers),
+            },
+          },
         },
         'http headers',
       )
@@ -176,10 +203,15 @@ export class HttpClient implements BaseHttpClient {
           httpResponseBody = '...body is too long to be logged'
         }
       }
+
       this.log.debug(
         {
-          httpRequestId: req.id,
-          httpResponseBody,
+          http: {
+            request: {
+              id: req.id,
+              body: httpResponseBody,
+            },
+          },
         },
         'http body',
       )
