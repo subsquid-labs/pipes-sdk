@@ -102,7 +102,7 @@ class PortalCache {
 
   async *getStream<Q extends Query>(): PortalStream<GetBlock<Q>> {
     const { query, portal, logger, adapter } = this.options
-    const queryHash = hashQuery(query)
+    const queryHash = await hashQuery(query)
 
     let cursor: BlockCursor = { number: query.fromBlock, hash: query.parentBlockHash }
 

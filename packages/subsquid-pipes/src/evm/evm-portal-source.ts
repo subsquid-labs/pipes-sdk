@@ -2,6 +2,7 @@ import {
   createDefaultLogger,
   createTransformer,
   Logger,
+  MetricsServerOptions,
   PortalRange,
   PortalSource,
   parsePortalRange,
@@ -21,11 +22,13 @@ export function createEvmPortalSource<F extends evm.FieldSelection = any>({
   query,
   cache,
   logger,
+  metrics,
   progress,
 }: {
   portal: string | PortalClientOptions | PortalClient
   query?: PortalRange | EvmQueryBuilder<F>
   cache?: PortalCacheOptions
+  metrics?: MetricsServerOptions
   logger?: Logger
   progress?: ProgressTrackerOptions
 }) {
@@ -40,6 +43,7 @@ export function createEvmPortalSource<F extends evm.FieldSelection = any>({
         : new EvmQueryBuilder<F>().addRange(parsePortalRange(query)),
     cache,
     logger,
+    metrics,
     transformers: [
       progressTracker({
         logger: logger,

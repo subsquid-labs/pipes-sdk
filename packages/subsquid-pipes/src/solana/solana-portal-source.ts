@@ -3,6 +3,7 @@ import {
   createDefaultLogger,
   createTransformer,
   Logger,
+  MetricsServerOptions,
   PortalRange,
   PortalSource,
   parsePortalRange,
@@ -21,11 +22,13 @@ export function createSolanaPortalSource<F extends solana.FieldSelection = any>(
   query,
   cache,
   logger,
+  metrics,
   progress,
 }: {
   portal: string | PortalClientOptions
   query?: PortalRange | SolanaQueryBuilder<F>
   cache?: PortalCacheOptions
+  metrics?: MetricsServerOptions
   logger?: Logger
   progress?: ProgressTrackerOptions
 }) {
@@ -40,6 +43,7 @@ export function createSolanaPortalSource<F extends solana.FieldSelection = any>(
         : new SolanaQueryBuilder<F>().addRange(parsePortalRange(query)),
     cache,
     logger,
+    metrics,
     transformers: [
       progressTracker({
         logger: logger,

@@ -31,6 +31,11 @@ export type MetricsServer = {
   metrics: Metrics
 }
 
+export type MetricsServerOptions = {
+  port?: number
+  enabled?: boolean
+}
+
 const metrics = new Map<string, any>()
 
 export type Stats = {
@@ -111,7 +116,7 @@ function transformExemplar(profiler: Profiler): TransformationResult {
 
 const MAX_HISTORY = 50
 
-export function createMetricsServer(): MetricsServer {
+export function createMetricsServer({ port = 9090, enabled = false }: MetricsServerOptions = {}): MetricsServer {
   const registry = new client.Registry()
   const app = express()
   let server: Server | undefined = undefined
@@ -204,13 +209,17 @@ export function createMetricsServer(): MetricsServer {
 
   return {
     start: async () => {
-      server = app.listen(9090)
+      if (!enabled) return
+
+      server = app.listen(port)
     },
     stop: async () => {
       client.register.clear()
 
       return new Promise((done) => {
-        server?.close((_) => done())
+        if (!server) return done()
+
+        server.close((_) => done())
       })
     },
 

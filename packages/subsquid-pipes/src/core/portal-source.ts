@@ -3,7 +3,7 @@ import { isForkException, PortalClient, PortalClientOptions } from '~/portal-cli
 import { last } from '../internal/array.js'
 import { createPortalCache, PortalCacheOptions } from '../portal-cache/portal-cache.js'
 import { Logger } from './logger.js'
-import { createMetricsServer, Metrics, MetricsServer } from './metrics-server.js'
+import { createMetricsServer, Metrics, MetricsServer, MetricsServerOptions } from './metrics-server.js'
 import { Profiler, Span } from './profiling.js'
 import { ProgressState, StartState } from './progress-tracker.js'
 import { hashQuery, QueryBuilder } from './query-builder.js'
@@ -26,7 +26,11 @@ export type BatchCtx = {
      * and enabling rollback to a valid chain state when a fork is detected.
      */
     rollbackChain: BlockCursor[]
-
+    /**
+     * Current progress state of batch processing. Contains information about
+     * the completion percentage, processed blocks count, and other metrics
+     * that help track the indexing progress.
+     */
     progress?: ProgressState
   }
   meta: {
@@ -52,7 +56,7 @@ export type PortalSourceOptions<Query> = {
   profiler?: boolean
   cache?: PortalCacheOptions
   transformers?: Transformer<any, any>[]
-  metricServer?: MetricsServer
+  metrics?: MetricsServer | MetricsServerOptions
   progress?: {
     interval?: number
     onStart?: (data: StartState) => void
@@ -89,7 +93,9 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       cache: options.cache,
       profiler: typeof options.profiler === 'undefined' ? process.env.NODE_ENV !== 'production' : options.profiler,
     }
-    this.#metricServer = options.metricServer || createMetricsServer()
+    this.#metricServer =
+      options.metrics && 'start' in options.metrics ? options.metrics : createMetricsServer(options.metrics)
+
     this.#transformers = options.transformers || []
   }
 
@@ -230,7 +236,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       logger: this.#logger,
       profiler: this.#options.profiler,
       cache: this.#options.cache,
-      metricServer: this.#metricServer,
+      metrics: this.#metricServer,
       transformers: [...this.#transformers, transformer],
     })
   }
