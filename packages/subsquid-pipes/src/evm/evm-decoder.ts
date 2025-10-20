@@ -19,6 +19,7 @@ export type DecodedEvent<D = object, F = unknown> = {
   event: D
   contract: string
   blockNumber: number
+  blockHash: string
   timestamp: Date
   factory?: F extends object ? FactoryEvent<F> : never
   rawEvent: Log<{
@@ -222,6 +223,7 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
                 contract: log.address,
                 rawEvent: log,
                 blockNumber: block.header.number,
+                blockHash: block.header.hash,
                 factory: factoryEvent,
                 timestamp: new Date(block.header.timestamp * 1000),
               })
