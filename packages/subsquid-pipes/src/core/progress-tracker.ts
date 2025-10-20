@@ -129,6 +129,11 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
   let ticker: NodeJS.Timeout | null = null
   let currentBlock: Gauge | null = null
   let lastState: ProgressState | null = null
+  let chainHeightGauge: Gauge | null = null
+  let lastBlockGauge: Gauge | null = null
+  let mappingSpeedGauge: Gauge | null = null
+  let syncEtaGauge: Gauge | null = null
+  let syncRatioGauge: Gauge | null = null
 
   const history = new ProgressHistory()
 
@@ -176,6 +181,31 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
         help: 'Total number of blocks processed',
       })
       currentBlock.set(-1)
+
+      chainHeightGauge = metrics.gauge({
+        name: 'sqd_processor_chain_height',
+        help: 'Chain height of the data source',
+      })
+
+      lastBlockGauge = metrics.gauge({
+        name: 'sqd_processor_last_block',
+        help: 'Last processed block',
+      })
+
+      mappingSpeedGauge = metrics.gauge({
+        name: 'sqd_processor_mapping_blocks_per_second',
+        help: 'Mapping performance',
+      })
+
+      syncEtaGauge = metrics.gauge({
+        name: 'sqd_processor_sync_eta_seconds',
+        help: 'Estimated time until all required blocks will be processed or until the chain height will be reached',
+      })
+
+      syncRatioGauge = metrics.gauge({
+        name: 'sqd_processor_sync_ratio',
+        help: 'Percentage of processed blocks',
+      })
     },
     transform: async (data, ctx) => {
       history.addState({
@@ -188,6 +218,12 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
       }
 
       lastState = history.calculate()
+
+      chainHeightGauge?.set(lastState.state.last)
+      lastBlockGauge?.set(lastState.state.current)
+      mappingSpeedGauge?.set(lastState.interval.processedBlocks.perSecond)
+      syncEtaGauge?.set(lastState.state.etaSeconds)
+      syncRatioGauge?.set(lastState.state.percent / 100)
 
       ctx.state.progress = lastState
 
