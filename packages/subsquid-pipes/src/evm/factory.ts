@@ -106,7 +106,7 @@ export class Factory<T extends EventArgs> {
               for (const event of data.factory) {
                 res.push({
                   contract: event.contract,
-                  blockNumber: event.blockNumber,
+                  blockNumber: event.block.number,
                   event: event.event,
                 })
               }
