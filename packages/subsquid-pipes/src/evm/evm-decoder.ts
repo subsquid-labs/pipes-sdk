@@ -252,5 +252,10 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
 
       return result
     },
+    fork(cursor) {
+      if (!Factory.isFactory(contracts)) return
+
+      return contracts.fork(cursor)
+    },
   })
 }

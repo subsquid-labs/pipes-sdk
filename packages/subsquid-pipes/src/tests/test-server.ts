@@ -23,6 +23,7 @@ type MockResponse =
           hash: string
           timestamp: number
         }
+        logs?: any[]
       }[]
       finalizedHead?: { number: number; hash: string }
       validateRequest?: ValidateRequest
