@@ -44,12 +44,23 @@ type MockResponse =
 
 export type MockPortal = { server: Server; url: string }
 
-export async function createMockPortal(mockResponses: MockResponse[]): Promise<MockPortal> {
+export async function createFinalizedMockPortal(mockResponses: MockResponse[]) {
+  return createMockPortal(mockResponses, {
+    finalized: true,
+  })
+}
+
+export async function createMockPortal(
+  mockResponses: MockResponse[],
+  { finalized = false }: { finalized?: boolean } = {},
+): Promise<MockPortal> {
   const promise = new Promise<Server>((resolve, reject) => {
     let requestCount = 0
 
+    const streamUrl = finalized ? '/finalized-stream' : '/stream'
+
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-      if (req.url !== '/stream') {
+      if (req.url !== streamUrl) {
         res.statusCode = 404
         res.end()
         return
