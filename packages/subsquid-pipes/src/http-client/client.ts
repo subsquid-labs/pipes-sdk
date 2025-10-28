@@ -39,6 +39,7 @@ export interface RequestOptions {
   abort?: AbortSignal
   stream?: boolean
   keepalive?: boolean
+  compress?: boolean
 }
 
 export interface FetchRequest extends RequestInit {
@@ -178,10 +179,10 @@ export class HttpClient implements BaseHttpClient {
   protected afterResponse(req: FetchRequest, res: HttpResponse): void {
     if (!res.stream && this.log?.isLevelEnabled('debug')) {
       let httpResponseBody: any = res.body
-      if (typeof res.body === 'string' || res.body instanceof Uint8Array) {
-        if (res.body.length > 1024 * 1024) {
-          httpResponseBody = '...body is too long to be logged'
-        }
+      if ((typeof res.body === 'string' || res.body instanceof Uint8Array) && res.body.length > 1024 * 1024) {
+        // Truncate response body logging if it exceeds 1MB to prevent excessive memory usage and log file size growth.
+        // The full response body is still available in res.body
+        httpResponseBody = `...response body truncated: size ${(res.body.length / (1024 * 1024)).toFixed(2)}MB exceeds 1MB limit`
       }
 
       this.log.debug(
@@ -212,6 +213,10 @@ export class HttpClient implements BaseHttpClient {
     }
 
     this.handleBasicAuth(req)
+
+    if (options.compress === true) {
+      req.headers.set('Accept-Encoding', 'gzip, deflate, br')
+    }
 
     if (options.query) {
       let qs = new URLSearchParams(options.query as any).toString()
