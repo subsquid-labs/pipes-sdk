@@ -22,6 +22,11 @@ export interface PortalClientOptions {
   url: string
 
   /**
+   *  If true, queries will only return finalized blocks.
+   */
+  finalized?: boolean
+
+  /**
    * Optional custom HTTP client to use.
    */
   http?: HttpClient | HttpClientOptions
@@ -60,7 +65,7 @@ export interface PortalClientOptions {
 export type PortalRequestOptions = Pick<
   RequestOptions,
   'headers' | 'retryAttempts' | 'retrySchedule' | 'httpTimeout' | 'bodyTimeout' | 'abort'
->
+> & { finalized?: boolean }
 
 export interface PortalStreamOptions {
   request?: Omit<PortalRequestOptions, 'abort'>
@@ -71,6 +76,8 @@ export interface PortalStreamOptions {
   maxWaitTime?: number
 
   headPollInterval?: number
+
+  finalized?: boolean
 }
 
 export type PortalStreamData<B> = {
@@ -97,6 +104,8 @@ function isForkHttpError(err: unknown): err is HttpError {
 }
 
 export class PortalClient {
+  readonly #finalized: boolean
+
   private readonly url: URL
   private client: HttpClient
   private readonly headPollInterval: number
@@ -107,6 +116,7 @@ export class PortalClient {
 
   constructor(options: PortalClientOptions) {
     this.url = new URL(options.url)
+    this.#finalized = options.finalized || false
     this.client = options.http instanceof HttpClient ? options.http : new HttpClient(options.http)
     this.headPollInterval = options.headPollInterval ?? 0
     this.minBytes = options.minBytes ?? 10 * 1024 * 1024
@@ -130,42 +140,12 @@ export class PortalClient {
   }
 
   async getHead(options?: PortalRequestOptions): Promise<BlockRef | undefined> {
-    const res = await this.request('GET', this.getDatasetUrl('head'), options)
+    const res = await this.request(
+      'GET',
+      this.getDatasetUrl((options?.finalized ?? this.#finalized) ? 'finalized-head' : 'head'),
+      options,
+    )
     return res.body ?? undefined
-  }
-
-  async getFinalizedHead(options?: PortalRequestOptions): Promise<BlockRef | undefined> {
-    const res = await this.request('GET', this.getDatasetUrl('finalized-head'), options)
-    return res.body ?? undefined
-  }
-
-  /**
-   * @deprecated
-   */
-  async getFinalizedHeight(options?: PortalRequestOptions): Promise<number> {
-    let { body } = await this.request<string>('GET', this.getDatasetUrl('finalized-stream/height'), options)
-    let height = parseInt(body)
-    return height
-  }
-
-  getFinalizedQuery<Q extends Query>(query: Q, options?: PortalRequestOptions): Promise<GetBlock<Q>[]> {
-    // FIXME: is it needed or it is better to always use stream?
-    return this.request<Buffer>('POST', this.getDatasetUrl(`finalized-stream`), {
-      ...options,
-      json: query,
-    })
-      .catch(
-        withErrorContext({
-          archiveQuery: query,
-        }),
-      )
-      .then((res) => {
-        return res.body
-          .toString('utf8')
-          .trimEnd()
-          .split('\n')
-          .map((line) => JSON.parse(line))
-      })
   }
 
   getQuery<Q extends PortalQuery = PortalQuery, R extends PortalBlock = PortalBlock>(
@@ -173,10 +153,14 @@ export class PortalClient {
     options?: PortalRequestOptions,
   ): Promise<R[]> {
     // FIXME: is it needed or it is better to always use stream?
-    return this.request<Buffer>('POST', this.getDatasetUrl(`stream`), {
-      ...options,
-      json: query,
-    })
+    return this.request<Buffer>(
+      'POST',
+      this.getDatasetUrl((options?.finalized ?? this.#finalized) ? 'finalized-stream' : `stream`),
+      {
+        ...options,
+        json: query,
+      },
+    )
       .catch(
         withErrorContext({
           archiveQuery: query,
@@ -191,21 +175,12 @@ export class PortalClient {
       })
   }
 
-  getFinalizedStream<Q extends evm.Query | solana.Query | substrate.Query>(
-    query: Q,
-    options?: PortalStreamOptions,
-  ): PortalStream<GetBlock<Q>> {
-    return createPortalStream(query, this.getStreamOptions(options), async (q, o) =>
-      this.getStreamRequest('finalized-stream', q, o),
-    )
-  }
-
   getStream<Q extends evm.Query | solana.Query | substrate.Query>(
     query: Q,
     options?: PortalStreamOptions,
   ): PortalStream<GetBlock<Q>> {
     return createPortalStream(query, this.getStreamOptions(options), async (q, o) =>
-      this.getStreamRequest('stream', q, o),
+      this.getStreamRequest((options?.finalized ?? this.#finalized) ? 'finalized-stream' : 'stream', q, o),
     )
   }
 
@@ -217,6 +192,7 @@ export class PortalClient {
       maxIdleTime = this.maxIdleTime,
       maxWaitTime = this.maxWaitTime,
       request = {},
+      finalized = false,
     } = options ?? {}
 
     return {
@@ -226,6 +202,7 @@ export class PortalClient {
       maxIdleTime,
       maxWaitTime,
       request,
+      finalized,
     }
   }
 
@@ -617,9 +594,17 @@ function isStreamAbortedError(err: unknown) {
   if (!(err instanceof Error)) return false
   if (!('code' in err)) return false
   switch (err.code) {
+    // Explicitly canceled via AbortController
     case 'ABORT_ERR':
+    // The remote server ended the connection
+    // before Node finished reading the response body.
     case 'ERR_STREAM_PREMATURE_CLOSE':
+    // The other side hung up unexpectedly
     case 'ECONNRESET':
+    // A low-level socket problem —
+    // the TCP connection between your app and the remote server failed
+    // or behaved unexpectedly.
+    case 'UND_ERR_SOCKET':
       return true
     default:
       return false
