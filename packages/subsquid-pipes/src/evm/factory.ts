@@ -1,7 +1,7 @@
 import { AbiEvent } from '@subsquid/evm-abi'
 import type { Codec } from '@subsquid/evm-codec'
 
-import { createTarget, Logger, parsePortalRange } from '~/core/index.js'
+import { BlockCursor, createTarget, Logger, parsePortalRange } from '~/core/index.js'
 import { PortalClient } from '~/portal-client/client.js'
 import { createEvmDecoder, FactoryEvent } from './evm-decoder.js'
 import { createEvmPortalSource } from './evm-portal-source.js'
@@ -14,6 +14,7 @@ export interface FactoryPersistentAdapter<T extends FactoryEvent<any>> {
   all(): Promise<T[]>
   lookup(parameter: string): Promise<T | null>
   save(entities: T[]): Promise<void>
+  remove(blockNumber: number): Promise<void>
 }
 
 export type DecodedAbiEvent<T extends EventArgs> = ReturnType<AbiEvent<T>['decode']>
@@ -128,6 +129,10 @@ export class Factory<T extends EventArgs> {
     await this.options.database.save(this.#batch)
     // Flush memory batch
     this.#batch = []
+  }
+
+  async fork(cursor: BlockCursor) {
+    await this.options.database.remove(cursor.number)
   }
 
   static isFactory(address: any) {

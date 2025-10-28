@@ -16,7 +16,7 @@ export async function sqliteFactoryDatabase(options: SqliteOptions): Promise<Fac
     CREATE TABLE IF NOT EXISTS 
         factory(
           address        TEXT,
-          block_number   TEXT,
+          block_number   INTEGER,
           event          BLOB,
             PRIMARY KEY (address)
         )
@@ -62,6 +62,11 @@ export async function sqliteFactoryDatabase(options: SqliteOptions): Promise<Fac
         ])
       }
 
+      lookupCache = {}
+    },
+
+    remove: async (blockNumber: number) => {
+      db.exec(`DELETE FROM factory WHERE block_number > ?`, [blockNumber])
       lookupCache = {}
     },
   }

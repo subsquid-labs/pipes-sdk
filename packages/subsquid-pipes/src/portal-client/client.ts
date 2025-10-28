@@ -592,8 +592,11 @@ function getFinalizedHeadHeader(headers: HttpResponse['headers']) {
 
 function isStreamAbortedError(err: unknown) {
   if (!(err instanceof Error)) return false
-  if (!('code' in err)) return false
-  switch (err.code) {
+
+  const code = (err.cause as any)?.code || (err as any).code
+  if (!code) return false
+
+  switch (code) {
     // Explicitly canceled via AbortController
     case 'ABORT_ERR':
     // The remote server ended the connection
