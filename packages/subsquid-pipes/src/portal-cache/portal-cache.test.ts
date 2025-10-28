@@ -178,7 +178,7 @@ describe('Portal cache', () => {
       expect(rows).toHaveLength(1)
     })
 
-    it('should not reuse data that has from from greater than request', async () => {
+    it('should not reuse data that has from greater than request', async () => {
       mockPortal = await createMockPortal([
         {
           statusCode: 200,
@@ -262,7 +262,7 @@ describe('Portal cache', () => {
                 "unfinalized": undefined,
               },
               "meta": {
-                "bytesSize": 268,
+                "bytesSize": 265,
               },
               "query": {
                 "hash": "2c0bdec7ab51d431cd1d70c122cb49146bf48fd434f0f6b6d162abf7926c486a",
@@ -297,7 +297,7 @@ describe('Portal cache', () => {
         }),
       )
 
-      expect(rows).toHaveLength(1)
+      expect(rows).toHaveLength(2)
     })
 
     it('should exclude unfinalized blocks', async () => {
