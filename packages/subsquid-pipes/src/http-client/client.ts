@@ -39,7 +39,6 @@ export interface RequestOptions {
   abort?: AbortSignal
   stream?: boolean
   keepalive?: boolean
-  compress?: boolean
 }
 
 export interface FetchRequest extends RequestInit {
@@ -213,10 +212,6 @@ export class HttpClient implements BaseHttpClient {
     }
 
     this.handleBasicAuth(req)
-
-    if (options.compress === true) {
-      req.headers.set('Accept-Encoding', 'gzip, deflate, br')
-    }
 
     if (options.query) {
       let qs = new URLSearchParams(options.query as any).toString()

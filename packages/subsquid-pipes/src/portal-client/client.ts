@@ -59,7 +59,7 @@ export interface PortalClientOptions {
 
 export type PortalRequestOptions = Pick<
   RequestOptions,
-  'headers' | 'retryAttempts' | 'retrySchedule' | 'httpTimeout' | 'bodyTimeout' | 'abort' | 'compress'
+  'headers' | 'retryAttempts' | 'retrySchedule' | 'httpTimeout' | 'bodyTimeout' | 'abort'
 >
 
 export interface PortalStreamOptions {
@@ -299,10 +299,6 @@ function createPortalStream<Q extends Query>(
 
     if (toBlock != null && fromBlock > toBlock) return
 
-    const compress = !(
-      process.env['DISABLE_HTTP_COMPRESSION'] === 'true' || process.env['DISABLE_HTTP_COMPRESSION'] === '1'
-    )
-
     let res = await requestStream(
       {
         ...query,
@@ -312,7 +308,6 @@ function createPortalStream<Q extends Query>(
       {
         ...request,
         abort: buffer.signal,
-        compress,
       },
     )
 
