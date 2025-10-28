@@ -14,7 +14,7 @@ export type SaveBatch = { queryHash: string; cursors: { first: BlockCursor; last
 
 export interface PortalCacheAdapter {
   init?(): Promise<void>
-  stream(request: { queryHash: string; cursor: BlockCursor }): AsyncIterable<Buffer>
+  stream(request: { queryHash: string; fromBlock: number }): AsyncIterable<Buffer>
   save(batch: SaveBatch): Promise<void>
 }
 
@@ -107,8 +107,22 @@ class PortalCache {
     let cursor: BlockCursor = { number: query.fromBlock, hash: query.parentBlockHash }
 
     logger.debug(`loading data from cache from ${cursor.number} block`)
-    for await (const message of adapter.stream({ cursor, queryHash })) {
+    let first = false
+    const fromBlock = cursor.number + 1
+
+    for await (const message of adapter.stream({
+      fromBlock,
+      queryHash,
+    })) {
       const decoded: PortalStreamData<GetBlock<Q>> = JSON.parse(await this.decompress(message))
+      if (!first) {
+        if (decoded.blocks[0]?.header.number !== fromBlock) {
+          logger.debug(`cache miss at ${cursor.number} block, switching to portal`)
+          break
+        }
+        first = true
+      }
+
       yield decoded
 
       cursor = cursorFromHeader(last(decoded.blocks))
@@ -119,20 +133,29 @@ class PortalCache {
     logger.debug(`switching to the portal from ${cursor.number} block`)
     for await (const batch of portal.getStream({
       ...query,
-      fromBlock: cursor.number + 1,
+      fromBlock,
       parentBlockHash: cursor.hash,
     } as Q)) {
-      if (batch.blocks.length === 0) continue
+      const finalizedHead = batch.finalizedHead?.number
+      if (!finalizedHead) continue
 
-      cursor = cursorFromHeader(last(batch.blocks))
+      const blocks = batch.blocks.filter((b) => b.header.number <= finalizedHead)
+      if (blocks.length === 0) continue
+
+      cursor = cursorFromHeader(last(blocks))
 
       await adapter.save({
         queryHash,
         cursors: {
-          first: cursorFromHeader(batch.blocks[0]),
+          first: cursorFromHeader(blocks[0]),
           last: cursor,
         },
-        data: await this.compress(JSON.stringify(batch)),
+        data: await this.compress(
+          JSON.stringify({
+            ...batch,
+            blocks,
+          }),
+        ),
       })
 
       yield batch

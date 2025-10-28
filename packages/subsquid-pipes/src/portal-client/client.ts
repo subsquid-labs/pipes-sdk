@@ -160,12 +160,11 @@ export class PortalClient {
         }),
       )
       .then((res) => {
-        let blocks = res.body
+        return res.body
           .toString('utf8')
           .trimEnd()
           .split('\n')
           .map((line) => JSON.parse(line))
-        return blocks
       })
   }
 
@@ -184,12 +183,11 @@ export class PortalClient {
         }),
       )
       .then((res) => {
-        let blocks = res.body
+        return res.body
           .toString('utf8')
           .trimEnd()
           .split('\n')
           .map((line) => JSON.parse(line))
-        return blocks
       })
   }
 

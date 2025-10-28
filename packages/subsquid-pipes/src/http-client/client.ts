@@ -6,7 +6,7 @@ import type { HttpBody } from './body.js'
 
 export type { HttpBody }
 
-const USER_AGENT = 'sqd-core/http-client (sqd.ai)'
+const USER_AGENT = 'subsquid-pipes/http-client (sqd.ai)'
 
 export type HeadersInit = string[][] | Record<string, string | readonly string[]> | Headers
 
@@ -63,6 +63,8 @@ const statusTexts: Record<number, string> = {
   504: 'gateway timeout',
   524: 'timeout occurred',
 }
+
+const MAX_LOG_BODY_SIZE_BYTES = 1024 * 1024 // 1MB
 
 export class HttpClient implements BaseHttpClient {
   protected log?: Logger
@@ -129,91 +131,77 @@ export class HttpClient implements BaseHttpClient {
   }
 
   protected beforeRequest(req: FetchRequest): void {
-    if (this.log?.isLevelEnabled('debug')) {
-      this.log.debug(
-        {
-          http: {
-            request: {
-              id: req.id,
-              url: req.url,
-              method: req.method,
-              headers: Array.from(req.headers),
-              body: req.body,
-            },
-          },
+    this.log?.debug(
+      {
+        request_id: req.id,
+        http_request: {
+          url: req.url,
+          method: req.method,
+          body: req.body,
         },
-        'http request',
-      )
-    }
+      },
+      'http request started',
+    )
   }
 
   protected beforeRetryPause(req: FetchRequest, reason: Error | HttpResponse, pause: number): void {
-    if (this.log?.isLevelEnabled('warn')) {
-      let info: any = {
-        reason:
-          reason instanceof Error
-            ? reason.toString()
-            : `got ${reason.status} response status${statusTexts[reason.status] ? `: ${statusTexts[reason.status]}` : ''}`,
-        http: {
-          request: {
-            id: req.id,
-            url: req.url,
-            method: req.method,
-            body: req.body,
-          },
-        },
-      }
-
-      if (!(reason instanceof Error)) {
-        info.http.response = {
-          url: reason.url,
-          status: reason.status,
-          headers: Array.from(reason.headers),
-          body: reason.body,
-        }
-      }
-
-      this.log.warn(info, `request will be retried in ${pause} ms`)
+    let info: any = {
+      retry_reason:
+        reason instanceof Error
+          ? reason.toString()
+          : `got ${reason.status} response status${statusTexts[reason.status] ? `: ${statusTexts[reason.status]}` : ''}`,
+      request_id: req.id,
+      http_request: {
+        url: req.url,
+        method: req.method,
+        body: req.body,
+      },
     }
+
+    if (!(reason instanceof Error)) {
+      info.http_response = {
+        status: reason.status,
+        body: reason.body,
+      }
+    }
+
+    this.log?.warn(info, `HTTP request id:${req.id} will be retried in ${pause} ms`)
   }
 
-  protected afterResponseHeaders(req: FetchRequest, url: string, status: number, headers: Headers): void {
-    if (this.log?.isLevelEnabled('debug')) {
-      this.log.debug(
-        {
-          http: {
-            request: {
-              id: req.id,
-              url: url,
-              status: status,
-              headers: Array.from(headers),
-            },
-          },
+  protected afterResponseHeaders(req: FetchRequest, res: Response): void {
+    this.log?.debug(
+      {
+        request_id: req.id,
+        http_response: {
+          url: res.url,
+          status: res.status,
+          headers: Object.fromEntries(res.headers),
         },
-        'http headers',
-      )
-    }
+      },
+      'http response started',
+    )
   }
 
   protected afterResponse(req: FetchRequest, res: HttpResponse): void {
     if (!res.stream && this.log?.isLevelEnabled('debug')) {
       let httpResponseBody: any = res.body
-      if (typeof res.body === 'string' || res.body instanceof Uint8Array) {
-        if (res.body.length > 1024 * 1024) {
-          httpResponseBody = '...body is too long to be logged'
-        }
+      if (
+        (typeof res.body === 'string' || res.body instanceof Uint8Array) &&
+        res.body.length > MAX_LOG_BODY_SIZE_BYTES
+      ) {
+        // Truncate response body logging if it exceeds 1MB to prevent excessive memory usage and log file size growth.
+        // The full response body is still available in res.body
+        httpResponseBody = `...response body truncated: size ${(res.body.length / (1024 * 1024)).toFixed(2)}MB exceeds 1MB limit...`
       }
 
       this.log.debug(
         {
-          http: {
-            request: {
-              id: req.id,
-              body: httpResponseBody,
-            },
+          request_id: req.id,
+          http_response: {
+            body: httpResponseBody,
           },
         },
-        'http body',
+        'http response finished',
       )
     }
   }
@@ -316,7 +304,7 @@ export class HttpClient implements BaseHttpClient {
 
   private async performRequest(req: FetchRequest): Promise<HttpResponse> {
     let res = await fetch(req.url, req)
-    this.afterResponseHeaders(req, res.url, res.status, res.headers)
+    this.afterResponseHeaders(req, res)
     let body = await this.handleResponseBody(req, res)
     let httpResponse = new HttpResponse(req.id, res.url, res.status, res.headers, body, body instanceof ReadableStream)
     this.afterResponse(req, httpResponse)

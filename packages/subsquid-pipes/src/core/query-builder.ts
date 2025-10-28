@@ -1,7 +1,5 @@
-import { createHash } from 'node:crypto'
 import { PortalRange, parsePortalRange } from '~/core/portal-range.js'
-import { mergeDeep } from '~/internal/object/merge-deep.js'
-import { Query, solana } from '~/portal-client/index.js'
+import { Query } from '~/portal-client/index.js'
 import { Heap } from '../internal/heap.js'
 
 /**
@@ -310,7 +308,7 @@ export function concatQueryLists<T extends object>(a?: T[], b?: T[]): T[] | unde
   return result.length ? result : undefined
 }
 
-export function hashQuery(query: Query): string {
+export async function hashQuery(query: Query): Promise<string> {
   /**
    *  We use a hash of the query (excluding fromBlock and toBlock) as a unique identifier
    *  to store and retrieve cached data.
@@ -319,5 +317,27 @@ export function hashQuery(query: Query): string {
    */
   const { fromBlock, toBlock, parentBlockHash, ...unique } = query
 
-  return createHash('md5').update(JSON.stringify(unique)).digest('hex')
+  return await sha256Hex(JSON.stringify(unique))
+}
+
+/** UTF-8 encode a JS string to ArrayBuffer. */
+export function stringToArrayBuffer(str: string): Uint8Array {
+  if (typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(str)
+  }
+
+  throw new Error(
+    'TextEncoder is not supported in this environment. Please ensure you are running in a modern JavaScript environment that supports TextEncoder (Node.js 11+, modern browsers, or include a polyfill).',
+  )
+}
+
+async function sha256Hex(data: string): Promise<string> {
+  // globalThis.crypto is available in browsers, Node 18+, and Cloudflare Workers
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
+    throw new Error(
+      'crypto.subtle is not supported in this environment. Please ensure you are running in a modern JavaScript environment that supports crypto.subtle (Node.js 18+, modern browsers, or include a polyfill).',
+    )
+  }
+  const d = await crypto.subtle.digest('SHA-256', stringToArrayBuffer(data))
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }

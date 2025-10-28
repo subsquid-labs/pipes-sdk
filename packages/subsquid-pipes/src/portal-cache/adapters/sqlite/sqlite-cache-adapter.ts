@@ -24,8 +24,8 @@ export async function sqliteCacheAdapter(options: SqliteOptions): Promise<Portal
   const select = 'SELECT * FROM "data" WHERE "block_from" >= ? and "query_hash" = ? ORDER BY "block_from" ASC'
 
   return {
-    async *stream({ cursor, queryHash }) {
-      for await (const message of db.stream<[number, string], { value: Buffer }>(select, [cursor.number, queryHash])) {
+    async *stream({ fromBlock, queryHash }) {
+      for await (const message of db.stream<[number, string], { value: Buffer }>(select, [fromBlock, queryHash])) {
         yield message.value
       }
     },
