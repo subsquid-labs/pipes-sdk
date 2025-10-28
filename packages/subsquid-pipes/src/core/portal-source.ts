@@ -99,7 +99,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     this.#transformers = options.transformers || []
   }
 
-  async *read(cursor?: BlockCursor): AsyncIterable<PortalBatch<T>> {
+  private async *read(cursor?: BlockCursor): AsyncIterable<PortalBatch<T>> {
     /*
      Calculates query ranges while excluding blocks that were previously fetched to avoid duplicate processing
      */
@@ -161,7 +161,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             },
             query: {
               url: this.#portal.getUrl(),
-              hash: hashQuery(query),
+              hash: await hashQuery(query),
               raw: query,
             },
 
@@ -247,7 +247,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     return this.pipe(compositeTransformer(composite))
   }
 
-  async applyTransformers(ctx: BatchCtx, data: T) {
+  private async applyTransformers(ctx: BatchCtx, data: T) {
     const span = ctx.profiler.start('apply transformers')
 
     for (const transformer of this.#transformers) {
@@ -262,7 +262,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     return data
   }
 
-  context<T extends Record<string, any>>(span: Profiler, rest?: T) {
+  private context<T extends Record<string, any>>(span: Profiler, rest?: T) {
     return {
       logger: this.#logger,
       profiler: span,
@@ -270,14 +270,14 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     } as Ctx & T
   }
 
-  async forkTransformers(profiler: Profiler, cursor: BlockCursor) {
+  private async forkTransformers(profiler: Profiler, cursor: BlockCursor) {
     const span = profiler.start('transformers_rollback')
     const ctx = this.context(span)
     await Promise.all(this.#transformers.map((t) => t.fork(cursor, ctx)))
     span.end()
   }
 
-  async configure() {
+  private async configure() {
     const profiler = Span.root('configure', this.#options.profiler)
 
     const span = profiler.start('transformers')
@@ -292,7 +292,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     profiler.end()
   }
 
-  async start(state: { initial: number; current?: BlockCursor }) {
+  private async start(state: { initial: number; current?: BlockCursor }) {
     if (this.#started) {
       this.#logger.debug(`stream has been already started, skipping "start" hook...`)
       return
@@ -319,6 +319,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     this.#started = true
   }
 
+  /** @internal */
   async stop() {
     this.#started = false
 
@@ -384,7 +385,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     })
   }
 
-  batchEnd(ctx: BatchCtx) {
+  private batchEnd(ctx: BatchCtx) {
     ctx.profiler.end()
     this.#metricServer.addBatchContext(ctx)
   }

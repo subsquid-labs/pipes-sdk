@@ -11,7 +11,7 @@ const transformBatch = ({
   ctx: {
     head,
     query: {
-      // exclude other dynamic, i.e. URL
+      // exclude another dynamic, i.e. URL
       url,
       ...query
     },
@@ -79,7 +79,7 @@ describe('Portal cache', () => {
             { header: { number: 4, hash: '0x4', timestamp: 4000 } },
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
-          finalizedHead: { number: 2, hash: '0x2' },
+          finalizedHead: { number: 5, hash: '0x5' },
         },
       ])
 
@@ -128,6 +128,124 @@ describe('Portal cache', () => {
             "meta": {
               "head": {
                 "finalized": {
+                  "hash": "0x5",
+                  "number": 5,
+                },
+                "unfinalized": undefined,
+              },
+              "meta": {
+                "bytesSize": 265,
+              },
+              "query": {
+                "hash": "2c0bdec7ab51d431cd1d70c122cb49146bf48fd434f0f6b6d162abf7926c486a",
+                "raw": {
+                  "fields": {},
+                  "fromBlock": 0,
+                  "parentBlockHash": undefined,
+                  "toBlock": 5,
+                  "type": "evm",
+                },
+              },
+              "state": {
+                "current": {
+                  "hash": "0x5",
+                  "number": 5,
+                  "timestamp": 5000,
+                },
+                "initial": 0,
+                "last": 5,
+                "rollbackChain": [
+                  {
+                    "hash": "0x5",
+                    "number": 5,
+                    "timestamp": 5000,
+                  },
+                ],
+              },
+            },
+          },
+        ]
+      `)
+
+      // check stored rows by query hash
+      const rows = await readAllChunks(
+        adapter.stream({
+          queryHash: '2c0bdec7ab51d431cd1d70c122cb49146bf48fd434f0f6b6d162abf7926c486a',
+          cursor: { number: 0 },
+        }),
+      )
+
+      expect(rows).toHaveLength(1)
+    })
+
+    it('should exclude unfinalized blocks', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [
+            { header: { number: 1, hash: '0x1', timestamp: 1000 } },
+            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
+            { header: { number: 3, hash: '0x3', timestamp: 3000 } },
+            { header: { number: 4, hash: '0x4', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5', timestamp: 5000 } },
+          ],
+          finalizedHead: { number: 2, hash: '0x2' },
+        },
+        {
+          statusCode: 200,
+          data: [
+            { header: { number: 3, hash: '0x3', timestamp: 3000 } },
+            { header: { number: 4, hash: '0x4', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5', timestamp: 5000 } },
+          ],
+          finalizedHead: { number: 5, hash: '0x5' },
+        },
+      ])
+
+      const adapter = await sqliteCacheAdapter({ path: DB_PATH })
+
+      const stream = createEvmPortalSource({
+        portal: mockPortal.url,
+        query: { from: 0, to: 5 },
+        cache: { adapter },
+      }).pipe(blockTransformer())
+
+      const res1 = (await readAllChunks(stream)).map(transformBatch)
+      const res2 = (await readAllChunks(stream)).map(transformBatch)
+
+      expect(res1).toMatchInlineSnapshot(`
+        [
+          {
+            "data": [
+              {
+                "hash": "0x1",
+                "number": 1,
+                "timestamp": 1000,
+              },
+              {
+                "hash": "0x2",
+                "number": 2,
+                "timestamp": 2000,
+              },
+              {
+                "hash": "0x3",
+                "number": 3,
+                "timestamp": 3000,
+              },
+              {
+                "hash": "0x4",
+                "number": 4,
+                "timestamp": 4000,
+              },
+              {
+                "hash": "0x5",
+                "number": 5,
+                "timestamp": 5000,
+              },
+            ],
+            "meta": {
+              "head": {
+                "finalized": {
                   "hash": "0x2",
                   "number": 2,
                 },
@@ -137,7 +255,7 @@ describe('Portal cache', () => {
                 "bytesSize": 265,
               },
               "query": {
-                "hash": "87052be918a68207740211f7eb8c2725",
+                "hash": "2c0bdec7ab51d431cd1d70c122cb49146bf48fd434f0f6b6d162abf7926c486a",
                 "raw": {
                   "fields": {},
                   "fromBlock": 0,
@@ -181,16 +299,129 @@ describe('Portal cache', () => {
           },
         ]
       `)
+      expect(res2).toMatchInlineSnapshot(`
+        [
+          {
+            "data": [
+              {
+                "hash": "0x1",
+                "number": 1,
+                "timestamp": 1000,
+              },
+              {
+                "hash": "0x2",
+                "number": 2,
+                "timestamp": 2000,
+              },
+            ],
+            "meta": {
+              "head": {
+                "finalized": {
+                  "hash": "0x2",
+                  "number": 2,
+                },
+                "unfinalized": undefined,
+              },
+              "meta": {
+                "bytesSize": 265,
+              },
+              "query": {
+                "hash": "2c0bdec7ab51d431cd1d70c122cb49146bf48fd434f0f6b6d162abf7926c486a",
+                "raw": {
+                  "fields": {},
+                  "fromBlock": 0,
+                  "parentBlockHash": undefined,
+                  "toBlock": 5,
+                  "type": "evm",
+                },
+              },
+              "state": {
+                "current": {
+                  "hash": "0x2",
+                  "number": 2,
+                  "timestamp": 2000,
+                },
+                "initial": 0,
+                "last": 5,
+                "rollbackChain": [
+                  {
+                    "hash": "0x2",
+                    "number": 2,
+                    "timestamp": 2000,
+                  },
+                ],
+              },
+            },
+          },
+          {
+            "data": [
+              {
+                "hash": "0x3",
+                "number": 3,
+                "timestamp": 3000,
+              },
+              {
+                "hash": "0x4",
+                "number": 4,
+                "timestamp": 4000,
+              },
+              {
+                "hash": "0x5",
+                "number": 5,
+                "timestamp": 5000,
+              },
+            ],
+            "meta": {
+              "head": {
+                "finalized": {
+                  "hash": "0x5",
+                  "number": 5,
+                },
+                "unfinalized": undefined,
+              },
+              "meta": {
+                "bytesSize": 159,
+              },
+              "query": {
+                "hash": "2c0bdec7ab51d431cd1d70c122cb49146bf48fd434f0f6b6d162abf7926c486a",
+                "raw": {
+                  "fields": {},
+                  "fromBlock": 0,
+                  "parentBlockHash": undefined,
+                  "toBlock": 5,
+                  "type": "evm",
+                },
+              },
+              "state": {
+                "current": {
+                  "hash": "0x5",
+                  "number": 5,
+                  "timestamp": 5000,
+                },
+                "initial": 0,
+                "last": 5,
+                "rollbackChain": [
+                  {
+                    "hash": "0x5",
+                    "number": 5,
+                    "timestamp": 5000,
+                  },
+                ],
+              },
+            },
+          },
+        ]
+      `)
 
       // check stored rows by query hash
       const rows = await readAllChunks(
         adapter.stream({
-          queryHash: '87052be918a68207740211f7eb8c2725',
+          queryHash: '2c0bdec7ab51d431cd1d70c122cb49146bf48fd434f0f6b6d162abf7926c486a',
           cursor: { number: 0 },
         }),
       )
 
-      expect(rows).toHaveLength(1)
+      expect(rows).toHaveLength(2)
     })
   })
 })

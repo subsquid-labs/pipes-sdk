@@ -6,7 +6,7 @@ import type { HttpBody } from './body.js'
 
 export type { HttpBody }
 
-const USER_AGENT = 'sqd-core/http-client (sqd.ai)'
+const USER_AGENT = 'subsquid-pipes/http-client (sqd.ai)'
 
 export type HeadersInit = string[][] | Record<string, string | readonly string[]> | Headers
 
@@ -129,31 +129,8 @@ export class HttpClient implements BaseHttpClient {
   }
 
   protected beforeRequest(req: FetchRequest): void {
-    if (this.log?.isLevelEnabled('debug')) {
-      this.log.debug(
-        {
-          http: {
-            request: {
-              id: req.id,
-              url: req.url,
-              method: req.method,
-              headers: Array.from(req.headers),
-              body: req.body,
-            },
-          },
-        },
-        'http request',
-      )
-    }
-  }
-
-  protected beforeRetryPause(req: FetchRequest, reason: Error | HttpResponse, pause: number): void {
-    if (this.log?.isLevelEnabled('warn')) {
-      let info: any = {
-        reason:
-          reason instanceof Error
-            ? reason.toString()
-            : `got ${reason.status} response status${statusTexts[reason.status] ? `: ${statusTexts[reason.status]}` : ''}`,
+    this.log?.debug(
+      {
         http: {
           request: {
             id: req.id,
@@ -162,37 +139,40 @@ export class HttpClient implements BaseHttpClient {
             body: req.body,
           },
         },
-      }
+      },
+      'http request',
+    )
+  }
 
-      if (!(reason instanceof Error)) {
-        info.http.response = {
-          url: reason.url,
-          status: reason.status,
-          headers: Array.from(reason.headers),
-          body: reason.body,
-        }
-      }
-
-      this.log.warn(info, `request will be retried in ${pause} ms`)
+  protected beforeRetryPause(req: FetchRequest, reason: Error | HttpResponse, pause: number): void {
+    let info: any = {
+      reason:
+        reason instanceof Error
+          ? reason.toString()
+          : `got ${reason.status} response status${statusTexts[reason.status] ? `: ${statusTexts[reason.status]}` : ''}`,
+      http: {
+        request: { id: req.id, url: req.url, method: req.method, body: req.body },
+      },
     }
+
+    if (!(reason instanceof Error)) {
+      info.http.response = {
+        url: reason.url,
+        status: reason.status,
+        body: reason.body,
+      }
+    }
+
+    this.log?.warn(info, `request will be retried in ${pause} ms`)
   }
 
   protected afterResponseHeaders(req: FetchRequest, url: string, status: number, headers: Headers): void {
-    if (this.log?.isLevelEnabled('debug')) {
-      this.log.debug(
-        {
-          http: {
-            request: {
-              id: req.id,
-              url: url,
-              status: status,
-              headers: Array.from(headers),
-            },
-          },
-        },
-        'http headers',
-      )
-    }
+    this.log?.debug(
+      {
+        http: { request: { id: req.id, url: url, status: status } },
+      },
+      'http headers',
+    )
   }
 
   protected afterResponse(req: FetchRequest, res: HttpResponse): void {

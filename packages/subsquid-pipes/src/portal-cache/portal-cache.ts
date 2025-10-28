@@ -122,17 +122,26 @@ class PortalCache {
       fromBlock: cursor.number + 1,
       parentBlockHash: cursor.hash,
     } as Q)) {
-      if (batch.blocks.length === 0) continue
+      const finalizedHead = batch.finalizedHead?.number
+      if (!finalizedHead) return
 
-      cursor = cursorFromHeader(last(batch.blocks))
+      const blocks = batch.blocks.filter((b) => b.header.number <= finalizedHead)
+      if (blocks.length === 0) continue
+
+      cursor = cursorFromHeader(last(blocks))
 
       await adapter.save({
         queryHash,
         cursors: {
-          first: cursorFromHeader(batch.blocks[0]),
+          first: cursorFromHeader(blocks[0]),
           last: cursor,
         },
-        data: await this.compress(JSON.stringify(batch)),
+        data: await this.compress(
+          JSON.stringify({
+            ...batch,
+            blocks,
+          }),
+        ),
       })
 
       yield batch
