@@ -1,6 +1,6 @@
+import { Metrics } from '~/core/metrics-server.js'
 import { PortalClient } from '~/portal-client/index.js'
 import { Logger } from './logger.js'
-import { Metrics } from './metrics-server.js'
 import { BatchCtx } from './portal-source.js'
 import { ProfilerOptions } from './profiling.js'
 import { BlockCursor, Ctx } from './types.js'

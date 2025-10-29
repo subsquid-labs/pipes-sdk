@@ -53,4 +53,5 @@ jobs:
         env:
           TEST_CLICKHOUSE_URL: http://localhost:8123
           TEST_CLICKHOUSE_USERNAME: default
+          TEST_CLICKHOUSE_PASSWORD: ""
         run: pnpm test

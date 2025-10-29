@@ -2,12 +2,12 @@ import {
   createDefaultLogger,
   createTransformer,
   Logger,
-  MetricsServerOptions,
   PortalRange,
   PortalSource,
   parsePortalRange,
   Transformer,
 } from '~/core/index.js'
+import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
 import { PortalCacheOptions } from '~/portal-cache/portal-cache.js'
 import { evm, PortalClient, PortalClientOptions } from '../portal-client/index.js'
@@ -28,7 +28,7 @@ export function createEvmPortalSource<F extends evm.FieldSelection = any>({
   portal: string | PortalClientOptions | PortalClient
   query?: PortalRange | EvmQueryBuilder<F>
   cache?: PortalCacheOptions
-  metrics?: MetricsServerOptions
+  metrics?: MetricsServer
   logger?: Logger
   progress?: ProgressTrackerOptions
 }) {

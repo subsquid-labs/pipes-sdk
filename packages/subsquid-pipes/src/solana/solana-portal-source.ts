@@ -1,9 +1,9 @@
+import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
 import {
   createDefaultLogger,
   createTransformer,
   Logger,
-  MetricsServerOptions,
   PortalRange,
   PortalSource,
   parsePortalRange,
@@ -28,7 +28,7 @@ export function createSolanaPortalSource<F extends solana.FieldSelection = any>(
   portal: string | PortalClientOptions
   query?: PortalRange | SolanaQueryBuilder<F>
   cache?: PortalCacheOptions
-  metrics?: MetricsServerOptions
+  metrics?: MetricsServer
   logger?: Logger
   progress?: ProgressTrackerOptions
 }) {

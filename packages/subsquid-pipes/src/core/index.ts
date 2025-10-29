@@ -1,6 +1,6 @@
 export * from './formatters.js'
 export * from './logger.js'
-export type { MetricsServerOptions } from './metrics-server.js'
+export * from './metrics-server.js'
 export * from './portal-range.js'
 export * from './portal-source.js'
 export type { ProfilerOptions } from './profiling.js'

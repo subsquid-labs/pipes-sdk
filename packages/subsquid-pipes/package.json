@@ -28,6 +28,9 @@
     "vitest": "3.2.4"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-metrics": "^2.2.0",
+    "@opentelemetry/sdk-node": "^0.207.0",
     "@subsquid/evm-abi": "0.3.1",
     "@subsquid/evm-codec": "0.3.0",
     "@subsquid/solana-stream": "0.3.1",
@@ -88,6 +91,11 @@
       "types": "./dist/targets/clickhouse/index.d.ts",
       "import": "./dist/targets/clickhouse/index.js",
       "require": "./dist/targets/clickhouse/index.cjs"
+    },
+    "./metrics/node": {
+      "types": "./dist/metrics/node/index.d.ts",
+      "import": "./dist/metrics/node/index.js",
+      "require": "./dist/metrics/node/index.cjs"
     }
   },
   "typesVersions": {
@@ -109,6 +117,9 @@
       ],
       "targets/clickhouse": [
         "./dist/targets/clickhouse/index.d.ts"
+      ],
+      "metrics/node": [
+        "./dist/metrics/node/index.d.ts"
       ]
     }
   }

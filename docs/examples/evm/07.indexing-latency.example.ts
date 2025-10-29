@@ -1,5 +1,6 @@
 import { formatBlock } from '@sqd-pipes/pipes'
 import { createEvmPortalSource, createEvmRpcLatencyWatcher } from '@sqd-pipes/pipes/evm'
+import { createNodeMetricsServer } from '@sqd-pipes/pipes/metrics/node'
 
 /**
  * This example demonstrates how to track and compare block indexing latency
@@ -23,6 +24,9 @@ async function main() {
   const stream = createEvmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/base-mainnet',
     query: { from: 'latest' }, // Start from the latest block
+    metrics: createNodeMetricsServer({
+      port: 9090,
+    }),
   }).pipe(
     createEvmRpcLatencyWatcher({
       rpcUrl: ['https://base.drpc.org', 'https://base-rpc.publicnode.com'], // RPC endpoints to monitor

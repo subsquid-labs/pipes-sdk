@@ -1,4 +1,4 @@
-import { Gauge } from 'prom-client'
+import { Gauge } from '~/core/index.js'
 import { displayEstimatedTime, formatBlock, formatNumber, humanBytes } from './formatters.js'
 import { Logger } from './logger.js'
 import { createTransformer } from './transformer.js'

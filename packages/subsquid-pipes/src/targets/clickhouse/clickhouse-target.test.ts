@@ -9,7 +9,7 @@ import { createClickhouseTarget } from './clickouse-target.js'
 const client = createClient({
   url: process.env['TEST_CLICKHOUSE_URL'] || 'http://localhost:10123',
   username: process.env['TEST_CLICKHOUSE_USERNAME'] || 'default',
-  password: process.env['TEST_CLICKHOUSE_PASSWORD'] || '',
+  password: process.env['TEST_CLICKHOUSE_PASSWORD'] || 'default',
   clickhouse_settings: {
     date_time_output_format: 'iso',
   },
