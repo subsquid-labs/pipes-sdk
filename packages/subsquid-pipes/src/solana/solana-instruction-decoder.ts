@@ -36,7 +36,7 @@ const decodedEventFields = {
 
 type SelectedFields = Required<typeof decodedEventFields>
 
-type DecodedInstruction<D> = {
+export type DecodedInstruction<D> = {
   instruction: D
   programId: string
   blockNumber: number
