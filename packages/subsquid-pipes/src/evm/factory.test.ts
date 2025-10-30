@@ -240,7 +240,6 @@ describe('Factory', () => {
     await createEvmPortalSource({
       portal: {
         url: mockPortal.url,
-        minBytes: 1,
       },
     })
       .pipe(
