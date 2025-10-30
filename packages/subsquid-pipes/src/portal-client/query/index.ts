@@ -26,7 +26,7 @@ export function createQuery<Q extends Query>(query: Q): Simplify<Q & Query> {
 
 const BLOCK_SCHEMAS = new WeakMap<Query, Validator<any, any>>()
 
-export function getBlockSchema<Q extends Query>(query: Q): Validator<GetBlock<Q>, any> {
+export function getBlockSchema<Block>(query: Query): Validator<Block, any> {
   let schema = BLOCK_SCHEMAS.get(query)
   if (schema) return schema
 

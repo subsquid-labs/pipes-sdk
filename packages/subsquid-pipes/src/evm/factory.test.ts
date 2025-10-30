@@ -61,6 +61,9 @@ describe('Factory', () => {
                   '0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
                   '0x0000000000000000000000000000000000000000000000000000000000000bb8',
                 ],
+                logIndex: 0,
+                transactionIndex: 0,
+                transactionHash: '0xdeadbeef',
                 data: '0x000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000008ad599c3a0ff1de082011efddc58f1908eb6e6d8',
               },
             ],
@@ -75,6 +78,9 @@ describe('Factory', () => {
                   '0x000000000000000000000000def1cafe0000000000000000000000000000dead',
                   '0x000000000000000000000000beef0000000000000000000000000000deadbeef',
                 ],
+                logIndex: 0,
+                transactionIndex: 0,
+                transactionHash: '0xdeadbeef',
                 data: '0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000005',
               },
               {
@@ -84,6 +90,9 @@ describe('Factory', () => {
                   '0x000000000000000000000000def1cafe0000000000000000000000000000dead',
                   '0x000000000000000000000000beef0000000000000000000000000000deadbeef',
                 ],
+                logIndex: 1,
+                transactionIndex: 1,
+                transactionHash: '0xdeadbeef',
                 data: '0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000005',
               },
             ],
@@ -142,11 +151,14 @@ describe('Factory', () => {
           "rawEvent": {
             "address": "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
             "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000005",
+            "logIndex": 1,
             "topics": [
               "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67",
               "0x000000000000000000000000def1cafe0000000000000000000000000000dead",
               "0x000000000000000000000000beef0000000000000000000000000000deadbeef",
             ],
+            "transactionHash": "0xdeadbeef",
+            "transactionIndex": 1,
           },
           "timestamp": 1970-01-01T00:33:20.000Z,
         },
@@ -185,6 +197,9 @@ describe('Factory', () => {
             header: { number: 2, hash: '0x2', timestamp: 2000 },
             logs: [
               {
+                logIndex: 0,
+                transactionIndex: 0,
+                transactionHash: '0xdeadbeef',
                 address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
                 topics: [
                   '0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118',
@@ -210,10 +225,13 @@ describe('Factory', () => {
         statusCode: 200,
         data: [
           {
-            header: { number: 2, hash: '0x2-1', timestamp: 3000 },
+            header: { number: 2, hash: '0x2a', timestamp: 3000 },
             logs: [
               // this event should not be decoded as the pool address became invalid after the fork
               {
+                logIndex: 0,
+                transactionIndex: 0,
+                transactionHash: '0xdeadbeef',
                 address: '0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8',
                 topics: [
                   '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67',
@@ -225,11 +243,11 @@ describe('Factory', () => {
             ],
           },
           {
-            header: { number: 3, hash: '0x3-1', timestamp: 3000 },
+            header: { number: 3, hash: '0x3a', timestamp: 3000 },
             logs: [],
           },
         ],
-        finalizedHead: { number: 3, hash: '0x3-1' },
+        finalizedHead: { number: 3, hash: '0x3a' },
       },
     ])
 

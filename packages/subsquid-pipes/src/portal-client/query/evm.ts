@@ -393,7 +393,7 @@ export type Block<F extends FieldSelection> = Simplify<{
 }>
 
 export const getBlockSchema = <F extends FieldSelection>(fields: F): Validator<Block<F>, unknown> => {
-  let header = object(project(BlockHeaderShape, { ...fields.block, number: true, hash: true }))
+  let header = object(project(BlockHeaderShape, fields.block))
   let log = object(project(LogShape, fields.log))
   let transaction = object(project(TransactionShape, fields.transaction))
   let trace = getTraceFrameValidator(fields.trace)

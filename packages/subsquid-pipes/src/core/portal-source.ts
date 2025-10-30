@@ -99,6 +99,13 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
   private async *read(cursor?: BlockCursor): AsyncIterable<PortalBatch<T>> {
     /*
+     Ensure that block hash and number are always included in the query for proper cursor management
+     */
+    this.#queryBuilder.addFields({
+      block: { hash: true, number: true },
+    })
+
+    /*
      Calculates query ranges while excluding blocks that were previously fetched to avoid duplicate processing
      */
     const ranges = await this.#queryBuilder.calculateRanges({

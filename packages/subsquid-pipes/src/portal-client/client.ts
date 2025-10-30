@@ -1,6 +1,5 @@
 import { createFuture, Future, unexpectedCase, wait, withErrorContext } from '@subsquid/util-internal'
 import { Readable } from 'stream'
-
 import {
   HttpBody,
   HttpClient,
@@ -265,9 +264,8 @@ function createPortalStream<Q extends Query>(
     stream?: AsyncIterable<string[]> | null | undefined
   }>,
 ): PortalStream<GetBlock<Q>> {
-  let { headPollInterval, request, ...bufferOptions } = options
-
-  let buffer = new PortalStreamBuffer<GetBlock<Q>>(bufferOptions)
+  const { headPollInterval, request, ...bufferOptions } = options
+  const buffer = new PortalStreamBuffer<GetBlock<Q>>(bufferOptions)
 
   let { fromBlock = 0, toBlock, parentBlockHash } = query
 
@@ -276,7 +274,7 @@ function createPortalStream<Q extends Query>(
 
     if (toBlock != null && fromBlock > toBlock) return
 
-    let res = await requestStream(
+    const res = await requestStream(
       {
         ...query,
         fromBlock,
@@ -308,7 +306,7 @@ function createPortalStream<Q extends Query>(
     // no data left on this range
     if (res.stream == null) return
 
-    let iterator = res.stream[Symbol.asyncIterator]()
+    const iterator = res.stream[Symbol.asyncIterator]()
     try {
       while (true) {
         let data = await iterator.next()
@@ -320,7 +318,7 @@ function createPortalStream<Q extends Query>(
         let bytes = 0
 
         for (let line of data.value) {
-          let block = JSON.parse(line) // cast(schema, JSON.parse(line))
+          const block = JSON.parse(line)
           blocks.push(block)
           bytes += line.length
 

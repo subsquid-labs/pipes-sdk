@@ -1,3 +1,4 @@
+import { cast } from '@subsquid/util-internal-validation'
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
 import {
@@ -6,11 +7,10 @@ import {
   Logger,
   PortalRange,
   PortalSource,
-  parsePortalRange,
   Transformer,
 } from '../core/index.js'
 import { PortalCacheOptions } from '../portal-cache/portal-cache.js'
-import { PortalClientOptions, solana } from '../portal-client/index.js'
+import { getBlockSchema, PortalClientOptions, solana } from '../portal-client/index.js'
 import { SolanaQueryBuilder } from './solana-query-builder.js'
 
 export type SolanaTransformer<In, Out> = Transformer<In, Out, SolanaQueryBuilder>
@@ -40,7 +40,7 @@ export function createSolanaPortalSource<F extends solana.FieldSelection = any>(
       ? new SolanaQueryBuilder<F>()
       : query instanceof SolanaQueryBuilder
         ? query
-        : new SolanaQueryBuilder<F>().addRange(parsePortalRange(query)),
+        : new SolanaQueryBuilder<F>().addRange(query),
     cache,
     logger,
     metrics,
@@ -53,16 +53,10 @@ export function createSolanaPortalSource<F extends solana.FieldSelection = any>(
       }),
       createTransformer<SolanaPortalData<F>, SolanaPortalData<F>>({
         profiler: { id: 'normalize data' },
-        transform: (data) => {
-          data.blocks = data.blocks.map((block) => ({
-            ...block,
-            logs: block.logs || [],
-            transactions: block.transactions || [],
-            instructions: block.instructions || [],
-            tokenBalances: block.tokenBalances || [],
-            balances: block.balances || [],
-            rewards: block.rewards || [],
-          }))
+        transform: (data, ctx) => {
+          const schema = getBlockSchema<solana.Block<F>>(ctx.query.raw)
+
+          data.blocks = data.blocks.map((b) => cast(schema, b))
 
           return data
         },

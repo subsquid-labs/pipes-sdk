@@ -21,7 +21,7 @@ type MockResponse =
         header: {
           number: number
           hash: string
-          timestamp: number
+          timestamp?: number
         }
         logs?: any[]
       }[]
