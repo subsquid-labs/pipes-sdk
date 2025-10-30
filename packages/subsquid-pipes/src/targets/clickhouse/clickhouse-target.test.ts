@@ -104,6 +104,9 @@ describe('Clickhouse state', () => {
       await createEvmPortalSource({
         portal: {
           url: mockPortal.url,
+          // we need to save each response separately
+          // to create multiple rows in the status table,
+          // so, we set minBytes to 1 to avoid batching
           minBytes: 1,
         },
         query: { from: 0, to: 3 },
@@ -506,10 +509,7 @@ describe('Clickhouse state', () => {
       while (!finished) {
         try {
           await createEvmPortalSource({
-            portal: {
-              url: mockPortal.url,
-              minBytes: 1,
-            },
+            portal: mockPortal.url,
             query: { from: 0, to: 7 },
           })
             .pipe(blockTransformer())
@@ -551,10 +551,10 @@ describe('Clickhouse state', () => {
             "sign": 1,
           },
           {
-            "current": "{"number":3,"hash":"0x3-1","timestamp":5000}",
-            "finalized": "{"hash":"0x2-1","number":2}",
+            "current": "{"number":7,"hash":"0x7-1","timestamp":7000}",
+            "finalized": "{"hash":"0x4-1","number":4}",
             "id": "stream",
-            "rollback_chain": "[{"number":2,"hash":"0x2-1","timestamp":4000},{"number":3,"hash":"0x3-1","timestamp":5000}]",
+            "rollback_chain": "[{"number":4,"hash":"0x4-1","timestamp":4000},{"number":5,"hash":"0x5-1","timestamp":5000},{"number":6,"hash":"0x6-1","timestamp":6000},{"number":7,"hash":"0x7-1","timestamp":7000}]",
             "sign": 1,
           },
         ]
@@ -653,10 +653,7 @@ describe('Clickhouse state', () => {
       ])
 
       await createEvmPortalSource({
-        portal: {
-          url: mockPortal.url,
-          minBytes: 1,
-        },
+        portal: mockPortal.url,
         query: { from: 0, to: 7 },
       })
         .pipe(blockTransformer())
