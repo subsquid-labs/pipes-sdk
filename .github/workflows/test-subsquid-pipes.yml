@@ -25,6 +25,9 @@ jobs:
         ports:
           - 8123:8123
           - 9000:9000
+        env:
+          CLICKHOUSE_USER: default
+          CLICKHOUSE_PASSWORD: default
         options: >-
           --health-cmd "clickhouse-client --query 'SELECT 1'"
           --health-interval 10s
@@ -53,5 +56,5 @@ jobs:
         env:
           TEST_CLICKHOUSE_URL: http://localhost:8123
           TEST_CLICKHOUSE_USERNAME: default
-          TEST_CLICKHOUSE_PASSWORD: ""
+          TEST_CLICKHOUSE_PASSWORD: default
         run: pnpm test
