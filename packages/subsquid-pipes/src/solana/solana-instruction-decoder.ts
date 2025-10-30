@@ -36,7 +36,7 @@ const decodedEventFields = {
 
 type SelectedFields = Required<typeof decodedEventFields>
 
-type DecodedInstruction<D> = {
+export type DecodedInstruction<D> = {
   instruction: D
   programId: string
   blockNumber: number
@@ -62,8 +62,10 @@ type InstructionsArgs<T extends Instructions> = {
   readonly [K in keyof T]: T[K] extends AbiInstruction<any, any> ? T[K] : never
 }
 
+export type AbiDecodeInstruction<T extends AbiInstruction<any, any>> = DecodedInstruction<ReturnType<T['decode']>>
+
 export type EventResponse<T extends Instructions> = {
-  [K in keyof T]: DecodedInstruction<ReturnType<T[K]['decode']>>[]
+  [K in keyof T]: AbiDecodeInstruction<T[K]>[]
 }
 
 const defaultError = (ctx: BatchCtx, error: any) => {
