@@ -21,10 +21,7 @@ describe('Portal abstract stream', () => {
       mockPortal = await createMockPortal([
         {
           statusCode: 200,
-          data: [
-            { header: { number: 1, hash: '0x123', timestamp: 1000 } },
-            { header: { number: 2, hash: '0x456', timestamp: 2000 } },
-          ],
+          data: [{ header: { number: 1, hash: '0x123' } }, { header: { number: 2, hash: '0x456' } }],
         },
       ])
 
@@ -40,12 +37,10 @@ describe('Portal abstract stream', () => {
         {
           "hash": "0x123",
           "number": 1,
-          "timestamp": 1000,
         },
         {
           "hash": "0x456",
           "number": 2,
-          "timestamp": 2000,
         },
       ]
     `)
@@ -55,12 +50,12 @@ describe('Portal abstract stream', () => {
       mockPortal = await createMockPortal([
         {
           statusCode: 200,
-          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
+          data: [{ header: { number: 1, hash: '0x123' } }],
         },
         ...new Array(10).fill({ statusCode: 503 }),
         {
           statusCode: 200,
-          data: [{ header: { number: 2, hash: '0x456', timestamp: 2000 } }],
+          data: [{ header: { number: 2, hash: '0x456' } }],
         },
       ])
 
@@ -79,12 +74,10 @@ describe('Portal abstract stream', () => {
         {
           "hash": "0x123",
           "number": 1,
-          "timestamp": 1000,
         },
         {
           "hash": "0x456",
           "number": 2,
-          "timestamp": 2000,
         },
       ]
     `)
@@ -123,7 +116,6 @@ describe('Portal abstract stream', () => {
               header: {
                 number: 100_000_000,
                 hash: '0x100000000',
-                timestamp: 1000,
               },
             },
           ],
@@ -179,10 +171,7 @@ describe('Portal abstract stream', () => {
       mockPortal = await createFinalizedMockPortal([
         {
           statusCode: 200,
-          data: [
-            { header: { number: 1, hash: '0x123', timestamp: 1000 } },
-            { header: { number: 2, hash: '0x456', timestamp: 2000 } },
-          ],
+          data: [{ header: { number: 1, hash: '0x123' } }, { header: { number: 2, hash: '0x456' } }],
         },
       ])
 
@@ -201,12 +190,10 @@ describe('Portal abstract stream', () => {
         {
           "hash": "0x123",
           "number": 1,
-          "timestamp": 1000,
         },
         {
           "hash": "0x456",
           "number": 2,
-          "timestamp": 2000,
         },
       ]
     `)

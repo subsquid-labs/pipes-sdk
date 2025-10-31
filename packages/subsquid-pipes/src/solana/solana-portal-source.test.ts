@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { solana } from '~/portal-client/index.js'
 import { SolanaQueryBuilder } from '~/solana/solana-query-builder.js'
 import { closeMockPortal, createMockPortal, MockPortal } from '../tests/index.js'
-import { createSolanaPortalSource, SolanaPortalData } from './solana-portal-source.js'
+import { createSolanaPortalSource } from './solana-portal-source.js'
 
 describe('Portal abstract stream', () => {
   let mockPortal: MockPortal
@@ -16,8 +16,8 @@ describe('Portal abstract stream', () => {
       {
         statusCode: 200,
         data: [
-          { header: { number: 1, hash: '0x123', timestamp: 1000 } },
-          { header: { number: 2, hash: '0x456', timestamp: 2000 } },
+          { header: { number: 1, hash: 'abcd1', timestamp: 1000 } },
+          { header: { number: 2, hash: 'abcd2', timestamp: 2000 } },
         ],
       },
     ])
@@ -35,10 +35,6 @@ describe('Portal abstract stream', () => {
     const stream = createSolanaPortalSource({
       portal: mockPortal.url,
       query: new SolanaQueryBuilder().addFields(fields).addRange({ from: 0, to: 2 }),
-    }).pipe({
-      transform: (data: SolanaPortalData<typeof fields>) => {
-        return data
-      },
     })
 
     for await (const { data } of stream) {

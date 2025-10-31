@@ -1,16 +1,9 @@
-import {
-  createDefaultLogger,
-  createTransformer,
-  Logger,
-  PortalRange,
-  PortalSource,
-  parsePortalRange,
-  Transformer,
-} from '~/core/index.js'
+import { cast } from '@subsquid/util-internal-validation'
+import { createDefaultLogger, createTransformer, Logger, PortalRange, PortalSource, Transformer } from '~/core/index.js'
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
 import { PortalCacheOptions } from '~/portal-cache/portal-cache.js'
-import { evm, PortalClient, PortalClientOptions } from '../portal-client/index.js'
+import { evm, getBlockSchema, PortalClient, PortalClientOptions } from '../portal-client/index.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
 
 export type EvmTransformer<In, Out> = Transformer<In, Out, EvmQueryBuilder>
@@ -40,7 +33,7 @@ export function createEvmPortalSource<F extends evm.FieldSelection = any>({
       ? new EvmQueryBuilder<F>()
       : query instanceof EvmQueryBuilder
         ? query
-        : new EvmQueryBuilder<F>().addRange(parsePortalRange(query)),
+        : new EvmQueryBuilder<F>().addRange(query),
     cache,
     logger,
     metrics,
@@ -53,14 +46,10 @@ export function createEvmPortalSource<F extends evm.FieldSelection = any>({
       }),
       createTransformer<EvmPortalData<F>, EvmPortalData<F>>({
         profiler: { id: 'normalize data' },
-        transform: (data) => {
-          data.blocks = data.blocks.map((block) => ({
-            ...block,
-            logs: block.logs || [],
-            transactions: block.transactions || [],
-            stateDiffs: block.stateDiffs || [],
-            traces: block.traces || [],
-          }))
+        transform: (data, ctx) => {
+          const schema = getBlockSchema<evm.Block<F>>(ctx.query.raw)
+
+          data.blocks = data.blocks.map((b) => cast(schema, b))
 
           return data
         },

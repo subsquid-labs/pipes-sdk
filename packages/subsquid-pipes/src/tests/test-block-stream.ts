@@ -1,4 +1,15 @@
-import { Transformer } from '../core/index.js'
+import { EvmQueryBuilder } from '~/evm/index.js'
+import { PortalRange, Transformer } from '../core/index.js'
+
+export function blockQuery(range: PortalRange) {
+  return new EvmQueryBuilder().addRange(range).addFields({
+    block: {
+      number: true,
+      hash: true,
+      timestamp: true,
+    },
+  })
+}
 
 export function blockTransformer<
   H extends { number: number; timestamp: number; hash: string },

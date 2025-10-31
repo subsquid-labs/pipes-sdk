@@ -304,7 +304,7 @@ export type Block<F extends FieldSelection> = Simplify<{
 }>
 
 export function getBlockSchema<F extends FieldSelection>(fields: F): Validator<Block<F>, unknown> {
-  let header = object(project(BlockHeaderShape, { ...fields.block, number: true, hash: true }))
+  let header = object(project(BlockHeaderShape, fields.block))
 
   let transaction = object(project(TransactionShape, fields.transaction))
 
