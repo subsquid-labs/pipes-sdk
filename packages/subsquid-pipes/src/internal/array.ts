@@ -4,7 +4,7 @@ export function arrayify<T>(data: T | T[]): T[] {
 
 export function last<T>(arr: T[]): T {
   if (!arr.length) {
-    throw new Error(`last() called on empty array`)
+    throw new Error(`last() was called on empty array`)
   }
 
   return arr[arr.length - 1]

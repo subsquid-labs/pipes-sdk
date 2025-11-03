@@ -149,33 +149,6 @@ export class PortalClient {
     return res.body ?? undefined
   }
 
-  getQuery<Q extends PortalQuery = PortalQuery, R extends PortalBlock = PortalBlock>(
-    query: Q,
-    options?: PortalRequestOptions,
-  ): Promise<R[]> {
-    // FIXME: is it needed or it is better to always use stream?
-    return this.request<Buffer>(
-      'POST',
-      this.getDatasetUrl((options?.finalized ?? this.#finalized) ? 'finalized-stream' : `stream`),
-      {
-        ...options,
-        json: query,
-      },
-    )
-      .catch(
-        withErrorContext({
-          archiveQuery: query,
-        }),
-      )
-      .then((res) => {
-        return res.body
-          .toString('utf8')
-          .trimEnd()
-          .split('\n')
-          .map((line) => JSON.parse(line))
-      })
-  }
-
   getStream<Q extends evm.Query | solana.Query | substrate.Query>(
     query: Q,
     options?: PortalStreamOptions,
@@ -329,27 +302,72 @@ function createPortalStream<Q extends Query>(
           let blocks: GetBlock<Q>[] = []
           let bytes = 0
           let requestedFromBlock = fromBlock
+          let needsToPut = false
+          let unfinalizedBlock = false
 
           for (let line of data) {
             const block = JSON.parse(line)
-            blocks.push(block)
-            bytes += line.length
 
-            fromBlock = block.header.number + 1
-            parentBlockHash = block.header.hash
+            unfinalizedBlock = finalizedHead?.number ? block.header?.number > finalizedHead?.number : false
+
+            if (unfinalizedBlock) {
+              // If we are processing unfinalized blocks in batch,
+              // flush the current buffer and put the unfinalized block separately
+              if (blocks.length) {
+                await buffer.put({
+                  blocks,
+                  finalizedHead,
+                  meta: {
+                    bytes,
+                    requestedFromBlock,
+                    lastBlockReceivedAt,
+                  },
+                })
+
+                blocks = []
+                bytes = 0
+                needsToPut = false
+              }
+
+              // Put unfinalized block separately
+              await buffer.put(
+                {
+                  blocks: [block],
+                  finalizedHead,
+                  meta: {
+                    bytes: line.length,
+                    requestedFromBlock,
+                    lastBlockReceivedAt,
+                  },
+                },
+                true,
+              )
+            } else {
+              // Normal finalized block processing
+              needsToPut = true
+              blocks.push(block)
+              bytes += line.length
+            }
           }
 
-          await buffer.put({
-            blocks,
-            finalizedHead,
-            meta: {
-              bytes,
-              requestedFromBlock,
-              lastBlockReceivedAt,
-              requests,
-            },
-          })
+          // Put any remaining finalized blocks
+          if (needsToPut) {
+            if (unfinalizedBlock) {
+              // This should never happen as unfinalized blocks are handled above
+              throw new Error('Unexpected finalized blocks after unfinalized block')
+            }
 
+            await buffer.put({
+              blocks,
+              finalizedHead,
+              meta: {
+                bytes,
+                requestedFromBlock,
+                lastBlockReceivedAt,
+                requests,
+              },
+            })
+          }
           requests = {}
         }
       } catch (err) {
@@ -375,7 +393,9 @@ class PortalStreamBuffer<B> {
   private error: unknown
 
   private readyFuture: Future<void> = createFuture()
+  // Signals that data has been taken and more can be put
   private takeFuture: Future<void> = createFuture()
+  // Signals that data has been put and can be taken
   private putFuture: Future<void> = createFuture()
 
   private idleTimeout: ReturnType<typeof setTimeout> | undefined
@@ -435,7 +455,7 @@ class PortalStreamBuffer<B> {
     }
   }
 
-  async put(data: PortalStreamData<B>) {
+  async put(data: PortalStreamData<B>, flushImmediate = false): Promise<void> {
     if (this.state === 'closed' || this.state === 'failed') {
       throw new Error('Buffer is closed')
     }
@@ -466,11 +486,11 @@ class PortalStreamBuffer<B> {
 
     this.putFuture.resolve()
 
-    if (this.buffer.meta.bytes >= this.minBytes) {
+    if (flushImmediate || this.buffer.meta.bytes >= this.minBytes) {
       this.readyFuture.resolve()
     }
 
-    if (this.buffer.meta.bytes >= this.maxBytes) {
+    if (flushImmediate || this.buffer.meta.bytes >= this.maxBytes) {
       await this.takeFuture.promise()
     }
 

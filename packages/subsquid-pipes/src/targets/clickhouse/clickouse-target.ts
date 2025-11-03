@@ -65,7 +65,7 @@ export function createClickhouseTarget<T>({
       }
 
       for await (const { data, ctx: batchCtx } of read(cursor)) {
-        const userSpan = ctx.profiler.start('data handler')
+        const userSpan = ctx.profiler.start('db data handler')
         await onData({
           store,
           data: data,
@@ -76,7 +76,7 @@ export function createClickhouseTarget<T>({
         })
         userSpan.end()
 
-        const cursorSpan = batchCtx.profiler.start('clickhouse cursor save')
+        const cursorSpan = batchCtx.profiler.start('db state save')
         await state.saveCursor(batchCtx)
         cursorSpan.end()
       }
