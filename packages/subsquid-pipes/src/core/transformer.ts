@@ -1,5 +1,5 @@
 import { Metrics } from '~/core/metrics-server.js'
-import { PortalClient } from '~/portal-client/index.js'
+import { Portal } from '~/portal-client/index.js'
 import { Logger } from './logger.js'
 import { BatchCtx } from './portal-source.js'
 import { ProfilerOptions } from './profiling.js'
@@ -12,7 +12,7 @@ export type StartCtx = {
 }
 
 export type StopCtx = { logger: Logger }
-export type QueryCtx<Query> = { queryBuilder: Query; portal: PortalClient; logger: Logger }
+export type QueryCtx<Query> = { queryBuilder: Query; portal: Portal; logger: Logger }
 
 export interface TransformerOptions<In, Out, Query = any> {
   profiler?: ProfilerOptions

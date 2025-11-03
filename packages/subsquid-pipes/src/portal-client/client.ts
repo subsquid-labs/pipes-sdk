@@ -1,5 +1,6 @@
 import { createFuture, Future, unexpectedCase, wait, withErrorContext } from '@subsquid/util-internal'
 import { Readable } from 'stream'
+import { Logger } from '~/core/index.js'
 import {
   HttpBody,
   HttpClient,
@@ -102,7 +103,14 @@ function isForkHttpError(err: unknown): err is HttpError {
   return true
 }
 
-export class PortalClient {
+export interface Portal {
+  getUrl(): string
+  getLogger(): Logger | undefined
+  getHead(options?: PortalRequestOptions): Promise<BlockRef | undefined>
+  getStream<Q extends evm.Query | solana.Query | substrate.Query>(query: Q): PortalStream<GetBlock<Q>>
+}
+
+export class PortalClient implements Portal {
   readonly #finalized: boolean
 
   private readonly url: URL
@@ -122,6 +130,10 @@ export class PortalClient {
     this.maxBytes = options.maxBytes ?? this.minBytes
     this.maxIdleTime = options.maxIdleTime ?? 300
     this.maxWaitTime = options.maxWaitTime ?? 5_000
+  }
+
+  getLogger(): Logger | undefined {
+    return
   }
 
   getUrl() {
@@ -616,4 +628,14 @@ function isStreamAbortedError(err: unknown) {
     default:
       return false
   }
+}
+
+export function createPortalClient(portal: string | PortalClient | PortalClientOptions) {
+  return portal instanceof PortalClient
+    ? portal
+    : new PortalClient(
+        typeof portal === 'string'
+          ? { url: portal, http: { retryAttempts: Number.MAX_SAFE_INTEGER } }
+          : { ...portal, http: { retryAttempts: Number.MAX_SAFE_INTEGER, ...portal.http } },
+      )
 }

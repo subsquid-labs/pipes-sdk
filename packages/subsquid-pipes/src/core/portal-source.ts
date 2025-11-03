@@ -1,7 +1,6 @@
 import { CompositePipe, compositeTransformer } from '~/core/composite-transformer.js'
-import { isForkException, PortalClient, PortalClientOptions } from '~/portal-client/index.js'
+import { isForkException, Portal } from '~/portal-client/index.js'
 import { last } from '../internal/array.js'
-import { createPortalCache, PortalCacheOptions } from '../portal-cache/portal-cache.js'
 import { Logger } from './logger.js'
 import { createNoopMetricsServer, Metrics, MetricsServer } from './metrics-server.js'
 import { Profiler, Span } from './profiling.js'
@@ -10,6 +9,10 @@ import { hashQuery, QueryBuilder } from './query-builder.js'
 import { Target } from './target.js'
 import { Transformer, TransformerOptions } from './transformer.js'
 import { BlockCursor, Ctx } from './types.js'
+
+export interface PortalCacheAdapter extends Portal {
+  init: (portal: Portal) => PortalCacheAdapter
+}
 
 export type BatchCtx = {
   head: {
@@ -50,11 +53,10 @@ export function cursorFromHeader(block: { header: { number: number; hash: string
 }
 
 export type PortalSourceOptions<Query> = {
-  portal: string | PortalClientOptions | PortalClient
+  portal: Portal
   query: Query
   logger: Logger
   profiler?: boolean
-  cache?: PortalCacheOptions
   transformers?: Transformer<any, any>[]
   metrics?: MetricsServer
   progress?: {
@@ -65,34 +67,20 @@ export type PortalSourceOptions<Query> = {
 }
 
 export class PortalSource<Q extends QueryBuilder<any>, T = any> {
-  readonly #options: {
-    profiler: boolean
-    cache?: PortalCacheOptions
-  }
   readonly #queryBuilder: Q
   readonly #logger: Logger
-  readonly #portal: PortalClient
+  readonly #portal: Portal
+  readonly #profiler: boolean
   readonly #metricServer: MetricsServer
   readonly #transformers: Transformer<any, any>[]
 
   #started = false
 
   constructor({ portal, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
-    this.#portal =
-      portal instanceof PortalClient
-        ? portal
-        : new PortalClient(
-            typeof portal === 'string'
-              ? { url: portal, http: { retryAttempts: Number.MAX_SAFE_INTEGER } }
-              : { ...portal, http: { retryAttempts: Number.MAX_SAFE_INTEGER, ...portal.http } },
-          )
-
+    this.#portal = portal
     this.#queryBuilder = query
     this.#logger = logger
-    this.#options = {
-      cache: options.cache,
-      profiler: typeof options.profiler === 'undefined' ? process.env.NODE_ENV !== 'production' : options.profiler,
-    }
+    this.#profiler = typeof options.profiler === 'undefined' ? process.env.NODE_ENV !== 'production' : options.profiler
     this.#metricServer = options.metrics && 'start' in options.metrics ? options.metrics : createNoopMetricsServer()
     this.#transformers = options.transformers || []
   }
@@ -129,18 +117,9 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
         parentBlockHash: cursor?.hash ? cursor.hash : undefined,
       }
 
-      const source = this.#options.cache
-        ? await createPortalCache({
-            ...this.#options.cache,
-            portal: this.#portal,
-            logger: this.#logger,
-            query,
-          })
-        : this.#portal.getStream(query)
-
-      let batchSpan = Span.root('batch', this.#options.profiler)
+      let batchSpan = Span.root('batch', this.#profiler)
       let readSpan = batchSpan.start('fetch data')
-      for await (const batch of source) {
+      for await (const batch of this.#portal.getStream(query)) {
         readSpan.end()
 
         if (batch.blocks.length > 0) {
@@ -191,7 +170,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
           yield { data, ctx }
         }
 
-        batchSpan = Span.root('batch', this.#options.profiler)
+        batchSpan = Span.root('batch', this.#profiler)
         readSpan = batchSpan.start('fetch data')
       }
     }
@@ -239,8 +218,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       portal: this.#portal,
       query: this.#queryBuilder,
       logger: this.#logger,
-      profiler: this.#options.profiler,
-      cache: this.#options.cache,
+      profiler: this.#profiler,
       metrics: this.#metricServer,
       transformers: [...this.#transformers, transformer],
     })
@@ -283,7 +261,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   }
 
   private async configure() {
-    const profiler = Span.root('configure', this.#options.profiler)
+    const profiler = Span.root('configure', this.#profiler)
 
     const span = profiler.start('transformers')
     const ctx = this.context(span, {
@@ -305,7 +283,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     this.#logger.debug(`invoking <start> hook...`)
 
-    const profiler = Span.root('start', this.#options.profiler)
+    const profiler = Span.root('start', this.#profiler)
 
     const span = profiler.start('transformers')
     const ctx = this.context(span, {
@@ -328,7 +306,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   async stop() {
     this.#started = false
 
-    const profiler = Span.root('stop', this.#options.profiler)
+    const profiler = Span.root('stop', this.#profiler)
 
     const span = profiler.start('transformers')
     const ctx = this.context(span)
@@ -344,7 +322,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     const self = this
 
     return target.write({
-      ctx: this.context(Span.root('write', this.#options.profiler)),
+      ctx: this.context(Span.root('write', this.#profiler)),
       read: async function* (cursor?: BlockCursor) {
         await self.configure()
 
@@ -368,7 +346,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
               throw new Error('Target does not support fork')
             }
 
-            const forkProfiler = Span.root('fork', self.#options.profiler)
+            const forkProfiler = Span.root('fork', self.#profiler)
 
             const span = forkProfiler.start('target_rollback')
             const forkedCursor = await target.fork(e.previousBlocks)

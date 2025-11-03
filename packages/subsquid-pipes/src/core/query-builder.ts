@@ -1,5 +1,5 @@
 import { PortalRange, parsePortalRange } from '~/core/portal-range.js'
-import { Query } from '~/portal-client/index.js'
+import { Portal, Query } from '~/portal-client/index.js'
 import { Heap } from '../internal/heap.js'
 
 /**
@@ -52,7 +52,13 @@ export abstract class QueryBuilder<F extends {}, R = any> {
     return this
   }
 
-  async calculateRanges({ portal, bound }: { bound?: Range; portal: Portal }): Promise<RangeRequest<R>[]> {
+  async calculateRanges({
+    portal,
+    bound,
+  }: {
+    bound?: Range
+    portal: Pick<Portal, 'getHead'>
+  }): Promise<RangeRequest<R>[]> {
     const latest = this.requests.some((r) => r.range.from === 'latest') ? await portal.getHead() : undefined
 
     const ranges = mergeRangeRequests(
@@ -75,10 +81,6 @@ export abstract class QueryBuilder<F extends {}, R = any> {
 
     return applyRangeBound(ranges, bound)
   }
-}
-
-export interface Portal {
-  getHead(): Promise<{ number: number; hash: string } | undefined>
 }
 
 // TODO generate unit tests for this

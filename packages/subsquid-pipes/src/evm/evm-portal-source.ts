@@ -1,9 +1,16 @@
 import { cast } from '@subsquid/util-internal-validation'
-import { createDefaultLogger, createTransformer, Logger, PortalRange, PortalSource, Transformer } from '~/core/index.js'
+import {
+  createDefaultLogger,
+  createTransformer,
+  Logger,
+  PortalCacheAdapter,
+  PortalRange,
+  PortalSource,
+  Transformer,
+} from '~/core/index.js'
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
-import { PortalCacheOptions } from '~/portal-cache/portal-cache.js'
-import { evm, getBlockSchema, PortalClient, PortalClientOptions } from '../portal-client/index.js'
+import { createPortalClient, evm, getBlockSchema, PortalClient, PortalClientOptions } from '../portal-client/index.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
 
 export type EvmTransformer<In, Out> = Transformer<In, Out, EvmQueryBuilder>
@@ -20,7 +27,7 @@ export function createEvmPortalSource<F extends evm.FieldSelection = any>({
 }: {
   portal: string | PortalClientOptions | PortalClient
   query?: PortalRange | EvmQueryBuilder<F>
-  cache?: PortalCacheOptions
+  cache?: PortalCacheAdapter
   metrics?: MetricsServer
   logger?: Logger
   progress?: ProgressTrackerOptions
@@ -28,13 +35,12 @@ export function createEvmPortalSource<F extends evm.FieldSelection = any>({
   logger = logger || createDefaultLogger()
 
   return new PortalSource<EvmQueryBuilder<F>, EvmPortalData<F>>({
-    portal,
+    portal: cache ? cache.init(createPortalClient(portal)) : createPortalClient(portal),
     query: !query
       ? new EvmQueryBuilder<F>()
       : query instanceof EvmQueryBuilder
         ? query
         : new EvmQueryBuilder<F>().addRange(query),
-    cache,
     logger,
     metrics,
     transformers: [

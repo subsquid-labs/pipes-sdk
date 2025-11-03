@@ -5,12 +5,12 @@ import {
   createDefaultLogger,
   createTransformer,
   Logger,
+  PortalCacheAdapter,
   PortalRange,
   PortalSource,
   Transformer,
 } from '../core/index.js'
-import { PortalCacheOptions } from '../portal-cache/portal-cache.js'
-import { getBlockSchema, PortalClientOptions, solana } from '../portal-client/index.js'
+import { createPortalClient, getBlockSchema, PortalClientOptions, solana } from '../portal-client/index.js'
 import { SolanaQueryBuilder } from './solana-query-builder.js'
 
 export type SolanaTransformer<In, Out> = Transformer<In, Out, SolanaQueryBuilder>
@@ -27,7 +27,7 @@ export function createSolanaPortalSource<F extends solana.FieldSelection = any>(
 }: {
   portal: string | PortalClientOptions
   query?: PortalRange | SolanaQueryBuilder<F>
-  cache?: PortalCacheOptions
+  cache?: PortalCacheAdapter
   metrics?: MetricsServer
   logger?: Logger
   progress?: ProgressTrackerOptions
@@ -35,13 +35,12 @@ export function createSolanaPortalSource<F extends solana.FieldSelection = any>(
   logger = logger || createDefaultLogger()
 
   return new PortalSource<SolanaQueryBuilder<F>, SolanaPortalData<F>>({
-    portal,
+    portal: cache ? cache.init(createPortalClient(portal)) : createPortalClient(portal),
     query: !query
       ? new SolanaQueryBuilder<F>()
       : query instanceof SolanaQueryBuilder
         ? query
         : new SolanaQueryBuilder<F>().addRange(query),
-    cache,
     logger,
     metrics,
     transformers: [
