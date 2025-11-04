@@ -440,10 +440,12 @@ function isRetryableError(error: HttpResponse | Error, req?: FetchRequest): bool
   if (error instanceof HttpResponse) {
     switch (error.status) {
       case 429:
-      case 500:
       case 502:
       case 503:
       case 504:
+      case 521:
+      case 522:
+      case 523:
       case 524:
         return true
       default:
