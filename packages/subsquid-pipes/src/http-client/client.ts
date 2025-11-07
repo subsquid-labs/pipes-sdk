@@ -208,7 +208,7 @@ export class HttpClient implements BaseHttpClient {
 
   protected async prepareRequest(url: string, options: RequestOptions & HttpBody): Promise<FetchRequest> {
     let req: FetchRequest = {
-      id: this.requestCounter++,
+      id: ++this.requestCounter,
       method: options.method,
       headers: new Headers(options.headers),
       url: this.getAbsUrl(url),

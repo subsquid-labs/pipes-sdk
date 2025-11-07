@@ -70,7 +70,7 @@ export abstract class QueryBuilder<F extends {}, R = any> {
 
     if (!ranges.length) {
       // FIXME request should be optional
-      return [{ range: bound } as any]
+      return [{ range: bound || { from: 0 } } as any]
     }
 
     return applyRangeBound(ranges, bound)
