@@ -61,6 +61,9 @@ const statusTexts: Record<number, string> = {
   502: 'bad gateway',
   503: 'service unavailable',
   504: 'gateway timeout',
+  521: 'web server is down',
+  522: 'connection timed out',
+  523: 'origin is unreachable',
   524: 'timeout occurred',
 }
 
