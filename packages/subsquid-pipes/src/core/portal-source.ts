@@ -157,7 +157,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             // Batch metadata
             meta: {
               bytesSize: batch.meta.bytes,
-              lastBlockReceivedAt: batch.lastBlockReceivedAt,
+              lastBlockReceivedAt: batch.meta.lastBlockReceivedAt,
             },
             head: {
               finalized: batch.finalizedHead,

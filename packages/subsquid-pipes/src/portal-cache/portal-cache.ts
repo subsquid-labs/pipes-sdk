@@ -10,7 +10,7 @@ const compressAsync = promisify('zstdCompress' in zlib ? (zlib.zstdCompress as a
 // @ts-ignore
 const decompressAsync = promisify('zstdDecompress' in zlib ? (zlib.zstdDecompress as any) : zlib.gunzip)
 
-export type SaveBatch = { queryHash: string; cursors: { first: BlockCursor; last: BlockCursor }; data: Buffer }
+export type SaveBatch = { queryHash: string; cursors: { first: number; last: number }; data: Buffer }
 
 export interface PortalCacheAdapter {
   init?(): Promise<void>
@@ -104,49 +104,46 @@ class PortalCache {
     const { query, portal, logger, adapter } = this.options
     const queryHash = await hashQuery(query)
 
-    let cursor: BlockCursor = { number: query.fromBlock, hash: query.parentBlockHash }
-
+    let cursor: BlockCursor = {
+      number: query.fromBlock,
+      hash: query.parentBlockHash,
+    }
     logger.debug(`loading data from cache from ${cursor.number} block`)
-    let first = false
-    const fromBlock = cursor.number + 1
 
     for await (const message of adapter.stream({
-      fromBlock,
+      fromBlock: cursor.number,
       queryHash,
     })) {
       const decoded: PortalStreamData<GetBlock<Q>> = JSON.parse(await this.decompress(message))
-      if (!first) {
-        if (decoded.blocks[0]?.header.number !== fromBlock) {
-          logger.debug(`cache miss at ${cursor.number} block, switching to portal`)
-          break
-        }
-        first = true
-      }
 
       yield decoded
 
       cursor = cursorFromHeader(last(decoded.blocks))
+      cursor.number += 1
     }
 
-    if (cursor.number === query.toBlock) return
+    if (query.toBlock && cursor.number >= query.toBlock) return
 
     logger.debug(`switching to the portal from ${cursor.number} block`)
     for await (const batch of portal.getStream({
       ...query,
-      fromBlock,
+      fromBlock: cursor.number,
       parentBlockHash: cursor.hash,
     } as Q)) {
       const finalizedHead = batch.finalizedHead?.number
       // TODO add warning
-      if (!finalizedHead) continue
+      if (!finalizedHead) {
+        yield batch
+        continue
+      }
 
       const finalizedBlocks = batch.blocks.filter((b) => b.header.number <= finalizedHead)
       if (finalizedBlocks.length) {
         await adapter.save({
           queryHash,
           cursors: {
-            first: cursorFromHeader(finalizedBlocks[0]),
-            last: cursorFromHeader(last(finalizedBlocks)),
+            first: batch.meta.requestedFromBlock,
+            last: last(finalizedBlocks).header.number,
           },
           data: await this.compress(
             JSON.stringify({
@@ -158,7 +155,6 @@ class PortalCache {
       }
 
       yield batch
-
       // TODO check next batch in cache
     }
   }
