@@ -21,16 +21,21 @@ export async function sqliteCacheAdapter(options: SqliteOptions): Promise<Portal
   `)
 
   const insert = 'INSERT INTO "data" ("block_from", "block_to", "query_hash", "value") VALUES (?, ?, ?, ?)'
-  const select = 'SELECT * FROM "data" WHERE "block_from" >= ? and "query_hash" = ? ORDER BY "block_from" ASC'
+  const select = 'SELECT * FROM "data" WHERE "block_from" = ? and "query_hash" = ? ORDER BY "block_from"'
 
   return {
     async *stream({ fromBlock, queryHash }) {
-      for await (const message of db.stream<[number, string], { value: Buffer }>(select, [fromBlock, queryHash])) {
-        yield message.value
+      while (true) {
+        const res = db.get<{ value: Buffer; block_to: number }>(select, [fromBlock, queryHash])
+        if (!res) break
+
+        yield res.value
+
+        fromBlock = res.block_to + 1
       }
     },
     async save({ queryHash, cursors, data }: SaveBatch) {
-      db.exec(insert, [cursors.first.number, cursors.last.number, queryHash, data])
+      db.exec(insert, [cursors.first, cursors.last, queryHash, data])
     },
   }
 }

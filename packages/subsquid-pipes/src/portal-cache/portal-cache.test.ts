@@ -80,6 +80,9 @@ describe('Portal cache', () => {
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
           finalizedHead: { number: 5, hash: '0x5' },
+          validateRequest: (res) => {
+            expect(res.fromBlock).toBe(0)
+          },
         },
       ])
 
@@ -177,7 +180,7 @@ describe('Portal cache', () => {
       const rows = await readAllChunks(
         adapter.stream({
           queryHash: '8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b',
-          fromBlock: 1,
+          fromBlock: 0,
         }),
       )
 
@@ -196,6 +199,9 @@ describe('Portal cache', () => {
             { header: { number: 10, hash: '0x10', timestamp: 10000 } },
           ],
           finalizedHead: { number: 20, hash: '0x20' },
+          validateRequest: (req) => {
+            expect(req.fromBlock).toBe(6)
+          },
         },
         {
           statusCode: 200,
@@ -207,6 +213,9 @@ describe('Portal cache', () => {
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
           finalizedHead: { number: 20, hash: '0x20' },
+          validateRequest: (req) => {
+            expect(req.fromBlock).toBe(0)
+          },
         },
       ])
 
@@ -305,14 +314,14 @@ describe('Portal cache', () => {
       const rows = await readAllChunks(
         adapter.stream({
           queryHash: '8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b',
-          fromBlock: 1,
+          fromBlock: 0,
         }),
       )
 
       expect(rows).toHaveLength(2)
     })
 
-    it('should exclude unfinalized blocks', async () => {
+    it('should support block gaps and exclude unfinalized blocks', async () => {
       mockPortal = await createMockPortal([
         {
           statusCode: 200,
@@ -324,6 +333,9 @@ describe('Portal cache', () => {
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
           finalizedHead: { number: 2, hash: '0x2' },
+          validateRequest: (req) => {
+            expect(req.fromBlock).toBe(0)
+          },
         },
         {
           statusCode: 200,
@@ -333,6 +345,9 @@ describe('Portal cache', () => {
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
           finalizedHead: { number: 5, hash: '0x5' },
+          validateRequest: (req) => {
+            expect(req.fromBlock).toBe(3)
+          },
         },
       ])
 
@@ -569,7 +584,7 @@ describe('Portal cache', () => {
       const rows = await readAllChunks(
         adapter.stream({
           queryHash: '8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b',
-          fromBlock: 1,
+          fromBlock: 0,
         }),
       )
 

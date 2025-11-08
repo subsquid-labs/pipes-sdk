@@ -84,8 +84,9 @@ export type PortalStreamData<B> = {
   finalizedHead?: BlockRef
   meta: {
     bytes: number
+    requestedFromBlock: number
+    lastBlockReceivedAt: Date
   }
-  lastBlockReceivedAt: Date
 }
 
 export interface PortalStream<B> extends AsyncIterable<PortalStreamData<B>> {}
@@ -292,9 +293,12 @@ function createPortalStream<Q extends Query>(
     if (!('stream' in res)) {
       await buffer.put({
         blocks: [],
-        meta: { bytes: 0 },
+        meta: {
+          bytes: 0,
+          requestedFromBlock: fromBlock,
+          lastBlockReceivedAt: new Date(),
+        },
         finalizedHead,
-        lastBlockReceivedAt: new Date(),
       })
       buffer.flush()
       if (headPollInterval > 0) {
@@ -316,6 +320,7 @@ function createPortalStream<Q extends Query>(
 
         let blocks: GetBlock<Q>[] = []
         let bytes = 0
+        let requestedFromBlock = fromBlock
 
         for (let line of data.value) {
           const block = JSON.parse(line)
@@ -329,8 +334,11 @@ function createPortalStream<Q extends Query>(
         await buffer.put({
           blocks,
           finalizedHead,
-          meta: { bytes },
-          lastBlockReceivedAt,
+          meta: {
+            bytes,
+            requestedFromBlock,
+            lastBlockReceivedAt,
+          },
         })
       }
     } catch (err) {
@@ -433,15 +441,19 @@ class PortalStreamBuffer<B> {
     if (this.buffer == null) {
       this.buffer = {
         blocks: [],
-        meta: { bytes: 0 },
-        lastBlockReceivedAt: new Date(),
+        meta: {
+          bytes: 0,
+          lastBlockReceivedAt: new Date(),
+          requestedFromBlock: Infinity,
+        },
       }
     }
 
     this.buffer.blocks.push(...data.blocks)
     this.buffer.finalizedHead = data.finalizedHead
     this.buffer.meta.bytes += data.meta.bytes
-    this.buffer.lastBlockReceivedAt = data.lastBlockReceivedAt
+    this.buffer.meta.requestedFromBlock = Math.min(this.buffer.meta.requestedFromBlock, data.meta.requestedFromBlock)
+    this.buffer.meta.lastBlockReceivedAt = data.meta.lastBlockReceivedAt
 
     this.putFuture.resolve()
 
