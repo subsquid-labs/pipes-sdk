@@ -10,6 +10,42 @@ const USER_AGENT = 'subsquid-pipes/http-client (sqd.ai)'
 
 export type HeadersInit = string[][] | Record<string, string | readonly string[]> | Headers
 
+export interface RequestHooks {
+  /**
+   * Called before the request is sent.
+   * Can be used for logging, metrics, or modifying the request.
+   */
+  onBeforeRequest?: (req: FetchRequest) => void | Promise<void>
+
+  /**
+   * Called after response headers are received but before body is read.
+   * Useful for early response inspection or streaming setup.
+   */
+  onAfterResponseHeaders?: (req: FetchRequest, res: Response) => void | Promise<void>
+
+  /**
+   * Called after the full response is received and processed.
+   * The response body has been read at this point.
+   */
+  onAfterResponse?: (req: FetchRequest, res: HttpResponse) => void | Promise<void>
+
+  /**
+   * Called before a retry is attempted.
+   * Provides the reason for retry (error or response) and pause duration.
+   */
+  onBeforeRetry?: (req: FetchRequest, reason: Error | HttpResponse, pauseMs: number, attempt: number) => void | Promise<void>
+
+  /**
+   * Called when a request fails with a non-retryable error.
+   */
+  onError?: (req: FetchRequest, error: Error) => void | Promise<void>
+
+  /**
+   * Called when a request completes successfully (after all retries if any).
+   */
+  onSuccess?: (req: FetchRequest, res: HttpResponse) => void | Promise<void>
+}
+
 export interface HttpClientOptions {
   baseUrl?: string
   headers?: Record<string, string | number | bigint>
@@ -26,6 +62,12 @@ export interface HttpClientOptions {
   keepalive?: boolean
 
   log?: Logger | null
+  
+  /**
+   * Lifecycle hooks for request processing.
+   * These hooks are called at various stages of the request lifecycle.
+   */
+  hooks?: RequestHooks
 }
 
 export interface RequestOptions {
@@ -39,6 +81,11 @@ export interface RequestOptions {
   abort?: AbortSignal
   stream?: boolean
   keepalive?: boolean
+  /**
+   * Request-specific hooks that combine with the default hooks from HttpClientOptions.
+   * Both hooks will execute: client-level hook first, then request-level hook.
+   */
+  hooks?: RequestHooks
 }
 
 export interface FetchRequest extends RequestInit {
@@ -49,6 +96,7 @@ export interface FetchRequest extends RequestInit {
   bodyTimeout?: number
   signal?: AbortSignal
   stream?: boolean
+  hooks?: RequestHooks
 }
 
 export interface BaseHttpClient {
@@ -80,6 +128,7 @@ export class HttpClient implements BaseHttpClient {
   private readonly httpTimeout: number
   private readonly bodyTimeout?: number
   private readonly keepalive?: boolean
+  private readonly hooks?: RequestHooks
 
   constructor(options: HttpClientOptions = {}) {
     this.log = options.log == null ? createDefaultLogger().child({ module: 'http-client' }) : options.log
@@ -90,6 +139,7 @@ export class HttpClient implements BaseHttpClient {
     this.httpTimeout = options.httpTimeout ?? 20000
     this.bodyTimeout = options.bodyTimeout
     this.keepalive = options.keepalive
+    this.hooks = options.hooks
   }
 
   async get<T = any>(url: string, options?: Omit<RequestOptions, 'method'>): Promise<T> {
@@ -105,7 +155,7 @@ export class HttpClient implements BaseHttpClient {
   async request<T = any>(url: string, options: RequestOptions & HttpBody = {}): Promise<HttpResponse<T>> {
     let req = await this.prepareRequest(url, options)
 
-    this.beforeRequest(req)
+    await this.beforeRequest(req)
 
     let retryAttempts = options.retryAttempts ?? this.retryAttempts
     let retrySchedule = options.retrySchedule ?? this.retrySchedule
@@ -120,20 +170,24 @@ export class HttpClient implements BaseHttpClient {
             pause = retrySchedule[Math.min(retries, retrySchedule.length - 1)] ?? 1000
           }
           retries += 1
-          this.beforeRetryPause(req, res, pause)
+          await this.beforeRetryPause(req, res, pause, retries)
           await wait(pause, req.signal)
         } else if (res instanceof Error) {
+          await req.hooks?.onError?.(req, res)
           throw addErrorContext(res, { httpRequestId: req.id })
         } else {
-          throw new HttpError(res)
+          const error = new HttpError(res)
+          await req.hooks?.onError?.(req, error)
+          throw error
         }
       } else {
+        await req.hooks?.onSuccess?.(req, res)
         return res
       }
     }
   }
 
-  protected beforeRequest(req: FetchRequest): void {
+  protected async beforeRequest(req: FetchRequest): Promise<void> {
     this.log?.debug(
       {
         request_id: req.id,
@@ -145,9 +199,11 @@ export class HttpClient implements BaseHttpClient {
       },
       'http request started',
     )
+    
+    await req.hooks?.onBeforeRequest?.(req)
   }
 
-  protected beforeRetryPause(req: FetchRequest, reason: Error | HttpResponse, pause: number): void {
+  protected async beforeRetryPause(req: FetchRequest, reason: Error | HttpResponse, pause: number, attempt: number): Promise<void> {
     let info: any = {
       retry_reason:
         reason instanceof Error
@@ -169,9 +225,11 @@ export class HttpClient implements BaseHttpClient {
     }
 
     this.log?.warn(info, `HTTP request id:${req.id} will be retried in ${pause} ms`)
+    
+    await req.hooks?.onBeforeRetry?.(req, reason, pause, attempt)
   }
 
-  protected afterResponseHeaders(req: FetchRequest, res: Response): void {
+  protected async afterResponseHeaders(req: FetchRequest, res: Response): Promise<void> {
     this.log?.debug(
       {
         request_id: req.id,
@@ -183,9 +241,11 @@ export class HttpClient implements BaseHttpClient {
       },
       'http response started',
     )
+    
+    await req.hooks?.onAfterResponseHeaders?.(req, res)
   }
 
-  protected afterResponse(req: FetchRequest, res: HttpResponse): void {
+  protected async afterResponse(req: FetchRequest, res: HttpResponse): Promise<void> {
     if (!res.stream && this.log?.isLevelEnabled('debug')) {
       let httpResponseBody: any = res.body
       if (
@@ -207,6 +267,8 @@ export class HttpClient implements BaseHttpClient {
         'http response finished',
       )
     }
+    
+    await req.hooks?.onAfterResponse?.(req, res)
   }
 
   protected async prepareRequest(url: string, options: RequestOptions & HttpBody): Promise<FetchRequest> {
@@ -261,7 +323,38 @@ export class HttpClient implements BaseHttpClient {
       }
     }
 
+    req.hooks = this.mergeHooks(this.hooks, options.hooks)
+
     return req
+  }
+
+  private mergeHooks(clientHooks?: RequestHooks, requestHooks?: RequestHooks): RequestHooks | undefined {
+    if (!clientHooks && !requestHooks) return undefined
+    if (!clientHooks) return requestHooks
+    if (!requestHooks) return clientHooks
+
+    return {
+      onBeforeRequest: this.combineHook(clientHooks.onBeforeRequest, requestHooks.onBeforeRequest),
+      onAfterResponseHeaders: this.combineHook(clientHooks.onAfterResponseHeaders, requestHooks.onAfterResponseHeaders),
+      onAfterResponse: this.combineHook(clientHooks.onAfterResponse, requestHooks.onAfterResponse),
+      onBeforeRetry: this.combineHook(clientHooks.onBeforeRetry, requestHooks.onBeforeRetry),
+      onError: this.combineHook(clientHooks.onError, requestHooks.onError),
+      onSuccess: this.combineHook(clientHooks.onSuccess, requestHooks.onSuccess),
+    }
+  }
+
+  private combineHook<T extends (...args: any[]) => void | Promise<void>>(
+    a?: T,
+    b?: T,
+  ): T | undefined {
+    if (!a && !b) return undefined
+    if (!a) return b
+    if (!b) return a
+
+    return (async (...args: any[]) => {
+      await a(...args)
+      await b(...args)
+    }) as T
   }
 
   private handleBasicAuth(req: FetchRequest): void {
@@ -307,10 +400,10 @@ export class HttpClient implements BaseHttpClient {
 
   private async performRequest(req: FetchRequest): Promise<HttpResponse> {
     let res = await fetch(req.url, req)
-    this.afterResponseHeaders(req, res)
+    await this.afterResponseHeaders(req, res)
     let body = await this.handleResponseBody(req, res)
     let httpResponse = new HttpResponse(req.id, res.url, res.status, res.headers, body, body instanceof ReadableStream)
-    this.afterResponse(req, httpResponse)
+    await this.afterResponse(req, httpResponse)
     return httpResponse
   }
 

@@ -63,11 +63,11 @@ export interface PortalClientOptions {
 
 export type PortalRequestOptions = Pick<
   RequestOptions,
-  'headers' | 'retryAttempts' | 'retrySchedule' | 'httpTimeout' | 'bodyTimeout' | 'abort'
-> & { finalized?: boolean }
+  'headers' | 'retryAttempts' | 'retrySchedule' | 'httpTimeout' | 'bodyTimeout'
+> & { finalized?: boolean } // why do we have it here?
 
 export interface PortalStreamOptions {
-  request?: Omit<PortalRequestOptions, 'abort'>
+  request?: PortalRequestOptions
 
   minBytes?: number
   maxBytes?: number
@@ -86,6 +86,7 @@ export type PortalStreamData<B> = {
     bytes: number
     requestedFromBlock: number
     lastBlockReceivedAt: Date
+    retries: number
   }
 }
 
@@ -206,7 +207,7 @@ export class PortalClient {
     }
   }
 
-  private async getStreamRequest(path: string, query: PortalQuery, options?: PortalRequestOptions) {
+  private async getStreamRequest(path: string, query: PortalQuery, options?: RequestOptions) {
     try {
       let res = await this.request<Readable | undefined>('POST', this.getDatasetUrl(path), {
         ...options,
@@ -259,7 +260,7 @@ function createPortalStream<Q extends Query>(
   options: Required<PortalStreamOptions>,
   requestStream: (
     query: Q,
-    options?: PortalRequestOptions,
+    options?: RequestOptions,
   ) => Promise<{
     finalizedHead?: BlockRef
     stream?: AsyncIterable<string[]> | null | undefined
@@ -271,87 +272,89 @@ function createPortalStream<Q extends Query>(
   let { fromBlock = 0, toBlock, parentBlockHash } = query
 
   const ingest = async () => {
-    if (buffer.signal.aborted) return
+    while (!buffer.signal.aborted) {
+      if (toBlock != null && fromBlock > toBlock) break
 
-    if (toBlock != null && fromBlock > toBlock) return
+      let retries = 0
 
-    const res = await requestStream(
-      {
-        ...query,
-        fromBlock,
-        parentBlockHash,
-      },
-      {
-        ...request,
-        abort: buffer.signal,
-      },
-    )
-
-    const finalizedHead = res.finalizedHead
-
-    // we are on head
-    if (!('stream' in res)) {
-      await buffer.put({
-        blocks: [],
-        meta: {
-          bytes: 0,
-          requestedFromBlock: fromBlock,
-          lastBlockReceivedAt: new Date(),
+      const res = await requestStream(
+        {
+          ...query,
+          fromBlock,
+          parentBlockHash,
         },
-        finalizedHead,
-      })
-      buffer.flush()
-      if (headPollInterval > 0) {
-        await wait(headPollInterval, buffer.signal)
-      }
-      return ingest()
-    }
-
-    // no data left on this range
-    if (res.stream == null) return
-
-    const iterator = res.stream[Symbol.asyncIterator]()
-    try {
-      while (true) {
-        let data = await iterator.next()
-        if (data.done) break
-
-        const lastBlockReceivedAt = new Date()
-
-        let blocks: GetBlock<Q>[] = []
-        let bytes = 0
-        let requestedFromBlock = fromBlock
-
-        for (let line of data.value) {
-          const block = JSON.parse(line)
-          blocks.push(block)
-          bytes += line.length
-
-          fromBlock = block.header.number + 1
-          parentBlockHash = block.header.hash
-        }
-
-        await buffer.put({
-          blocks,
-          finalizedHead,
-          meta: {
-            bytes,
-            requestedFromBlock,
-            lastBlockReceivedAt,
+        {
+          ...request,
+          abort: buffer.signal,
+          hooks: {
+            onBeforeRetry: () => {
+              retries++
+            },
           },
-        })
-      }
-    } catch (err) {
-      if (buffer.signal.aborted || isStreamAbortedError(err)) {
-        // ignore
-      } else {
-        throw err
-      }
-    } finally {
-      await iterator?.return?.().catch(() => {})
-    }
+        },
+      )
 
-    return ingest()
+      const finalizedHead = res.finalizedHead
+
+      // we are on head
+      if (!('stream' in res)) {
+        await buffer.put({
+          blocks: [],
+          meta: {
+            bytes: 0,
+            requestedFromBlock: fromBlock,
+            lastBlockReceivedAt: new Date(),
+            retries,
+          },
+          finalizedHead,
+        })
+        buffer.flush()
+        if (headPollInterval > 0) {
+          await wait(headPollInterval, buffer.signal)
+        }
+        continue
+      }
+
+      // no data left on this range
+      if (res.stream == null) break
+
+      try {
+        for await (let data of res.stream) {
+          const lastBlockReceivedAt = new Date()
+
+          let blocks: GetBlock<Q>[] = []
+          let bytes = 0
+          let requestedFromBlock = fromBlock
+
+          for (let line of data) {
+            const block = JSON.parse(line)
+            blocks.push(block)
+            bytes += line.length
+
+            fromBlock = block.header.number + 1
+            parentBlockHash = block.header.hash
+          }
+
+          await buffer.put({
+            blocks,
+            finalizedHead,
+            meta: {
+              bytes,
+              requestedFromBlock,
+              lastBlockReceivedAt,
+              retries,
+            },
+          })
+
+          retries = 0
+        }
+      } catch (err) {
+        if (buffer.signal.aborted) break
+        if (!isStreamAbortedError(err)) {
+          throw err
+        }
+      }
+    }
   }
 
   ingest().then(
@@ -445,6 +448,7 @@ class PortalStreamBuffer<B> {
           bytes: 0,
           lastBlockReceivedAt: new Date(),
           requestedFromBlock: Infinity,
+          retries: 0,
         },
       }
     }
@@ -452,6 +456,7 @@ class PortalStreamBuffer<B> {
     this.buffer.blocks.push(...data.blocks)
     this.buffer.finalizedHead = data.finalizedHead
     this.buffer.meta.bytes += data.meta.bytes
+    this.buffer.meta.retries += data.meta.retries
     this.buffer.meta.requestedFromBlock = Math.min(this.buffer.meta.requestedFromBlock, data.meta.requestedFromBlock)
     this.buffer.meta.lastBlockReceivedAt = data.meta.lastBlockReceivedAt
 
