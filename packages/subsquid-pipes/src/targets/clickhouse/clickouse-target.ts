@@ -84,7 +84,11 @@ export function createClickhouseTarget<T>({
       await store.close()
     },
     fork: async (previousBlocks) => {
-      return state.fork(previousBlocks)
+      const cursor = await state.fork(previousBlocks)
+      if (!cursor) return cursor
+
+      await onRollback?.({ type: 'blockchain_fork', store, cursor })
+      return cursor
     },
   })
 }

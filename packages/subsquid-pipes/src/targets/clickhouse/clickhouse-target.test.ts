@@ -279,7 +279,7 @@ describe('Clickhouse state', () => {
                 block_hash       String,
                 sign             Int8
             ) ENGINE = CollapsingMergeTree(sign)
-            ORDER BY (block_number)
+            ORDER BY (block_number, block_hash)
         `,
       })
     })
@@ -364,6 +364,7 @@ describe('Clickhouse state', () => {
         },
       ])
 
+      let rollbackCalls = 0
       await createEvmPortalSource({
         portal: mockPortal.url,
         query: { from: 0, to: 7 },
@@ -384,11 +385,8 @@ describe('Clickhouse state', () => {
               })
             },
             onRollback: async ({ type, store, cursor }) => {
-              if (type === 'offset_check') {
-                expect(cursor).toMatchObject({ number: 0 })
-              } else {
-                expect(cursor).toMatchObject({ number: 3, hash: '0x3' })
-              }
+              rollbackCalls++
+              expect(cursor).toMatchObject({ number: 3, hash: '0x3' })
               await store.removeAllRows({
                 tables: 'test',
                 where: `block_number > {latest:UInt32}`,
@@ -397,6 +395,8 @@ describe('Clickhouse state', () => {
             },
           }),
         )
+
+      expect(rollbackCalls).toEqual(1)
 
       const res = await client.query({
         query: 'SELECT * FROM test FINAL ORDER BY block_number ASC',
@@ -665,6 +665,8 @@ describe('Clickhouse state', () => {
         },
       ])
 
+      let rollbackCalls = 0
+
       await createEvmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 0, to: 7 }),
@@ -686,11 +688,13 @@ describe('Clickhouse state', () => {
               })
             },
             onRollback: async ({ type, store, cursor }) => {
-              if (type === 'offset_check') {
-                expect(cursor).toMatchObject({ number: 0 })
-              } else {
+              if (rollbackCalls === 0) {
                 expect(cursor).toMatchObject({ number: 3, hash: '0x3' })
+              } else {
+                expect(cursor).toMatchObject({ number: 1, hash: '0x1' })
               }
+
+              rollbackCalls++
               await store.removeAllRows({
                 tables: 'test',
                 where: `block_number > {latest:UInt32}`,
