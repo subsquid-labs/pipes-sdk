@@ -54,8 +54,11 @@ export class ClickhouseState {
     private store: ClickhouseStore,
     options: Options,
   ) {
+    // Accessing connectionParams as any due to private typing in ClickHouseClient
+    const client = store.client as any
+
     this.options = {
-      database: 'default',
+      database: client.connectionParams?.database || 'default',
       table: 'sync',
       id: 'stream',
       maxRows: 10_000,
