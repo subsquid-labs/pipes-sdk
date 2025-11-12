@@ -35,6 +35,7 @@ export type BatchCtx = {
   }
   meta: {
     bytesSize: number
+    retries: Record<number, number>
     lastBlockReceivedAt: Date
   }
   query: { url: string; hash: string; raw: any }
@@ -157,6 +158,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             // Batch metadata
             meta: {
               bytesSize: batch.meta.bytes,
+              retries: batch.meta.retries,
               lastBlockReceivedAt: batch.meta.lastBlockReceivedAt,
             },
             head: {
