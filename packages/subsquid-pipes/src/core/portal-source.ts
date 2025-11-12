@@ -35,7 +35,7 @@ export type BatchCtx = {
   }
   meta: {
     bytesSize: number
-    retries: Record<number, number>
+    requests: Record<number, number>
     lastBlockReceivedAt: Date
   }
   query: { url: string; hash: string; raw: any }
@@ -84,8 +84,21 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
         ? portal
         : new PortalClient(
             typeof portal === 'string'
-              ? { url: portal, http: { retryAttempts: Number.MAX_SAFE_INTEGER } }
-              : { ...portal, http: { retryAttempts: Number.MAX_SAFE_INTEGER, ...portal.http } },
+              ? {
+                  url: portal,
+                  http: {
+                    log: logger,
+                    retryAttempts: Number.MAX_SAFE_INTEGER,
+                  },
+                }
+              : {
+                  ...portal,
+                  http: {
+                    log: logger,
+                    retryAttempts: Number.MAX_SAFE_INTEGER,
+                    ...portal.http,
+                  },
+                },
           )
 
     this.#queryBuilder = query
@@ -158,7 +171,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             // Batch metadata
             meta: {
               bytesSize: batch.meta.bytes,
-              retries: batch.meta.retries,
+              requests: batch.meta.requests,
               lastBlockReceivedAt: batch.meta.lastBlockReceivedAt,
             },
             head: {

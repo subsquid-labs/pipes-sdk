@@ -1,7 +1,7 @@
 import { addErrorContext, ensureError, wait } from '@subsquid/util-internal'
 import { addTimeout } from '@subsquid/util-timeout'
 
-import { createDefaultLogger, type Logger } from '~/core/logger.js'
+import { type Logger } from '~/core/logger.js'
 import type { HttpBody } from './body.js'
 
 export type { HttpBody }
@@ -33,7 +33,12 @@ export interface RequestHooks {
    * Called before a retry is attempted.
    * Provides the reason for retry (error or response) and pause duration.
    */
-  onBeforeRetry?: (req: FetchRequest, reason: Error | HttpResponse, pauseMs: number, attempt: number) => void | Promise<void>
+  onBeforeRetry?: (
+    req: FetchRequest,
+    reason: Error | HttpResponse,
+    pauseMs: number,
+    attempt: number,
+  ) => void | Promise<void>
 
   /**
    * Called when a request fails with a non-retryable error.
@@ -62,7 +67,7 @@ export interface HttpClientOptions {
   keepalive?: boolean
 
   log?: Logger | null
-  
+
   /**
    * Lifecycle hooks for request processing.
    * These hooks are called at various stages of the request lifecycle.
@@ -131,7 +136,7 @@ export class HttpClient implements BaseHttpClient {
   private readonly hooks?: RequestHooks
 
   constructor(options: HttpClientOptions = {}) {
-    this.log = options.log == null ? createDefaultLogger().child({ module: 'http-client' }) : options.log
+    this.log = options.log?.child({ module: 'http-client' })
     this.headers = options.headers
     this.setBaseUrl(options.baseUrl)
     this.retrySchedule = options.retrySchedule || [10, 100, 500, 2000, 10000, 20000]
@@ -199,11 +204,16 @@ export class HttpClient implements BaseHttpClient {
       },
       'http request started',
     )
-    
+
     await req.hooks?.onBeforeRequest?.(req)
   }
 
-  protected async beforeRetryPause(req: FetchRequest, reason: Error | HttpResponse, pause: number, attempt: number): Promise<void> {
+  protected async beforeRetryPause(
+    req: FetchRequest,
+    reason: Error | HttpResponse,
+    pause: number,
+    attempt: number,
+  ): Promise<void> {
     let info: any = {
       retry_reason:
         reason instanceof Error
@@ -225,7 +235,7 @@ export class HttpClient implements BaseHttpClient {
     }
 
     this.log?.warn(info, `HTTP request id:${req.id} will be retried in ${pause} ms`)
-    
+
     await req.hooks?.onBeforeRetry?.(req, reason, pause, attempt)
   }
 
@@ -241,7 +251,7 @@ export class HttpClient implements BaseHttpClient {
       },
       'http response started',
     )
-    
+
     await req.hooks?.onAfterResponseHeaders?.(req, res)
   }
 
@@ -267,7 +277,7 @@ export class HttpClient implements BaseHttpClient {
         'http response finished',
       )
     }
-    
+
     await req.hooks?.onAfterResponse?.(req, res)
   }
 
@@ -343,10 +353,7 @@ export class HttpClient implements BaseHttpClient {
     }
   }
 
-  private combineHook<T extends (...args: any[]) => void | Promise<void>>(
-    a?: T,
-    b?: T,
-  ): T | undefined {
+  private combineHook<T extends (...args: any[]) => void | Promise<void>>(a?: T, b?: T): T | undefined {
     if (!a && !b) return undefined
     if (!a) return b
     if (!b) return a

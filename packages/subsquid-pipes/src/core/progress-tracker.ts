@@ -4,7 +4,12 @@ import { Logger } from './logger.js'
 import { createTransformer } from './transformer.js'
 import { BlockCursor } from './types.js'
 
-type HistoryState = { ts: number; bytesDownloaded: number; blockNumber: number }
+type HistoryState = {
+  ts: number
+  bytesDownloaded: number
+  blockNumber: number
+  requests: Record<number, number>
+}
 type LastCursorState = { initial: number; last: number; current: BlockCursor }
 
 export type StartState = {
@@ -21,6 +26,23 @@ export type ProgressState = {
     etaSeconds: number
   }
   interval: {
+    requests: {
+      total: {
+        count: number
+      }
+      successful: {
+        count: number
+        percent: number
+      }
+      rateLimited: {
+        count: number
+        percent: number
+      }
+      failed: {
+        count: number
+        percent: number
+      }
+    }
     processedBlocks: {
       count: number
       perSecond: number
@@ -51,19 +73,30 @@ class ProgressHistory {
     }
   }
 
-  addState({ bytes, state }: { bytes: number; state: LastCursorState }) {
-    if (!state.current?.number) return
+  addState({ bytes, state, requests }: { bytes: number; state: LastCursorState; requests: Record<number, number> }) {
+    // if (!state.current?.number) return
 
     this.#states.push({
       ts: Date.now(),
       bytesDownloaded: bytes,
       blockNumber: state.current.number || 0,
+      requests,
     })
 
     this.#lastCursorState = state
 
     // Keep only the last N states for X seconds
     this.#states = this.#states.slice(-this.#options.maxHistory)
+  }
+
+  private mapRequestStatus(statusCode: number): 'successful' | 'rateLimited' | 'failed' {
+    if (statusCode >= 200 && statusCode < 300) {
+      return 'successful'
+    } else if (statusCode === 429) {
+      return 'rateLimited'
+    } else {
+      return 'failed'
+    }
   }
 
   private validateHistory(states: HistoryState[]) {
@@ -73,12 +106,37 @@ class ProgressHistory {
     // This can happen if the stream got stuck
     if (lastTs && Date.now() - lastTs > this.#options.maxStaleSeconds * 1000) {
       this.#states = []
-      return { blocks: 0, bytes: 0 }
+      return {
+        blocks: 0,
+        bytes: 0,
+        requests: {
+          total: 0,
+          successful: 0,
+          rateLimited: 0,
+          failed: 0,
+        },
+      }
     }
 
     return {
       blocks: states.length >= 2 ? states[states.length - 1].blockNumber - states[0].blockNumber : 0,
       bytes: states.reduce((acc, state) => acc + state.bytesDownloaded, 0),
+      requests: states.reduce(
+        (acc, state) => {
+          for (const [status, value] of Object.entries(state.requests)) {
+            acc.total += value
+            acc[this.mapRequestStatus(Number(status))] += value
+          }
+
+          return acc
+        },
+        {
+          total: 0,
+          successful: 0,
+          rateLimited: 0,
+          failed: 0,
+        },
+      ),
     }
   }
 
@@ -105,6 +163,23 @@ class ProgressHistory {
         etaSeconds: blockPerSecond > 0 ? blocksRemaining / blockPerSecond : 0,
       },
       interval: {
+        requests: {
+          total: {
+            count: stat.requests.total,
+          },
+          successful: {
+            count: stat.requests.successful,
+            percent: stat.requests.total > 0 ? (stat.requests.successful / stat.requests.total) * 100 : 0,
+          },
+          rateLimited: {
+            count: stat.requests.rateLimited,
+            percent: stat.requests.total > 0 ? (stat.requests.rateLimited / stat.requests.total) * 100 : 0,
+          },
+          failed: {
+            count: stat.requests.failed,
+            percent: stat.requests.total > 0 ? (stat.requests.failed / stat.requests.total) * 100 : 0,
+          },
+        },
         processedBlocks: {
           count: stat.blocks,
           perSecond: blockPerSecond,
@@ -154,6 +229,7 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
         message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%), ${displayEstimatedTime(state.etaSeconds)}`,
         blocks: `${interval.processedBlocks.perSecond.toFixed(interval.processedBlocks.perSecond > 1 ? 0 : 2)} blocks/second`,
         bytes: `${humanBytes(interval.bytesDownloaded.perSecond)}/second`,
+        requests: `${formatNumber(interval.requests.successful.percent)}% successful, ${formatNumber(interval.requests.rateLimited.percent)}% rate limited, ${formatNumber(interval.requests.failed.percent)}% failed out of ${formatNumber(interval.requests.total.count)} requests`,
       })
     }
   }
@@ -181,6 +257,7 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
       history.addState({
         state: ctx.state,
         bytes: ctx.meta.bytesSize,
+        requests: ctx.meta.requests,
       })
 
       if (ctx.state.current?.number) {

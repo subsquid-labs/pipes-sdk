@@ -46,7 +46,7 @@ export function createSolanaPortalSource<F extends solana.FieldSelection = any>(
     metrics,
     transformers: [
       progressTracker({
-        logger: logger,
+        logger,
         interval: progress?.interval,
         onStart: progress?.onStart,
         onProgress: progress?.onProgress,
