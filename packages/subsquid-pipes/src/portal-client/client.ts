@@ -8,9 +8,10 @@ import {
   HttpResponse,
   RequestOptions,
 } from '~/http-client/index.js'
+import { partition } from '~/internal/array.js'
 import { npmVersion } from '~/version.js'
 import { ForkException } from './fork-exception.js'
-import { evm, GetBlock, PortalBlock, PortalQuery, Query, solana, substrate } from './query/index.js'
+import { evm, GetBlock, PortalQuery, Query, solana, substrate } from './query/index.js'
 
 const USER_AGENT = `@subsquid/pipes:${npmVersion}`
 
@@ -298,76 +299,54 @@ function createPortalStream<Q extends Query>(
       try {
         for await (let data of res.stream) {
           const lastBlockReceivedAt = new Date()
-
-          let blocks: GetBlock<Q>[] = []
-          let bytes = 0
-          let requestedFromBlock = fromBlock
-          let needsToPut = false
-          let unfinalizedBlock = false
+          const blocks: { block: GetBlock<Q>; bytes: number }[] = []
+          const requestedFromBlock = fromBlock
 
           for (let line of data) {
             const block = JSON.parse(line)
 
-            unfinalizedBlock = finalizedHead?.number ? block.header?.number > finalizedHead?.number : false
+            fromBlock = block.header.number + 1
+            parentBlockHash = block.header.hash
 
-            if (unfinalizedBlock) {
-              // If we are processing unfinalized blocks in batch,
-              // flush the current buffer and put the unfinalized block separately
-              if (blocks.length) {
-                await buffer.put({
-                  blocks,
-                  finalizedHead,
-                  meta: {
-                    bytes,
-                    requestedFromBlock,
-                    lastBlockReceivedAt,
-                  },
-                })
-
-                blocks = []
-                bytes = 0
-                needsToPut = false
-              }
-
-              // Put unfinalized block separately
-              await buffer.put(
-                {
-                  blocks: [block],
-                  finalizedHead,
-                  meta: {
-                    bytes: line.length,
-                    requestedFromBlock,
-                    lastBlockReceivedAt,
-                  },
-                },
-                true,
-              )
-            } else {
-              // Normal finalized block processing
-              needsToPut = true
-              blocks.push(block)
-              bytes += line.length
-            }
-          }
-
-          // Put any remaining finalized blocks
-          if (needsToPut) {
-            if (unfinalizedBlock) {
-              // This should never happen as unfinalized blocks are handled above
-              throw new Error('Unexpected finalized blocks after unfinalized block')
-            }
-
-            await buffer.put({
-              blocks,
-              finalizedHead,
-              meta: {
-                bytes,
-                requestedFromBlock,
-                lastBlockReceivedAt,
-                requests,
-              },
+            blocks.push({
+              block,
+              bytes: line.length,
             })
           }
+
+          const [finalizedBlocks, unfinalizedBlocks] = finalizedHead?.number
+            ? partition(blocks, ({ block }) => block.header?.number <= finalizedHead.number)
+            : [blocks, []]
+
+          await buffer.put({
+            blocks: finalizedBlocks.map((b) => b.block),
+            finalizedHead,
+            meta: {
+              bytes: finalizedBlocks.reduce((a, b) => a + b.bytes, 0),
+              requestedFromBlock,
+              lastBlockReceivedAt,
+              requests,
+            },
+          })
+
+          for (let { block, bytes } of unfinalizedBlocks) {
+            await buffer.put(
+              {
+                blocks: [block],
+                finalizedHead,
+                meta: {
+                  bytes,
+                  requestedFromBlock,
+                  lastBlockReceivedAt,
+                  // We flush requests here to avoid double-counting
+                  // as we already sent them
+                  requests: finalizedBlocks.length > 0 ? {} : requests,
+                },
+              },
+              true,
+            )
+          }
+
           requests = {}
         }
       } catch (err) {

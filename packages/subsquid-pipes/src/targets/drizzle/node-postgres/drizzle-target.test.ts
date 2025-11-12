@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { integer, pgTable, varchar } from 'drizzle-orm/pg-core'
 import { Pool, QueryResultRow } from 'pg'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createEvmPortalSource } from '~/evm/index.js'
 import {
   blockQuery,
@@ -28,9 +28,7 @@ async function execute<T extends QueryResultRow>(query: string, params: any[] = 
 }
 
 async function getAllFromSyncTable(schema = 'public') {
-  const res = await execute(
-    `SELECT "id", "current", "finalized", "rollback_chain" FROM "${schema}"."sync" ORDER BY timestamp ASC`,
-  )
+  const res = await execute(`SELECT * FROM "${schema}"."sync" ORDER BY current_number ASC`)
 
   return res.rows
 }
@@ -39,21 +37,65 @@ describe('Drizzle target', () => {
   let mockPortal: MockPortal
   const db = drizzle(pool)
 
-  describe('state manager', () => {
-    afterEach(async () => {
-      await closeMockPortal(mockPortal)
-      await pool.end()
+  afterEach(async () => {
+    await closeMockPortal(mockPortal)
+  })
+  afterAll(async () => {
+    await pool.end()
+  })
+
+  describe('common', () => {
+    const testTable = pgTable('test', {
+      id: integer().primaryKey(),
     })
 
-    beforeEach(async () => {
-      const client = await pool.connect()
+    afterEach(async () => {
+      await execute(`
+        DROP SCHEMA IF EXISTS "public" CASCADE; 
+        CREATE SCHEMA IF NOT EXISTS "public";
+      `)
+    })
 
-      await client.query(`
+    it('should throw an error if table is not tracked', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [
+            { header: { number: 1, hash: '0x1', timestamp: 1000 } },
+            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
+            { header: { number: 3, hash: '0x3', timestamp: 3000 } },
+            { header: { number: 4, hash: '0x4', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5', timestamp: 5000 } },
+          ],
+          finalizedHead: { number: 2, hash: '0x2' },
+        },
+      ])
+
+      await expect(async () => {
+        await createEvmPortalSource({
+          portal: mockPortal.url,
+          query: blockQuery({ from: 0, to: 5 }),
+        })
+          .pipe(blockTransformer())
+          .pipeTo(
+            createDrizzleTarget({
+              db,
+              tables: [],
+              onData: async ({ tx }) => {
+                await tx.insert(testTable).values({ id: 1 })
+              },
+            }),
+          )
+      }).rejects.toThrow('Table "test" is not tracked for rollbacks')
+    })
+  })
+
+  describe('state manager', () => {
+    beforeEach(async () => {
+      await execute(`
         DROP SCHEMA IF EXISTS "test" CASCADE; 
         CREATE SCHEMA IF NOT EXISTS "test";
       `)
-
-      client.release()
     })
 
     it('should save state to custom schema', async () => {
@@ -89,11 +131,9 @@ describe('Drizzle target', () => {
       expect(rows).toMatchInlineSnapshot(`
         [
           {
-            "current": {
-              "hash": "0x3",
-              "number": 3,
-              "timestamp": 3000,
-            },
+            "current_hash": "0x3",
+            "current_number": "3",
+            "current_timestamp": 3000,
             "finalized": {
               "hash": "0x2",
               "number": 2,
@@ -113,11 +153,9 @@ describe('Drizzle target', () => {
             ],
           },
           {
-            "current": {
-              "hash": "0x4",
-              "number": 4,
-              "timestamp": 4000,
-            },
+            "current_hash": "0x4",
+            "current_number": "4",
+            "current_timestamp": 4000,
             "finalized": {
               "hash": "0x2",
               "number": 2,
@@ -132,11 +170,9 @@ describe('Drizzle target', () => {
             ],
           },
           {
-            "current": {
-              "hash": "0x5",
-              "number": 5,
-              "timestamp": 5000,
-            },
+            "current_hash": "0x5",
+            "current_number": "5",
+            "current_timestamp": 5000,
             "finalized": {
               "hash": "0x2",
               "number": 2,
@@ -433,6 +469,9 @@ describe('Drizzle target', () => {
                   })
               }
             },
+            onBeforeRollback: () => {
+              // throw new Error('STOP')
+            },
             onAfterRollback: async ({ tx, cursor }) => {
               callCount++
               const [row] = await tx.select().from(testTable).where(eq(testTable.block_number, -1))
@@ -649,18 +688,70 @@ describe('Drizzle target', () => {
                 })
               }
             },
-            onAfterRollback: async ({ tx, cursor }) => {
+            onAfterRollback: async () => {
               callCount++
-              // const [row] = await tx.select().from(testTable).where(eq(testTable.block_number, -1))
-              //
-              // expect(cursor.number).toEqual(3)
-              // expect(cursor.hash).toEqual('0x3')
-              // expect(row.data).toEqual(JSON.stringify(cursor))
             },
           }),
         )
 
       expect(callCount).toEqual(1)
+
+      const childs = await db.select().from(childTable).orderBy(childTable.id)
+      expect(childs).toMatchInlineSnapshot(`
+        [
+          {
+            "id": 1,
+            "parent_id": 1,
+            "text": "0x1",
+          },
+          {
+            "id": 2,
+            "parent_id": 2,
+            "text": "0x2",
+          },
+          {
+            "id": 3,
+            "parent_id": 3,
+            "text": "0x3",
+          },
+          {
+            "id": 4,
+            "parent_id": 4,
+            "text": "0x4a",
+          },
+          {
+            "id": 5,
+            "parent_id": 5,
+            "text": "0x5a",
+          },
+        ]
+      `)
+
+      const parents = await db.select().from(parentTable).orderBy(parentTable.id)
+      expect(parents).toMatchInlineSnapshot(`
+        [
+          {
+            "id": 1,
+            "text": "0x1",
+          },
+          {
+            "id": 2,
+            "text": "0x2",
+          },
+          {
+            "id": 3,
+            "text": "0x3",
+          },
+          {
+            "id": 4,
+            "text": "0x4a",
+          },
+          {
+            "id": 5,
+            "text": "0x5a",
+          },
+        ]
+      `)
     })
   })
 })

@@ -5,11 +5,11 @@ describe('EvmQueryBuilder', () => {
   describe('calculateRanges', () => {
     it('should add default range', async () => {
       const qb = new EvmQueryBuilder()
-      const ranges = await qb.calculateRanges({
+      const { bounded } = await qb.calculateRanges({
         portal: { getHead: async () => ({ number: 15, hash: '0x' }) },
       })
 
-      expect(ranges).toEqual([{ range: { from: 0 } }])
+      expect(bounded).toEqual([{ range: { from: 0 } }])
     })
   })
 
@@ -18,11 +18,11 @@ describe('EvmQueryBuilder', () => {
       const builder = new EvmQueryBuilder()
       builder.addRange({ from: 'latest' })
 
-      const res = await builder.calculateRanges({
+      const { bounded } = await builder.calculateRanges({
         portal: { getHead: async () => ({ number: 15, hash: '0x' }) },
       })
 
-      expect(res).toMatchInlineSnapshot(`
+      expect(bounded).toMatchInlineSnapshot(`
         [
           {
             "range": {
@@ -38,12 +38,12 @@ describe('EvmQueryBuilder', () => {
       const builder = new EvmQueryBuilder()
       builder.addRange({ from: 'latest' })
 
-      const res = await builder.calculateRanges({
+      const { bounded } = await builder.calculateRanges({
         portal: { getHead: async () => ({ number: 15, hash: '0x' }) },
         bound: { from: 10 },
       })
 
-      expect(res).toMatchInlineSnapshot(`
+      expect(bounded).toMatchInlineSnapshot(`
         [
           {
             "range": {

@@ -48,7 +48,7 @@ export type Options = {
 export class ClickhouseState {
   options: Options & Required<Pick<Options, 'database' | 'id' | 'table'>>
 
-  readonly #fullTableName: string
+  readonly #qualifiedName: string
 
   constructor(
     private store: ClickhouseStore,
@@ -70,7 +70,7 @@ export class ClickhouseState {
       throw new Error('Max rows must be greater than 0')
     }
 
-    this.#fullTableName = `"${this.options.database}"."${this.options.table}"`
+    this.#qualifiedName = `"${this.options.database}"."${this.options.table}"`
   }
 
   encodeCursor(cursor: BlockCursor | { number: number }): string {
@@ -114,7 +114,7 @@ export class ClickhouseState {
   async getCursor(): Promise<BlockCursor | undefined> {
     try {
       const res = await this.store.query({
-        query: `SELECT * FROM ${this.#fullTableName} WHERE id = {id:String} ORDER BY timestamp DESC LIMIT 1`,
+        query: `SELECT * FROM ${this.#qualifiedName} WHERE id = {id:String} ORDER BY timestamp DESC LIMIT 1`,
         format: 'JSONEachRow',
         query_params: { id: this.options.id },
       })
@@ -127,7 +127,7 @@ export class ClickhouseState {
       return
     } catch (e: unknown) {
       if (e instanceof Error && 'type' in e && e.type === 'UNKNOWN_TABLE') {
-        await this.store.command({ query: table(this.#fullTableName) })
+        await this.store.command({ query: table(this.#qualifiedName) })
 
         return
       }
@@ -138,7 +138,7 @@ export class ClickhouseState {
 
   async fork(previousBlocks: BlockCursor[]): Promise<BlockCursor | null> {
     const res = await this.store.query({
-      query: `SELECT * FROM ${this.#fullTableName} ORDER BY "timestamp" DESC`,
+      query: `SELECT * FROM ${this.#qualifiedName} ORDER BY "timestamp" DESC`,
       format: 'JSONEachRow',
     })
     for await (const rows of res.stream<{ rollback_chain: string; finalized: string }>()) {

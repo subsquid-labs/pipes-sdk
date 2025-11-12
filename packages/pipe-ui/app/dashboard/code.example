@@ -1,4 +1,5 @@
 import { commonAbis, createEvmDecoder, createEvmPortalSource } from '@sqd-pipes/pipes/evm'
+import { createNodeMetricsServer } from '@sqd-pipes/pipes/metrics/node'
 
 async function cli() {
   const stream = createEvmPortalSource({

@@ -24,7 +24,7 @@ export function generateTriggerSQL(from: string, to: string, table: Table) {
       const extra = extraConfigFn(getDrizzleTableExtraColumns(table))
 
       for (const fn of extra) {
-        if (!is(fn, PrimaryKeyBuilder) && !is(fn, PrimaryKeyBuilder)) continue
+        if (!is(fn, PrimaryKeyBuilder)) continue
 
         const primaryKeyBuilder = fn as any
 

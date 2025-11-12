@@ -1,19 +1,34 @@
 import { BatchCtx, BlockCursor } from '~/core/index.js'
+import { parseNumber } from '~/internal/number.js'
 
-const table = (table: string) => `
-CREATE TABLE IF NOT EXISTS ${table}
+const table = ({ qualifiedName, table }: { qualifiedName: string; table: string }) => `
+CREATE TABLE IF NOT EXISTS ${qualifiedName}
 (
-    id               text,
-    current          jsonb,
-    finalized        jsonb,
-    rollback_chain   jsonb,
-    timestamp        timestamptz
+    id                      text not null,
+    current_number          numeric not null,
+    current_hash            text    not null,
+    "current_timestamp"     int4,
+    finalized               jsonb,
+    rollback_chain          jsonb,
+    CONSTRAINT "${table}_pk" PRIMARY KEY("current_number", "id")
 );
-COMMENT ON COLUMN ${table}."id" IS 'Stream identifier to differentiate multiple logical streams';
-COMMENT ON COLUMN ${table}."current" IS 'Current offset, corresponds to the most recent indexed block';
-COMMENT ON COLUMN ${table}."finalized" IS 'Finalized offset, usually corresponds to the most recent known block';
-COMMENT ON COLUMN ${table}."rollback_chain" IS 'JSON-encoded list of block references starting from the finalized block and including all unfinalized blocks';
-COMMENT ON COLUMN ${table}."timestamp" IS 'Timestamp of the record';
+COMMENT ON COLUMN ${qualifiedName}."id" IS
+    'Stream identifier used to separate state records within the same table.';
+
+COMMENT ON COLUMN ${qualifiedName}."current_number" IS
+    'The block number of the current processed block. Acts as part of the primary key.';
+
+COMMENT ON COLUMN ${qualifiedName}."current_hash" IS
+    'The block hash of the current processed block. Used together with current_number to uniquely identify the block.';
+
+COMMENT ON COLUMN ${qualifiedName}."current_timestamp" IS
+    'Timestamp when this state entry was recorded. Indicates when the cursor was persisted.';
+
+COMMENT ON COLUMN ${qualifiedName}."finalized" IS
+    'JSON structure representing the latest finalized block returned by the chain head.';
+
+COMMENT ON COLUMN ${qualifiedName}."rollback_chain" IS
+    'JSON array of BlockCursor entries used for detecting forks and reconstructing rollback points.';
 `
 
 type DeleteResult = {
@@ -25,7 +40,9 @@ type SelectResult<T> = {
 type StateSelect = SelectResult<{
   rollback_chain: BlockCursor[]
   finalized: BlockCursor
-  current: BlockCursor
+  current_number: string
+  current_hash: string
+  current_timestamp: string
   id: string
 }>
 
@@ -34,12 +51,12 @@ interface PgClient {
 }
 
 /**
- * Configuration options for ClickhouseState.
+ * Configuration options for PostgresState.
  */
 export type StateOptions = {
   /**
-   * Name of the ClickHouse database to use.
-   * Defaults to "default" if not provided.
+   * Name of the PostgreSQL schema to use.
+   * Defaults to "public" if not provided.
    */
   schema?: string
 
@@ -60,7 +77,7 @@ export type StateOptions = {
 export class PostgresState {
   options: Required<StateOptions>
 
-  readonly #fullTableName: string
+  readonly #qualifiedTableName: string
 
   constructor(
     private client: PgClient,
@@ -78,18 +95,23 @@ export class PostgresState {
       throw new Error('Retention strategy must be greater than 0')
     }
 
-    this.#fullTableName = `"${this.options.schema}"."${this.options.table}"`
+    this.#qualifiedTableName = `"${this.options.schema}"."${this.options.table}"`
   }
 
   async saveCursor({ state: { current, rollbackChain }, head, logger }: BatchCtx) {
     const finalizedBlock = head.finalized?.number
 
     await this.client.query(
-      `INSERT INTO ${this.#fullTableName} (id, current, finalized, rollback_chain, timestamp) VALUES ($1, $2, $3, $4, NOW())`,
+      `
+        INSERT INTO ${this.#qualifiedTableName} 
+        (id, current_number, current_hash, "current_timestamp", finalized, rollback_chain) 
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `,
       [
         this.options.id,
-        //
-        JSON.stringify(current),
+        current.number,
+        current.hash,
+        current.timestamp,
         JSON.stringify(head.finalized),
         JSON.stringify(rollbackChain),
       ],
@@ -100,8 +122,8 @@ export class PostgresState {
       const safeBlockNumber = Math.max(finalizedBlock - this.options.unfinalizedBlocksRetention, 0)
       const res = await this.client.query<DeleteResult>(
         `DELETE
-         FROM ${this.#fullTableName}
-         WHERE "id" = $1 AND "current" ->> 'number' <= $2`,
+         FROM ${this.#qualifiedTableName}
+         WHERE "id" = $1 AND "current_number" <= $2`,
         [this.options.id, safeBlockNumber],
       )
 
@@ -118,14 +140,25 @@ export class PostgresState {
   async getCursor(): Promise<BlockCursor | undefined> {
     try {
       const { rows } = await this.client.query<StateSelect>(
-        `SELECT * FROM ${this.#fullTableName} WHERE id = $1 ORDER BY timestamp DESC LIMIT 1`,
+        `SELECT * FROM ${this.#qualifiedTableName} WHERE id = $1 ORDER BY "current_number" DESC LIMIT 1`,
         [this.options.id],
       )
+      const [row] = rows
+      if (!row) return
 
-      return rows[0]?.current
+      return {
+        number: parseNumber(row.current_number),
+        hash: row.current_hash,
+        timestamp: row.current_timestamp ? parseNumber(row.current_timestamp) : undefined,
+      }
     } catch (e: unknown) {
       if (e instanceof Error && 'code' in e && e.code === '42P01') {
-        await this.client.query(table(this.#fullTableName))
+        await this.client.query(
+          table({
+            qualifiedName: this.#qualifiedTableName,
+            table: this.options.table,
+          }),
+        )
         return
       }
 
@@ -139,7 +172,7 @@ export class PostgresState {
 
     while (true) {
       const res = await this.client.query<StateSelect>(
-        `SELECT * FROM ${this.#fullTableName} ORDER BY "timestamp" DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
+        `SELECT * FROM ${this.#qualifiedTableName} ORDER BY "current_number" DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
       )
       if (!res.rows.length) break
 

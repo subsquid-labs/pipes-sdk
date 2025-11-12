@@ -6,7 +6,7 @@ import { PgColumn } from 'drizzle-orm/pg-core/columns/common'
 
 import { BlockCursor, Ctx, createTarget } from '~/core/index.js'
 import { nonNullable } from '~/internal/array.js'
-import { getDrizzleForeignKeys, getDrizzleTableName, SQD_PRIMARY_COLS } from './consts.js'
+import { getDrizzleTableName, SQD_PRIMARY_COLS } from './consts.js'
 import { PostgresState, StateOptions } from './postgres-state.js'
 import { generateTriggerSQL, orderTablesForDelete } from './rollback.js'
 
@@ -43,29 +43,36 @@ class DrizzleTracker {
 
   async fork(tx: Transaction, cursor: BlockCursor) {
     for (const table of this.#knownTables.keys()) {
-      const from = getDrizzleTableName(table)
-      const to = `${from}__snapshots`
+      const snapshots = `${getDrizzleTableName(table)}__snapshots`
 
       const res = await tx.execute<
         {
           ___sqd__block_number: number
           ___sqd__operation: 'INSERT' | 'UPDATE' | 'DELETE'
         } & Record<string, unknown>
-      >(`DELETE FROM "${to}" WHERE "___sqd__block_number" > ${cursor.number} RETURNING *`)
-
-      res.rows.sort((a, b) => {
-        return b.___sqd__block_number - a.___sqd__block_number
-      })
+      >(
+        `SELECT *
+         FROM "${snapshots}"
+         WHERE "___sqd__block_number" >= ${cursor.number}
+         ORDER BY "___sqd__block_number" DESC`,
+      )
 
       for (const row of res.rows) {
         const { ___sqd__block_number, ___sqd__operation, ...snapshot } = row
         const primaryCols: PgColumn[] = (table as any)[SQD_PRIMARY_COLS]
 
         const filter = and(...primaryCols.map((col) => eq(col, snapshot[col.name])))
-
+        const rowCancelled = Number(___sqd__block_number) !== cursor.number
         switch (___sqd__operation) {
           case 'INSERT':
-            await tx.delete(table).where(filter)
+            if (rowCancelled) {
+              await tx.delete(table).where(filter)
+            } else {
+              await tx.insert(table).values(snapshot).onConflictDoUpdate({
+                target: primaryCols,
+                set: snapshot,
+              })
+            }
             break
           case 'UPDATE':
             await tx.insert(table).values(snapshot).onConflictDoUpdate({
@@ -74,14 +81,39 @@ class DrizzleTracker {
             })
             break
           case 'DELETE':
-            await tx.insert(table).values(snapshot).onConflictDoUpdate({
-              target: primaryCols,
-              set: snapshot,
-            })
+            if (rowCancelled) {
+              await tx.insert(table).values(snapshot).onConflictDoUpdate({
+                target: primaryCols,
+                set: snapshot,
+              })
+            } else {
+              await tx.delete(table).where(filter)
+            }
             break
         }
       }
+
+      // Clean up any remaining snapshots beyond the fork point
+      await tx.execute(`DELETE FROM "${snapshots}" WHERE "___sqd__block_number" > ${cursor.number}`)
     }
+  }
+
+  wrapTransaction(tx: any): Transaction {
+    for (const method of ['insert', 'delete', 'update']) {
+      const orig = tx[method].bind(tx)
+
+      tx[method] = (table: Table, ...args: any[]) => {
+        if (!this.#knownTables.has(table)) {
+          throw new Error(
+            `Table "${getDrizzleTableName(table)}" is not tracked for rollbacks. Make sure to include it in the "tables" array when creating the target.`,
+          )
+        }
+
+        return orig(table, ...args)
+      }
+    }
+
+    return tx
   }
 }
 
@@ -90,7 +122,7 @@ class DrizzleTracker {
  *
  * @param options - Configuration options
  * @param options.db - Drizzle database instance
- * @param options.tables - Array of Drizzle tables that will be used for data insertion
+ * @param options.tables - Array of Drizzle tables that will be used for tracking rollbacks
  * @param options.onStart - Optional callback that runs before processing starts
  * @param options.onData - Callback that processes each batch of data within a transaction
  * @returns Target implementation that can be used with pipe()
@@ -118,7 +150,7 @@ export function createDrizzleTarget<T>({
   settings?: {
     state?: StateOptions
   }
-  tables: Table[]
+  tables: Table[] | Record<string, Table>
   onStart?: (ctx: { db: NodePgDatabase }) => Promise<unknown>
   onData: (ctx: { tx: Transaction; data: T; ctx: Ctx }) => Promise<unknown>
   onBeforeRollback?: (ctx: { tx: Transaction; cursor: BlockCursor }) => Promise<unknown> | unknown
@@ -131,10 +163,10 @@ export function createDrizzleTarget<T>({
   }
 
   const state = new PostgresState(client, settings?.state)
-  const sortedTables = orderTablesForDelete(tables)
+  const sortedTables = orderTablesForDelete(Array.isArray(tables) ? tables : Object.values(tables))
 
   return createTarget<T>({
-    write: async ({ read, ctx }) => {
+    write: async ({ read, logger }) => {
       const cursor = await state.getCursor()
 
       await onStart?.({ db })
@@ -144,9 +176,10 @@ export function createDrizzleTarget<T>({
         await Promise.all(triggers.map((trigger) => tx.execute(trigger)))
       })
 
-      for await (const { data, ctx: batchCtx } of read(cursor)) {
+      for await (const { data, ctx } of read(cursor)) {
         await db.transaction(async (tx) => {
-          const hasUnfinalizedBlocks = batchCtx.state.rollbackChain.length > 0 ? 'true' : 'false'
+          const snapshotEnabled =
+            ctx.head.finalized?.number && ctx.state.current.number >= ctx.head.finalized.number ? 'true' : 'false'
 
           /*
            * Enable snapshotting for this transaction
@@ -156,26 +189,26 @@ export function createDrizzleTarget<T>({
            * rolled back to this point if needed.
            */
           await tx.execute(`
-            SET LOCAL sqd.snapshot_enabled = ${hasUnfinalizedBlocks};
-            SET LOCAL sqd.snapshot_block_number = ${batchCtx.state.current.number};
+            SET LOCAL sqd.snapshot_enabled = ${snapshotEnabled};
+            SET LOCAL sqd.snapshot_block_number = ${ctx.state.current.number};
           `)
 
           await ctx.profiler.measure('db data handler', async (profiler) => {
             await onData({
-              tx,
+              tx: tracker.wrapTransaction(tx),
               data,
               ctx: {
-                logger: ctx.logger,
+                logger,
                 profiler,
               },
             })
           })
 
-          await batchCtx.profiler.measure('db state save', async (span) => {
-            const { safeBlockNumber } = await state.saveCursor(batchCtx)
+          await ctx.profiler.measure('db state save', async (span) => {
+            const { safeBlockNumber } = await state.saveCursor(ctx)
             if (safeBlockNumber <= 0) return
 
-            ctx.logger.debug(`Safe block number updated to ${safeBlockNumber}`)
+            logger.debug(`Safe block number updated to ${safeBlockNumber}`)
 
             await span.measure('cleanup snapshots', () => {
               return tracker.cleanup(tx, safeBlockNumber)

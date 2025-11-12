@@ -52,7 +52,13 @@ export abstract class QueryBuilder<F extends {}, R = any> {
     return this
   }
 
-  async calculateRanges({ portal, bound }: { bound?: Range; portal: Portal }): Promise<RangeRequest<R>[]> {
+  async calculateRanges({
+    portal,
+    bound,
+  }: {
+    bound?: Range
+    portal: Portal
+  }): Promise<{ bounded: RangeRequest<R>[]; raw: RangeRequest<R>[] }> {
     const latest = this.requests.some((r) => r.range.from === 'latest') ? await portal.getHead() : undefined
 
     const ranges = mergeRangeRequests(
@@ -70,10 +76,16 @@ export abstract class QueryBuilder<F extends {}, R = any> {
 
     if (!ranges.length) {
       // FIXME request should be optional
-      return [{ range: bound || { from: 0 } } as any]
+      return {
+        raw: [{ range: { from: 0 } } as any],
+        bounded: [{ range: bound || { from: 0 } } as any],
+      }
     }
 
-    return applyRangeBound(ranges, bound)
+    return {
+      raw: ranges,
+      bounded: applyRangeBound(ranges, bound),
+    }
   }
 }
 
