@@ -86,7 +86,7 @@ export type PortalStreamData<B> = {
     bytes: number
     requestedFromBlock: number
     lastBlockReceivedAt: Date
-    retries: number
+    retries: Record<number, number>
   }
 }
 
@@ -275,7 +275,7 @@ function createPortalStream<Q extends Query>(
     while (!buffer.signal.aborted) {
       if (toBlock != null && fromBlock > toBlock) break
 
-      let retries = 0
+      let retries: Record<number, number> = {}
 
       const res = await requestStream(
         {
@@ -287,8 +287,9 @@ function createPortalStream<Q extends Query>(
           ...request,
           abort: buffer.signal,
           hooks: {
-            onBeforeRetry: () => {
-              retries++
+            onBeforeRetry: (_, reason) => {
+              const status = reason instanceof HttpResponse ? reason.status : 0
+              retries[status] = (retries[status] || 0) + 1
             },
           },
         },
@@ -346,7 +347,7 @@ function createPortalStream<Q extends Query>(
             },
           })
 
-          retries = 0
+          retries = {}
         }
       } catch (err) {
         if (buffer.signal.aborted) break
@@ -448,7 +449,7 @@ class PortalStreamBuffer<B> {
           bytes: 0,
           lastBlockReceivedAt: new Date(),
           requestedFromBlock: Infinity,
-          retries: 0,
+          retries: {},
         },
       }
     }
@@ -456,7 +457,7 @@ class PortalStreamBuffer<B> {
     this.buffer.blocks.push(...data.blocks)
     this.buffer.finalizedHead = data.finalizedHead
     this.buffer.meta.bytes += data.meta.bytes
-    this.buffer.meta.retries += data.meta.retries
+    this.buffer.meta.retries = mergeRetries(this.buffer.meta.retries, data.meta.retries)
     this.buffer.meta.requestedFromBlock = Math.min(this.buffer.meta.requestedFromBlock, data.meta.requestedFromBlock)
     this.buffer.meta.lastBlockReceivedAt = data.meta.lastBlockReceivedAt
 
@@ -633,4 +634,16 @@ function isStreamAbortedError(err: unknown) {
     default:
       return false
   }
+}
+
+function mergeRetries(a: Record<number, number>, b: Record<number, number>) {
+  for (let code in b) {
+    if (a[code] == null) {
+      a[code] = 0
+    }
+
+    a[code] += b[code]
+  }
+
+  return a
 }

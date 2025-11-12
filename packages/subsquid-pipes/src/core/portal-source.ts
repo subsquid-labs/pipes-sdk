@@ -35,7 +35,7 @@ export type BatchCtx = {
   }
   meta: {
     bytesSize: number
-    retries: number
+    retries: Record<number, number>
     lastBlockReceivedAt: Date
   }
   query: { url: string; hash: string; raw: any }
