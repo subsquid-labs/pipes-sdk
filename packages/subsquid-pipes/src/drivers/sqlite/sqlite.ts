@@ -1,5 +1,9 @@
 export type SqliteOptions = {
+  // File path to the SQLite database
   path: string
+  // Enable Write-Ahead Logging mode for better performance in concurrent scenarios
+  // defaults to true
+  enableWAL?: boolean
 }
 
 export interface SqliteSync {
