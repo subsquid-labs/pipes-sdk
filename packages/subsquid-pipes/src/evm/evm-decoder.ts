@@ -39,10 +39,12 @@ type EventsMap<T extends Events> = {
   readonly [K in keyof T]: T[K] extends AbiEvent<any> ? T[K] : never
 }
 
+export type AbiDecodeEvent<T extends AbiEvent<any>> = ReturnType<T['decode']>
+
 export type EventResponse<T extends Events, F> = {
   [K in keyof T]: DecodedEvent<
     // child event
-    ReturnType<T[K]['decode']>,
+    AbiDecodeEvent<T[K]>,
     // factory event
     F extends Factory<infer R> ? DecodedAbiEvent<R> : never
   >[]
