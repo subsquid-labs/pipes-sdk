@@ -1,13 +1,21 @@
 import pino, { Logger as PinoLogger } from 'pino'
 
 export type Logger = PinoLogger
+export type LogLevel = 'pino' | 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent' | false | null
 
-// FIXME 1) enable pretty-print only if TTY and process.env.LOG_PRETTY is not "false"
-export function createDefaultLogger() {
+function isEnvFalse(name: string): boolean {
+  const val = process.env[name]
+
+  return val === 'false' || val === '0'
+}
+
+export function createDefaultLogger({ level }: { level?: LogLevel } = {}): Logger {
+  const baseLevel = level !== false && level !== null ? level : 'silent'
+
   return pino({
     base: null,
     messageKey: 'message',
-    level: process.env['LOG_LEVEL'] || 'info',
+    level: baseLevel ?? (process.env['LOG_LEVEL'] || 'info'),
     formatters: {
       level(label) {
         return { level: label }
@@ -17,12 +25,15 @@ export function createDefaultLogger() {
       error: pino.stdSerializers.errWithCause,
       err: pino.stdSerializers.errWithCause,
     },
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        messageKey: 'message',
-      },
-    },
+    transport:
+      process.stdout?.isTTY && !isEnvFalse('LOG_PRETTY')
+        ? {
+            target: 'pino-pretty',
+            options: {
+              colorize: true,
+              messageKey: 'message',
+            },
+          }
+        : undefined,
   })
 }

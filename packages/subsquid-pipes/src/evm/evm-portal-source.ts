@@ -1,5 +1,13 @@
 import { cast } from '@subsquid/util-internal-validation'
-import { createDefaultLogger, createTransformer, Logger, PortalRange, PortalSource, Transformer } from '~/core/index.js'
+import {
+  createDefaultLogger,
+  createTransformer,
+  Logger,
+  LogLevel,
+  PortalRange,
+  PortalSource,
+  Transformer,
+} from '~/core/index.js'
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
 import { PortalCacheOptions } from '~/portal-cache/portal-cache.js'
@@ -22,10 +30,11 @@ export function createEvmPortalSource<F extends evm.FieldSelection = any>({
   query?: PortalRange | EvmQueryBuilder<F>
   cache?: PortalCacheOptions
   metrics?: MetricsServer
-  logger?: Logger
+  logger?: Logger | LogLevel
   progress?: ProgressTrackerOptions
 }) {
-  logger = logger || createDefaultLogger()
+  logger = logger && typeof logger !== 'string'  ? logger : createDefaultLogger({ level: logger })
+
 
   return new PortalSource<EvmQueryBuilder<F>, EvmPortalData<F>>({
     portal,
@@ -39,7 +48,7 @@ export function createEvmPortalSource<F extends evm.FieldSelection = any>({
     metrics,
     transformers: [
       progressTracker({
-        logger: logger,
+        logger,
         interval: progress?.interval,
         onStart: progress?.onStart,
         onProgress: progress?.onProgress,
