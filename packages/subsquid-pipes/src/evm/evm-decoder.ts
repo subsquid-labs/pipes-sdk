@@ -14,7 +14,12 @@ import { EvmPortalData } from './evm-portal-source.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
 import { DecodedAbiEvent, Factory } from './factory.js'
 
-export type FactoryEvent<T> = { contract: string; blockNumber: number; event: T }
+export type FactoryEvent<T> = {
+  contract: string
+  blockNumber: number
+  event: T
+}
+
 export type DecodedEvent<D = object, F = unknown> = {
   event: D
   contract: string
@@ -111,19 +116,13 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
         return
       }
 
-      const preIndexRange = contracts.preIndexRange() //
+      const preIndexRange = contracts.preIndexRange()
       if (preIndexRange) {
         await contracts.startPreIndex({
-          portal,
-          logger: logger.child({ module: 'pre index' }),
-        })
-
-        queryBuilder.addLog({
+          name: 'EVM decoder factory pre-index',
           range: preIndexRange,
-          request: {
-            address: [contracts.factoryAddress()],
-            topic0: [contracts.factoryTopic()],
-          },
+          portal,
+          logger,
         })
 
         const children = await contracts.getAllContracts()
@@ -143,7 +142,7 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
             // pre-indexed stage
             range: firstRange,
             request: {
-              address: children.map((c) => c.contract), // fill addresses from factory events
+              address: children.map((c) => c.childAddress), // fill addresses from factory events
               topic0: eventTopics,
               transaction: true,
             },
@@ -162,7 +161,7 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
       queryBuilder.addLog({
         range: decodedRange,
         request: {
-          address: [contracts.factoryAddress()],
+          address: contracts.factoryAddress(),
           topic0: [contracts.factoryTopic()],
         },
       })
@@ -174,6 +173,14 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
           transaction: true,
         },
       })
+    },
+    start: async ({ logger }) => {
+      if (Factory.isFactory(contracts)) {
+        logger.debug('Running factory migrations')
+        await contracts.migrate()
+
+        logger.debug('Finished factory migrations')
+      }
     },
     transform: async (data, ctx) => {
       const result = {} as EventResponse<T, C>

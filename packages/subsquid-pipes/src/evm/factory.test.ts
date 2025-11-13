@@ -139,7 +139,7 @@ describe('Factory', () => {
           },
           "factory": {
             "blockNumber": 1,
-            "contract": "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
+            "contract": "0x1f98431c8ad98523631ae4a59f267346ea31f984",
             "event": {
               "fee": 3000,
               "pool": "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
@@ -170,7 +170,7 @@ describe('Factory', () => {
       [
         {
           "blockNumber": 1,
-          "contract": "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
+          "childAddress": "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
           "event": {
             "fee": 3000,
             "pool": "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
@@ -178,6 +178,9 @@ describe('Factory', () => {
             "token0": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
             "token1": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
           },
+          "factoryAddress": "0x1f98431c8ad98523631ae4a59f267346ea31f984",
+          "logIndex": 0,
+          "transactionIndex": 0,
         },
       ]
     `)

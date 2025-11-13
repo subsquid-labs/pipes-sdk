@@ -1,73 +1,132 @@
-import { loadSqlite, SqliteOptions } from '~/drivers/sqlite/sqlite.js'
-import { FactoryPersistentAdapter } from '../factory.js'
+import { loadSqlite, SqliteOptions, SqliteSync } from '~/drivers/sqlite/sqlite.js'
+import { FactoryPersistentAdapter, InternalFactoryEvent } from '../factory.js'
 
 type Row = {
+  factory: string
   address: string
   block_number: number
+  transaction_index: number
+  log_index: number
   event: Buffer
 }
 
-type T = { contract: string; blockNumber: number; event: any }
+const VERSION = '1.0.0'
 
-export async function sqliteFactoryDatabase(options: SqliteOptions): Promise<FactoryPersistentAdapter<T>> {
-  const db = await loadSqlite(options)
+class SqliteFactoryAdapter implements FactoryPersistentAdapter<InternalFactoryEvent<any>> {
+  #db: SqliteSync
+  #lookupCache: Record<string, InternalFactoryEvent<any> | null> = {}
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS 
-        factory(
-          address        TEXT,
-          block_number   INTEGER,
-          event          BLOB,
-            PRIMARY KEY (address)
-        )
-  `)
+  constructor(
+    db: SqliteSync,
+    protected options: SqliteOptions,
+  ) {
+    this.options = {
+      enableWAL: true,
+      ...options,
+    }
+    this.#db = db
+  }
 
-  let lookupCache: Record<string, T | null> = {}
+  async migrate(): Promise<void> {
+    if (this.options.enableWAL) {
+      this.#db.exec('PRAGMA journal_mode = WAL;')
+      this.#db.exec('PRAGMA synchronous = NORMAL;')
+    }
 
-  return {
-    all: async (): Promise<T[]> => {
-      return db.all<Row>(`SELECT * FROM "factory"`).map((row): T => {
-        return {
-          contract: row.address,
-          blockNumber: row.block_number,
-          event: JSON.parse(row.event.toString()),
-        }
-      })
-    },
-    lookup: async (address: string) => {
-      if (typeof lookupCache[address] !== 'undefined') {
-        return lookupCache[address]
-      }
+    this.#db.exec('BEGIN TRANSACTION')
+    this.#db.exec(`CREATE TABLE IF NOT EXISTS "metadata" (id TEXT, value TEXT, PRIMARY KEY (id))`)
+    this.#db.exec(
+      `INSERT INTO "metadata" (id, value) VALUES (?, ?)  ON CONFLICT (id) DO UPDATE SET "value" = excluded.value`,
+      ['version', VERSION],
+    )
+    this.#db.exec('COMMIT')
 
-      const row = db.get<Row>('SELECT * FROM "factory" WHERE address = ?', [address])
-      if (!row) {
-        lookupCache[address] = null
-        return null
-      }
+    this.#db.exec('BEGIN TRANSACTION')
+    this.#db.exec(`
+      CREATE TABLE IF NOT EXISTS factory (
+        address             TEXT,
+        factory             TEXT,
+        block_number        INTEGER,
+        transaction_index   INTEGER,
+        log_index           INTEGER,
+        event               BLOB,
+          PRIMARY KEY (address)
+      )
+    `)
+    this.#db.exec(`CREATE INDEX IF NOT EXISTS factory_block_number_idx ON factory (block_number)`)
+    this.#db.exec('COMMIT')
+  }
 
-      lookupCache[address] = {
-        contract: row.address,
+  async all() {
+    return this.#db.all<Row>(`SELECT * FROM "factory"`).map((row): InternalFactoryEvent<any> => {
+      return {
+        childAddress: row.address,
+        factoryAddress: row.factory,
         blockNumber: row.block_number,
+        transactionIndex: row.transaction_index,
+        logIndex: row.log_index,
         event: JSON.parse(row.event.toString()),
       }
-
-      return lookupCache[address]
-    },
-    save: async (entities: T[]) => {
-      for (const entity of entities) {
-        db.exec(`INSERT OR IGNORE INTO factory ('address', 'block_number', 'event') VALUES (?,?,?)`, [
-          entity.contract,
-          entity.blockNumber,
-          JSON.stringify(entity.event),
-        ])
-      }
-
-      lookupCache = {}
-    },
-
-    remove: async (blockNumber: number) => {
-      db.exec(`DELETE FROM factory WHERE block_number > ?`, [blockNumber])
-      lookupCache = {}
-    },
+    })
   }
+
+  async lookup(address: string): Promise<InternalFactoryEvent<any> | null> {
+    if (typeof this.#lookupCache[address] !== 'undefined') {
+      return this.#lookupCache[address]
+    }
+
+    const row = this.#db.get<Row>('SELECT * FROM "factory" WHERE address = ?', [address])
+    if (!row) {
+      this.#lookupCache[address] = null
+      return null
+    }
+
+    this.#lookupCache[address] = {
+      childAddress: row.address,
+      factoryAddress: row.factory,
+      blockNumber: row.block_number,
+      transactionIndex: row.transaction_index,
+      logIndex: row.log_index,
+      event: JSON.parse(row.event.toString()),
+    }
+
+    return this.#lookupCache[address]
+  }
+
+  async save(entities: InternalFactoryEvent<any>[]): Promise<void> {
+    this.#db.exec('BEGIN TRANSACTION')
+    try {
+      for (const entity of entities) {
+        this.#db.exec(
+          `INSERT OR IGNORE INTO factory ('address', 'factory', 'block_number', 'transaction_index', 'log_index', 'event') VALUES (?,?,?,?,?,?)`,
+          [
+            entity.childAddress,
+            entity.factoryAddress,
+            entity.blockNumber,
+            entity.transactionIndex,
+            entity.logIndex,
+            JSON.stringify(entity.event),
+          ],
+        )
+      }
+      this.#db.exec('COMMIT')
+    } catch (error) {
+      this.#db.exec('ROLLBACK')
+      throw error
+    }
+    this.clearCache()
+  }
+
+  async remove(blockNumber: number): Promise<void> {
+    this.#db.exec(`DELETE FROM factory WHERE block_number > ?`, [blockNumber])
+    this.clearCache()
+  }
+
+  private clearCache() {
+    this.#lookupCache = {}
+  }
+}
+
+export async function sqliteFactoryDatabase(options: SqliteOptions) {
+  return new SqliteFactoryAdapter(await loadSqlite(options), options)
 }

@@ -1,13 +1,14 @@
 {
   "name": "@sqd-pipes/pipes",
   "type": "module",
-  "version": "0.0.1-alpha.37",
+  "version": "0.0.1-alpha.38",
   "sideEffects": false,
   "author": "Subsquid Team",
   "files": [
     "dist",
-    "!dist/tests",
-    "!dist/**/*.test.*",
+    "src",
+    "!**/tests",
+    "!**/*.test.*",
     "package.json",
     "README.md",
     "LICENSE"
