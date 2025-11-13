@@ -108,6 +108,8 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       profiler: typeof options.profiler === 'undefined' ? process.env.NODE_ENV !== 'production' : options.profiler,
     }
     this.#metricServer = options.metrics && 'start' in options.metrics ? options.metrics : createNoopMetricsServer()
+    this.#metricServer.setLogger?.(this.#logger)
+
     this.#transformers = options.transformers || []
   }
 
@@ -122,18 +124,18 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     /*
      Calculates query ranges while excluding blocks that were previously fetched to avoid duplicate processing
      */
-    const ranges = await this.#queryBuilder.calculateRanges({
+    const { bounded, raw } = await this.#queryBuilder.calculateRanges({
       portal: this.#portal,
       bound: cursor ? { from: cursor.number + 1 } : undefined,
     })
 
-    const initial = ranges[0]?.range.from || 0
+    const initial = raw[0]?.range.from || 0
 
-    this.#logger.debug(`${ranges.length} range(s) configured`)
+    this.#logger.debug(`${bounded.length} range(s) configured`)
 
     await this.start({ initial, current: cursor })
 
-    for (const { range, request } of ranges) {
+    for (const { range, request } of bounded) {
       const query = {
         ...request,
         type: this.#queryBuilder.getType(),
@@ -157,14 +159,16 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       for await (const batch of source) {
         readSpan.end()
 
-        if (batch.blocks.length > 0) {
+        const blocks = batch.blocks
+
+        if (blocks.length > 0) {
           // TODO WTF with any?
-          const lastBatchBlock: { header: { number: number } } = last(batch.blocks as any)
+          const lastBatchBlock = last(blocks as { header: { number: number } }[])
           const finalized = batch.finalizedHead?.number
 
           const lastBlockNumber = Math.max(
-            Math.min(last(ranges)?.range?.to || finalized || Infinity),
-            lastBatchBlock?.header?.number || -Infinity,
+            Math.min(last(bounded)?.range?.to || finalized || Infinity),
+            lastBatchBlock.header?.number || -Infinity,
           )
 
           const ctx: BatchCtx = {
@@ -187,7 +191,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
             // State of the stream at the moment of this batch processing
             state: {
-              initial: initial,
+              initial,
               current: cursorFromHeader(lastBatchBlock as any),
               last: lastBlockNumber,
               rollbackChain: finalized
@@ -299,7 +303,6 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
   private async configure() {
     const profiler = Span.root('configure', this.#options.profiler)
-
     const span = profiler.start('transformers')
     const ctx = this.context(span, {
       queryBuilder: this.#queryBuilder,
@@ -359,7 +362,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     const self = this
 
     return target.write({
-      ctx: this.context(Span.root('write', this.#options.profiler)),
+      logger: this.#logger,
       read: async function* (cursor?: BlockCursor) {
         await self.configure()
 

@@ -8,11 +8,11 @@ describe('SolanaQueryBuilder', () => {
       const builder = new SolanaQueryBuilder()
       builder.addRange({ from: 'latest' })
 
-      const res = await builder.calculateRanges({
+      const { bounded } = await builder.calculateRanges({
         portal: { getHead: async () => ({ number: 15, hash: '0x' }) },
       })
 
-      expect(res).toMatchInlineSnapshot(`
+      expect(bounded).toMatchInlineSnapshot(`
         [
           {
             "range": {
@@ -28,12 +28,12 @@ describe('SolanaQueryBuilder', () => {
       const builder = new SolanaQueryBuilder()
       builder.addRange({ from: 'latest' })
 
-      const res = await builder.calculateRanges({
+      const { bounded } = await builder.calculateRanges({
         portal: { getHead: async () => ({ number: 15, hash: '0x' }) },
         bound: { from: 10 },
       })
 
-      expect(res).toMatchInlineSnapshot(`
+      expect(bounded).toMatchInlineSnapshot(`
         [
           {
             "range": {

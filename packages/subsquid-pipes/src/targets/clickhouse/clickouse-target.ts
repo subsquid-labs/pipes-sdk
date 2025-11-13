@@ -56,29 +56,27 @@ export function createClickhouseTarget<T>({
   const state = new ClickhouseState(store, settings)
 
   return createTarget<T>({
-    write: async ({ read, ctx }) => {
-      await onStart?.({ store, logger: ctx.logger })
+    write: async ({ read, logger }) => {
+      await onStart?.({ store, logger })
       const cursor = await state.getCursor()
 
       if (cursor) {
         await onRollback?.({ type: 'offset_check', store, cursor: cursor })
       }
 
-      for await (const { data, ctx: batchCtx } of read(cursor)) {
-        const userSpan = ctx.profiler.start('data handler')
-        await onData({
-          store,
-          data: data,
-          ctx: {
-            logger: ctx.logger,
-            profiler: userSpan,
-          },
+      for await (const { data, ctx } of read(cursor)) {
+        await ctx.profiler.measure('db data handler', async (profiler) => {
+          await onData({
+            store,
+            data: data,
+            ctx: {
+              logger,
+              profiler,
+            },
+          })
         })
-        userSpan.end()
 
-        const cursorSpan = batchCtx.profiler.start('clickhouse cursor save')
-        await state.saveCursor(batchCtx)
-        cursorSpan.end()
+        await ctx.profiler.measure('db state save', () => state.saveCursor(ctx))
       }
 
       await store.close()

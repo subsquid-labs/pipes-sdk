@@ -14,7 +14,7 @@ export interface BlockHeader {
 
 type ValidateRequest = (res: any) => unknown
 
-type MockResponse =
+export type MockResponse =
   | {
       statusCode: 200
       data: {

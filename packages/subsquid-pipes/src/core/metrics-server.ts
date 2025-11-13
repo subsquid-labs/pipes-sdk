@@ -65,6 +65,7 @@ export type MetricsServer = {
   start(): void
   stop(): Promise<void>
   addBatchContext(ctx: BatchCtx): void
+  setLogger?(logger: any, override?: boolean): void
   metrics: Metrics
 }
 

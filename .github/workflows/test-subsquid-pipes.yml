@@ -33,6 +33,20 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready -p 5432
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
@@ -57,4 +71,5 @@ jobs:
           TEST_CLICKHOUSE_URL: http://localhost:8123
           TEST_CLICKHOUSE_USERNAME: default
           TEST_CLICKHOUSE_PASSWORD: default
+          TEST_POSTGRES_DSN: postgresql://postgres:postgres@localhost:5432/postgres
         run: pnpm test

@@ -64,7 +64,9 @@ describe('Clickhouse state', () => {
             settings: {
               table: 'sync',
             },
-            onData: () => {},
+            onData: ({ data }) => {
+              console.log(data)
+            },
           }),
         )
 
@@ -72,10 +74,24 @@ describe('Clickhouse state', () => {
       expect(data).toMatchInlineSnapshot(`
         [
           {
+            "current": "{"number":3,"hash":"0x3","timestamp":3000}",
+            "finalized": "{"hash":"0x2","number":2}",
+            "id": "stream",
+            "rollback_chain": "[{"number":2,"hash":"0x2","timestamp":2000},{"number":3,"hash":"0x3","timestamp":3000}]",
+            "sign": 1,
+          },
+          {
+            "current": "{"number":4,"hash":"0x4","timestamp":4000}",
+            "finalized": "{"hash":"0x2","number":2}",
+            "id": "stream",
+            "rollback_chain": "[{"number":4,"hash":"0x4","timestamp":4000}]",
+            "sign": 1,
+          },
+          {
             "current": "{"number":5,"hash":"0x5","timestamp":5000}",
             "finalized": "{"hash":"0x2","number":2}",
             "id": "stream",
-            "rollback_chain": "[{"number":2,"hash":"0x2","timestamp":2000},{"number":3,"hash":"0x3","timestamp":3000},{"number":4,"hash":"0x4","timestamp":4000},{"number":5,"hash":"0x5","timestamp":5000}]",
+            "rollback_chain": "[{"number":5,"hash":"0x5","timestamp":5000}]",
             "sign": 1,
           },
         ]
@@ -539,17 +555,59 @@ describe('Clickhouse state', () => {
       expect(data).toMatchInlineSnapshot(`
         [
           {
+            "current": "{"number":2,"hash":"0x2"}",
+            "finalized": "{"hash":"0x1","number":1}",
+            "id": "stream",
+            "rollback_chain": "[{"number":1,"hash":"0x1"},{"number":2,"hash":"0x2"}]",
+            "sign": 1,
+          },
+          {
+            "current": "{"number":3,"hash":"0x3"}",
+            "finalized": "{"hash":"0x1","number":1}",
+            "id": "stream",
+            "rollback_chain": "[{"number":3,"hash":"0x3"}]",
+            "sign": 1,
+          },
+          {
+            "current": "{"number":4,"hash":"0x4"}",
+            "finalized": "{"hash":"0x1","number":1}",
+            "id": "stream",
+            "rollback_chain": "[{"number":4,"hash":"0x4"}]",
+            "sign": 1,
+          },
+          {
             "current": "{"number":5,"hash":"0x5"}",
             "finalized": "{"hash":"0x1","number":1}",
             "id": "stream",
-            "rollback_chain": "[{"number":1,"hash":"0x1"},{"number":2,"hash":"0x2"},{"number":3,"hash":"0x3"},{"number":4,"hash":"0x4"},{"number":5,"hash":"0x5"}]",
+            "rollback_chain": "[{"number":5,"hash":"0x5"}]",
+            "sign": 1,
+          },
+          {
+            "current": "{"number":3,"hash":"0x3a"}",
+            "finalized": "{"hash":"0x2a","number":2}",
+            "id": "stream",
+            "rollback_chain": "[{"number":2,"hash":"0x2a"},{"number":3,"hash":"0x3a"}]",
+            "sign": 1,
+          },
+          {
+            "current": "{"number":5,"hash":"0x5a"}",
+            "finalized": "{"hash":"0x4a","number":4}",
+            "id": "stream",
+            "rollback_chain": "[{"number":4,"hash":"0x4a"},{"number":5,"hash":"0x5a"}]",
+            "sign": 1,
+          },
+          {
+            "current": "{"number":6,"hash":"0x6a"}",
+            "finalized": "{"hash":"0x4a","number":4}",
+            "id": "stream",
+            "rollback_chain": "[{"number":6,"hash":"0x6a"}]",
             "sign": 1,
           },
           {
             "current": "{"number":7,"hash":"0x7a"}",
             "finalized": "{"hash":"0x4a","number":4}",
             "id": "stream",
-            "rollback_chain": "[{"number":4,"hash":"0x4a"},{"number":5,"hash":"0x5a"},{"number":6,"hash":"0x6a"},{"number":7,"hash":"0x7a"}]",
+            "rollback_chain": "[{"number":7,"hash":"0x7a"}]",
             "sign": 1,
           },
         ]

@@ -4,7 +4,7 @@ export function arrayify<T>(data: T | T[]): T[] {
 
 export function last<T>(arr: T[]): T {
   if (!arr.length) {
-    throw new Error(`last() called on empty array`)
+    throw new Error(`last() was called on empty array`)
   }
 
   return arr[arr.length - 1]
@@ -28,4 +28,19 @@ export function findDuplicates(value: string[]): string[] {
     }
   }
   return res
+}
+
+export function partition<T>(arr: T[], predicate: (item: T) => boolean): [T[], T[]] {
+  const pass: T[] = []
+  const fail: T[] = []
+
+  for (const item of arr) {
+    if (predicate(item)) {
+      pass.push(item)
+    } else {
+      fail.push(item)
+    }
+  }
+
+  return [pass, fail]
 }

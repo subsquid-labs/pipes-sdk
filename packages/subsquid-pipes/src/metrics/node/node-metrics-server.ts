@@ -1,6 +1,7 @@
 import express from 'express'
 import { Server } from 'http'
 import client from 'prom-client'
+import { Logger } from '~/core/index.js'
 import {
   Counter,
   CounterConfiguration,
@@ -19,6 +20,7 @@ import { npmVersion } from '~/version.js'
 export type MetricsServerOptions = {
   port?: number
   enabled?: boolean
+  logger?: Logger
 }
 
 const metrics = new Map<string, any>()
@@ -101,7 +103,11 @@ function transformExemplar(profiler: Profiler): TransformationResult {
 
 const MAX_HISTORY = 50
 
-export function createNodeMetricsServer({ port = 9090, enabled = true }: MetricsServerOptions = {}): MetricsServer {
+export function createNodeMetricsServer({
+  port = 9090,
+  enabled = true,
+  logger,
+}: MetricsServerOptions = {}): MetricsServer {
   const registry = new client.Registry()
   const app = express()
   let server: Server | undefined = undefined
@@ -193,10 +199,18 @@ export function createNodeMetricsServer({ port = 9090, enabled = true }: Metrics
   })
 
   return {
+    setLogger: (newLogger: Logger, override = false) => {
+      if (!override && logger) return
+
+      logger = newLogger
+    },
+
     start: async () => {
       if (!enabled) return
 
       server = app.listen(port)
+
+      logger?.info(`🦑 Metrics server started at http://localhost:${port}`)
     },
     stop: async () => {
       client.register.clear()

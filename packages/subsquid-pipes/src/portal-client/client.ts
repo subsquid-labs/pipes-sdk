@@ -8,9 +8,10 @@ import {
   HttpResponse,
   RequestOptions,
 } from '~/http-client/index.js'
+import { partition } from '~/internal/array.js'
 import { npmVersion } from '~/version.js'
 import { ForkException } from './fork-exception.js'
-import { evm, GetBlock, PortalBlock, PortalQuery, Query, solana, substrate } from './query/index.js'
+import { evm, GetBlock, PortalQuery, Query, solana, substrate } from './query/index.js'
 
 const USER_AGENT = `@subsquid/pipes:${npmVersion}`
 
@@ -147,33 +148,6 @@ export class PortalClient {
       options,
     )
     return res.body ?? undefined
-  }
-
-  getQuery<Q extends PortalQuery = PortalQuery, R extends PortalBlock = PortalBlock>(
-    query: Q,
-    options?: PortalRequestOptions,
-  ): Promise<R[]> {
-    // FIXME: is it needed or it is better to always use stream?
-    return this.request<Buffer>(
-      'POST',
-      this.getDatasetUrl((options?.finalized ?? this.#finalized) ? 'finalized-stream' : `stream`),
-      {
-        ...options,
-        json: query,
-      },
-    )
-      .catch(
-        withErrorContext({
-          archiveQuery: query,
-        }),
-      )
-      .then((res) => {
-        return res.body
-          .toString('utf8')
-          .trimEnd()
-          .split('\n')
-          .map((line) => JSON.parse(line))
-      })
   }
 
   getStream<Q extends evm.Query | solana.Query | substrate.Query>(
@@ -325,30 +299,53 @@ function createPortalStream<Q extends Query>(
       try {
         for await (let data of res.stream) {
           const lastBlockReceivedAt = new Date()
-
-          let blocks: GetBlock<Q>[] = []
-          let bytes = 0
-          let requestedFromBlock = fromBlock
+          const blocks: { block: GetBlock<Q>; bytes: number }[] = []
+          const requestedFromBlock = fromBlock
 
           for (let line of data) {
             const block = JSON.parse(line)
-            blocks.push(block)
-            bytes += line.length
 
             fromBlock = block.header.number + 1
             parentBlockHash = block.header.hash
+
+            blocks.push({
+              block,
+              bytes: line.length,
+            })
           }
 
+          const [finalizedBlocks, unfinalizedBlocks] = finalizedHead?.number
+            ? partition(blocks, ({ block }) => block.header?.number <= finalizedHead.number)
+            : [blocks, []]
+
           await buffer.put({
-            blocks,
+            blocks: finalizedBlocks.map((b) => b.block),
             finalizedHead,
             meta: {
-              bytes,
+              bytes: finalizedBlocks.reduce((a, b) => a + b.bytes, 0),
               requestedFromBlock,
               lastBlockReceivedAt,
               requests,
             },
           })
+
+          for (let { block, bytes } of unfinalizedBlocks) {
+            await buffer.put(
+              {
+                blocks: [block],
+                finalizedHead,
+                meta: {
+                  bytes,
+                  requestedFromBlock,
+                  lastBlockReceivedAt,
+                  // We flush requests here to avoid double-counting
+                  // as we already sent them
+                  requests: finalizedBlocks.length > 0 ? {} : requests,
+                },
+              },
+              true,
+            )
+          }
 
           requests = {}
         }
@@ -375,7 +372,9 @@ class PortalStreamBuffer<B> {
   private error: unknown
 
   private readyFuture: Future<void> = createFuture()
+  // Signals that data has been taken and more can be put
   private takeFuture: Future<void> = createFuture()
+  // Signals that data has been put and can be taken
   private putFuture: Future<void> = createFuture()
 
   private idleTimeout: ReturnType<typeof setTimeout> | undefined
@@ -435,7 +434,7 @@ class PortalStreamBuffer<B> {
     }
   }
 
-  async put(data: PortalStreamData<B>) {
+  async put(data: PortalStreamData<B>, flushImmediate = false): Promise<void> {
     if (this.state === 'closed' || this.state === 'failed') {
       throw new Error('Buffer is closed')
     }
@@ -466,11 +465,11 @@ class PortalStreamBuffer<B> {
 
     this.putFuture.resolve()
 
-    if (this.buffer.meta.bytes >= this.minBytes) {
+    if (flushImmediate || this.buffer.meta.bytes >= this.minBytes) {
       this.readyFuture.resolve()
     }
 
-    if (this.buffer.meta.bytes >= this.maxBytes) {
+    if (flushImmediate || this.buffer.meta.bytes >= this.maxBytes) {
       await this.takeFuture.promise()
     }
 
