@@ -52,21 +52,44 @@ export interface RequestHooks {
 }
 
 export interface HttpClientOptions {
+  /**
+   * Base URL for all requests. If provided, relative URLs will be resolved against this base.
+   * The base URL should be an absolute URL including protocol and host, e.g. 'https://api.example.com'.
+   */
   baseUrl?: string
+
+  /**
+   * Default headers to be included with every request.
+   * These can be overridden by request-specific headers.
+   */
   headers?: Record<string, string | number | bigint>
+
   /**
    * Default request timeout in milliseconds.
+   * This is the maximum time allowed for the entire HTTP request to complete, including connection time.
    *
-   * This timeout is only related to individual http requests.
+   * Note: This timeout is only related to individual HTTP requests.
    * Overall request processing time might be much larger due to retries.
+   *
+   * Default: 20_000 (20 seconds)
    */
   httpTimeout?: number
+
+  /**
+   * Maximum time in milliseconds allowed for reading the response body.
+   * This timeout is separate from httpTimeout and starts after response headers are received.
+   *
+   * When reading streaming responses, the timeout applies to the interval between chunks.
+   * If no data is received within the timeout period, the request fails with HttpBodyTimeoutError.
+   *
+   * Default: undefined (no timeout)
+   */
   bodyTimeout?: number
   retryAttempts?: number
   retrySchedule?: number[]
   keepalive?: boolean
 
-  log?: Logger | null
+  logger?: Logger | null
 
   /**
    * Lifecycle hooks for request processing.
@@ -123,7 +146,7 @@ const statusTexts: Record<number, string> = {
 const MAX_LOG_BODY_SIZE_BYTES = 1024 * 1024 // 1MB
 
 export class HttpClient implements BaseHttpClient {
-  protected log?: Logger
+  protected logger?: Logger
   protected headers?: Record<string, string | number | bigint>
   private baseUrl?: string
   private requestCounter = 0
@@ -136,14 +159,14 @@ export class HttpClient implements BaseHttpClient {
   private readonly hooks?: RequestHooks
 
   constructor(options: HttpClientOptions = {}) {
-    this.log = options.log?.child({ module: 'http-client' })
+    this.logger = options.logger?.child({ module: 'http-client' })
     this.headers = options.headers
     this.setBaseUrl(options.baseUrl)
     this.retrySchedule = options.retrySchedule || [10, 100, 500, 2000, 10000, 20000]
     this.retryAttempts = options.retryAttempts || 0
     this.httpTimeout = options.httpTimeout ?? 20000
     this.bodyTimeout = options.bodyTimeout
-    this.keepalive = options.keepalive
+    this.keepalive = options.keepalive ?? true
     this.hooks = options.hooks
   }
 
@@ -193,7 +216,7 @@ export class HttpClient implements BaseHttpClient {
   }
 
   protected async beforeRequest(req: FetchRequest): Promise<void> {
-    this.log?.debug(
+    this.logger?.debug(
       {
         request_id: req.id,
         http_request: {
@@ -234,13 +257,13 @@ export class HttpClient implements BaseHttpClient {
       }
     }
 
-    this.log?.warn(info, `HTTP request id:${req.id} will be retried in ${pause} ms`)
+    this.logger?.warn(info, `HTTP request id:${req.id} will be retried in ${pause} ms`)
 
     await req.hooks?.onBeforeRetry?.(req, reason, pause, attempt)
   }
 
   protected async afterResponseHeaders(req: FetchRequest, res: Response): Promise<void> {
-    this.log?.debug(
+    this.logger?.debug(
       {
         request_id: req.id,
         http_response: {
@@ -249,14 +272,14 @@ export class HttpClient implements BaseHttpClient {
           headers: Object.fromEntries(res.headers),
         },
       },
-      'http response started',
+      'http response headers received',
     )
 
     await req.hooks?.onAfterResponseHeaders?.(req, res)
   }
 
   protected async afterResponse(req: FetchRequest, res: HttpResponse): Promise<void> {
-    if (!res.stream && this.log?.isLevelEnabled('debug')) {
+    if (!res.stream && this.logger?.isLevelEnabled('debug')) {
       let httpResponseBody: any = res.body
       if (
         (typeof res.body === 'string' || res.body instanceof Uint8Array) &&
@@ -267,7 +290,7 @@ export class HttpClient implements BaseHttpClient {
         httpResponseBody = `...response body truncated: size ${(res.body.length / (1024 * 1024)).toFixed(2)}MB exceeds 1MB limit...`
       }
 
-      this.log.debug(
+      this.logger.debug(
         {
           request_id: req.id,
           http_response: {

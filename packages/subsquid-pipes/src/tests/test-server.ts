@@ -61,7 +61,17 @@ export async function createMockPortal(
     const streamUrl = finalized ? '/finalized-stream' : '/stream'
 
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-      if (req.url !== streamUrl) {
+      if (req.url === '/metadata') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.write(
+          JSON.stringify({
+            dataset: 'mock-dataset',
+            real_time: true,
+          }),
+        )
+        res.end()
+        return
+      } else if (req.url !== streamUrl) {
         res.statusCode = 404
         res.end()
         return
