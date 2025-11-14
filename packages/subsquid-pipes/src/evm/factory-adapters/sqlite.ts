@@ -28,11 +28,6 @@ class SqliteFactoryAdapter implements FactoryPersistentAdapter<InternalFactoryEv
   }
 
   async migrate(): Promise<void> {
-    if (this.options.enableWAL) {
-      this.#db.exec('PRAGMA journal_mode = WAL;')
-      this.#db.exec('PRAGMA synchronous = NORMAL;')
-    }
-
     this.#db.exec('BEGIN TRANSACTION')
     this.#db.exec(`CREATE TABLE IF NOT EXISTS "metadata" (id TEXT, value TEXT, PRIMARY KEY (id))`)
     this.#db.exec(
@@ -127,6 +122,11 @@ class SqliteFactoryAdapter implements FactoryPersistentAdapter<InternalFactoryEv
   }
 }
 
-export async function sqliteFactoryDatabase(options: SqliteOptions) {
+export async function factorySqliteDatabase(options: SqliteOptions) {
   return new SqliteFactoryAdapter(await loadSqlite(options), options)
 }
+
+/**
+ *  @deprecated use `factorySqliteDatabase` instead
+ */
+export const sqliteFactoryDatabase = factorySqliteDatabase

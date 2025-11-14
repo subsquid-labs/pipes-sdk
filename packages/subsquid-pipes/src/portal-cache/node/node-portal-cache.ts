@@ -1,108 +1,77 @@
 import { promisify } from 'node:util'
 import zlib from 'node:zlib'
-import { BlockCursor, cursorFromHeader, Logger } from '~/core/index.js'
-import { hashQuery } from '../core/query-builder.js'
-import { last } from '../internal/array.js'
-import { GetBlock, PortalClient, PortalStream, PortalStreamData, Query } from '../portal-client/index.js'
+
+import { BlockCursor, cursorFromHeader, Logger, PortalCache } from '~/core/index.js'
+import { hashQuery } from '~/core/query-builder.js'
+import { last } from '~/internal/array.js'
+import { GetBlock, PortalClient, PortalStream, PortalStreamData, Query } from '~/portal-client/index.js'
 
 // @ts-ignore
 const compressAsync = promisify('zstdCompress' in zlib ? (zlib.zstdCompress as any) : zlib.gzip)
 // @ts-ignore
 const decompressAsync = promisify('zstdDecompress' in zlib ? (zlib.zstdDecompress as any) : zlib.gunzip)
 
-export type SaveBatch = { queryHash: string; cursors: { first: number; last: number }; data: Buffer }
-
-export interface PortalCacheAdapter {
-  init?(): Promise<void>
-  stream(request: { queryHash: string; fromBlock: number }): AsyncIterable<Buffer>
-  save(batch: SaveBatch): Promise<void>
-}
-
-/**
- * Configuration options for the Portal Cache system
- */
-export interface PortalCacheOptions {
+export type Options<ImplOptions> = {
   /**
    * Enable or disable data compression.
    * Uses zstd compression algorithm.
    * @default true
    */
   compress?: boolean
-  /**
-   * Storage adapter implementation for caching portal data
-   */
-  adapter: PortalCacheAdapter
-}
+} & ImplOptions
 
-interface Options extends PortalCacheOptions {
-  portal: PortalClient
-  query: Query
-  logger: Logger
-}
+export type SaveBatch = { queryHash: string; cursors: { first: number; last: number }; data: Buffer }
+export type StreamBatch = { queryHash: string; fromBlock: number }
 
-class CacheBuffer {
-  #buffer: string[] = []
-  #size = 0
+export abstract class PortalCacheNodeJs<ImplOptions> implements PortalCache {
+  protected readonly options: Options<ImplOptions>
 
-  add(str: any) {
-    const serialized = JSON.stringify(str)
-    this.#buffer.push(serialized)
-    this.#size += serialized.length
-
-    return this.#size
-  }
-
-  flush() {
-    const buffer = this.#buffer.join('')
-    this.#buffer = []
-    this.#size = 0
-
-    return buffer
-  }
-}
-
-class PortalCache {
-  private readonly options: Options
-
-  #buffer = new CacheBuffer()
-
-  constructor(options: Options) {
+  protected constructor(options: Options<ImplOptions>) {
     this.options = {
       compress: true,
       ...options,
     }
   }
 
-  async compress(value: string): Promise<Buffer> {
+  #initialized = false
+
+  protected abstract initialize?(): Promise<void>
+  protected abstract stream(request: StreamBatch): AsyncIterable<Buffer>
+  protected abstract save(batch: SaveBatch): Promise<void>
+
+  protected async compress(value: string): Promise<Buffer> {
     if (!this.options.compress) return Buffer.from(value)
 
     return await compressAsync(value)
   }
 
-  async decompress(value: Buffer): Promise<string> {
+  protected async decompress(value: Buffer): Promise<string> {
     if (!this.options.compress) return value.toString('utf-8')
 
     const buffer = await decompressAsync(value)
     return buffer.toString('utf8')
   }
 
-  // async buffer(value: any): Promise<void> {
-  //  const size = this.#buffer.add(value)
-  //   if (size < 1_000_000) {
-  //     await adapter.save({
-  //       queryHash,
-  //       cursors: {
-  //         first: cursorFromHeader(batch.blocks[0]),
-  //         last: cursor,
-  //       },
-  //       data: await this.compress(JSON.stringify(batch)),
-  //     })
-  //   }
-  // }
+  protected async ensureInitialized() {
+    if (this.#initialized) return
 
-  async *getStream<Q extends Query>(): PortalStream<GetBlock<Q>> {
-    const { query, portal, logger, adapter } = this.options
+    await this.initialize?.()
+
+    this.#initialized = true
+  }
+
+  async *getStream<Q extends Query>({
+    portal,
+    query,
+    logger,
+  }: {
+    portal: PortalClient
+    query: Query
+    logger: Logger
+  }): PortalStream<GetBlock<Q>> {
     const queryHash = await hashQuery(query)
+
+    await this.ensureInitialized()
 
     let cursor: BlockCursor = {
       number: query.fromBlock,
@@ -110,7 +79,7 @@ class PortalCache {
     }
     logger.debug(`loading data from cache from ${cursor.number} block`)
 
-    for await (const message of adapter.stream({
+    for await (const message of this.stream({
       fromBlock: cursor.number,
       queryHash,
     })) {
@@ -139,7 +108,7 @@ class PortalCache {
 
       const finalizedBlocks = batch.blocks.filter((b) => b.header.number <= finalizedHead)
       if (finalizedBlocks.length) {
-        await adapter.save({
+        await this.save({
           queryHash,
           cursors: {
             first: batch.meta.requestedFromBlock,
@@ -158,12 +127,4 @@ class PortalCache {
       // TODO check next batch in cache
     }
   }
-}
-
-export async function createPortalCache(opts: Options) {
-  const cache = new PortalCache(opts)
-
-  await opts.adapter.init?.()
-
-  return cache.getStream()
 }

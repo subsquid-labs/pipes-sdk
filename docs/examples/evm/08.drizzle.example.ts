@@ -39,7 +39,7 @@
 import { ApolloServer } from '@apollo/server'
 import { startStandaloneServer } from '@apollo/server/standalone'
 import { commonAbis, createEvmDecoder, createEvmPortalSource } from '@sqd-pipes/pipes/evm'
-import { createNodeMetricsServer } from '@sqd-pipes/pipes/metrics/node'
+import { metricsServer } from '@sqd-pipes/pipes/metrics/node'
 import { chunk, createDrizzleTarget } from '@sqd-pipes/pipes/targets/drizzle/node-postgres'
 import { buildSchema } from 'drizzle-graphql'
 import { drizzle } from 'drizzle-orm/node-postgres'
@@ -74,7 +74,7 @@ async function main() {
       url: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
       // maxBytes: 1024 * 1024 * 1024 * 2,
     },
-    metrics: createNodeMetricsServer(),
+    metrics: metricsServer(),
   })
     .pipe(
       // Configure decoder to extract ERC20 Transfer events from raw blockchain data

@@ -82,7 +82,7 @@ class NoopSummary<T extends string> implements Summary<T> {
   observe(): void {}
 }
 
-export function createNoopMetricsServer(): MetricsServer {
+export function noopMetricsServer(): MetricsServer {
   return {
     start() {},
     async stop() {},
