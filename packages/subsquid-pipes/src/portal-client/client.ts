@@ -65,18 +65,15 @@ export interface PortalClientOptions {
 export type PortalRequestOptions = Pick<
   RequestOptions,
   'headers' | 'retryAttempts' | 'retrySchedule' | 'httpTimeout' | 'bodyTimeout'
-> & { finalized?: boolean } // why do we have it here?
+>
 
 export interface PortalStreamOptions {
   request?: PortalRequestOptions
-
   minBytes?: number
   maxBytes?: number
   maxIdleTime?: number
   maxWaitTime?: number
-
   headPollInterval?: number
-
   finalized?: boolean
 }
 
@@ -106,34 +103,31 @@ function isForkHttpError(err: unknown): err is HttpError {
 }
 
 export class PortalClient {
-  readonly #finalized: boolean
-
-  private readonly url: URL
-  private client: HttpClient
-  private readonly headPollInterval: number
-  private readonly minBytes: number
-  private readonly maxBytes: number
-  private readonly maxIdleTime: number
-  private readonly maxWaitTime: number
+  readonly #client: HttpClient
+  readonly #url: URL
+  readonly #options: Required<Omit<PortalClientOptions, 'url' | 'http'>>
 
   constructor(options: PortalClientOptions) {
-    this.url = new URL(options.url)
-    this.#finalized = options.finalized || false
-    this.client = options.http instanceof HttpClient ? options.http : new HttpClient(options.http)
-    this.headPollInterval = options.headPollInterval ?? 0
-    this.minBytes = options.minBytes ?? 10 * 1024 * 1024
-    this.maxBytes = options.maxBytes ?? this.minBytes
-    this.maxIdleTime = options.maxIdleTime ?? 300
-    this.maxWaitTime = options.maxWaitTime ?? 5_000
+    this.#client = options.http instanceof HttpClient ? options.http : new HttpClient(options.http)
+
+    this.#url = new URL(options.url)
+    this.#options = {
+      finalized: options.finalized ?? false,
+      headPollInterval: options.headPollInterval ?? 0,
+      minBytes: options.minBytes ?? 10 * 1024 * 1024,
+      maxBytes: options.maxBytes ?? options.minBytes ?? 10 * 1024 * 1024,
+      maxIdleTime: options.maxIdleTime ?? 300,
+      maxWaitTime: options.maxWaitTime ?? 5_000,
+    }
   }
 
   getUrl() {
-    return this.url.toString()
+    return this.#url.toString()
   }
 
   private getDatasetUrl(path: string): string {
-    let u = new URL(this.url)
-    if (this.url.pathname.endsWith('/')) {
+    let u = new URL(this.#url)
+    if (this.#url.pathname.endsWith('/')) {
       u.pathname += path
     } else {
       u.pathname += '/' + path
@@ -141,10 +135,21 @@ export class PortalClient {
     return u.toString()
   }
 
-  async getHead(options?: PortalRequestOptions): Promise<BlockRef | undefined> {
-    const res = await this.request(
+  async getMetadata(options?: PortalRequestOptions): Promise<{
+    dataset: string
+    aliases: string[]
+    real_time: boolean
+    start_block: number
+  }> {
+    const res = await this.request('GET', this.getDatasetUrl('metadata'), options)
+
+    return res.body
+  }
+
+  async getHead(options?: PortalRequestOptions & { finalized: boolean }): Promise<BlockRef | undefined> {
+    const res = await this.request<BlockRef>(
       'GET',
-      this.getDatasetUrl((options?.finalized ?? this.#finalized) ? 'finalized-head' : 'head'),
+      this.getDatasetUrl((options?.finalized ?? this.#options.finalized) ? 'finalized-head' : 'head'),
       options,
     )
     return res.body ?? undefined
@@ -154,31 +159,15 @@ export class PortalClient {
     query: Q,
     options?: PortalStreamOptions,
   ): PortalStream<GetBlock<Q>> {
-    return createPortalStream(query, this.getStreamOptions(options), async (q, o) =>
-      this.getStreamRequest((options?.finalized ?? this.#finalized) ? 'finalized-stream' : 'stream', q, o),
-    )
-  }
-
-  private getStreamOptions(options?: PortalStreamOptions) {
-    let {
-      headPollInterval = this.headPollInterval,
-      minBytes = this.minBytes,
-      maxBytes = this.maxBytes,
-      maxIdleTime = this.maxIdleTime,
-      maxWaitTime = this.maxWaitTime,
-      request = {},
-      finalized = false,
-    } = options ?? {}
-
-    return {
-      headPollInterval,
-      minBytes,
-      maxBytes,
-      maxIdleTime,
-      maxWaitTime,
-      request,
-      finalized,
+    const settings = {
+      request: {},
+      ...this.#options,
+      ...options,
     }
+
+    return createPortalStream(query, settings, async (q, o) =>
+      this.getStreamRequest((options?.finalized ?? this.#options.finalized) ? 'finalized-stream' : 'stream', q, o),
+    )
   }
 
   private async getStreamRequest(path: string, query: PortalQuery, options?: RequestOptions) {
@@ -218,7 +207,7 @@ export class PortalClient {
   }
 
   private request<T = any>(method: string, url: string, options: RequestOptions & HttpBody = {}) {
-    return this.client.request<T>(url, {
+    return this.#client.request<T>(url, {
       ...options,
       method,
       headers: {
@@ -261,12 +250,8 @@ function createPortalStream<Q extends Query>(
           ...request,
           abort: buffer.signal,
           hooks: {
-            onSuccess: (_, res) => {
+            onAfterResponse: (_, res) => {
               requests[res.status] = (requests[res.status] || 0) + 1
-            },
-            onBeforeRetry: (_, reason) => {
-              const status = reason instanceof HttpResponse ? reason.status : 0
-              requests[status] = (requests[status] || 0) + 1
             },
           },
         },
@@ -274,7 +259,8 @@ function createPortalStream<Q extends Query>(
 
       const finalizedHead = res.finalizedHead
 
-      // we are on head
+      // We are on head
+      // TODO should we check response status 204 instead?
       if (!('stream' in res)) {
         await buffer.put({
           blocks: [],
@@ -293,7 +279,7 @@ function createPortalStream<Q extends Query>(
         continue
       }
 
-      // no data left on this range
+      // No data left on this range
       if (res.stream == null) break
 
       try {
@@ -303,21 +289,31 @@ function createPortalStream<Q extends Query>(
           const requestedFromBlock = fromBlock
 
           for (let line of data) {
-            const block = JSON.parse(line)
+            try {
+              const block = JSON.parse(line)
 
-            fromBlock = block.header.number + 1
-            parentBlockHash = block.header.hash
+              // Update for next request
+              fromBlock = block.header.number + 1
+              parentBlockHash = block.header.hash
 
-            blocks.push({
-              block,
-              bytes: line.length,
-            })
+              // Collect a block and its size
+              blocks.push({ block, bytes: line.length })
+            } catch (e: any) {
+              // FIXME we need to catch JSON parse errors here
+              // we hit an incomplete line, we should break and wait for more data
+              // we need to find the RC first
+              // if (e.message?.includes?.('Unterminated string')) break
+
+              throw e
+            }
           }
 
+          // Split blocks into finalized and unfinalized
           const [finalizedBlocks, unfinalizedBlocks] = finalizedHead?.number
             ? partition(blocks, ({ block }) => block.header?.number <= finalizedHead.number)
             : [blocks, []]
 
+          // Push finalized blocks as a batch
           await buffer.put({
             blocks: finalizedBlocks.map((b) => b.block),
             finalizedHead,

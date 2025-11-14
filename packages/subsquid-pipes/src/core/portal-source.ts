@@ -11,6 +11,16 @@ import { Target } from './target.js'
 import { Transformer, TransformerOptions } from './transformer.js'
 import { BlockCursor, Ctx } from './types.js'
 
+const NOT_REAL_TIME_WARNING = (name: string) => `
+==================================================================
+⚠️  This dataset (${name}) does not provide real-time (head) block streaming.
+------------------------------------------------------------------
+
+Portal data for this dataset will lag behind the chain head.
+This is expected. Do not rely on this dataset for latency-critical workflows.
+==================================================================
+`
+
 export type BatchCtx = {
   head: {
     finalized?: BlockCursor
@@ -87,14 +97,14 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
               ? {
                   url: portal,
                   http: {
-                    log: logger,
+                    logger,
                     retryAttempts: Number.MAX_SAFE_INTEGER,
                   },
                 }
               : {
                   ...portal,
                   http: {
-                    log: logger,
+                    logger,
                     retryAttempts: Number.MAX_SAFE_INTEGER,
                     ...portal.http,
                   },
@@ -134,6 +144,11 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     this.#logger.debug(`${bounded.length} range(s) configured`)
 
     await this.start({ initial, current: cursor })
+
+    const metadata = await this.#portal.getMetadata()
+    if (!metadata.real_time) {
+      this.#logger.warn(NOT_REAL_TIME_WARNING(metadata.dataset))
+    }
 
     for (const { range, request } of bounded) {
       const query = {
@@ -235,7 +250,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
        */
       | Transformer<T, Out, Q>,
   ): PortalSource<Q, Out> {
-    if (this.#started) throw new Error('Source closed')
+    if (this.#started) throw new Error('Source is closed')
 
     const transformer =
       transformerOrOptions instanceof Transformer
@@ -338,7 +353,6 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     profiler.end()
 
     this.#logger.debug(`<start> hook invoked`)
-
     this.#started = true
   }
 

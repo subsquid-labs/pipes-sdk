@@ -11,6 +11,7 @@ import { commonAbis, createEvmDecoder, createEvmPortalSource } from '@sqd-pipes/
 async function cli() {
   const stream = createEvmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
+    // logger: 'debug',
   }).pipe(
     createEvmDecoder({
       range: { from: 'latest' },
