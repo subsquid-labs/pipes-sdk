@@ -2,8 +2,8 @@ import fs from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PortalBatch } from '~/core/index.js'
 import { createEvmPortalSource } from '~/evm/index.js'
+import { portalSqliteCache } from '~/portal-cache/node/node-sqlite-cache-adapter.js'
 import { blockQuery, blockTransformer, closeMockPortal, createMockPortal, MockPortal } from '~/tests/index.js'
-import { sqliteCacheAdapter } from './adapters/sqlite/index.js'
 
 // Transform batch to only include data and meta without any functions or complex objects
 const transformBatch = ({
@@ -86,12 +86,12 @@ describe('Portal cache', () => {
         },
       ])
 
-      const adapter = await sqliteCacheAdapter({ path: DB_PATH })
+      const cache = portalSqliteCache({ path: DB_PATH })
 
       const stream = createEvmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 0, to: 5 }),
-        cache: { adapter },
+        cache,
       }).pipe(blockTransformer())
 
       const res1 = (await readAllChunks(stream)).map(transformBatch)
@@ -178,7 +178,7 @@ describe('Portal cache', () => {
 
       // check stored rows by query hash
       const rows = await readAllChunks(
-        adapter.stream({
+        cache.stream({
           queryHash: '8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b',
           fromBlock: 0,
         }),
@@ -219,12 +219,12 @@ describe('Portal cache', () => {
         },
       ])
 
-      const adapter = await sqliteCacheAdapter({ path: DB_PATH })
+      const cache = portalSqliteCache({ path: DB_PATH })
 
       const stream = createEvmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 6, to: 10 }),
-        cache: { adapter },
+        cache,
       }).pipe(blockTransformer())
 
       await readAllChunks(stream) // first pass to store data
@@ -233,7 +233,7 @@ describe('Portal cache', () => {
       const stream2 = createEvmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 0, to: 5 }),
-        cache: { adapter },
+        cache,
       }).pipe(blockTransformer())
 
       const res2 = (await readAllChunks(stream2)).map(transformBatch)
@@ -312,7 +312,7 @@ describe('Portal cache', () => {
 
       // check stored rows by query hash
       const rows = await readAllChunks(
-        adapter.stream({
+        cache.stream({
           queryHash: '8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b',
           fromBlock: 0,
         }),
@@ -351,12 +351,12 @@ describe('Portal cache', () => {
         },
       ])
 
-      const adapter = await sqliteCacheAdapter({ path: DB_PATH })
+      const cache = portalSqliteCache({ path: DB_PATH })
 
       const stream = createEvmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 0, to: 5 }),
-        cache: { adapter },
+        cache,
       }).pipe(blockTransformer())
 
       const res1 = (await readAllChunks(stream)).map(transformBatch)
@@ -668,7 +668,7 @@ describe('Portal cache', () => {
 
       // check stored rows by query hash
       const rows = await readAllChunks(
-        adapter.stream({
+        cache.stream({
           queryHash: '8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b',
           fromBlock: 0,
         }),

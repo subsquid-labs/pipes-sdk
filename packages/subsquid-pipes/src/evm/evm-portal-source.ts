@@ -4,13 +4,13 @@ import {
   createTransformer,
   Logger,
   LogLevel,
+  PortalCache,
   PortalRange,
   PortalSource,
   Transformer,
 } from '~/core/index.js'
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
-import { PortalCacheOptions } from '~/portal-cache/portal-cache.js'
 import { evm, getBlockSchema, PortalClient, PortalClientOptions } from '../portal-client/index.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
 
@@ -28,13 +28,12 @@ export function createEvmPortalSource<F extends evm.FieldSelection = any>({
 }: {
   portal: string | PortalClientOptions | PortalClient
   query?: PortalRange | EvmQueryBuilder<F>
-  cache?: PortalCacheOptions
+  cache?: PortalCache
   metrics?: MetricsServer
   logger?: Logger | LogLevel
   progress?: ProgressTrackerOptions
 }) {
-  logger = logger && typeof logger !== 'string'  ? logger : createDefaultLogger({ level: logger })
-
+  logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ level: logger })
 
   return new PortalSource<EvmQueryBuilder<F>, EvmPortalData<F>>({
     portal,

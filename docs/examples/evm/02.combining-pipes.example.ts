@@ -1,4 +1,4 @@
-import { createEvmPortalSource, sqliteFactoryDatabase } from '@sqd-pipes/pipes/evm'
+import { createEvmPortalSource, factorySqliteDatabase } from '@sqd-pipes/pipes/evm'
 import { erc20Transfers, uniswapV3, uniswapV3Decoder } from './decoders'
 
 /**
@@ -23,7 +23,7 @@ async function cli() {
       range,
       factory: {
         address: uniswapV3.base.mainnet.factory,
-        database: await sqliteFactoryDatabase({ path: './uniswap-v3-pools.sqlite' }),
+        database: await factorySqliteDatabase({ path: './uniswap-v3-pools.sqlite' }),
       },
     }),
   })

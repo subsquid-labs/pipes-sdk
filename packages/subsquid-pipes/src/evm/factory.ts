@@ -37,13 +37,16 @@ export type FactoryOptions<T extends EventArgs> = {
   event: AbiEvent<T>
   _experimental_preindex?: { from: number | string; to: number | string }
   parameter: keyof T | ((data: DecodedAbiEvent<T>) => string)
-  database: FactoryPersistentAdapter<InternalFactoryEvent<T>>
+  database:
+    | FactoryPersistentAdapter<InternalFactoryEvent<T>>
+    | Promise<FactoryPersistentAdapter<InternalFactoryEvent<T>>>
 }
 
 export class Factory<T extends EventArgs> {
   constructor(private options: FactoryOptions<T>) {}
 
   #batch: InternalFactoryEvent<T>[] = []
+  #db!: FactoryPersistentAdapter<InternalFactoryEvent<T>>
 
   factoryAddress(): string[] {
     return arrayify(this.options.address)
@@ -57,8 +60,16 @@ export class Factory<T extends EventArgs> {
     return this.options.event.is(log)
   }
 
-  migrate() {
-    return this.options.database.migrate()
+  private assertDb() {
+    if (!this.#db) throw new Error('Database not initialized. Call migrate() first.')
+
+    return this.#db
+  }
+
+  async migrate() {
+    this.#db = this.options.database instanceof Promise ? await this.options.database : this.options.database
+
+    return this.assertDb()?.migrate()
   }
 
   async decode(log: Log, blockNumber: number) {
@@ -82,10 +93,10 @@ export class Factory<T extends EventArgs> {
     const memory = this.#batch.find((b) => b.childAddress === address)
     if (memory) return this.transform(memory)
 
-    const db = await this.options.database.lookup(address)
-    if (!db) return null
+    const fromDb = await this.assertDb().lookup(address)
+    if (!fromDb) return null
 
-    return this.transform(db)
+    return this.transform(fromDb)
   }
 
   private transform(event: InternalFactoryEvent<T>): FactoryEvent<DecodedAbiEvent<T>> {
@@ -113,11 +124,6 @@ export class Factory<T extends EventArgs> {
     logger: Logger
     portal: PortalClient
   }) {
-    if (!this.options.database) {
-      logger.warn(`No database provided, skipping ${name}`)
-      return
-    }
-
     logger.info(`Starting ${name}`)
 
     await createEvmPortalSource({
@@ -156,7 +162,7 @@ export class Factory<T extends EventArgs> {
                 })
               }
 
-              await this.options.database?.save(res)
+              await this.assertDb().save(res)
             }
           },
         }),
@@ -166,17 +172,17 @@ export class Factory<T extends EventArgs> {
   }
 
   async getAllContracts() {
-    return this.options.database.all()
+    return this.assertDb().all()
   }
 
   async persist() {
-    await this.options.database.save(this.#batch)
+    await this.assertDb().save(this.#batch)
     // Flush memory batch
     this.#batch = []
   }
 
   async fork(cursor: BlockCursor) {
-    await this.options.database.remove(cursor.number)
+    await this.assertDb().remove(cursor.number)
   }
 
   static isFactory(address: any) {
@@ -184,6 +190,6 @@ export class Factory<T extends EventArgs> {
   }
 }
 
-export function createFactory<T extends EventArgs>(options: FactoryOptions<T>) {
+export function factory<T extends EventArgs>(options: FactoryOptions<T>) {
   return new Factory(options)
 }
