@@ -27,6 +27,6 @@ class EvmRpcLatencyWatcher extends RpcLatencyWatcher {
   }
 }
 
-export function createEvmRpcLatencyWatcher({ rpcUrl }: { rpcUrl: string[] }) {
+export function evmRpcLatencyWatcher({ rpcUrl }: { rpcUrl: string[] }) {
   return rpcLatencyWatcher(new EvmRpcLatencyWatcher(rpcUrl))
 }

@@ -103,11 +103,7 @@ function transformExemplar(profiler: Profiler): TransformationResult {
 
 const MAX_HISTORY = 50
 
-export function createNodeMetricsServer({
-  port = 9090,
-  enabled = true,
-  logger,
-}: MetricsServerOptions = {}): MetricsServer {
+export function metricsServer({ port = 9090, enabled = true, logger }: MetricsServerOptions = {}): MetricsServer {
   const registry = new client.Registry()
   const app = express()
   let server: Server | undefined = undefined
@@ -290,3 +286,9 @@ export function createNodeMetricsServer({
     },
   }
 }
+
+/**
+ *  @deprecated
+ *  Use `metricsServer`
+ */
+export const createNodeMetricsServer = metricsServer

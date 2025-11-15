@@ -1,9 +1,15 @@
 import { CompositePipe, compositeTransformer } from '~/core/composite-transformer.js'
-import { isForkException, PortalClient, PortalClientOptions } from '~/portal-client/index.js'
+import {
+  GetBlock,
+  isForkException,
+  PortalClient,
+  PortalClientOptions,
+  PortalStream,
+  Query,
+} from '~/portal-client/index.js'
 import { last } from '../internal/array.js'
-import { createPortalCache, PortalCacheOptions } from '../portal-cache/portal-cache.js'
 import { Logger } from './logger.js'
-import { createNoopMetricsServer, Metrics, MetricsServer } from './metrics-server.js'
+import { Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
 import { Profiler, Span } from './profiling.js'
 import { ProgressState, StartState } from './progress-tracker.js'
 import { hashQuery, QueryBuilder } from './query-builder.js'
@@ -20,6 +26,10 @@ Portal data for this dataset will lag behind the chain head.
 This is expected. Do not rely on this dataset for latency-critical workflows.
 ==================================================================
 `
+
+export interface PortalCache {
+  getStream<Q extends Query>(options: { portal: PortalClient; query: Q; logger: Logger }): PortalStream<GetBlock<Q>>
+}
 
 export type BatchCtx = {
   head: {
@@ -65,7 +75,7 @@ export type PortalSourceOptions<Query> = {
   query: Query
   logger: Logger
   profiler?: boolean
-  cache?: PortalCacheOptions
+  cache?: PortalCache
   transformers?: Transformer<any, any>[]
   metrics?: MetricsServer
   progress?: {
@@ -78,7 +88,7 @@ export type PortalSourceOptions<Query> = {
 export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   readonly #options: {
     profiler: boolean
-    cache?: PortalCacheOptions
+    cache?: PortalCache
   }
   readonly #queryBuilder: Q
   readonly #logger: Logger
@@ -117,7 +127,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       cache: options.cache,
       profiler: typeof options.profiler === 'undefined' ? process.env.NODE_ENV !== 'production' : options.profiler,
     }
-    this.#metricServer = options.metrics && 'start' in options.metrics ? options.metrics : createNoopMetricsServer()
+    this.#metricServer = options.metrics ?? noopMetricsServer()
     this.#metricServer.setLogger?.(this.#logger)
 
     this.#transformers = options.transformers || []
@@ -161,8 +171,8 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       }
 
       const source = this.#options.cache
-        ? await createPortalCache({
-            ...this.#options.cache,
+        ? // use cache if available
+          this.#options.cache.getStream({
             portal: this.#portal,
             logger: this.#logger,
             query,

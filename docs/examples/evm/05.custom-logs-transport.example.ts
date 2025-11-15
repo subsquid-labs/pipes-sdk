@@ -1,4 +1,4 @@
-import { createEvmPortalSource } from '@sqd-pipes/pipes/evm'
+import { evmPortalSource } from '@sqd-pipes/pipes/evm'
 import pino from 'pino'
 import { erc20Transfers } from './decoders'
 
@@ -23,7 +23,7 @@ async function cli() {
     },
   })
 
-  const stream = createEvmPortalSource({
+  const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     logger: pino(transport),
   }).pipe(erc20Transfers())

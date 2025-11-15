@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 import { integer, pgTable, varchar } from 'drizzle-orm/pg-core'
 import { Pool, QueryResultRow } from 'pg'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createEvmPortalSource } from '~/evm/index.js'
+import { evmPortalSource } from '~/evm/index.js'
 import {
   blockQuery,
   blockTransformer,
@@ -12,7 +12,7 @@ import {
   MockPortal,
   MockResponse,
 } from '~/tests/index.js'
-import { createDrizzleTarget } from './index.js'
+import { drizzleTarget } from './index.js'
 
 const dsnUrl = process.env['TEST_POSTGRES_DSN'] || `postgresql://postgres:postgres@localhost:5432/postgres`
 const pool = new Pool({
@@ -72,13 +72,13 @@ describe('Drizzle target', () => {
       ])
 
       await expect(async () => {
-        await createEvmPortalSource({
+        await evmPortalSource({
           portal: mockPortal.url,
           query: blockQuery({ from: 0, to: 5 }),
         })
           .pipe(blockTransformer())
           .pipeTo(
-            createDrizzleTarget({
+            drizzleTarget({
               db,
               tables: [],
               onData: async ({ tx }) => {
@@ -113,13 +113,13 @@ describe('Drizzle target', () => {
         },
       ])
 
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 0, to: 5 }),
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createDrizzleTarget({
+          drizzleTarget({
             db,
             tables: [],
             settings: { state: { schema: 'test' } },
@@ -210,13 +210,13 @@ describe('Drizzle target', () => {
         },
       ])
 
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 0, to: 1 }),
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createDrizzleTarget({
+          drizzleTarget({
             db,
             tables: [],
             settings: {
@@ -226,13 +226,13 @@ describe('Drizzle target', () => {
           }),
         )
 
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 1, to: 2 }),
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createDrizzleTarget({
+          drizzleTarget({
             db,
             tables: [],
             settings: { state: { schema: 'test' } },
@@ -343,13 +343,13 @@ describe('Drizzle target', () => {
         },
       ])
 
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: mockPortal.url,
         query: { from: 0, to: 7 },
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createDrizzleTarget({
+          drizzleTarget({
             db,
             tables: [testTable],
             onBeforeRollback: () => {
@@ -444,13 +444,13 @@ describe('Drizzle target', () => {
 
       let callCount = 0
 
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: mockPortal.url,
         query: { from: 0, to: 5 },
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createDrizzleTarget({
+          drizzleTarget({
             db,
             tables: [testTable],
             onData: async ({ tx, data }) => {
@@ -532,13 +532,13 @@ describe('Drizzle target', () => {
       ])
 
       let callCount = 0
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: mockPortal.url,
         query: { from: 0, to: 5 },
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createDrizzleTarget({
+          drizzleTarget({
             db,
             tables: [testTable],
             onData: async ({ tx, data }) => {
@@ -656,13 +656,13 @@ describe('Drizzle target', () => {
 
       let callCount = 0
 
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: mockPortal.url,
         query: { from: 0, to: 5 },
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createDrizzleTarget({
+          drizzleTarget({
             db,
             tables: [
               /*

@@ -1,24 +1,24 @@
-import { cast } from '@subsquid/util-internal-validation';
-import { MetricsServer } from '~/core/metrics-server.js';
-import { progressTracker, ProgressTrackerOptions } from '~/core/progress-tracker.js';
+import { cast } from '@subsquid/util-internal-validation'
+import { MetricsServer } from '~/core/metrics-server.js'
+import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
 import {
   createDefaultLogger,
   createTransformer,
   Logger,
   LogLevel,
+  PortalCache,
   PortalRange,
   PortalSource,
   Transformer,
-} from '../core/index.js';
-import { PortalCacheOptions } from '../portal-cache/portal-cache.js';
-import { getBlockSchema, PortalClientOptions, solana } from '../portal-client/index.js';
-import { SolanaQueryBuilder } from './solana-query-builder.js';
+} from '../core/index.js'
+import { getBlockSchema, PortalClientOptions, solana } from '../portal-client/index.js'
+import { SolanaQueryBuilder } from './solana-query-builder.js'
 
 export type SolanaTransformer<In, Out> = Transformer<In, Out, SolanaQueryBuilder>
 
 export type SolanaPortalData<F extends solana.FieldSelection> = { blocks: solana.Block<F>[] }
 
-export function createSolanaPortalSource<F extends solana.FieldSelection = any>({
+export function solanaPortalSource<F extends solana.FieldSelection = any>({
   portal,
   query,
   cache,
@@ -28,12 +28,12 @@ export function createSolanaPortalSource<F extends solana.FieldSelection = any>(
 }: {
   portal: string | PortalClientOptions
   query?: PortalRange | SolanaQueryBuilder<F>
-  cache?: PortalCacheOptions
+  cache?: PortalCache
   metrics?: MetricsServer
   logger?: Logger | LogLevel
   progress?: ProgressTrackerOptions
 }) {
-  logger = logger && typeof logger !== 'string'  ? logger : createDefaultLogger({ level: logger })
+  logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ level: logger })
 
   return new PortalSource<SolanaQueryBuilder<F>, SolanaPortalData<F>>({
     portal,
@@ -65,3 +65,8 @@ export function createSolanaPortalSource<F extends solana.FieldSelection = any>(
     ],
   })
 }
+
+/**
+ *  @deprecated use `solanaPortalSource` instead
+ */
+export const createSolanaPortalSource = solanaPortalSource

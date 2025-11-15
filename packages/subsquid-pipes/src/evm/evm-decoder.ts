@@ -87,7 +87,7 @@ const decodedEventFields = {
   },
 } as const
 
-export function createEvmDecoder<T extends Events, C extends Contracts>({
+export function evmDecoder<T extends Events, C extends Contracts>({
   range,
   contracts,
   events,
@@ -268,3 +268,8 @@ export function createEvmDecoder<T extends Events, C extends Contracts>({
     },
   })
 }
+
+/**
+ *  @deprecated use `evmDecoder` instead
+ */
+export const createEvmDecoder = evmDecoder

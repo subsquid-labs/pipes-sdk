@@ -34,3 +34,5 @@ local/
 
 # SQLite files used for pipes
 **/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal

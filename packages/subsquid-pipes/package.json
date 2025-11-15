@@ -75,6 +75,7 @@
       "require": "./dist/index.cjs"
     },
     "./evm": {
+      "browser": "./dist/evm/browser.js",
       "types": "./dist/evm/index.d.ts",
       "import": "./dist/evm/index.js",
       "require": "./dist/evm/index.cjs"
@@ -89,10 +90,10 @@
       "import": "./dist/portal-client/index.js",
       "require": "./dist/portal-client/index.cjs"
     },
-    "./portal-cache": {
-      "types": "./dist/portal-cache/index.d.ts",
-      "import": "./dist/portal-cache/index.js",
-      "require": "./dist/portal-cache/index.cjs"
+    "./portal-cache/node": {
+      "types": "./dist/portal-cache/node/index.d.ts",
+      "import": "./dist/portal-cache/node/index.js",
+      "require": "./dist/portal-cache/node/index.cjs"
     },
     "./targets/clickhouse": {
       "types": "./dist/targets/clickhouse/index.d.ts",
@@ -124,8 +125,8 @@
       "portal-client": [
         "./dist/portal-client/index.d.ts"
       ],
-      "portal-cache": [
-        "./dist/portal-cache/index.d.ts"
+      "portal-cache/node": [
+        "./dist/portal-cache/node/index.d.ts"
       ],
       "targets/clickhouse": [
         "./dist/targets/clickhouse/index.d.ts"

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { solana } from '~/portal-client/index.js'
 import { SolanaQueryBuilder } from '~/solana/solana-query-builder.js'
 import { closeMockPortal, createMockPortal, MockPortal } from '../tests/index.js'
-import { createSolanaPortalSource } from './solana-portal-source.js'
+import { solanaPortalSource } from './solana-portal-source.js'
 
 describe('Portal abstract stream', () => {
   let mockPortal: MockPortal
@@ -32,7 +32,7 @@ describe('Portal abstract stream', () => {
       reward: { lamports: true },
     } as const
 
-    const stream = createSolanaPortalSource({
+    const stream = solanaPortalSource({
       portal: mockPortal.url,
       query: new SolanaQueryBuilder().addFields(fields).addRange({ from: 0, to: 2 }),
     })

@@ -13,12 +13,21 @@ export interface SqliteSync {
   stream<P extends any[], R>(sql: string, params?: P): AsyncIterable<R>
 }
 
+function setupClient(client: SqliteSync, options: SqliteOptions): SqliteSync {
+  if (options.enableWAL ?? true) {
+    client.exec('PRAGMA journal_mode = WAL;')
+    client.exec('PRAGMA synchronous = NORMAL;')
+  }
+
+  return client
+}
+
 export async function loadSqlite(options: SqliteOptions): Promise<SqliteSync> {
   if (typeof Bun !== 'undefined') {
     const m = await import('./bun-sqlite.js')
-    return new m.BunSQLite(options)
+    return setupClient(new m.BunSQLite(options), options)
   }
 
   const m = await import('./node-sqlite.js')
-  return new m.NodeSQLite(options)
+  return setupClient(new m.NodeSQLite(options), options)
 }

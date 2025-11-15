@@ -33,7 +33,7 @@ export type Settings = {
   maxRows?: number
 }
 
-export function createClickhouseTarget<T>({
+export function clickhouseTarget<T>({
   client,
   onStart,
   onData,
@@ -90,3 +90,8 @@ export function createClickhouseTarget<T>({
     },
   })
 }
+
+/**
+ *  @deprecated use `clickhouseTarget` instead
+ */
+export const createClickhouseTarget = clickhouseTarget
