@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { createEvmPortalSource } from '~/evm/index.js'
+import { evmPortalSource } from '~/evm/index.js'
 import {
   blockTransformer,
   closeMockPortal,
@@ -25,7 +25,7 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = createEvmPortalSource({
+      const stream = evmPortalSource({
         portal: mockPortal.url,
         query: { from: 0, to: 2 },
       }).pipe(blockTransformer())
@@ -59,7 +59,7 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = createEvmPortalSource({
+      const stream = evmPortalSource({
         portal: {
           url: mockPortal.url,
           http: { retrySchedule: [0] },
@@ -92,7 +92,7 @@ describe('Portal abstract stream', () => {
         ...new Array(2).fill({ statusCode: 503 }),
       ])
 
-      const stream = createEvmPortalSource({
+      const stream = evmPortalSource({
         portal: {
           url: mockPortal.url,
           http: {
@@ -144,7 +144,7 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = createEvmPortalSource({
+      const stream = evmPortalSource({
         portal: {
           url: mockPortal.url,
           http: { retryAttempts: 0, retrySchedule: [0] },
@@ -175,7 +175,7 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = createEvmPortalSource({
+      const stream = evmPortalSource({
         portal: {
           url: mockPortal.url,
           finalized: true,

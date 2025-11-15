@@ -1,5 +1,5 @@
 import { formatBlock } from '@sqd-pipes/pipes'
-import { createEvmPortalSource, evmRpcLatencyWatcher } from '@sqd-pipes/pipes/evm'
+import { evmPortalSource, evmRpcLatencyWatcher } from '@sqd-pipes/pipes/evm'
 import { metricsServer } from '@sqd-pipes/pipes/metrics/node'
 
 /**
@@ -21,7 +21,7 @@ import { metricsServer } from '@sqd-pipes/pipes/metrics/node'
 
 async function main() {
   // Create a stream of new blocks from the Base mainnet portal
-  const stream = createEvmPortalSource({
+  const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/base-mainnet',
     query: { from: 'latest' }, // Start from the latest block
     metrics: metricsServer({

@@ -5,8 +5,8 @@ import { BlockCursor, createTarget, Logger, PortalRange, parsePortalRange } from
 import { arrayify } from '~/internal/array.js'
 import { PortalClient } from '~/portal-client/client.js'
 import { Log } from '~/portal-client/query/evm.js'
-import { createEvmDecoder, FactoryEvent } from './evm-decoder.js'
-import { createEvmPortalSource } from './evm-portal-source.js'
+import { evmDecoder, FactoryEvent } from './evm-decoder.js'
+import { evmPortalSource } from './evm-portal-source.js'
 
 export type EventArgs = {
   [key: string]: Codec<any> & { indexed?: boolean }
@@ -69,7 +69,7 @@ export class Factory<T extends EventArgs> {
   async migrate() {
     this.#db = this.options.database instanceof Promise ? await this.options.database : this.options.database
 
-    return this.assertDb()?.migrate()
+    return this.assertDb().migrate()
   }
 
   async decode(log: Log, blockNumber: number) {
@@ -126,12 +126,12 @@ export class Factory<T extends EventArgs> {
   }) {
     logger.info(`Starting ${name}`)
 
-    await createEvmPortalSource({
+    await evmPortalSource({
       portal,
       logger,
     })
       .pipe(
-        createEvmDecoder({
+        evmDecoder({
           profiler: { id: name },
           contracts: this.factoryAddress(),
           range,

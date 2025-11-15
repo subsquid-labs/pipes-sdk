@@ -1,4 +1,4 @@
-import { commonAbis, createEvmDecoder, createEvmPortalSource } from '@sqd-pipes/pipes/evm'
+import { commonAbis, evmDecoder, evmPortalSource } from '@sqd-pipes/pipes/evm'
 import { metricsServer } from '@sqd-pipes/pipes/metrics/node'
 
 /**
@@ -9,13 +9,13 @@ import { metricsServer } from '@sqd-pipes/pipes/metrics/node'
  */
 
 async function cli() {
-  const stream = createEvmPortalSource({
+  const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     metrics: metricsServer({
       port: 9090,
     }),
   }).pipe(
-    createEvmDecoder({
+    evmDecoder({
       range: { from: 'latest' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,

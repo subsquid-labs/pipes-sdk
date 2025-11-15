@@ -1,4 +1,4 @@
-import { createEvmPortalSource, factorySqliteDatabase } from '@sqd-pipes/pipes/evm'
+import { evmPortalSource, factorySqliteDatabase } from '@sqd-pipes/pipes/evm'
 import { erc20Transfers, uniswapV3, uniswapV3Decoder } from './decoders'
 
 /**
@@ -13,7 +13,7 @@ async function cli() {
 
   // Create a combined stream that processes both ERC20 transfers and Uniswap V3 swaps
   // from Base Mainnet using Portal API
-  const stream = createEvmPortalSource({
+  const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/base-mainnet',
   }).pipeComposite({
     transfers: erc20Transfers({
@@ -23,7 +23,7 @@ async function cli() {
       range,
       factory: {
         address: uniswapV3.base.mainnet.factory,
-        database: await factorySqliteDatabase({ path: './uniswap-v3-pools.sqlite' }),
+        database: factorySqliteDatabase({ path: './uniswap-v3-pools.sqlite' }),
       },
     }),
   })
