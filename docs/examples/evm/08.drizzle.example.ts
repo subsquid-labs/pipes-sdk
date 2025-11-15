@@ -38,9 +38,9 @@
 
 import { ApolloServer } from '@apollo/server'
 import { startStandaloneServer } from '@apollo/server/standalone'
-import { commonAbis, createEvmDecoder, createEvmPortalSource } from '@sqd-pipes/pipes/evm'
+import { commonAbis, evmDecoder, evmPortalSource } from '@sqd-pipes/pipes/evm'
 import { metricsServer } from '@sqd-pipes/pipes/metrics/node'
-import { chunk, createDrizzleTarget } from '@sqd-pipes/pipes/targets/drizzle/node-postgres'
+import { chunk, drizzleTarget } from '@sqd-pipes/pipes/targets/drizzle/node-postgres'
 import { buildSchema } from 'drizzle-graphql'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { integer, numeric, pgTable, primaryKey, timestamp, varchar } from 'drizzle-orm/pg-core'
@@ -69,7 +69,7 @@ const DB_URL = 'postgresql://postgres:postgres@localhost:5432/postgres'
 
 async function main() {
   // Configure Portal API source to fetch data from Ethereum mainnet
-  await createEvmPortalSource({
+  await evmPortalSource({
     portal: {
       url: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
       // maxBytes: 1024 * 1024 * 1024 * 2,
@@ -78,7 +78,7 @@ async function main() {
   })
     .pipe(
       // Configure decoder to extract ERC20 Transfer events from raw blockchain data
-      createEvmDecoder({
+      evmDecoder({
         range: { from: '0' },
         events: {
           transfers: commonAbis.erc20.events.Transfer,
@@ -87,7 +87,7 @@ async function main() {
     )
     .pipeTo(
       // Configure Drizzle ORM target to store events in PostgreSQL database
-      createDrizzleTarget({
+      drizzleTarget({
         db: drizzle(DB_URL),
         /*
          * List of tables that will be used to track snapshots for rollbacks.

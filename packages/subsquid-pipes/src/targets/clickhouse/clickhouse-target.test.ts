@@ -1,10 +1,10 @@
 import { createClient } from '@clickhouse/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { createEvmPortalSource } from '~/evm/index.js'
+import { evmPortalSource } from '~/evm/index.js'
 import { blockQuery, blockTransformer, closeMockPortal, createMockPortal, MockPortal } from '~/tests/index.js'
 
-import { createClickhouseTarget } from './clickouse-target.js'
+import { clickhouseTarget } from './clickouse-target.js'
 
 const client = createClient({
   url: process.env['TEST_CLICKHOUSE_URL'] || 'http://localhost:10123',
@@ -53,13 +53,13 @@ describe('Clickhouse state', () => {
         },
       ])
 
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 0, to: 5 }),
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createClickhouseTarget({
+          clickhouseTarget({
             client,
             settings: {
               table: 'sync',
@@ -117,7 +117,7 @@ describe('Clickhouse state', () => {
         },
       ])
 
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: {
           url: mockPortal.url,
           // we need to save each response separately
@@ -129,7 +129,7 @@ describe('Clickhouse state', () => {
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createClickhouseTarget({
+          clickhouseTarget({
             client,
             settings: {
               table: 'sync',
@@ -173,13 +173,13 @@ describe('Clickhouse state', () => {
         { statusCode: 200, data: [{ header: { number: 3, hash: '0x3', timestamp: 3000 } }] },
       ])
 
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 0, to: 3 }),
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createClickhouseTarget({
+          clickhouseTarget({
             client,
             settings: {
               table: 'sync',
@@ -211,13 +211,13 @@ describe('Clickhouse state', () => {
         },
       ])
 
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 0, to: 1 }),
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createClickhouseTarget({
+          clickhouseTarget({
             client,
             settings: { table: 'sync' },
             onData: () => {},
@@ -258,25 +258,25 @@ describe('Clickhouse state', () => {
         },
       ])
 
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 0, to: 1 }),
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createClickhouseTarget({
+          clickhouseTarget({
             client,
             onData: () => {},
           }),
         )
 
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 1, to: 2 }),
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createClickhouseTarget({
+          clickhouseTarget({
             client,
             onData: () => {},
           }),
@@ -381,13 +381,13 @@ describe('Clickhouse state', () => {
       ])
 
       let rollbackCalls = 0
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: mockPortal.url,
         query: { from: 0, to: 7 },
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createClickhouseTarget({
+          clickhouseTarget({
             client,
             onData: async ({ store, data }) => {
               await store.insert({
@@ -519,13 +519,13 @@ describe('Clickhouse state', () => {
 
       while (!finished) {
         try {
-          await createEvmPortalSource({
+          await evmPortalSource({
             portal: mockPortal.url,
             query: { from: 0, to: 7 },
           })
             .pipe(blockTransformer())
             .pipeTo(
-              createClickhouseTarget({
+              clickhouseTarget({
                 client,
                 onData: async ({ data }) => {
                   if (data[0].hash === '0x4-1' && crashes === 0) {
@@ -725,13 +725,13 @@ describe('Clickhouse state', () => {
 
       let rollbackCalls = 0
 
-      await createEvmPortalSource({
+      await evmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 0, to: 7 }),
       })
         .pipe(blockTransformer())
         .pipeTo(
-          createClickhouseTarget({
+          clickhouseTarget({
             client,
             onData: async ({ store, data }) => {
               await store.insert({

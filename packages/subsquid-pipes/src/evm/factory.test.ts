@@ -1,12 +1,12 @@
 import { event, indexed } from '@subsquid/evm-abi'
 import * as p from '@subsquid/evm-codec'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createEvmDecoder } from '~/evm/evm-decoder.js'
+import { evmDecoder } from '~/evm/evm-decoder.js'
 import { factory } from '~/evm/factory.js'
 import { factorySqliteDatabase } from '~/evm/factory-adapters/sqlite.js'
 import { createMemoryTarget } from '~/targets/memory/memory-target.js'
 import { closeMockPortal, createMockPortal, MockPortal, readAll } from '../tests/index.js'
-import { createEvmPortalSource } from './evm-portal-source.js'
+import { evmPortalSource } from './evm-portal-source.js'
 
 const factoryAbi = {
   PoolCreated: event(
@@ -102,10 +102,10 @@ describe('Factory', () => {
     ])
 
     const db = await factorySqliteDatabase({ path: ':memory:' })
-    const stream = createEvmPortalSource({
+    const stream = evmPortalSource({
       portal: mockPortal.url,
     }).pipe(
-      createEvmDecoder({
+      evmDecoder({
         range: { from: 1, to: 2 },
         contracts: factory({
           address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
@@ -258,13 +258,13 @@ describe('Factory', () => {
 
     const db = await factorySqliteDatabase({ path: ':memory:' })
 
-    await createEvmPortalSource({
+    await evmPortalSource({
       portal: {
         url: mockPortal.url,
       },
     })
       .pipe(
-        createEvmDecoder({
+        evmDecoder({
           range: { from: 1, to: 3 },
           contracts: factory({
             address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',

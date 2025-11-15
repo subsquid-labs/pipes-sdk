@@ -1,5 +1,5 @@
 import { formatBlock } from '@sqd-pipes/pipes'
-import { createSolanaPortalSource, solanaRpcLatencyWatcher } from '@sqd-pipes/pipes/solana'
+import { solanaPortalSource, solanaRpcLatencyWatcher } from '@sqd-pipes/pipes/solana'
 
 /**
  * This example demonstrates how to track and compare block indexing latency
@@ -20,7 +20,7 @@ import { createSolanaPortalSource, solanaRpcLatencyWatcher } from '@sqd-pipes/pi
 
 async function main() {
   // Create a stream of new blocks from the Base mainnet portal
-  const stream = createSolanaPortalSource({
+  const stream = solanaPortalSource({
     portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
     query: { from: 'latest' }, // Start from the latest block
   }).pipe(

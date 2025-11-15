@@ -110,7 +110,7 @@ export function createSolanaInstructionDecoder<T extends Instructions>(
           [
             'No valid instruction discriminators found. It looks like one or more instructions in your ABI are missing their decoder configuration.',
             'This usually happens when you accidentally pass an event instead of an instruction, or when your ABI instruction definitions are incomplete.',
-            'Please check that you are passing correct instruction definitions to "createSolanaInstructionDecoder":',
+            'Please check that you are passing correct instruction definitions to "solanaInstructionDecoder":',
             '--------------------------------------------------',
             'Example',
             '',
@@ -121,7 +121,7 @@ export function createSolanaInstructionDecoder<T extends Instructions>(
             ' // ... omitted logic ....',
             '',
 
-            'createSolanaInstructionDecoder({',
+            'solanaInstructionDecoder({',
             '  range: { from: 371602677 },',
             '  programId: orcaWhirlpool.programId,',
             '  instructions: {',

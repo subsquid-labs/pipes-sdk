@@ -18,7 +18,7 @@ export type EvmTransformer<In, Out> = Transformer<In, Out, EvmQueryBuilder>
 
 export type EvmPortalData<F extends evm.FieldSelection> = { blocks: evm.Block<F>[] }
 
-export function createEvmPortalSource<F extends evm.FieldSelection = any>({
+export function evmPortalSource<F extends evm.FieldSelection = any>({
   portal,
   query,
   cache,
@@ -65,3 +65,8 @@ export function createEvmPortalSource<F extends evm.FieldSelection = any>({
     ],
   })
 }
+
+/**
+ *  @deprecated use `evmPortalSource` instead
+ */
+export const createEvmPortalSource = evmPortalSource

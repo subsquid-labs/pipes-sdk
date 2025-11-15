@@ -18,7 +18,7 @@ export type SolanaTransformer<In, Out> = Transformer<In, Out, SolanaQueryBuilder
 
 export type SolanaPortalData<F extends solana.FieldSelection> = { blocks: solana.Block<F>[] }
 
-export function createSolanaPortalSource<F extends solana.FieldSelection = any>({
+export function solanaPortalSource<F extends solana.FieldSelection = any>({
   portal,
   query,
   cache,
@@ -65,3 +65,8 @@ export function createSolanaPortalSource<F extends solana.FieldSelection = any>(
     ],
   })
 }
+
+/**
+ *  @deprecated use `solanaPortalSource` instead
+ */
+export const createSolanaPortalSource = solanaPortalSource
