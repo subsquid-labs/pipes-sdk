@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PortalBatch } from '~/core/index.js'
-import { createEvmPortalSource } from '~/evm/index.js'
+import { evmPortalSource } from '~/evm/index.js'
 import { portalSqliteCache } from '~/portal-cache/node/node-sqlite-cache-adapter.js'
 import { blockQuery, blockTransformer, closeMockPortal, createMockPortal, MockPortal } from '~/tests/index.js'
 
@@ -88,7 +88,7 @@ describe('Portal cache', () => {
 
       const cache = portalSqliteCache({ path: DB_PATH })
 
-      const stream = createEvmPortalSource({
+      const stream = evmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 0, to: 5 }),
         cache,
@@ -221,7 +221,7 @@ describe('Portal cache', () => {
 
       const cache = portalSqliteCache({ path: DB_PATH })
 
-      const stream = createEvmPortalSource({
+      const stream = evmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 6, to: 10 }),
         cache,
@@ -230,7 +230,7 @@ describe('Portal cache', () => {
       await readAllChunks(stream) // first pass to store data
 
       // now request from 0 to 5, should not reuse data from 6 to 10
-      const stream2 = createEvmPortalSource({
+      const stream2 = evmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 0, to: 5 }),
         cache,
@@ -353,7 +353,7 @@ describe('Portal cache', () => {
 
       const cache = portalSqliteCache({ path: DB_PATH })
 
-      const stream = createEvmPortalSource({
+      const stream = evmPortalSource({
         portal: mockPortal.url,
         query: blockQuery({ from: 0, to: 5 }),
         cache,

@@ -288,7 +288,6 @@ export function metricsServer({ port = 9090, enabled = true, logger }: MetricsSe
 }
 
 /**
- *  @deprecated
- *  Use `metricsServer`
+ *  @deprecated Use `metricsServer` instead.
  */
 export const createNodeMetricsServer = metricsServer

@@ -1,4 +1,4 @@
-import { commonAbis, createEvmDecoder, createEvmPortalSource } from '@sqd-pipes/pipes/evm'
+import { commonAbis, evmDecoder, evmPortalSource } from '@sqd-pipes/pipes/evm'
 
 /**
  * Basic example demonstrating how to use pipes for processing EVM data.
@@ -9,11 +9,11 @@ import { commonAbis, createEvmDecoder, createEvmPortalSource } from '@sqd-pipes/
  */
 
 async function cli() {
-  const stream = createEvmPortalSource({
+  const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     // logger: 'debug',
   }).pipe(
-    createEvmDecoder({
+    evmDecoder({
       range: { from: 'latest' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,

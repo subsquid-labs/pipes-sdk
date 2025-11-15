@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { EvmQueryBuilder } from '~/evm/evm-query-builder.js'
 import { closeMockPortal, createMockPortal, MockPortal } from '../tests/index.js'
-import { createEvmPortalSource, EvmPortalData } from './evm-portal-source.js'
+import { EvmPortalData, evmPortalSource } from './evm-portal-source.js'
 
-describe('createEvmPortalSource', () => {
+describe('evmPortalSource', () => {
   let mockPortal: MockPortal
 
   afterEach(async () => {
@@ -29,7 +29,7 @@ describe('createEvmPortalSource', () => {
       trace: { error: true },
     } as const
 
-    const stream = createEvmPortalSource({
+    const stream = evmPortalSource({
       portal: mockPortal.url,
       query: new EvmQueryBuilder().addFields(fields).addRange({ from: 0, to: 2 }),
     }).pipe({

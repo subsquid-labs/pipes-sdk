@@ -128,7 +128,7 @@ class DrizzleTracker {
  * @returns Target implementation that can be used with pipe()
  * @example
  * ```ts
- * createDrizzleTarget({
+ * drizzleTarget({
  *   db: drizzle('postgresql://...'),
  *   tables: [myTable],
  *   onData: async ({tx, data}) => {
@@ -137,7 +137,7 @@ class DrizzleTracker {
  * })
  * ```
  */
-export function createDrizzleTarget<T>({
+export function drizzleTarget<T>({
   db,
   tables,
   onStart,

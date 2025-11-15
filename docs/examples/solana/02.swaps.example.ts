@@ -1,4 +1,4 @@
-import { createSolanaInstructionDecoder, createSolanaPortalSource } from '@sqd-pipes/pipes/solana'
+import { createSolanaInstructionDecoder, solanaPortalSource } from '@sqd-pipes/pipes/solana'
 import * as meteoraDamm from './abi/meteora-damm/index.js'
 import * as meteoraDlmm from './abi/meteora-dlmm/index.js'
 import * as orcaWhirlpool from './abi/orca_whirlpool/index.js'
@@ -9,7 +9,7 @@ import * as raydiumCpmm from './abi/raydium-cpmm/index.js'
 const from = '340,000,000'
 
 async function cli() {
-  const stream = createSolanaPortalSource({
+  const stream = solanaPortalSource({
     portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
   }).pipeComposite({
     orcaWhirlpool: createSolanaInstructionDecoder({
