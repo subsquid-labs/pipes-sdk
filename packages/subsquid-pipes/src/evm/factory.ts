@@ -43,13 +43,16 @@ export type FactoryOptions<T extends EventArgs> = {
 }
 
 export class Factory<T extends EventArgs> {
-  constructor(private options: FactoryOptions<T>) {}
-
   #batch: InternalFactoryEvent<T>[] = []
-  #db!: FactoryPersistentAdapter<InternalFactoryEvent<T>>
+  #db?: FactoryPersistentAdapter<InternalFactoryEvent<T>>
+  readonly #addresses: Set<string>
+
+  constructor(private options: FactoryOptions<T>) {
+    this.#addresses = new Set(arrayify(this.options.address))
+  }
 
   factoryAddress(): string[] {
-    return arrayify(this.options.address)
+    return Array.from(this.#addresses)
   }
 
   factoryTopic() {
@@ -91,10 +94,15 @@ export class Factory<T extends EventArgs> {
 
   async getContract(address: string): Promise<FactoryEvent<DecodedAbiEvent<T>> | null> {
     const memory = this.#batch.find((b) => b.childAddress === address)
-    if (memory) return this.transform(memory)
+    if (memory) {
+      if (!this.#addresses.has(memory.factoryAddress)) return null
+
+      return this.transform(memory)
+    }
 
     const fromDb = await this.assertDb().lookup(address)
     if (!fromDb) return null
+    else if (!this.#addresses.has(fromDb.factoryAddress)) return null
 
     return this.transform(fromDb)
   }

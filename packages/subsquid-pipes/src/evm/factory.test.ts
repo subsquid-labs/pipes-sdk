@@ -186,6 +186,103 @@ describe('Factory', () => {
     `)
   })
 
+  it('should set event with same topic to correct factory', async () => {
+    mockPortal = await createMockPortal([
+      {
+        statusCode: 200,
+        data: [
+          {
+            header: { number: 1, hash: '0x1', timestamp: 1000 },
+            logs: [
+              {
+                address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+                topics: [
+                  '0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118',
+                  '0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+                  '0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+                  '0x0000000000000000000000000000000000000000000000000000000000000bb8',
+                ],
+                logIndex: 0,
+                transactionIndex: 0,
+                transactionHash: '0xdeadbeef',
+                data: '0x000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000008ad599c3a0ff1de082011efddc58f1908eb6e6d8',
+              },
+            ],
+          },
+          {
+            header: { number: 2, hash: '0x2', timestamp: 2000 },
+            logs: [
+              {
+                address: '0xaaaaaac3a0ff1de082011efddc58f1908eb6e6d8', // should be skipped
+                topics: [
+                  '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67',
+                  '0x000000000000000000000000def1cafe0000000000000000000000000000dead',
+                  '0x000000000000000000000000beef0000000000000000000000000000deadbeef',
+                ],
+                logIndex: 0,
+                transactionIndex: 0,
+                transactionHash: '0xdeadbeef',
+                data: '0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000005',
+              },
+              {
+                address: '0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8', // should be decoded
+                topics: [
+                  '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67',
+                  '0x000000000000000000000000def1cafe0000000000000000000000000000dead',
+                  '0x000000000000000000000000beef0000000000000000000000000000deadbeef',
+                ],
+                logIndex: 1,
+                transactionIndex: 1,
+                transactionHash: '0xdeadbeef',
+                data: '0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000005',
+              },
+            ],
+          },
+        ],
+      },
+    ])
+
+    const db = await factorySqliteDatabase({ path: ':memory:' })
+    const stream = evmPortalSource({
+      portal: mockPortal.url,
+    }).pipeComposite({
+      v1: evmDecoder({
+        range: { from: 1, to: 2 },
+        contracts: factory({
+          address: '0x00000000000000000000000000000000000000000',
+          event: factoryAbi.PoolCreated,
+          parameter: 'pool',
+          database: db,
+        }),
+        events: {
+          swaps: poolAbi.Swap,
+        },
+      }),
+      v2: evmDecoder({
+        range: { from: 1, to: 2 },
+        contracts: factory({
+          address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+          event: factoryAbi.PoolCreated,
+          parameter: 'pool',
+          database: db,
+        }),
+        events: {
+          swaps: poolAbi.Swap,
+        },
+      }),
+    })
+
+    let v1: any[] = []
+    let v2: any[] = []
+    for await (const chunk of stream) {
+      v1 = [...v1, ...chunk.data.v1.swaps]
+      v2 = [...v2, ...chunk.data.v2.swaps]
+    }
+
+    expect(v1).toHaveLength(0)
+    expect(v2).toHaveLength(1)
+  })
+
   it('should handle fork', async () => {
     mockPortal = await createMockPortal([
       {
