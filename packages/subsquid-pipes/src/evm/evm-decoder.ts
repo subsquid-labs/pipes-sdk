@@ -207,7 +207,6 @@ export function evmDecoder<T extends Events, C extends Contracts>({
 
         for (const log of block.logs) {
           let factoryEvent: FactoryEvent<any> | null = null
-
           if (Factory.isFactory(contracts)) {
             factoryEvent = await contracts.getContract(log.address)
             if (!factoryEvent) {
