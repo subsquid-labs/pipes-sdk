@@ -20,9 +20,9 @@ You can run the same code in CLIs, backend services
 Add the Pipes package to any TypeScript/Node project.
 
 ```bash
-pnpm add @sqd-pipes/pipes
+pnpm add @subsquid/pipes
 # or
-npm install @sqd-pipes/pipes
+npm install @subsquid/pipes
 ```
 
 ---
@@ -34,13 +34,13 @@ The snippet below streams ERC-20 transfers from Ethereum Mainnet via the Subsqui
 Create `src/erc20-transfers.ts`:
 
 ```ts
-import { commonAbis, createEvmDecoder, createEvmPortalSource } from '@sqd-pipes/pipes/evm'
+import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
 
 async function main() {
-  const stream = createEvmPortalSource({
+  const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
   }).pipe(
-    createEvmDecoder({
+    evmDecoder({
       profiler: { id: 'erc20-transfers' },
       range: { from: '12,000,000' },
       events: {
@@ -71,10 +71,13 @@ You should see logs as transfers are decoded.
 
 ### ClickHouse target
 
-If you have ClickHouse and want automatic offset management, read the new guide at `docs/examples/evm/04.clickhouse.example.ts`. It uses the `createClickhouseTarget` from the core package to batch writes and handle forks gracefully.
+If you have ClickHouse and want automatic offset management, read the new guide at `docs/examples/evm/04.clickhouse.example.ts`.
+It uses the `createClickhouseTarget` from the core package to batch writes and handle forks gracefully.
 
-[//]: # (### PostgreSQL snapshots with Drizzle)
-[//]: # (To experiment with snapshotting tables on every block, check `docs/examples/evm/10.drizzle.example.ts`. The helper schema in `docs/examples/evm/db/schema.ts` and the CLI config in `docs/drizzle.config.ts` show how to generate triggers that keep historical state in `___snapshots` tables.)
+### PostgreSQL with Drizzle
+
+If you prefer PostgreSQL, check out `docs/examples/evm/08.drizzle.example.ts`,
+which demonstrates how to use Drizzle ORM to define your schema and persist decoded data.
 
 ---
 

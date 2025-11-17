@@ -1,5 +1,5 @@
-import { PortalRange } from '@sqd-pipes/pipes'
-import { factory as createFactory, evmDecoder, FactoryPersistentAdapter } from '@sqd-pipes/pipes/evm'
+import { PortalRange } from '@subsquid/pipes'
+import { factory as createFactory, evmDecoder, FactoryPersistentAdapter } from '@subsquid/pipes/evm'
 
 import { events as factoryAbi } from '../abi/uniswap.v3/factory'
 import { events as swapsAbi } from '../abi/uniswap.v3/swaps'

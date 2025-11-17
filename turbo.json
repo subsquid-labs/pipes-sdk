@@ -2,7 +2,7 @@
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env.*local"],
   "tasks": {
-    "@sqd-pipes/pipes#build": {
+    "@subsquid/pipes#build": {
       "inputs": [
         "src/**/*.ts",
         "scripts/**/*.ts",
@@ -19,7 +19,7 @@
     },
     "@sqd-pipes/docs#build": {
       "inputs": ["examples/**/*.ts", "tsconfig.json"],
-      "dependsOn": ["@sqd-pipes/pipes#build"],
+      "dependsOn": ["@subsquid/pipes#build"],
       "outputs": ["dist/**"],
       "outputLogs": "new-only"
     }

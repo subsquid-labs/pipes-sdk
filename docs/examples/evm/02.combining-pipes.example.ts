@@ -1,4 +1,4 @@
-import { evmPortalSource, factorySqliteDatabase } from '@sqd-pipes/pipes/evm'
+import { evmPortalSource, factorySqliteDatabase } from '@subsquid/pipes/evm'
 import { erc20Transfers, uniswapV3, uniswapV3Decoder } from './decoders'
 
 /**

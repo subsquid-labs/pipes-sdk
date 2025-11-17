@@ -1,4 +1,4 @@
-import { evmPortalSource } from '@sqd-pipes/pipes/evm'
+import { evmPortalSource } from '@subsquid/pipes/evm'
 import pino from 'pino'
 import { erc20Transfers } from './decoders'
 

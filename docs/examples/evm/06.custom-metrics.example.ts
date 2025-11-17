@@ -1,5 +1,5 @@
-import { commonAbis, evmDecoder, evmPortalSource } from '@sqd-pipes/pipes/evm'
-import { metricsServer } from '@sqd-pipes/pipes/metrics/node'
+import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
+import { metricsServer } from '@subsquid/pipes/metrics/node'
 
 /**
  * This example demonstrates how to add custom Prometheus metrics to your data processing pipeline.

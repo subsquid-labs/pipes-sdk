@@ -18,7 +18,7 @@ export function PipelineDisconnected() {
         <div className="mt-4">
           <h4 className="mb-1">1. Install npm package</h4>
           <Code language="bash" className="text-xs">
-            npm install @sqd-pipes/pipes
+            npm install @subsquid/pipes
           </Code>
         </div>
 

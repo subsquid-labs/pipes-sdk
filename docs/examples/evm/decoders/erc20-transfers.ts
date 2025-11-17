@@ -1,5 +1,5 @@
-import { PortalRange } from '@sqd-pipes/pipes'
-import { commonAbis, evmDecoder } from '@sqd-pipes/pipes/evm'
+import { PortalRange } from '@subsquid/pipes'
+import { commonAbis, evmDecoder } from '@subsquid/pipes/evm'
 
 export type Erc20Event = {
   from: string

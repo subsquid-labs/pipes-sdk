@@ -1,4 +1,4 @@
-import { commonAbis, evmDecoder, evmPortalSource } from '@sqd-pipes/pipes/evm'
+import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
 
 /**
  * Basic example demonstrating how to use pipes for processing EVM data.

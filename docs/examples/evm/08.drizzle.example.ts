@@ -38,9 +38,9 @@
 
 import { ApolloServer } from '@apollo/server'
 import { startStandaloneServer } from '@apollo/server/standalone'
-import { commonAbis, evmDecoder, evmPortalSource } from '@sqd-pipes/pipes/evm'
-import { metricsServer } from '@sqd-pipes/pipes/metrics/node'
-import { chunk, drizzleTarget } from '@sqd-pipes/pipes/targets/drizzle/node-postgres'
+import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
+import { metricsServer } from '@subsquid/pipes/metrics/node'
+import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
 import { buildSchema } from 'drizzle-graphql'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { integer, numeric, pgTable, primaryKey, timestamp, varchar } from 'drizzle-orm/pg-core'

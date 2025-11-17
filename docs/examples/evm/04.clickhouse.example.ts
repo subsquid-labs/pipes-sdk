@@ -1,6 +1,6 @@
 import { createClient } from '@clickhouse/client'
-import { commonAbis, evmDecoder, evmPortalSource } from '@sqd-pipes/pipes/evm'
-import { clickhouseTarget } from '@sqd-pipes/pipes/targets/clickhouse'
+import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
+import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
 
 /**
  * This example demonstrates how to use ClickHouse as a target for storing processed blockchain data.

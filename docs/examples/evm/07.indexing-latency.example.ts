@@ -1,6 +1,6 @@
-import { formatBlock } from '@sqd-pipes/pipes'
-import { evmPortalSource, evmRpcLatencyWatcher } from '@sqd-pipes/pipes/evm'
-import { metricsServer } from '@sqd-pipes/pipes/metrics/node'
+import { formatBlock } from '@subsquid/pipes'
+import { evmPortalSource, evmRpcLatencyWatcher } from '@subsquid/pipes/evm'
+import { metricsServer } from '@subsquid/pipes/metrics/node'
 
 /**
  * This example demonstrates how to track and compare block indexing latency

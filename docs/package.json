@@ -16,7 +16,7 @@
   "dependencies": {
     "@apollo/server": "^5.1.0",
     "@clickhouse/client": "^1.12.1",
-    "@sqd-pipes/pipes": "workspace:*",
+    "@subsquid/pipes": "workspace:*",
     "@subsquid/borsh": "0.3.0",
     "@subsquid/evm-abi": "0.3.1",
     "@subsquid/evm-codec": "0.3.0",

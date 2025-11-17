@@ -1,4 +1,4 @@
-# @sqd-pipes/pipes
+# @subsquid/pipes
 
 > ⚠️ **Warning**: This SDK is currently in the experimental stage.
 > APIs may change without notice.
@@ -10,7 +10,7 @@ Core package of the **SQD Pipes** ecosystem. It provides specialized, composable
 
 ## Overview
 
-`@sqd-pipes/pipes` is a TypeScript library designed for **efficient blockchain data processing**.  
+`@subsquid/pipes` is a TypeScript library designed for **efficient blockchain data processing**.  
 It implements a **pipeline-based architecture** that makes it easy to consume, decode, and persist blockchain data, while remaining flexible and extensible.
 
 ---
@@ -33,7 +33,7 @@ It implements a **pipeline-based architecture** that makes it easy to consume, d
 ## Installation
 
 ```bash
-npm install @sqd-pipes/pipes
+npm install @subsquid/pipes
 ```
 
 ---
@@ -43,7 +43,7 @@ npm install @sqd-pipes/pipes
 Example: consume events from an EVM chain and write them into ClickHouse.
 
 ```ts
-import { commonAbis, createEvmDecoder, createEvmPortalSource } from '@sqd-pipes/pipes/evm'
+import { commonAbis, createEvmDecoder, createEvmPortalSource } from '@subsquid/pipes/evm'
 
 async function cli() {
   const stream = createEvmPortalSource({

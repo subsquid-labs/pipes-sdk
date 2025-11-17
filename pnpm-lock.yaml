@@ -44,7 +44,7 @@ importers:
       '@clickhouse/client':
         specifier: ^1.12.1
         version: 1.12.1
-      '@sqd-pipes/pipes':
+      '@subsquid/pipes':
         specifier: workspace:*
         version: link:../packages/subsquid-pipes
       '@subsquid/borsh':

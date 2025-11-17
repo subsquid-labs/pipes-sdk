@@ -1,5 +1,5 @@
-import { formatBlock } from '@sqd-pipes/pipes'
-import { solanaPortalSource, solanaRpcLatencyWatcher } from '@sqd-pipes/pipes/solana'
+import { formatBlock } from '@subsquid/pipes'
+import { solanaPortalSource, solanaRpcLatencyWatcher } from '@subsquid/pipes/solana'
 
 /**
  * This example demonstrates how to track and compare block indexing latency
