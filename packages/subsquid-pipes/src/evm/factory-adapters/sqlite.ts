@@ -1,4 +1,5 @@
 import { loadSqlite, SqliteOptions, SqliteSync } from '~/drivers/sqlite/sqlite.js'
+import { jsonParse, jsonStringify } from '~/internal/json.js'
 import { FactoryPersistentAdapter, InternalFactoryEvent } from '../factory.js'
 
 type Row = {
@@ -20,10 +21,7 @@ class SqliteFactoryAdapter implements FactoryPersistentAdapter<InternalFactoryEv
     db: SqliteSync,
     protected options: SqliteOptions,
   ) {
-    this.options = {
-      enableWAL: true,
-      ...options,
-    }
+    this.options = options
     this.#db = db
   }
 
@@ -60,7 +58,7 @@ class SqliteFactoryAdapter implements FactoryPersistentAdapter<InternalFactoryEv
         blockNumber: row.block_number,
         transactionIndex: row.transaction_index,
         logIndex: row.log_index,
-        event: JSON.parse(row.event.toString()),
+        event: jsonParse(row.event.toString()),
       }
     })
   }
@@ -82,7 +80,7 @@ class SqliteFactoryAdapter implements FactoryPersistentAdapter<InternalFactoryEv
       blockNumber: row.block_number,
       transactionIndex: row.transaction_index,
       logIndex: row.log_index,
-      event: JSON.parse(row.event.toString()),
+      event: jsonParse(row.event.toString()),
     }
 
     return this.#lookupCache[address]
@@ -100,7 +98,7 @@ class SqliteFactoryAdapter implements FactoryPersistentAdapter<InternalFactoryEv
             entity.blockNumber,
             entity.transactionIndex,
             entity.logIndex,
-            JSON.stringify(entity.event),
+            jsonStringify(entity.event),
           ],
         )
       }

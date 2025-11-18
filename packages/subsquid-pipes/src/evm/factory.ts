@@ -42,6 +42,34 @@ export type FactoryOptions<T extends EventArgs> = {
     | Promise<FactoryPersistentAdapter<InternalFactoryEvent<T>>>
 }
 
+const BIGINT_PREFIX = '_$BGI:'
+
+/**
+ * JSON.stringify with BigInt support.
+ * BigInts become strings like "BIGINT:1234567890".
+ */
+function stringifyWithBigInt(value: any) {
+  return JSON.stringify(value, (key, val) => {
+    if (typeof val === 'bigint') {
+      return BIGINT_PREFIX + val.toString(10)
+    }
+    return val
+  })
+}
+
+/**
+ * JSON.parse with BigInt support.
+ * Strings starting with "BIGINT:" become BigInt again.
+ */
+function parseWithBigInt(json: any) {
+  return JSON.parse(json, (key, val) => {
+    if (typeof val === 'string' && val.startsWith(BIGINT_PREFIX)) {
+      return BigInt(val.slice(BIGINT_PREFIX.length))
+    }
+    return val
+  })
+}
+
 export class Factory<T extends EventArgs> {
   #batch: InternalFactoryEvent<T>[] = []
   #db?: FactoryPersistentAdapter<InternalFactoryEvent<T>>

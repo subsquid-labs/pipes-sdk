@@ -6,6 +6,7 @@ export type CompositePipe<T extends Record<string, Transformer<any, any>>> = {
 }
 
 /**
+ * @internal
  * Combines multiple named transformers into a single transformer whose output is an object
  * with the same keys as the input transformers and values containing each transformer's output.
  *
