@@ -1,12 +1,13 @@
 {
   "name": "@sqd-pipes/pipe-ui",
-  "version": "0.0.1-alpha.11",
+  "version": "0.0.1-alpha.13",
   "type": "module",
   "scripts": {
     "build": "react-router build",
     "pack": "node scripts/package.js",
     "dev": "react-router dev",
-    "typecheck": "react-router typegen && tsc"
+    "typecheck": "react-router typegen && tsc",
+    "publish": "pnpm run build && pnpm run pack && cd build && npm publish --access public"
   },
   "bin": {
     "pipe-ui": "bin.js"

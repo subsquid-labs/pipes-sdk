@@ -12,6 +12,8 @@ const app = express()
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+const args = process.argv.slice(2)
+
 async function main() {
   const port = parseInt(process.env.PORT || '3000')
 
@@ -22,7 +24,9 @@ async function main() {
   )
   app.listen(port)
 
-  open(`http://localhost:${port}`)
+  if (args.includes('--open')) {
+    open(`http://localhost:${port}`)
+  }
 
   cfonts.say(`Pipe UI`, {
     font: 'simple3d',

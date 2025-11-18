@@ -1,5 +1,6 @@
-import { Terminal } from 'lucide-react'
+import { ArrowUpRightIcon, Terminal } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
+import { Button } from '~/components/ui/button'
 import { Code } from '~/components/ui/code'
 import example from './code.example?raw'
 
@@ -31,7 +32,14 @@ export function PipelineDisconnected() {
 
         <div className="mt-4">
           <h4 className="mb-1">3. Explore docs</h4>
-          <div className="text-xs text-muted">// TODO</div>
+          <div className="text-xs text-muted pt-2 pb-8">
+            <Button size="xl" asChild variant="default">
+              <a href={`${import.meta.env.VITE_DOCS_URL}/en/sdk/pipes-sdk/quickstart`} target="_blank">
+                Documentation
+                <ArrowUpRightIcon />
+              </a>
+            </Button>
+          </div>
         </div>
       </div>
     </div>

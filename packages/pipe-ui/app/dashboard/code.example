@@ -1,15 +1,24 @@
-import { commonAbis, createEvmDecoder, createEvmPortalSource } from '@subsquid/pipes/evm'
+import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
 import { metricsServer } from '@subsquid/pipes/metrics/node'
 
 async function cli() {
-  const stream = createEvmPortalSource({
+  // Create a data stream from the Ethereum mainnet portal
+  const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
+
+    /*
+     * IMPORTANT!
+     * ============================
+     * Enable the metrics server to connect with the Pipe UI dashboard.
+     * Without it, no metrics will be collected or displayed.
+     * ============================
+     */
     metrics: metricsServer({
       port: 9090,
     }),
   }).pipe(
-    createEvmDecoder({
-      profiler: { id: 'erc20_transfers' },
+    // Decode ERC-20 Transfer events starting from block 12,000,000
+    evmDecoder({
       range: { from: '12,000,000' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,
@@ -17,6 +26,7 @@ async function cli() {
     }),
   )
 
+  // Consume the stream and log the number of parsed transfers in each batch
   for await (const { data } of stream) {
     console.log(`parsed ${data.transfers.length} transfers`)
   }
