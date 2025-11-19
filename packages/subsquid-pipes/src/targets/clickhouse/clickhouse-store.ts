@@ -59,7 +59,7 @@ export class ClickhouseStore {
   }) {
     tables = typeof tables === 'string' ? [tables] : tables
 
-    await Promise.all(
+    return Promise.all(
       tables.map(async (table) => {
         // TODO check engine
 
@@ -106,6 +106,8 @@ export class ClickhouseStore {
         format: 'JSONEachRow',
         clickhouse_settings: {
           date_time_input_format: 'best_effort',
+          // output_format_json_quote_64bit_floats: 1,
+          // output_format_json_quote_64bit_integers: 1,
         },
       })
 
