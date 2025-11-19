@@ -47,6 +47,9 @@ export function clickhouseTarget<T>({
   onRollback?: (ctx: {
     type: 'offset_check' | 'blockchain_fork'
     store: ClickhouseStore
+    safeCursor: BlockCursor
+
+    /** @deprecated Use `safeCursor` from state instead */
     cursor: BlockCursor
   }) => unknown | Promise<unknown>
 }) {
@@ -61,7 +64,12 @@ export function clickhouseTarget<T>({
       const cursor = await state.getCursor()
 
       if (cursor) {
-        await onRollback?.({ type: 'offset_check', store, cursor: cursor })
+        await onRollback?.({
+          type: 'offset_check',
+          store,
+          cursor,
+          safeCursor: cursor,
+        })
       }
 
       for await (const { data, ctx } of read(cursor)) {
@@ -85,7 +93,12 @@ export function clickhouseTarget<T>({
       const cursor = await state.fork(previousBlocks)
       if (!cursor) return cursor
 
-      await onRollback?.({ type: 'blockchain_fork', store, cursor })
+      await onRollback?.({
+        type: 'blockchain_fork',
+        store,
+        cursor,
+        safeCursor: cursor,
+      })
       return cursor
     },
   })
