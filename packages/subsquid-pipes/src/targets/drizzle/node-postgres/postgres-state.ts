@@ -1,5 +1,8 @@
-import { BatchCtx, BlockCursor } from '~/core/index.js'
+import { sql } from 'drizzle-orm'
+import { BatchCtx, BlockCursor, Logger } from '~/core/index.js'
+import { doWithRetry } from '~/internal/function.js'
 import { parseNumber } from '~/internal/number.js'
+import { Transaction } from '~/targets/drizzle/node-postgres/drizzle-target.js'
 
 const table = ({ qualifiedName, table }: { qualifiedName: string; table: string }) => `
 CREATE TABLE IF NOT EXISTS ${qualifiedName}
@@ -7,11 +10,12 @@ CREATE TABLE IF NOT EXISTS ${qualifiedName}
     id                      text not null,
     current_number          numeric not null,
     current_hash            text    not null,
-    "current_timestamp"     int4,
+    "current_timestamp"     timestamptz,
     finalized               jsonb,
     rollback_chain          jsonb,
-    CONSTRAINT "${table}_pk" PRIMARY KEY("current_number", "id")
+    CONSTRAINT "${table}_pk" PRIMARY KEY("id", "current_number")
 );
+
 COMMENT ON COLUMN ${qualifiedName}."id" IS
     'Stream identifier used to separate state records within the same table.';
 
@@ -42,7 +46,7 @@ type StateSelect = SelectResult<{
   finalized: BlockCursor
   current_number: string
   current_hash: string
-  current_timestamp: string
+  current_timestamp: Date
   id: string
 }>
 
@@ -79,6 +83,9 @@ export class PostgresState {
 
   readonly #qualifiedTableName: string
 
+  /** Internal counter to track the number of saves for cleanup operations. */
+  #saves = 0
+
   constructor(
     private client: PgClient,
     options?: StateOptions,
@@ -98,34 +105,38 @@ export class PostgresState {
     this.#qualifiedTableName = `"${this.options.schema}"."${this.options.table}"`
   }
 
-  async saveCursor({ state: { current, rollbackChain }, head, logger }: BatchCtx) {
+  async saveCursor(tx: Transaction, { state: { current, rollbackChain }, head, logger }: BatchCtx) {
     const finalizedBlock = head.finalized?.number
 
-    await this.client.query(
-      `
-        INSERT INTO ${this.#qualifiedTableName} 
+    // logger.info(`Saving cursor at block ${current.number} for ${this.options.id} row...`)
+    await tx.execute(
+      sql`
+        INSERT INTO ${sql.raw(this.#qualifiedTableName)} 
         (id, current_number, current_hash, "current_timestamp", finalized, rollback_chain) 
-        VALUES ($1, $2, $3, $4, $5, $6)
+        VALUES (
+                ${this.options.id}, 
+                ${current.number}, 
+                ${current.hash}, 
+                ${current.timestamp ? new Date(current.timestamp * 1000) : sql.raw('NULL')}, 
+                ${JSON.stringify(head.finalized || {})}, 
+                ${JSON.stringify(rollbackChain || [])}
+        )
       `,
-      [
-        this.options.id,
-        current.number,
-        current.hash,
-        current.timestamp,
-        JSON.stringify(head.finalized),
-        JSON.stringify(rollbackChain),
-      ],
     )
-
-    // Clean up old unfinalized blocks beyond retention
-    if (finalizedBlock && rollbackChain.length) {
-      const safeBlockNumber = Math.max(finalizedBlock - this.options.unfinalizedBlocksRetention, 0)
-      const res = await this.client.query<DeleteResult>(
-        `DELETE
-         FROM ${this.#qualifiedTableName}
-         WHERE "id" = $1 AND "current_number" <= $2`,
-        [this.options.id, safeBlockNumber],
+    this.#saves++
+    if (this.#saves === 1 || this.#saves % 25 === 0) {
+      // Clean up old unfinalized blocks beyond retention
+      const safeBlockNumber = Math.max(
+        Math.min(current.number, finalizedBlock || Infinity) - this.options.unfinalizedBlocksRetention,
+        0,
       )
+
+      logger.info(`Cleaning up old offsets less than ${safeBlockNumber} block for ${this.options.id} row...`)
+
+      const res = await tx.execute<DeleteResult>(sql`
+        DELETE FROM ${sql.raw(this.#qualifiedTableName)}    
+        WHERE "id" = ${this.options.id} AND "current_number" <= ${safeBlockNumber}
+      `)
 
       logger.debug(`Removed unused offsets from ${res.rowCount} rows from ${this.options.table}`)
 
@@ -137,7 +148,7 @@ export class PostgresState {
     }
   }
 
-  async getCursor(): Promise<BlockCursor | undefined> {
+  async getCursor({ logger }: { logger: Logger }): Promise<BlockCursor | undefined> {
     try {
       const { rows } = await this.client.query<StateSelect>(
         `SELECT * FROM ${this.#qualifiedTableName} WHERE id = $1 ORDER BY "current_number" DESC LIMIT 1`,
@@ -149,18 +160,31 @@ export class PostgresState {
       return {
         number: parseNumber(row.current_number),
         hash: row.current_hash,
-        timestamp: row.current_timestamp ? parseNumber(row.current_timestamp) : undefined,
+        timestamp: row.current_timestamp ? row.current_timestamp.getTime() / 1000 : undefined,
       }
     } catch (e: unknown) {
+      logger.debug(`Creating table ${this.#qualifiedTableName} for state management...`)
+
       if (e instanceof Error && 'code' in e && e.code === '42P01') {
-        await this.client.query(
-          table({
-            qualifiedName: this.#qualifiedTableName,
-            table: this.options.table,
-          }),
+        await doWithRetry(
+          async () => {
+            await this.client.query(
+              table({
+                qualifiedName: this.#qualifiedTableName,
+                table: this.options.table,
+              }),
+            )
+          },
+          {
+            retries: 3,
+            delayMs: 100,
+          },
         )
+
         return
       }
+
+      logger.debug(`Table ${this.#qualifiedTableName} created!`)
 
       throw e
     }
@@ -172,7 +196,8 @@ export class PostgresState {
 
     while (true) {
       const res = await this.client.query<StateSelect>(
-        `SELECT * FROM ${this.#qualifiedTableName} ORDER BY "current_number" DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
+        `SELECT * FROM ${this.#qualifiedTableName} WHERE "id" = $1 ORDER BY "current_number" DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
+        [this.options.id],
       )
       if (!res.rows.length) break
 

@@ -66,18 +66,19 @@ export function drizzleTarget<T>({
 
   const state = new PostgresState(client, settings?.state)
   const sortedTables = orderTablesForDelete(Array.isArray(tables) ? tables : Object.values(tables))
+  const config: PgTransactionConfig = {
+    isolationLevel: settings?.transaction?.isolationLevel || 'serializable',
+  }
 
   return createTarget<T>({
     write: async ({ read, logger }) => {
-      const cursor = await state.getCursor()
+      const cursor = await state.getCursor({
+        logger,
+      })
 
       await onStart?.({ db })
+
       const triggers = sortedTables.map((table) => tracker.add(table)).filter(nonNullable)
-
-      const config: PgTransactionConfig = {
-        isolationLevel: settings?.transaction?.isolationLevel || 'serializable',
-      }
-
       await db.transaction(async (tx) => {
         await Promise.all(triggers.map((trigger) => tx.execute(trigger)))
       }, config)
@@ -113,7 +114,7 @@ export function drizzleTarget<T>({
               })
 
               await ctx.profiler.measure('db state save', async (span) => {
-                const { safeBlockNumber } = await state.saveCursor(ctx)
+                const { safeBlockNumber } = await state.saveCursor(tx, ctx)
                 if (safeBlockNumber <= 0) return
 
                 logger.debug(`Safe block number updated to ${safeBlockNumber}`)
@@ -126,7 +127,7 @@ export function drizzleTarget<T>({
           {
             title: 'batch insert transaction',
             retries: 3,
-            delayMs: 1000,
+            delayMs: 100,
           },
         )
       }

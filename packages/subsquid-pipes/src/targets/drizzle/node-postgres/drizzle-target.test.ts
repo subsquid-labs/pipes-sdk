@@ -133,7 +133,7 @@ describe('Drizzle target', () => {
           {
             "current_hash": "0x3",
             "current_number": "3",
-            "current_timestamp": 3000,
+            "current_timestamp": 1970-01-01T00:50:00.000Z,
             "finalized": {
               "hash": "0x2",
               "number": 2,
@@ -155,7 +155,7 @@ describe('Drizzle target', () => {
           {
             "current_hash": "0x4",
             "current_number": "4",
-            "current_timestamp": 4000,
+            "current_timestamp": 1970-01-01T01:06:40.000Z,
             "finalized": {
               "hash": "0x2",
               "number": 2,
@@ -172,7 +172,7 @@ describe('Drizzle target', () => {
           {
             "current_hash": "0x5",
             "current_number": "5",
-            "current_timestamp": 5000,
+            "current_timestamp": 1970-01-01T01:23:20.000Z,
             "finalized": {
               "hash": "0x2",
               "number": 2,
