@@ -1,6 +1,6 @@
 services:
   test_clickhouse:
-    image: bitnami/clickhouse:25.5.2
+    image: clickhouse/clickhouse-server:25.10
     ports:
       - "10123:8123"
     environment:

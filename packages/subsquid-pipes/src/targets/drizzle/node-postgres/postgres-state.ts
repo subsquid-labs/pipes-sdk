@@ -3,37 +3,7 @@ import { BatchCtx, BlockCursor, Logger } from '~/core/index.js'
 import { doWithRetry } from '~/internal/function.js'
 import { parseNumber } from '~/internal/number.js'
 import { Transaction } from '~/targets/drizzle/node-postgres/drizzle-target.js'
-
-const table = ({ qualifiedName, table }: { qualifiedName: string; table: string }) => `
-CREATE TABLE IF NOT EXISTS ${qualifiedName}
-(
-    id                      text not null,
-    current_number          numeric not null,
-    current_hash            text    not null,
-    "current_timestamp"     timestamptz,
-    finalized               jsonb,
-    rollback_chain          jsonb,
-    CONSTRAINT "${table}_pk" PRIMARY KEY("id", "current_number")
-);
-
-COMMENT ON COLUMN ${qualifiedName}."id" IS
-    'Stream identifier used to separate state records within the same table.';
-
-COMMENT ON COLUMN ${qualifiedName}."current_number" IS
-    'The block number of the current processed block. Acts as part of the primary key.';
-
-COMMENT ON COLUMN ${qualifiedName}."current_hash" IS
-    'The block hash of the current processed block. Used together with current_number to uniquely identify the block.';
-
-COMMENT ON COLUMN ${qualifiedName}."current_timestamp" IS
-    'Timestamp when this state entry was recorded. Indicates when the cursor was persisted.';
-
-COMMENT ON COLUMN ${qualifiedName}."finalized" IS
-    'JSON structure representing the latest finalized block returned by the chain head.';
-
-COMMENT ON COLUMN ${qualifiedName}."rollback_chain" IS
-    'JSON array of BlockCursor entries used for detecting forks and reconstructing rollback points.';
-`
+import { syncTable, tableNotExists } from '~/targets/drizzle/node-postgres/tables.js'
 
 type DeleteResult = {
   rowCount: number
@@ -52,6 +22,13 @@ type StateSelect = SelectResult<{
 
 interface PgClient {
   query<T = any>(query: string, params?: any[]): Promise<T>
+}
+
+/** @internal */
+export type Table = {
+  fqnName: string
+  name: string
+  schema: string
 }
 
 /**
@@ -81,7 +58,7 @@ export type StateOptions = {
 export class PostgresState {
   options: Required<StateOptions>
 
-  readonly #qualifiedTableName: string
+  readonly #sync: Table
 
   /** Internal counter to track the number of saves for cleanup operations. */
   #saves = 0
@@ -102,24 +79,51 @@ export class PostgresState {
       throw new Error('Retention strategy must be greater than 0')
     }
 
-    this.#qualifiedTableName = `"${this.options.schema}"."${this.options.table}"`
+    this.#sync = {
+      name: this.options.table,
+      schema: this.options.schema,
+      fqnName: `"${this.options.schema}"."${this.options.table}"`,
+    }
+  }
+
+  /**
+   * Acquires a PostgreSQL advisory lock for the current state ID using
+   * the pg_try_advisory_xact_lock function. This ensures that only one
+   * process can write to this state at a time. The lock is automatically
+   * released at the end of the transaction.
+   */
+  async acquireLock(tx: Transaction): Promise<void> {
+    const res = await tx.execute<{ got_lock: boolean }>(
+      sql`SELECT pg_try_advisory_xact_lock(hashtext(${this.options.id})::bigint) AS got_lock;`,
+    )
+
+    if (res.rows[0]?.got_lock) return
+
+    throw new Error(
+      [
+        `Could not acquire advisory lock for state id "${this.options.id}".`,
+        `Another process might be holding the lock.`,
+        `Please ensure that only one process is writing to this state at a time.`,
+      ].join(' '),
+    )
   }
 
   async saveCursor(tx: Transaction, { state: { current, rollbackChain }, head, logger }: BatchCtx) {
     const finalizedBlock = head.finalized?.number
 
-    // logger.info(`Saving cursor at block ${current.number} for ${this.options.id} row...`)
+    logger.debug(`Saving cursor at block ${current.number} for ${this.options.id} row...`)
     await tx.execute(
       sql`
-        INSERT INTO ${sql.raw(this.#qualifiedTableName)} 
-        (id, current_number, current_hash, "current_timestamp", finalized, rollback_chain) 
+        INSERT INTO ${sql.raw(this.#sync.fqnName)} (
+           id, current_number, current_hash, "current_timestamp", finalized, rollback_chain
+        ) 
         VALUES (
-                ${this.options.id}, 
-                ${current.number}, 
-                ${current.hash}, 
-                ${current.timestamp ? new Date(current.timestamp * 1000) : sql.raw('NULL')}, 
-                ${JSON.stringify(head.finalized || {})}, 
-                ${JSON.stringify(rollbackChain || [])}
+            ${this.options.id}, 
+            ${current.number}, 
+            ${current.hash}, 
+            ${current.timestamp ? new Date(current.timestamp * 1000) : sql.raw('NULL')}, 
+            ${JSON.stringify(head.finalized || {})}, 
+            ${JSON.stringify(rollbackChain || [])}
         )
       `,
     )
@@ -134,7 +138,7 @@ export class PostgresState {
       logger.info(`Cleaning up old offsets less than ${safeBlockNumber} block for ${this.options.id} row...`)
 
       const res = await tx.execute<DeleteResult>(sql`
-        DELETE FROM ${sql.raw(this.#qualifiedTableName)}    
+        DELETE FROM ${sql.raw(this.#sync.fqnName)}    
         WHERE "id" = ${this.options.id} AND "current_number" <= ${safeBlockNumber}
       `)
 
@@ -151,7 +155,7 @@ export class PostgresState {
   async getCursor({ logger }: { logger: Logger }): Promise<BlockCursor | undefined> {
     try {
       const { rows } = await this.client.query<StateSelect>(
-        `SELECT * FROM ${this.#qualifiedTableName} WHERE id = $1 ORDER BY "current_number" DESC LIMIT 1`,
+        `SELECT * FROM ${this.#sync.fqnName} WHERE id = $1 ORDER BY "current_number" DESC LIMIT 1`,
         [this.options.id],
       )
       const [row] = rows
@@ -162,32 +166,17 @@ export class PostgresState {
         hash: row.current_hash,
         timestamp: row.current_timestamp ? row.current_timestamp.getTime() / 1000 : undefined,
       }
-    } catch (e: unknown) {
-      logger.debug(`Creating table ${this.#qualifiedTableName} for state management...`)
-
-      if (e instanceof Error && 'code' in e && e.code === '42P01') {
-        await doWithRetry(
-          async () => {
-            await this.client.query(
-              table({
-                qualifiedName: this.#qualifiedTableName,
-                table: this.options.table,
-              }),
-            )
-          },
-          {
-            retries: 3,
-            delayMs: 100,
-          },
-        )
-
-        return
+    } catch (e) {
+      if (!tableNotExists(e)) {
+        throw e
       }
 
-      logger.debug(`Table ${this.#qualifiedTableName} created!`)
-
-      throw e
+      logger.debug(`Creating table ${this.#sync.fqnName} for state management...`)
+      await doWithRetry(() => this.client.query(syncTable(this.#sync)))
+      logger.debug(`Table ${this.#sync.fqnName} created!`)
     }
+
+    return
   }
 
   async fork(previousBlocks: BlockCursor[]): Promise<BlockCursor | null> {
@@ -196,7 +185,7 @@ export class PostgresState {
 
     while (true) {
       const res = await this.client.query<StateSelect>(
-        `SELECT * FROM ${this.#qualifiedTableName} WHERE "id" = $1 ORDER BY "current_number" DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
+        `SELECT * FROM ${this.#sync.fqnName} WHERE "id" = $1 ORDER BY "current_number" DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
         [this.options.id],
       )
       if (!res.rows.length) break
