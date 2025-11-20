@@ -6,7 +6,7 @@ export function sleep(ms: number): Promise<void> {
 /** Retries the given async function up to `retries` times with an optional delay between attempts. */
 export async function doWithRetry<T>(
   fn: () => Promise<T>,
-  { retries = 3, delayMs = 0, title }: { retries?: number; delayMs?: number; title?: string } = {},
+  { retries = 3, delayMs = 50, title }: { retries?: number; delayMs?: number; title?: string } = {},
 ): Promise<T> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {

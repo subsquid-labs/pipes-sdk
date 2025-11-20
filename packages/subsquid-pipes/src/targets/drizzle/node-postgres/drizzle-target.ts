@@ -87,6 +87,7 @@ export function drizzleTarget<T>({
         await doWithRetry(
           () =>
             db.transaction(async (tx) => {
+              await state.acquireLock(tx)
               const snapshotEnabled =
                 ctx.head.finalized?.number && ctx.state.current.number >= ctx.head.finalized.number ? 'true' : 'false'
 
