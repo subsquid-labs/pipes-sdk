@@ -43,10 +43,7 @@ importers:
         version: 5.1.0(graphql@16.12.0)
       '@clickhouse/client':
         specifier: ^1.12.1
-        version: 1.12.1
-      '@subsquid/pipes':
-        specifier: workspace:*
-        version: link:../packages/subsquid-pipes
+        version: 1.14.0
       '@subsquid/borsh':
         specifier: 0.3.0
         version: 0.3.0
@@ -56,15 +53,18 @@ importers:
       '@subsquid/evm-codec':
         specifier: 0.3.0
         version: 0.3.0
+      '@subsquid/pipes':
+        specifier: workspace:*
+        version: link:../packages/subsquid-pipes
       '@subsquid/solana-stream':
         specifier: 0.3.1
         version: 0.3.1
       drizzle-graphql:
         specifier: ^0.8.5
-        version: 0.8.5(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.1)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(graphql@16.12.0)
+        version: 0.8.5(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(graphql@16.12.0)
       drizzle-orm:
         specifier: ^0.44.7
-        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.1)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
       graphql:
         specifier: ^16.12.0
         version: 16.12.0
@@ -194,8 +194,8 @@ importers:
   packages/subsquid-pipes:
     dependencies:
       '@clickhouse/client':
-        specifier: ^1.12.1
-        version: 1.12.1
+        specifier: 1.14.0
+        version: 1.14.0
       '@subsquid/evm-abi':
         specifier: 0.3.1
         version: 0.3.1
@@ -218,16 +218,16 @@ importers:
         specifier: ^2.3.2
         version: 2.3.2
       better-sqlite3:
-        specifier: ^12.4.1
-        version: 12.4.1
+        specifier: 12.4.5
+        version: 12.4.5
       drizzle-orm:
-        specifier: ^0.44.7
-        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.1)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+        specifier: 0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
       express:
         specifier: 5.1.0
         version: 5.1.0
       pg:
-        specifier: ^8.16.3
+        specifier: 8.16.3
         version: 8.16.3
       pino:
         specifier: 9.12.0
@@ -540,11 +540,11 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@clickhouse/client-common@1.12.1':
-    resolution: {integrity: sha512-ccw1N6hB4+MyaAHIaWBwGZ6O2GgMlO99FlMj0B0UEGfjxM9v5dYVYql6FpP19rMwrVAroYs/IgX2vyZEBvzQLg==}
+  '@clickhouse/client-common@1.14.0':
+    resolution: {integrity: sha512-CyUcv2iCkZ1A++vmOSufYRpHR3aAWVfbrWed7ATzf0yyx/BW/2SEqlL07vBpSRa3BIkQe/DSOHVv8JkWZpUOwQ==}
 
-  '@clickhouse/client@1.12.1':
-    resolution: {integrity: sha512-7ORY85rphRazqHzImNXMrh4vsaPrpetFoTWpZYueCO2bbO6PXYDXp/GQ4DgxnGIqbWB/Di1Ai+Xuwq2o7DJ36A==}
+  '@clickhouse/client@1.14.0':
+    resolution: {integrity: sha512-co2spjR7wZoZ3Ck0H/jv76bpiuO3oJHtOmq9/gxFiod2DcT9NFg01u/hXcG8MJFnEJuMB6e3vGqS6IOnLwHqRw==}
     engines: {node: '>=16'}
 
   '@cspotcode/source-map-support@0.8.1':
@@ -1969,9 +1969,9 @@ packages:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
 
-  better-sqlite3@12.4.1:
-    resolution: {integrity: sha512-3yVdyZhklTiNrtg+4WqHpJpFDd+WHTg2oM7UcR80GqL05AOV0xEJzc6qNvFYoEtE+hRp1n9MpN6/+4yhlGkDXQ==}
-    engines: {node: 20.x || 22.x || 23.x || 24.x}
+  better-sqlite3@12.4.5:
+    resolution: {integrity: sha512-4NejwX2llfdKYK7Tzwwre/qKzTXiqcbycIagtqMH9oE7Es3LCUGGGXvhw8rWbZ2alx1C/Nh0MeJyYEZKUFs4sw==}
+    engines: {node: 20.x || 22.x || 23.x || 24.x || 25.x}
 
   bindings@1.5.0:
     resolution: {integrity: sha512-p2q/t/mhvuOj/UeLlV6566GD/guowlr0hHxClI0W9m7MWYkL1F0hLo+0Aexs9HSPCtR1SXQ0TD3MMKrXZajbiQ==}
@@ -4602,11 +4602,11 @@ snapshots:
   '@biomejs/cli-win32-x64@2.3.4':
     optional: true
 
-  '@clickhouse/client-common@1.12.1': {}
+  '@clickhouse/client-common@1.14.0': {}
 
-  '@clickhouse/client@1.12.1':
+  '@clickhouse/client@1.14.0':
     dependencies:
-      '@clickhouse/client-common': 1.12.1
+      '@clickhouse/client-common': 1.14.0
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
@@ -5827,7 +5827,7 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  better-sqlite3@12.4.1:
+  better-sqlite3@12.4.5:
     dependencies:
       bindings: 1.5.0
       prebuild-install: 7.1.3
@@ -6155,9 +6155,9 @@ snapshots:
       '@babel/runtime': 7.28.4
       csstype: 3.1.3
 
-  drizzle-graphql@0.8.5(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.1)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(graphql@16.12.0):
+  drizzle-graphql@0.8.5(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(graphql@16.12.0):
     dependencies:
-      drizzle-orm: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.1)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+      drizzle-orm: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
       graphql: 16.12.0
       graphql-parse-resolve-info: 4.14.1(graphql@16.12.0)
     transitivePeerDependencies:
@@ -6172,12 +6172,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.1)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3):
+  drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3):
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@types/better-sqlite3': 7.6.13
       '@types/pg': 8.15.6
-      better-sqlite3: 12.4.1
+      better-sqlite3: 12.4.5
       bun-types: 1.3.2(@types/react@19.2.2)
       pg: 8.16.3
 
