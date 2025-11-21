@@ -89,6 +89,8 @@ export class ClickhouseStore {
       format: 'JSONEachRow',
       clickhouse_settings: {
         date_time_output_format: 'iso',
+        output_format_json_quote_64bit_floats: 1,
+        output_format_json_quote_64bit_integers: 1,
       },
       query_params: params,
     })
@@ -106,8 +108,6 @@ export class ClickhouseStore {
         format: 'JSONEachRow',
         clickhouse_settings: {
           date_time_input_format: 'best_effort',
-          // output_format_json_quote_64bit_floats: 1,
-          // output_format_json_quote_64bit_integers: 1,
         },
       })
 
