@@ -1,7 +1,7 @@
 import { BatchCtx, createTransformer, PortalRange, ProfilerOptions, parsePortalRange } from '~/core/index.js'
 import { arrayify } from '~/internal/array.js'
 import { Instruction, TokenBalance, Transaction } from '~/portal-client/query/solana.js'
-import { SolanaPortalData, SolanaTransformer } from '~/solana/solana-portal-source.js'
+import { createSolanaPortalSource, SolanaPortalData, SolanaTransformer } from '~/solana/solana-portal-source.js'
 import { getInstructionD1, getInstructionD2, getInstructionD4, getInstructionD8 } from '~/solana/types.js'
 
 const decodedEventFields = {
@@ -80,7 +80,7 @@ type DecodedEventPipeArgs<T extends Instructions> = {
   onError?: (ctx: BatchCtx, error: any) => unknown | Promise<unknown>
 }
 
-export function createSolanaInstructionDecoder<T extends Instructions>(
+export function solanaInstructionDecoder<T extends Instructions>(
   opts: DecodedEventPipeArgs<T>,
 ): SolanaTransformer<SolanaPortalData<typeof decodedEventFields>, EventResponse<T>> {
   const range = parsePortalRange(opts.range)
@@ -238,3 +238,8 @@ export function createSolanaInstructionDecoder<T extends Instructions>(
     },
   })
 }
+
+/**
+ *  @deprecated Use `solanaInstructionDecoder`
+ */
+export const createSolanaInstructionDecoder = solanaInstructionDecoder
