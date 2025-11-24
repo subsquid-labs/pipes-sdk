@@ -1,3 +1,4 @@
+export * from './aggregator.js'
 export * from './composite-transformer.js'
 export * from './formatters.js'
 export * from './logger.js'

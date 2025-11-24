@@ -161,7 +161,7 @@ export function createAggregator<
 }) {
   let storage: Storage
 
-  return createTransformer<T[], Record<string, Out>>({
+  return createTransformer<T[], Out[]>({
     profiler: { id: 'aggregator' },
     start: async () => {
       storage = new Storage({ path: dbPath })
@@ -171,10 +171,12 @@ export function createAggregator<
       const res: Record<string, Out> = {}
       const aggregators: Record<string, Agg> = {}
 
-      {
-        const span = ctx.profiler.start('load state')
+      ctx.profiler.measureSync('load state', () => {
         for (const item of data) {
-          const id = getId({ group: groupBy(item), window: window?.(item) })
+          const id = getId({
+            group: groupBy(item),
+            window: window?.(item),
+          })
           if (!aggregators[id]) {
             aggregators[id] = {} as Agg
             for (const key in aggregate) {
@@ -184,26 +186,29 @@ export function createAggregator<
             }
           }
         }
-        span.end()
-      }
+      })
 
-      for (const item of data) {
-        const id = getId({ group: groupBy(item), window: window?.(item) })
-        for (const key in aggregate) {
-          const finalized = ctx.head.finalized ? item.blockNumber <= ctx.head.finalized?.number : true
+      ctx.profiler.measureSync('calculations', () => {
+        for (const item of data) {
+          const id = getId({
+            group: groupBy(item),
+            window: window?.(item),
+          })
+          for (const key in aggregate) {
+            const finalized = ctx.head.finalized ? item.blockNumber <= ctx.head.finalized?.number : true
 
-          aggregators[id][key].aggregate(item, finalized)
+            aggregators[id][key].aggregate(item, finalized)
 
-          if (!res[id]) {
-            res[id] = { id } as Out
+            if (!res[id]) {
+              res[id] = { id } as Out
+            }
+            // @ts-ignore
+            res[id][key] = aggregators[id][key].calculate()
           }
-          // @ts-ignore
-          res[id][key] = aggregators[id][key].calculate()
         }
-      }
+      })
 
-      {
-        const span = ctx.profiler.start('persist state')
+      ctx.profiler.measureSync('persist state', () => {
         const update: { id: string; key: string; value: string }[] = []
         for (const id in aggregators) {
           for (const key in aggregators[id]) {
@@ -212,10 +217,9 @@ export function createAggregator<
         }
 
         storage.persist(update)
-        span.end()
-      }
+      })
 
-      return res
+      return Object.values(res)
     },
   })
 }

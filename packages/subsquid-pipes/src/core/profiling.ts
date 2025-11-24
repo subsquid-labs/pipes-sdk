@@ -13,6 +13,7 @@ export interface Profiler {
 
   start(name: string): Profiler
   measure<T>(name: string, fn: (span: Profiler) => Promise<T>): Promise<T>
+  measureSync<T>(name: string, fn: (span: Profiler) => T): T
   addLabels(labels: string | string[]): Profiler
   end(): Profiler
   addTransformerExemplar(dataExample: any): Profiler
@@ -84,6 +85,14 @@ export class Span implements Profiler {
     return res
   }
 
+  measureSync<T = any>(name: string, fn: (span: Profiler) => T): T {
+    const span = this.start(name)
+    const res = fn(span)
+    span.end()
+
+    return res
+  }
+
   addTransformerExemplar(data: any) {
     this.data = packExemplar(data)
     return this
@@ -126,6 +135,10 @@ export class DummyProfiler implements Profiler {
   }
 
   async measure<T>(name: string, fn: (span: Profiler) => Promise<T>): Promise<T> {
+    return fn(this)
+  }
+
+  measureSync<T>(name: string, fn: (span: Profiler) => T): T {
     return fn(this)
   }
 
