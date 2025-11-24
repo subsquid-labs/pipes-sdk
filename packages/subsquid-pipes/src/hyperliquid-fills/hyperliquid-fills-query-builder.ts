@@ -3,6 +3,7 @@ import { mergeDeep } from '~/internal/object/merge-deep.js'
 import { concatQueryLists, QueryBuilder, Range, RequestOptions, Subset } from '../core/query-builder.js'
 import { hyperliquidFills } from '../portal-client/index.js'
 
+// biome-ignore lint/complexity/noBannedTypes: <it is a default generic constraint>
 export class HyperliquidFillsQueryBuilder<F extends hyperliquidFills.FieldSelection = {}> extends QueryBuilder<
   F,
   hyperliquidFills.DataRequest

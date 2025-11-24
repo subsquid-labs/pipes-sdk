@@ -1,4 +1,4 @@
-import { Validator } from '@subsquid/util-internal-validation'
+import { Validator, ValidationFailure } from '@subsquid/util-internal-validation'
 
 /**
  * @example '0x0123456789abcdef'
@@ -81,3 +81,25 @@ export function project<T, S extends keyof T>(obj: T, fields: Selector<S> | unde
 export type ObjectValidatorShape<T> = Simplify<{
   [K in keyof T as [T[K]] extends [undefined] ? never : K]-?: Validator<T[K], any>
 }>
+
+export const FLOAT: Validator<number, number> = {
+  cast(value: unknown): number | ValidationFailure {
+    if (typeof value == 'number') {
+      if (Number.isNaN(value)) {
+        return new ValidationFailure(value, `{value} is not a number`)
+      } else {
+        return value
+      }
+    } else {
+      return new ValidationFailure(value, '{value} is not a float number')
+    }
+  },
+  validate(value: unknown): ValidationFailure | undefined {
+    let i = this.cast(value)
+    if (i instanceof ValidationFailure) return i
+    return undefined
+  },
+  phantom(): number {
+    return 0.0
+  }
+}

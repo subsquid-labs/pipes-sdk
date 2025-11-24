@@ -15,7 +15,9 @@ export type GetBlock<Q extends Query> = Q extends evm.Query
   ? evm.Block<Q['fields']>
   : Q extends solana.Query
     ? solana.Block<Q['fields']>
-    : substrate.Block<Q['fields']>
+    : Q extends substrate.Query
+      ? substrate.Block<Q['fields']>
+      : hyperliquidFills.Block<Q['fields']>
 
 export function createQuery<Q extends Query>(query: Q): Simplify<Q & Query> {
   return {

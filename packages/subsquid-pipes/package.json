@@ -85,6 +85,11 @@
       "import": "./dist/solana/index.js",
       "require": "./dist/solana/index.cjs"
     },
+    "./hyperliquid-fills": {
+      "types": "./dist/hyperliquid-fills/index.d.ts",
+      "import": "./dist/hyperliquid-fills/index.js",
+      "require": "./dist/hyperliquid-fills/index.cjs"
+    },
     "./portal-client": {
       "types": "./dist/portal-client/index.d.ts",
       "import": "./dist/portal-client/index.js",
@@ -121,6 +126,9 @@
       ],
       "solana": [
         "./dist/solana/index.d.ts"
+      ],
+      "hyperliquid-fills": [
+        "./dist/hyperliquid-fills/index.d.ts"
       ],
       "portal-client": [
         "./dist/portal-client/index.d.ts"

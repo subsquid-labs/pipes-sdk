@@ -11,7 +11,7 @@ import {
 import { partition } from '~/internal/array.js'
 import { npmVersion } from '~/version.js'
 import { ForkException } from './fork-exception.js'
-import { evm, GetBlock, PortalQuery, Query, solana, substrate } from './query/index.js'
+import { GetBlock, PortalQuery, Query } from './query/index.js'
 
 const USER_AGENT = `@subsquid/pipes:${npmVersion}`
 
@@ -155,7 +155,7 @@ export class PortalClient {
     return res.body ?? undefined
   }
 
-  getStream<Q extends evm.Query | solana.Query | substrate.Query>(
+  getStream<Q extends Query>(
     query: Q,
     options?: PortalStreamOptions,
   ): PortalStream<GetBlock<Q>> {
