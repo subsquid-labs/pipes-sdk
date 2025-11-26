@@ -31,6 +31,7 @@ export type BlockHeaderFields = {
   timestamp: number
 }
 
+// https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/notation
 export type FillFields = {
   fillIndex: number
   user: Hex

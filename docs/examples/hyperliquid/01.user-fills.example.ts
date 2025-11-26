@@ -1,36 +1,46 @@
-import { hyperliquidFillsPortalSource, HyperliquidFillsQueryBuilder } from '@subsquid/pipes/hyperliquid-fills'
+import { HyperliquidFillsQueryBuilder, hyperliquidFillsPortalSource } from '@subsquid/pipes/hyperliquid'
 
 /**
  * Basic example demonstrating how to fetch hyperliquid fills for a specific user.
  */
-
 async function cli() {
   const queryBuilder = new HyperliquidFillsQueryBuilder()
     .addFields({
-      block: { number: true, timestamp: true },
+      block: {
+        number: true,
+        timestamp: true,
+      },
       // To get more information about fills abbreviations please check the docs:
       // https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/notation
-      fill: { user: true, px: true, sz: true, side: true, coin: true }
+      fill: {
+        tid: true,
+        fillIndex: true,
+        user: true,
+        px: true,
+        sz: true,
+        side: true,
+        coin: true,
+        time: true,
+        closedPnl: true,
+      },
     })
     .addFill({
-      request: {
-        user: ['0x31ca8395cf837de08b24da3f660e77761dfb974b'],
-      },
+      request: {},
       range: {
         // Earlier blocks aren't supported yet
-        from: 750_000_000
-      }
+        from: 750_000_000,
+      },
     })
   const stream = hyperliquidFillsPortalSource({
-    portal: 'https://portal.tethys.sqd.dev/datasets/hl-node-fills',
+    portal: process.env['PORTAL_URL'] || 'https://portal.sqd.dev/datasets/hl-node-fills',
     query: queryBuilder,
   })
 
   for await (const { data } of stream) {
     for (const block of data.blocks) {
-      for (const fill of block.fills) {
-        console.log(fill)
-      }
+      if (block.fills.length === 0) continue
+
+      console.log(block.fills)
     }
   }
 }
