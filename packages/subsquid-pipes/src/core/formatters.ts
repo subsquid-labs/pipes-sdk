@@ -4,13 +4,16 @@
  * Adds thousands separators and limits decimals to two digits.
  *
  * @param value - The number to format.
+ * @param maxFractionDigits - The maximum number of fraction digits to display (default: 2).
  * @returns The formatted number string (e.g., "1,234.56").
  * @example
  * formatNumber(1000) // "1,000"
  * formatNumber(1234.5678) // "1,234.57"
+ * formatNumber(1234.5678, 0) // "1,235"
+ * formatNumber(1234.5678, 3) // "1,234.568"
  */
-export function formatNumber(value: number) {
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)
+export function formatNumber(value: number, maxFractionDigits = 2) {
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: maxFractionDigits }).format(value)
 }
 
 export function formatBlock(value: number | string) {
