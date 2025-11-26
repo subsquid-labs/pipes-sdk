@@ -118,6 +118,7 @@ export function evmDecoder<T extends Events, C extends Contracts>({
 
       const preIndexRange = contracts.preIndexRange()
       if (preIndexRange) {
+        await contracts.migrate()
         await contracts.startPreIndex({
           name: 'EVM decoder factory pre-index',
           range: preIndexRange,

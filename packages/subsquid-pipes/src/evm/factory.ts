@@ -36,7 +36,7 @@ export type FactoryOptions<T extends EventArgs> = {
   address: string | string[]
   event: AbiEvent<T>
   _experimental_preindex?: { from: number | string; to: number | string }
-  parameter: keyof T | ((data: DecodedAbiEvent<T>) => string)
+  parameter: keyof T | ((data: DecodedAbiEvent<T>) => string | null)
   database:
     | FactoryPersistentAdapter<InternalFactoryEvent<T>>
     | Promise<FactoryPersistentAdapter<InternalFactoryEvent<T>>>
@@ -81,6 +81,8 @@ export class Factory<T extends EventArgs> {
       typeof this.options.parameter === 'function'
         ? this.options.parameter(decoded)
         : String(decoded[this.options.parameter])
+
+    if (!contract) return
 
     this.#batch.push({
       childAddress: contract,
@@ -159,6 +161,8 @@ export class Factory<T extends EventArgs> {
                   typeof this.options.parameter === 'function'
                     ? this.options.parameter(event.event)
                     : String(event.event[this.options.parameter])
+
+                if (!contract) continue
 
                 res.push({
                   childAddress: contract,

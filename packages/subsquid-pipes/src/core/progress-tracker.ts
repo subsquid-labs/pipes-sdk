@@ -225,9 +225,14 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
         return
       }
 
+      const bps =
+        interval.processedBlocks.perSecond > 1
+          ? formatNumber(interval.processedBlocks.perSecond, 0)
+          : interval.processedBlocks.perSecond.toFixed(2)
+
       logger?.info({
         message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%), ${displayEstimatedTime(state.etaSeconds)}`,
-        blocks: `${interval.processedBlocks.perSecond.toFixed(interval.processedBlocks.perSecond > 1 ? 0 : 2)} blocks/second`,
+        blocks: `${bps} blocks/second`,
         bytes: `${humanBytes(interval.bytesDownloaded.perSecond)}/second`,
         requests: `${formatNumber(interval.requests.successful.percent)}% successful, ${formatNumber(interval.requests.rateLimited.percent)}% rate limited, ${formatNumber(interval.requests.failed.percent)}% failed out of ${formatNumber(interval.requests.total.count)} requests`,
       })

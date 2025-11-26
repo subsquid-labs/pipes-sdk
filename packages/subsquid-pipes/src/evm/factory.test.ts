@@ -213,6 +213,34 @@ describe('Factory', () => {
     `)
   })
 
+  it('should skip null', async () => {
+    mockPortal = await createMockPortal(SIMPLE_CHILD)
+
+    const db = await factorySqliteDatabase({ path: ':memory:' })
+    const stream = evmPortalSource({
+      portal: mockPortal.url,
+    }).pipe(
+      evmDecoder({
+        range: { from: 1, to: 2 },
+        contracts: factory({
+          address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+          event: factoryAbi.PoolCreated,
+          parameter: () => null,
+          database: db,
+        }),
+        events: {
+          swaps: poolAbi.Swap,
+        },
+      }).pipe((d) => d.swaps),
+    )
+
+    const res = await readAll(stream)
+    expect(res).toMatchInlineSnapshot(`[]`)
+
+    const contracts = await db.all()
+    expect(contracts).toMatchInlineSnapshot(`[]`)
+  })
+
   it('should set event with same topic to correct factory', async () => {
     mockPortal = await createMockPortal(SIMPLE_CHILD)
 
