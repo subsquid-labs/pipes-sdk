@@ -220,8 +220,10 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
 
   if (!onProgress) {
     onProgress = ({ state, interval }) => {
+      if (!logger) return
+
       if (state.current === 0 && state.last === 0) {
-        logger?.info({ message: 'Initializing...' })
+        logger.info({ message: 'Initializing...' })
         return
       }
 
@@ -230,12 +232,18 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
           ? formatNumber(interval.processedBlocks.perSecond, 0)
           : interval.processedBlocks.perSecond.toFixed(2)
 
-      logger?.info({
+      const msg: Record<string, string> = {
         message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%), ${displayEstimatedTime(state.etaSeconds)}`,
         blocks: `${bps} blocks/second`,
         bytes: `${humanBytes(interval.bytesDownloaded.perSecond)}/second`,
-        requests: `${formatNumber(interval.requests.successful.percent)}% successful, ${formatNumber(interval.requests.rateLimited.percent)}% rate limited, ${formatNumber(interval.requests.failed.percent)}% failed out of ${formatNumber(interval.requests.total.count)} requests`,
-      })
+      }
+
+      if (interval.requests.total.count > 0) {
+        msg['requests'] =
+          `${formatNumber(interval.requests.successful.percent)}% successful, ${formatNumber(interval.requests.rateLimited.percent)}% rate limited, ${formatNumber(interval.requests.failed.percent)}% failed out of ${formatNumber(interval.requests.total.count)} requests`
+      }
+
+      logger.info(msg)
     }
   }
 
