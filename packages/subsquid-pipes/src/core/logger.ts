@@ -37,3 +37,14 @@ export function createDefaultLogger({ level }: { level?: LogLevel } = {}): Logge
         : undefined,
   })
 }
+
+export function formatWarning({ title, content }: { content: string | string[]; title: string }): string {
+  return `
+==================================================================
+⚠️  ${title.trim()}
+------------------------------------------------------------------
+
+${Array.isArray(content) ? content.join('\n').trim() : content.trim()}
+==================================================================
+`
+}

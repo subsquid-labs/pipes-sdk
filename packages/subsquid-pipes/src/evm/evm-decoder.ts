@@ -4,11 +4,13 @@ import {
   createTransformer,
   formatBlock,
   formatNumber,
+  formatWarning,
   PortalRange,
   ProfilerOptions,
   parsePortalRange,
   Transformer,
 } from '~/core/index.js'
+import { findDuplicates } from '~/internal/array.js'
 import { Log } from '../portal-client/query/evm.js'
 import { EvmPortalData } from './evm-portal-source.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
@@ -87,6 +89,28 @@ const decodedEventFields = {
   },
 } as const
 
+const DUPLICATED_EVENTS = (duplicates: { props: string[]; event: string }[]) => {
+  const events = duplicates
+    .map((d) =>
+      `
+Topic:      ${d.event}
+Properties: ${d.props.join(', ')}
+
+${d.props.slice(1).join(', ')} property will miss events due to the duplicate signature.
+`.trim(),
+    )
+    .join('-----\n')
+
+  return formatWarning({
+    title: 'Duplicate event topics detected',
+    content: [
+      events,
+      '', // empty line
+      `Ensure each event has a unique signature to avoid decoding issues.`,
+    ],
+  })
+}
+
 export function evmDecoder<T extends Events, C extends Contracts>({
   range,
   contracts,
@@ -99,11 +123,25 @@ export function evmDecoder<T extends Events, C extends Contracts>({
   EvmQueryBuilder
 > {
   const eventTopics = Object.values(events).map((event) => event.topic)
+
   const decodedRange = parsePortalRange(range)
 
   return createTransformer({
     profiler: profiler || { id: 'EVM decoder' },
     query: async ({ queryBuilder, logger, portal }) => {
+      const duplicates = findDuplicates(eventTopics)
+      if (duplicates.length) {
+        const entries = Object.entries(events)
+        logger.error(
+          DUPLICATED_EVENTS(
+            duplicates.map((duplicate) => {
+              const props = entries.filter(([, event]) => event.topic === duplicate).map(([name]) => name)
+              return { props, event: duplicate }
+            }),
+          ),
+        )
+      }
+
       if (!Factory.isFactory(contracts)) {
         queryBuilder.addFields(decodedEventFields).addLog({
           range: decodedRange,

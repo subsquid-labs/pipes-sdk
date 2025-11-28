@@ -8,7 +8,7 @@ import {
   Query,
 } from '~/portal-client/index.js'
 import { last } from '../internal/array.js'
-import { Logger } from './logger.js'
+import { formatWarning, Logger } from './logger.js'
 import { Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
 import { Profiler, Span } from './profiling.js'
 import { ProgressState, StartState } from './progress-tracker.js'
@@ -17,15 +17,15 @@ import { Target } from './target.js'
 import { Transformer, TransformerOptions } from './transformer.js'
 import { BlockCursor, Ctx } from './types.js'
 
-const NOT_REAL_TIME_WARNING = (name: string) => `
-==================================================================
-⚠️  This dataset (${name}) does not provide real-time (head) block streaming.
-------------------------------------------------------------------
-
-Portal data for this dataset will lag behind the chain head.
-This is expected. Do not rely on this dataset for latency-critical workflows.
-==================================================================
-`
+const NOT_REAL_TIME_WARNING = (name: string) => {
+  return formatWarning({
+    title: `This dataset (${name}) does not provide real-time (head) block streaming`,
+    content: [
+      'Portal data for this dataset will lag behind the chain head.',
+      'This is expected. Do not rely on this dataset for latency-critical workflows.',
+    ],
+  })
+}
 
 export interface PortalCache {
   getStream<Q extends Query>(options: { portal: PortalClient; query: Q; logger: Logger }): PortalStream<GetBlock<Q>>
