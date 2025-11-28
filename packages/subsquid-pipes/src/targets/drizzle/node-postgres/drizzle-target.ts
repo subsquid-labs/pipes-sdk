@@ -79,9 +79,26 @@ export function drizzleTarget<T>({
       await onStart?.({ db })
 
       const triggers = sortedTables.map((table) => tracker.add(table)).filter(nonNullable)
-      await db.transaction(async (tx) => {
-        await Promise.all(triggers.map((trigger) => tx.execute(trigger)))
-      }, config)
+
+      logger.debug(`Configuring PG triggers for ${triggers.length} tables...`)
+      if (triggers.length) {
+        await doWithRetry(
+          () =>
+            db.transaction(async (tx) => {
+              // Acquire an advisory lock to prevent concurrent trigger modifications
+              await tx.execute(`SELECT pg_advisory_xact_lock(hashtext('sqd_drizzle_triggers')::bigint);`)
+              // Execute all trigger creation statements
+              await Promise.all(triggers.map(async (trigger) => tx.execute(trigger)))
+              // Lock is released automatically at the end of the transaction
+            }, config),
+          {
+            title: 'postgres triggers configuration',
+            retries: 3,
+            delayMs: 100,
+          },
+        )
+      }
+      logger.debug(`PG triggers configured`)
 
       for await (const { data, ctx } of read(cursor)) {
         await doWithRetry(
@@ -126,7 +143,7 @@ export function drizzleTarget<T>({
               })
             }, config),
           {
-            title: 'batch insert transaction',
+            title: 'postgres batch insert transaction',
             retries: 3,
             delayMs: 100,
           },
