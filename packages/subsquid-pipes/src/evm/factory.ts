@@ -37,6 +37,11 @@ export type FactoryOptions<T extends EventArgs> = {
   event: AbiEvent<T>
   _experimental_preindex?: { from: number | string; to: number | string }
   parameter: keyof T | ((data: DecodedAbiEvent<T>) => string | null)
+  args?: {
+    topic1?: string[]
+    topic2?: string[]
+    topic3?: string[]
+  }
   database:
     | FactoryPersistentAdapter<InternalFactoryEvent<T>>
     | Promise<FactoryPersistentAdapter<InternalFactoryEvent<T>>>
@@ -132,9 +137,12 @@ export class Factory<T extends EventArgs> {
     name: string
     range: PortalRange
     logger: Logger
+
     portal: PortalClient
   }) {
     logger.info(`Starting ${name}`)
+
+    await this.migrate()
 
     await evmPortalSource({
       portal,
@@ -145,6 +153,7 @@ export class Factory<T extends EventArgs> {
           profiler: { id: name },
           contracts: this.factoryAddress(),
           range,
+          args: this.options.args,
           events: {
             factory: this.options.event,
           },

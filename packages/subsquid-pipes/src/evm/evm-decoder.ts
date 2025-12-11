@@ -62,6 +62,11 @@ type Contracts = Factory<any> | string[]
 type DecodedEventPipeArgs<T extends Events, C extends Contracts> = {
   range: PortalRange
   contracts?: C
+  args?: {
+    topic1?: string[]
+    topic2?: string[]
+    topic3?: string[]
+  }
   events: EventsMap<T>
   profiler?: ProfilerOptions
   onError?: (ctx: BatchCtx, error: any) => unknown | Promise<unknown>
@@ -115,6 +120,7 @@ export function evmDecoder<T extends Events, C extends Contracts>({
   range,
   contracts,
   events,
+  args,
   profiler,
   onError,
 }: DecodedEventPipeArgs<T, C>): Transformer<
@@ -148,15 +154,21 @@ export function evmDecoder<T extends Events, C extends Contracts>({
           request: {
             address: contracts,
             topic0: eventTopics,
+            topic1: args?.topic1,
+            topic2: args?.topic2,
+            topic3: args?.topic3,
             transaction: true,
           },
         })
         return
       }
 
+      logger.debug('Running factory migrations')
+      await contracts.migrate()
+      logger.debug('Finished factory migrations')
+
       const preIndexRange = contracts.preIndexRange()
       if (preIndexRange) {
-        await contracts.migrate()
         await contracts.startPreIndex({
           name: 'EVM decoder factory pre-index',
           range: preIndexRange,
@@ -213,14 +225,7 @@ export function evmDecoder<T extends Events, C extends Contracts>({
         },
       })
     },
-    start: async ({ logger }) => {
-      if (Factory.isFactory(contracts)) {
-        logger.debug('Running factory migrations')
-        await contracts.migrate()
 
-        logger.debug('Finished factory migrations')
-      }
-    },
     transform: async (data, ctx) => {
       const result = {} as EventResponse<T, C>
       for (const eventName in events) {

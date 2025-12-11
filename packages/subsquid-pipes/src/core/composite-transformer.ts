@@ -46,10 +46,8 @@ export function compositeTransformer<
 
   return new Transformer<In, Res, Query>({
     profiler: { id: 'extend' },
-    query: (ctx) => {
-      for (const key in composite) {
-        composite[key].query?.(ctx)
-      }
+    query: async (ctx) => {
+      await Promise.all(Object.values(composite).map((e) => e.query?.(ctx)))
     },
     start: async (ctx) => {
       await Promise.all(Object.values(composite).map((e) => e.start?.(ctx)))
