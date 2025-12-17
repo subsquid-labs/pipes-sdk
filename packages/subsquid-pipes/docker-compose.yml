@@ -9,6 +9,23 @@ services:
       - ALLOW_EMPTY_PASSWORD=yes
     healthcheck:
       test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+
+  clickhouse_ui:
+    image: mo4islona/clickhouse-ui:0.0.1
+    ports:
+      - "8124:3000"
+    environment:
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=default
+      - CLICKHOUSE_URL=http://test_clickhouse:8123
+#    entrypoint:
+#      - bun
+#      - --bun
+#      - server.js
+#      - app/server.js
+#      - ls
+#      - -la
+#      - .
   test_pg:
     image: postgres:18
     environment:
