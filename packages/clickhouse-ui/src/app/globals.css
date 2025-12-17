@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --card: 222.2 84% 4.9%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222.2 84% 4.9%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 199 89% 48%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 217.2 32.6% 17.5%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 217.2 32.6% 17.5%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 199 89% 48%;
+  --radius: 0.75rem;
+  --font-sans: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+  'Courier New', monospace;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+  'Courier New', monospace;
+}
+
+* {
+  @apply border-border font-mono;
+}
+
+body {
+  @apply bg-background text-foreground;
+}
+
+a {
+  @apply text-primary underline-offset-4 underline;
+}
+
+.sql-hl-keyword {
+  @apply text-sky-300 font-semibold;
+}
+
+.sql-hl-function {
+  @apply text-amber-300;
+}
+
+.sql-hl-number {
+  @apply text-violet-300;
+}
+
+.sql-hl-string {
+  @apply text-rose-300;
+}
+
+.sql-hl-comment {
+  @apply text-slate-500 italic;
+}
+
+.sql-hl-special,
+.sql-hl-bracket {
+  @apply text-slate-400;
+}
+
+.sql-hl-identifier {
+  @apply text-slate-100;
+}
+
+
+
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
