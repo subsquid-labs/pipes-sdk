@@ -1,0 +1,27 @@
+{
+  "name": "transfers",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsup src/index.ts --format esm --dts",
+    "lint": "biome check . --write",
+    "format": "biome format . --write"
+  },
+  "dependencies": {
+    "@subsquid/pipes": "0.1.0-beta.10",
+    "dotenv": "^17.2.3",
+    "drizzle-kit": "^0.31.6",
+    "drizzle-orm": "^0.44.7",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.3.4",
+    "@types/node": "^25.0.3",
+    "tsup": "8.5.0",
+    "tsx": "4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

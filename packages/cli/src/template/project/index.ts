@@ -1,0 +1,12 @@
+export {
+  baseDependencies,
+  baseDevDependencies,
+  sinkDependencies,
+  getDependencies,
+} from "./dependencies.js";
+export { biomeConfig } from "./static/biome.js";
+export { tsconfigConfig } from "./static/tsconfig.js";
+export { gitignoreContent } from "./static/gitignore.js";
+export { getDockerCompose } from "./static/docker-compose.js";
+export { drizzleConfigTemplate } from "./static/drizzle-config.js";
+export { packageJsonTemplate } from "./templates/package-json.js";

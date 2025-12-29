@@ -1,0 +1,40 @@
+{
+  "name": "@subsquid/pipes-cli",
+  "type": "module",
+  "version": "0.1.0-beta.1",
+  "author": "Subsquid Team",
+  "files": [
+    "dist",
+    "src",
+    "!**/tests",
+    "!**/*.test.*",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "bin": {
+    "pipes": "./dist/index.cjs"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts init",
+    "build": "tsup-node",
+    "lint": "biome check . --write",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.1.0",
+    "@subsquid/pipes": "workspace:*",
+    "commander": "^14.0.2",
+    "inquirer": "^13.1.0",
+    "mustache": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/mustache": "^4.2.6",
+    "@types/node": "22.14.1",
+    "@vitest/coverage-v8": "3.2.4",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}
