@@ -1,6 +1,7 @@
 import Mustache from "mustache";
 import { Config } from "~/types/config.js";
 import { NetworkType } from "~/types/network.js";
+import { TransformerTemplate } from "~/types/templates.js";
 import {
   parseImports,
   mergeImports,
@@ -49,14 +50,17 @@ export function renderSchemasTemplate(config: Config<NetworkType>): string {
 
   // Extract code (without imports) from each schema file
   const schemas = templateEntries
-    .filter(([, value]) => value.drizzleSchema)
     .map(([, value]) => {
+      if (!value.drizzleSchema) return
+
       const { code } = parseImports(value.drizzleSchema);
+
       return {
         schema: code,
         tableName: value.drizzleTableName,
       };
-    });
+    })
+    .filter((value): value is { schema: string; tableName: string } => !!value)
 
   return Mustache.render(schemasTemplate, {
     mergedImports: mergedImportStatements,

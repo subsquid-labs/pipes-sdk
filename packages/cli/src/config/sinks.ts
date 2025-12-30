@@ -1,14 +1,14 @@
 export const sinks = [
   {
-    name: "ClickHouse",
-    id: "clickhouse",
+    name: 'ClickHouse',
+    id: 'clickhouse',
   },
   {
-    name: "PostgreSQL",
-    id: "postgresql",
+    name: 'PostgreSQL',
+    id: 'postgresql',
   },
   {
-    name: "Memory",
-    id: "memory",
+    name: 'Memory',
+    id: 'memory',
   },
-] as const;
+] as const

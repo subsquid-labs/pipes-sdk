@@ -1,18 +1,20 @@
-import { integer, numeric, pgTable, primaryKey, timestamp, varchar } from 'drizzle-orm/pg-core'
+import { bigint, integer, numeric, pgTable, primaryKey, varchar } from 'drizzle-orm/pg-core'
 
-export const transfersTable = pgTable(
-  'transfers',
+export const erc20TransfersTable = pgTable(
+  'erc20_transfers',
   {
     blockNumber: integer().notNull(),
-    timestamp: timestamp(),
-    from: varchar().notNull(),
-    to: varchar().notNull(),
+    txHash: varchar({ length: 66 }).notNull(),
+    logIndex: integer().notNull(),
+    timestamp: bigint({ mode: 'number' }).notNull(),
+    from: varchar({ length: 42 }).notNull(),
+    to: varchar({ length: 42 }).notNull(),
     value: numeric({ mode: 'bigint' }).notNull(),
-    tokenAddress: varchar().notNull(),
+    tokenAddress: varchar({ length: 42 }).notNull(),
   },
   (table) => [
     primaryKey({
-      columns: [table.blockNumber, table.from, table.to, table.tokenAddress],
+      columns: [table.blockNumber, table.txHash, table.logIndex],
     }),
   ],
 )

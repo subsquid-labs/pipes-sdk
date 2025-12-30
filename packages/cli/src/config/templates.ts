@@ -1,38 +1,28 @@
-import { NetworkType } from "~/types/network.js";
-
-const minimal = {
-  name: "Minimal",
-  id: "minimal",
-} as const;
+import { NetworkType } from '~/types/network.js'
 
 export const evmTemplateOptions = [
-  minimal,
   {
-    name: "Erc20 Transfers",
-    id: "erc20-transfers",
+    name: 'Erc20 Transfers',
+    id: 'erc20-transfers',
   },
   {
-    name: "Uniswap V3 Swaps",
-    id: "uniswap-v3-swaps",
+    name: 'Uniswap V3 Swaps',
+    id: 'uniswap-v3-swaps',
   },
-] as const;
+] as const
 
-export type EvmTemplateIds = (typeof evmTemplateOptions)[number]["id"];
+export type EvmTemplateIds = (typeof evmTemplateOptions)[number]['id'] | "custom"
 
 export const svmTemplateOptions = [
-  minimal,
   {
-    name: "Orca Swaps",
-    id: "orca-swaps",
+    name: 'Orca Swaps',
+    id: 'orca-swaps',
   },
-] as const;
+] as const
 
-export type SolanaTemplateIds = (typeof svmTemplateOptions)[number]["id"];
+export type SolanaTemplateIds = (typeof svmTemplateOptions)[number]['id'] | "custom"
 
 export const templateOptions = {
   evm: evmTemplateOptions,
   svm: svmTemplateOptions,
-} as const satisfies Record<
-  NetworkType,
-  typeof evmTemplateOptions | typeof svmTemplateOptions
->;
+} as const satisfies Record<NetworkType, typeof evmTemplateOptions | typeof svmTemplateOptions>

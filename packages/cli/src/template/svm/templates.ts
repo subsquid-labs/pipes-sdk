@@ -1,4 +1,5 @@
 import { SolanaTemplateIds } from "~/config/templates.js";
+import { TransformerTemplate } from "~/types/templates.js";
 
 export const erc20TransfersTransformer = `
     evmDecoder({
@@ -10,29 +11,19 @@ export const erc20TransfersTransformer = `
     })
 `;
 
-export const minimalTemplate = `
-    evmDecoder({
-        profiler: { id: "minimal" },
-        range: { from: "latest" },
-        contracts: [],
-        events: {},
-    })
-`;
-
 export const svmTemplates: Record<
   SolanaTemplateIds,
-  {
-    compositeKey: string;
-    transformer: string;
-    tableName: string;
-    clickhouseTableTemplate?: string;
-    postgresTableTemplate?: string;
-  }
+  TransformerTemplate
 > = {
-  minimal: {
+  custom: {
     compositeKey: "custom",
-    transformer: minimalTemplate,
-    tableName: "minimal",
+    transformer: `solanaInstructionDecoder({
+        range: { from: "latest" },
+        programId: [],
+        instructions: {},
+    })`,
+    tableName: "customContract",
+    drizzleTableName: "customContract",
   },
   "orca-swaps": {
     compositeKey: "transfers",

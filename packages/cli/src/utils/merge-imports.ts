@@ -7,6 +7,7 @@ interface ParsedImport {
   namespaceImport?: string;
   from: string;
   typeOnly: boolean;
+  sideEffect?: boolean;
 }
 
 export function parseImports(content: string): {
@@ -15,12 +16,29 @@ export function parseImports(content: string): {
 } {
   const imports: ParsedImport[] = [];
 
+  // Match side-effect imports: import "module" or import 'module'
+  const sideEffectRegex = /import\s+['"]([^'"]+)['"];?/g;
+  let match;
+  const importLines: number[] = [];
+
+  while ((match = sideEffectRegex.exec(content)) !== null) {
+    const afterMatch = content.substring(match.index! + match[0].length).trim();
+    // Only treat as side-effect if it's not followed by 'from' (which would be a regular import)
+    if (!afterMatch.startsWith('from')) {
+      const from = match[1]!;
+      imports.push({
+        namedImports: [],
+        from,
+        typeOnly: false,
+        sideEffect: true,
+      });
+      importLines.push(match.index!);
+    }
+  }
+
   // Match import statements (handles default, named, namespace, type imports)
   const importRegex =
     /import\s+(?:(type\s+)?(?:(?:\*\s+as\s+(\w+))|(\w+)|(?:\{([^}]+)\})|(?:\{([^}]+)\}\s+as\s+(\w+))|(?:(\w+)\s*,\s*\{([^}]+)\})))\s+from\s+['"]([^'"]+)['"];?/g;
-
-  let match;
-  const importLines: number[] = [];
 
   while ((match = importRegex.exec(content)) !== null) {
     const [
@@ -95,8 +113,17 @@ function parseNamedImports(namedStr: string): string[] {
 
 export function mergeImports(imports: ParsedImport[]): ParsedImport[] {
   const merged = new Map<string, ParsedImport>();
+  const sideEffectImports = new Map<string, ParsedImport>();
 
   for (const imp of imports) {
+    if (imp.sideEffect) {
+      // Side-effect imports are standalone, just deduplicate by module path
+      if (!sideEffectImports.has(imp.from)) {
+        sideEffectImports.set(imp.from, { ...imp });
+      }
+      continue;
+    }
+
     const key = imp.from;
     const existing = merged.get(key);
 
@@ -123,10 +150,16 @@ export function mergeImports(imports: ParsedImport[]): ParsedImport[] {
     }
   }
 
-  return Array.from(merged.values());
+  // Combine regular and side-effect imports, side-effects first
+  return [...Array.from(sideEffectImports.values()), ...Array.from(merged.values())];
 }
 
 export function generateImportStatement(imp: ParsedImport): string {
+  // Handle side-effect imports
+  if (imp.sideEffect) {
+    return `import "${imp.from}";`;
+  }
+
   const parts: string[] = [];
 
   if (imp.typeOnly) {

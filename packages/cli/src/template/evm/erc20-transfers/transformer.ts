@@ -1,4 +1,4 @@
-import { evmDecoder, commonAbis } from '@subsquid/pipes/evm'
+import { commonAbis, evmDecoder } from '@subsquid/pipes/evm'
 
 evmDecoder({
   profiler: { id: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
@@ -11,10 +11,12 @@ evmDecoder({
 }).pipe(({ transfers }) =>
   transfers.map((transfer) => ({
     blockNumber: transfer.block.number,
+    txHash: transfer.rawEvent.transactionHash,
+    logIndex: transfer.rawEvent.logIndex,
+    timestamp: transfer.timestamp.getTime(),
     from: transfer.event.from,
     to: transfer.event.to,
     value: transfer.event.value,
     tokenAddress: transfer.contract,
-    timestamp: transfer.timestamp,
   })),
 )

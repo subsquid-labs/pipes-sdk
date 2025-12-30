@@ -3,7 +3,7 @@ import { events as factoryEvents } from "./contracts/factory.js";
 import { events as poolEvents } from "./contracts/pool.js";
 
 evmDecoder({
-    range: { from: 12_369_621 }, // Uniswap V3 Factory deployment block
+    range: { from: 'latest' }, // Uniswap V3 Factory deployment block: 12,369,621 
     contracts: factory({
       address: ['0x1f98431c8ad98523631ae4a59f267346ea31f984'], // Uniswap V3 Factory address
       event: factoryEvents.PoolCreated,
@@ -18,13 +18,13 @@ evmDecoder({
   })
     .pipe(({ swaps }) =>
         swaps.map((s) => ({
-          pool: s.contract,
-          timestamp: s.timestamp.getTime(),
-          txHash: s.rawEvent.transactionHash,
           blockNumber: s.block.number,
-          token0: s.factory?.event.token0 || '',
-          token1: s.factory?.event.token1 || '',
+          txHash: s.rawEvent.transactionHash,
           logIndex: s.rawEvent.logIndex,
+          timestamp: s.timestamp.getTime(),
+          pool: s.contract,
+          token0: s.factory?.event.token0 ?? '',
+          token1: s.factory?.event.token1 ?? '',
           ...s.event,
         })),
     )

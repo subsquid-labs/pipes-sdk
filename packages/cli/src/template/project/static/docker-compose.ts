@@ -3,7 +3,6 @@ import { Sink } from "~/types/sink.js";
 export const clickhouseDockerCompose = `services:
   clickhouse:
     image: clickhouse/clickhouse-server:latest
-    container_name: clickhouse
     ports:
       - "8123:8123"
     environment:
@@ -22,8 +21,6 @@ export const postgresDockerCompose = `services:
       POSTGRES_DB: pipes
     ports:
       - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s

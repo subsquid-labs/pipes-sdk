@@ -6,6 +6,7 @@ import {
   parseImports,
   generateImportStatement,
 } from "~/utils/merge-imports.js";
+import { TransformerTemplate } from "~/types/templates.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -30,36 +31,31 @@ function parseTemplateFile(relativePath: string): {
 
 export const evmTemplates: Record<
   EvmTemplateIds,
-  {
-    compositeKey: string;
-    transformer: string;
-    imports?: string[];
-    tableName: string;
-    clickhouseTableTemplate?: string;
-    drizzleTableName?: string;
-    drizzleSchema?: string;
-  }
+  TransformerTemplate
 > = {
-  minimal: {
-    compositeKey: "custom",
-    transformer: `evmDecoder({
-      range: { from: "latest" },
-      contracts: [],
-      events: {},
-    })`,
-    tableName: "minimal",
-  },
+  custom: (() => {
+    const parsed = parseTemplateFile("custom-contract/transformer.ts");
+    return {
+      compositeKey: "custom",
+      transformer: parsed.code,
+      imports: parsed.imports,
+      tableName: "custom_contract",
+      drizzleTableName: "customContract",
+      drizzleSchema: readTemplateFile("custom-contract/pg-table.ts"),
+      clickhouseTableTemplate: readTemplateFile("custom-contract/clickhouse-table.sql"),
+    };
+  })(),
   "erc20-transfers": (() => {
     const parsed = parseTemplateFile("erc20-transfers/transformer.ts");
     return {
       compositeKey: "transfers",
       tableName: "erc20_transfers",
-      drizzleTableName: "transfersTable",
       transformer: parsed.code,
       imports: parsed.imports,
       clickhouseTableTemplate: readTemplateFile(
         "erc20-transfers/clickhouse-table.sql"
       ),
+      drizzleTableName: "erc20TransfersTable",
       drizzleSchema: readTemplateFile("erc20-transfers/pg-table.ts"),
     };
   })(),
@@ -68,10 +64,10 @@ export const evmTemplates: Record<
     return {
       compositeKey: "swaps",
       tableName: "uniswap_v3_swaps",
-      drizzleTableName: "uniswapV3Swaps",
       transformer: parsed.code,
       imports: parsed.imports,
       clickhouseTableTemplate: readTemplateFile("uniswap-v3-swaps/clickhouse-table.sql"),
+      drizzleTableName: "uniswapV3Swaps",
       drizzleSchema: readTemplateFile("uniswap-v3-swaps/pg-table.ts"),
     };
   })(),

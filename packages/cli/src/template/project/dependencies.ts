@@ -4,6 +4,7 @@ export const baseDependencies = [
   "@subsquid/pipes",
   "@subsquid/evm-codec",
   "@subsquid/evm-abi",
+  "dotenv",
 ];
 
 export const baseDevDependencies = [

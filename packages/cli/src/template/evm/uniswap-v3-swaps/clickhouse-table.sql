@@ -3,11 +3,14 @@ CREATE TABLE IF NOT EXISTS uniswap_v3_swaps (
     tx_hash String,
     log_index UInt32,
     timestamp DateTime(3),
-    pool_address String,
+    pool String,
     token0 String,
     token1 String,
-    fee UInt256,
-    tick_spacing UInt256,
+    amount0 Int256,
+    amount1 Int256,
+    sqrt_price_x96 UInt256,
+    liquidity UInt256,
+    tick Int64,
     sign Int8 DEFAULT 1
 )
 ENGINE = CollapsingMergeTree(sign)
