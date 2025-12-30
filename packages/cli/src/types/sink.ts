@@ -1,1 +1,1 @@
-export type Sink = "clickhouse" | "postgresql" | "memory";
+export type Sink = 'clickhouse' | 'postgresql' | 'memory'

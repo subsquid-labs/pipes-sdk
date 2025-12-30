@@ -82,11 +82,11 @@ export function renderStarterTemplate(config: Config<NetworkType>): string {
 
   // 2. Template imports
   // if (!isCustomContractFlow) {
-    for (const [, value] of templateEntries) {
-      if (value.imports && value.imports.length > 0) {
-        allImportStrings.push(...value.imports)
-      }
+  for (const [, value] of templateEntries) {
+    if (value.imports && value.imports.length > 0) {
+      allImportStrings.push(...value.imports)
     }
+  }
   // }
 
   // 3. Sink-specific imports
@@ -128,21 +128,21 @@ export function renderStarterTemplate(config: Config<NetworkType>): string {
     mergedImports: mergedImportStatements,
     // Include templates for table creation/registration, but exclude from insert code generation
     templates: templateEntries.map(([key, value], index) => {
-          const table = config.sink === 'clickhouse' ? value.clickhouseTableTemplate : value.drizzleSchema
-          // For custom template in custom contract flow, include table but exclude from insert code
-          const isCustomInCustomFlow = isCustomContractFlow && key === 'custom'
-          return {
-            compositeKey: value.compositeKey,
-            transformer: value.transformer,
-            tableName: value.tableName,
-            drizzleTableName: value.drizzleTableName,
-            table,
-            hasTable: Boolean(table),
-            // Exclude custom template from generating insert code when in custom contract flow
-            excludeFromInsert: isCustomInCustomFlow,
-            last: index === templateEntries.length - 1,
-          }
-        }),
+      const table = config.sink === 'clickhouse' ? value.clickhouseTableTemplate : value.drizzleSchema
+      // For custom template in custom contract flow, include table but exclude from insert code
+      const isCustomInCustomFlow = isCustomContractFlow && key === 'custom'
+      return {
+        compositeKey: value.compositeKey,
+        transformer: value.transformer,
+        tableName: value.tableName,
+        drizzleTableName: value.drizzleTableName,
+        table,
+        hasTable: Boolean(table),
+        // Exclude custom template from generating insert code when in custom contract flow
+        excludeFromInsert: isCustomInCustomFlow,
+        last: index === templateEntries.length - 1,
+      }
+    }),
     customContracts,
     hasCustomContracts: isCustomContractFlow,
   }

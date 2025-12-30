@@ -13,4 +13,4 @@ export const packageJsonTemplate = `{
     "db:migrate": "pnpm drizzle-kit migrate",
     "db:push": "pnpm drizzle-kit push"{{/hasPostgresScripts}}
   }
-}`;
+}`

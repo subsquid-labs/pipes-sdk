@@ -1,16 +1,16 @@
 export const tsconfigConfig = {
   compilerOptions: {
-    target: "ES2022",
-    module: "NodeNext",
-    moduleResolution: "NodeNext",
+    target: 'ES2022',
+    module: 'NodeNext',
+    moduleResolution: 'NodeNext',
     esModuleInterop: true,
     strict: true,
     skipLibCheck: true,
-    outDir: "dist",
-    rootDir: "src",
+    outDir: 'dist',
+    rootDir: 'src',
     declaration: true,
     resolveJsonModule: true,
   },
-  include: ["src"],
-  exclude: ["node_modules", "dist"],
-};
+  include: ['src'],
+  exclude: ['node_modules', 'dist'],
+}

@@ -552,7 +552,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'cyberconnect-l2-testnet',
     details: '/en/data/evm/cyberconnect-l2-testnet/overview',
-
   },
   {
     name: 'Dancelight',
@@ -565,7 +564,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'dancelight-testnet',
     details: '/en/data/evm/dancelight-testnet/overview',
-
   },
   {
     name: 'Degen Chain',
@@ -578,7 +576,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'degen-chain',
     details: '/en/data/evm/degen-chain/overview',
-
   },
   {
     name: 'DFK Chain',
@@ -591,7 +588,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'dfk-chain',
     details: '/en/data/evm/dfk-chain/overview',
-
   },
   {
     name: 'Dogechain',
@@ -604,7 +600,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'dogechain-mainnet',
     details: '/en/data/evm/dogechain-mainnet/overview',
-
   },
   {
     name: 'Dogechain Testnet',
@@ -617,7 +612,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'dogechain-testnet',
     details: '/en/data/evm/dogechain-testnet/overview',
-
   },
   {
     name: 'Ethereum',
@@ -630,7 +624,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'ethereum-mainnet',
     details: '/en/data/evm/ethereum-mainnet/overview',
-
   },
   {
     name: 'Ethereum Holesky',
@@ -643,7 +636,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'ethereum-holesky',
     details: '/en/data/evm/ethereum-holesky/overview',
-
   },
   {
     name: 'Ethereum Hoodi',
@@ -656,7 +648,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'ethereum-hoodi',
     details: '/en/data/evm/ethereum-hoodi/overview',
-
   },
   {
     name: 'Ethereum Sepolia',
@@ -669,7 +660,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'ethereum-sepolia',
     details: '/en/data/evm/ethereum-sepolia/overview',
-
   },
   {
     name: 'Etherlink',
@@ -682,7 +672,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'etherlink-mainnet',
     details: '/en/data/evm/etherlink-mainnet/overview',
-
   },
   {
     name: 'Etherlink Testnet',
@@ -695,7 +684,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'etherlink-testnet',
     details: '/en/data/evm/etherlink-testnet/overview',
-
   },
   {
     name: 'Exosama',
@@ -708,7 +696,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'exosama',
     details: '/en/data/evm/exosama/overview',
-
   },
   {
     name: 'Fantom',
@@ -721,7 +708,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'fantom-mainnet',
     details: '/en/data/evm/fantom-mainnet/overview',
-
   },
   {
     name: 'Fantom Testnet',
@@ -734,7 +720,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'fantom-testnet',
     details: '/en/data/evm/fantom-testnet/overview',
-
   },
   {
     name: 'Flare',
@@ -747,7 +732,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'flare-mainnet',
     details: '/en/data/evm/flare-mainnet/overview',
-
   },
   {
     name: 'Gelato Opcelestia Raspberry',
@@ -760,7 +744,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'gelato-opcelestia-raspberry',
     details: '/en/data/evm/gelato-opcelestia-raspberry/overview',
-
   },
   {
     name: 'Gnosis',
@@ -773,7 +756,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'gnosis-mainnet',
     details: '/en/data/evm/gnosis-mainnet/overview',
-
   },
   {
     name: 'Gravity',
@@ -786,7 +768,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'galxe-gravity',
     details: '/en/data/evm/galxe-gravity/overview',
-
   },
   {
     name: 'Hedera',
@@ -799,7 +780,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'hedera-mainnet',
     details: '/en/data/evm/hedera-mainnet/overview',
-
   },
   {
     name: 'Hemi',
@@ -812,7 +792,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'hemi-mainnet',
     details: '/en/data/evm/hemi-mainnet/overview',
-
   },
   {
     name: 'Hemi Testnet',
@@ -825,7 +804,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'hemi-testnet',
     details: '/en/data/evm/hemi-testnet/overview',
-
   },
   {
     name: 'HyperEVM',
@@ -838,7 +816,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'hyperliquid-mainnet',
     details: '/en/data/evm/hyperevm-mainnet/overview',
-
   },
   {
     name: 'HyperEVM Testnet',
@@ -851,7 +828,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'hyperliquid-testnet',
     details: '/en/data/evm/hyperevm-testnet/overview',
-
   },
   {
     name: 'Immutable zkEVM',
@@ -864,7 +840,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'immutable-zkevm-mainnet',
     details: '/en/data/evm/immutable-zkevm-mainnet/overview',
-
   },
   {
     name: 'Immutable zkEVM Testnet',
@@ -877,7 +852,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'immutable-zkevm-testnet',
     details: '/en/data/evm/immutable-zkevm-testnet/overview',
-
   },
   {
     name: 'Ink',
@@ -890,7 +864,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'ink-mainnet',
     details: '/en/data/evm/ink-mainnet/overview',
-
   },
   {
     name: 'Ink Sepolia',
@@ -903,7 +876,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'ink-sepolia',
     details: '/en/data/evm/ink-sepolia/overview',
-
   },
   {
     name: 'Kyoto Testnet',
@@ -916,7 +888,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'kyoto-testnet',
     details: '/en/data/evm/kyoto-testnet/overview',
-
   },
   {
     name: 'Linea',
@@ -929,7 +900,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'linea-mainnet',
     details: '/en/data/evm/linea-mainnet/overview',
-
   },
   {
     name: 'Lukso',
@@ -942,7 +912,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'lukso-mainnet',
     details: '/en/data/evm/lukso-mainnet/overview',
-
   },
   {
     name: 'Manta Pacific',
@@ -955,7 +924,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'manta-pacific',
     details: '/en/data/evm/manta-pacific/overview',
-
   },
   {
     name: 'Manta Pacific Sepolia',
@@ -968,7 +936,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'manta-pacific-sepolia',
     details: '/en/data/evm/manta-pacific-sepolia/overview',
-
   },
   {
     name: 'Mantle',
@@ -981,7 +948,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'mantle-mainnet',
     details: '/en/data/evm/mantle-mainnet/overview',
-
   },
   {
     name: 'Mantle Sepolia',
@@ -994,7 +960,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'mantle-sepolia',
     details: '/en/data/evm/mantle-sepolia/overview',
-
   },
   {
     name: 'Mega Testnet',
@@ -1007,7 +972,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'mega-testnet',
     details: '/en/data/evm/mega-testnet/overview',
-
   },
   {
     name: 'MemeCore',
@@ -1020,7 +984,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'memecore-mainnet',
     details: '/en/data/evm/memecore-mainnet/overview',
-
   },
   {
     name: 'MemeCore Testnet (Formicarium)',
@@ -1033,7 +996,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'formicarium-testnet',
     details: '/en/data/evm/formicarium-testnet/overview',
-
   },
   {
     name: 'Merlin',
@@ -1046,7 +1008,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'merlin-mainnet',
     details: '/en/data/evm/merlin-mainnet/overview',
-
   },
   {
     name: 'Merlin Testnet',
@@ -1059,7 +1020,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'merlin-testnet',
     details: '/en/data/evm/merlin-testnet/overview',
-
   },
   {
     name: 'Metis',
@@ -1072,7 +1032,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'metis-mainnet',
     details: '/en/data/evm/metis-mainnet/overview',
-
   },
   {
     name: 'Mode',
@@ -1085,7 +1044,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'mode-mainnet',
     details: '/en/data/evm/mode-mainnet/overview',
-
   },
   {
     name: 'Monad',
@@ -1098,7 +1056,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'monad-mainnet',
     details: '/en/data/evm/monad-mainnet/overview',
-
   },
   {
     name: 'Monad Testnet',
@@ -1111,7 +1068,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'monad-testnet',
     details: '/en/data/evm/monad-testnet/overview',
-
   },
   {
     name: 'Moonbase Alpha',
@@ -1124,7 +1080,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'moonbase-testnet',
     details: '/en/data/evm/moonbase-testnet/overview',
-
   },
   {
     name: 'Moonbeam',
@@ -1137,7 +1092,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'moonbeam-mainnet',
     details: '/en/data/evm/moonbeam-mainnet/overview',
-
   },
   {
     name: 'Moonriver',
@@ -1150,7 +1104,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'moonriver-mainnet',
     details: '/en/data/evm/moonriver-mainnet/overview',
-
   },
   {
     name: 'Moonsama',
@@ -1163,7 +1116,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'moonsama',
     details: '/en/data/evm/moonsama/overview',
-
   },
   {
     name: 'Naka Chain',
@@ -1176,7 +1128,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'nakachain',
     details: '/en/data/evm/nakachain/overview',
-
   },
   {
     name: 'Neon EVM',
@@ -1189,7 +1140,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'neon-mainnet',
     details: '/en/data/evm/neon-mainnet/overview',
-
   },
   {
     name: 'Neon EVM Devnet',
@@ -1202,7 +1152,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'neon-devnet',
     details: '/en/data/evm/neon-devnet/overview',
-
   },
   {
     name: 'Neox Testnet',
@@ -1215,7 +1164,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'neox-testnet',
     details: '/en/data/evm/neox-testnet/overview',
-
   },
   {
     name: 'opBNB',
@@ -1228,7 +1176,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'opbnb-mainnet',
     details: '/en/data/evm/opbnb-mainnet/overview',
-
   },
   {
     name: 'opBNB Testnet',
@@ -1241,7 +1188,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'opbnb-testnet',
     details: '/en/data/evm/opbnb-testnet/overview',
-
   },
   {
     name: 'Optimism',
@@ -1254,7 +1200,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'optimism-mainnet',
     details: '/en/data/evm/optimism-mainnet/overview',
-
   },
   {
     name: 'Optimism Sepolia',
@@ -1267,7 +1212,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'optimism-sepolia',
     details: '/en/data/evm/optimism-sepolia/overview',
-
   },
   {
     name: 'Ozean Testnet',
@@ -1280,7 +1224,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'ozean-testnet',
     details: '/en/data/evm/ozean-testnet/overview',
-
   },
   {
     name: 'Peaq',
@@ -1293,7 +1236,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'peaq-mainnet',
     details: '/en/data/evm/peaq-mainnet/overview',
-
   },
   {
     name: 'Plasma',
@@ -1306,7 +1248,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'plasma-mainnet',
     details: '/en/data/evm/plasma-mainnet/overview',
-
   },
   {
     name: 'Plasma Testnet',
@@ -1319,7 +1260,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'plasma-testnet',
     details: '/en/data/evm/plasma-testnet/overview',
-
   },
   {
     name: 'Plume Devnet',
@@ -1332,7 +1272,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'plume-devnet',
     details: '/en/data/evm/plume-devnet/overview',
-
   },
   {
     name: 'Plume',
@@ -1345,7 +1284,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'plume-mainnet',
     details: '/en/data/evm/plume-mainnet/overview',
-
   },
   {
     name: 'Plume (Legacy)',
@@ -1358,7 +1296,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'plume-legacy',
     details: '/en/data/evm/plume-legacy/overview',
-
   },
   {
     name: 'Plume Testnet',
@@ -1371,7 +1308,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'plume-testnet',
     details: '/en/data/evm/plume-testnet/overview',
-
   },
   {
     name: 'Polygon',
@@ -1384,7 +1320,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'polygon-mainnet',
     details: '/en/data/evm/polygon-mainnet/overview',
-
   },
   {
     name: 'Polygon Amoy Testnet',
@@ -1397,7 +1332,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'polygon-amoy-testnet',
     details: '/en/data/evm/polygon-amoy-testnet/overview',
-
   },
   {
     name: 'Polygon zkEVM',
@@ -1410,7 +1344,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'polygon-zkevm-mainnet',
     details: '/en/data/evm/polygon-zkevm-mainnet/overview',
-
   },
   {
     name: 'Polygon zkEVM Cardona Testnet',
@@ -1423,7 +1356,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'polygon-zkevm-cardona-testnet',
     details: '/en/data/evm/polygon-zkevm-cardona-testnet/overview',
-
   },
   {
     name: 'Poseidon Testnet',
@@ -1436,7 +1368,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'poseidon-testnet',
     details: '/en/data/evm/poseidon-testnet/overview',
-
   },
   {
     name: 'Prom',
@@ -1449,7 +1380,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'prom-mainnet',
     details: '/en/data/evm/prom-mainnet/overview',
-
   },
   {
     name: "Puppynet (Shibarium's Testnet)",
@@ -1462,7 +1392,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'puppynet',
     details: '/en/data/evm/puppynet/overview',
-
   },
   {
     name: 'Scroll',
@@ -1475,7 +1404,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'scroll-mainnet',
     details: '/en/data/evm/scroll-mainnet/overview',
-
   },
   {
     name: 'Scroll Sepolia',
@@ -1488,7 +1416,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'scroll-sepolia',
     details: '/en/data/evm/scroll-sepolia/overview',
-
   },
   {
     name: 'Shibarium',
@@ -1501,7 +1428,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'shibarium',
     details: '/en/data/evm/shibarium/overview',
-
   },
   {
     name: 'Shibuya',
@@ -1514,7 +1440,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'shibuya-testnet',
     details: '/en/data/evm/shibuya-testnet/overview',
-
   },
   {
     name: 'Shiden',
@@ -1527,7 +1452,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'shiden-mainnet',
     details: '/en/data/evm/shiden-mainnet/overview',
-
   },
   {
     name: 'Skale Nebula',
@@ -1540,7 +1464,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'skale-nebula',
     details: '/en/data/evm/skale-nebula/overview',
-
   },
   {
     name: 'Soneium',
@@ -1553,7 +1476,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'soneium-mainnet',
     details: '/en/data/evm/soneium-mainnet/overview',
-
   },
   {
     name: 'Soneium Minato Testnet',
@@ -1566,7 +1488,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'soneium-minato-testnet',
     details: '/en/data/evm/soneium-minato-testnet/overview',
-
   },
   {
     name: 'Sonic',
@@ -1579,7 +1500,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'sonic-mainnet',
     details: '/en/data/evm/sonic-mainnet/overview',
-
   },
   {
     name: 'Sonic Testnet',
@@ -1592,7 +1512,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'sonic-testnet',
     details: '/en/data/evm/sonic-testnet/overview',
-
   },
   {
     name: 'StratoVM Sepolia',
@@ -1605,7 +1524,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'stratovm-sepolia',
     details: '/en/data/evm/stratovm-sepolia/overview',
-
   },
   {
     name: 'Superseed',
@@ -1618,7 +1536,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'superseed-mainnet',
     details: '/en/data/evm/superseed-mainnet/overview',
-
   },
   {
     name: 'Superseed Sepolia',
@@ -1631,7 +1548,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'superseed-sepolia',
     details: '/en/data/evm/superseed-sepolia/overview',
-
   },
   {
     name: 'Taiko',
@@ -1644,7 +1560,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'taiko-mainnet',
     details: '/en/data/evm/taiko-mainnet/overview',
-
   },
   {
     name: 'Tanssi',
@@ -1657,7 +1572,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'tanssi',
     details: '/en/data/evm/tanssi/overview',
-
   },
   {
     name: 'Unichain',
@@ -1670,7 +1584,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'unichain-mainnet',
     details: '/en/data/evm/unichain-mainnet/overview',
-
   },
   {
     name: 'Unichain Sepolia',
@@ -1683,7 +1596,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'unichain-sepolia',
     details: '/en/data/evm/unichain-sepolia/overview',
-
   },
   {
     name: 'X Layer',
@@ -1696,7 +1608,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'xlayer-mainnet',
     details: '/en/data/evm/xlayer-mainnet/overview',
-
   },
   {
     name: 'X Layer Testnet',
@@ -1709,7 +1620,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'xlayer-testnet',
     details: '/en/data/evm/xlayer-testnet/overview',
-
   },
   {
     name: 'X1 Testnet',
@@ -1722,7 +1632,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'x1-testnet',
     details: '/en/data/evm/x1-testnet/overview',
-
   },
   {
     name: 'zkLink Nova',
@@ -1735,7 +1644,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'zklink-nova-mainnet',
     details: '/en/data/evm/zklink-nova-mainnet/overview',
-
   },
   {
     name: 'zkSync',
@@ -1748,7 +1656,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'zksync-mainnet',
     details: '/en/data/evm/zksync-mainnet/overview',
-
   },
   {
     name: 'zkSync Sepolia',
@@ -1761,7 +1668,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'zksync-sepolia',
     details: '/en/data/evm/zksync-sepolia/overview',
-
   },
   {
     name: 'Zora',
@@ -1774,7 +1680,6 @@ export const evmNetworks = [
     stateDiffs: true,
     slug: 'zora-mainnet',
     details: '/en/data/evm/zora-mainnet/overview',
-
   },
   {
     name: 'Zora Sepolia',
@@ -1787,7 +1692,6 @@ export const evmNetworks = [
     stateDiffs: false,
     slug: 'zora-sepolia',
     details: '/en/data/evm/zora-sepolia/overview',
-
   },
 ] as const
 
@@ -1800,7 +1704,6 @@ export const solanaNetworks = [
     realtime: true,
     slug: 'solana-mainnet',
     details: '/en/data/solana/solana-mainnet/overview',
-
   },
   {
     name: 'Solana Devnet',
@@ -1810,7 +1713,6 @@ export const solanaNetworks = [
     realtime: true,
     slug: 'solana-devnet',
     details: '/en/data/solana/solana-devnet/overview',
-
   },
   {
     name: 'Eclipse',
@@ -1820,7 +1722,6 @@ export const solanaNetworks = [
     realtime: false,
     slug: 'eclipse-mainnet',
     details: '/en/data/solana/eclipse-mainnet/overview',
-
   },
   {
     name: 'Eclipse Testnet',
@@ -1830,7 +1731,6 @@ export const solanaNetworks = [
     realtime: false,
     slug: 'eclipse-testnet',
     details: '/en/data/solana/eclipse-testnet/overview',
-
   },
   {
     name: 'SOON',
@@ -1840,7 +1740,6 @@ export const solanaNetworks = [
     realtime: false,
     slug: 'soon-mainnet',
     details: '/en/data/solana/soon-mainnet/overview',
-
   },
   {
     name: 'SOON Testnet',
@@ -1850,7 +1749,6 @@ export const solanaNetworks = [
     realtime: false,
     slug: 'soon-testnet',
     details: '/en/data/solana/soon-testnet/overview',
-
   },
   {
     name: 'SOON Devnet',
@@ -1860,7 +1758,6 @@ export const solanaNetworks = [
     realtime: false,
     slug: 'soon-devnet',
     details: '/en/data/solana/soon-devnet/overview',
-
   },
   {
     name: 'svmBNB',
@@ -1870,7 +1767,6 @@ export const solanaNetworks = [
     realtime: false,
     slug: 'svm-bnb-mainnet',
     details: '/en/data/solana/svm-bnb-mainnet/overview',
-
   },
   {
     name: 'svmBNB Testnet',

@@ -11,7 +11,7 @@ export const evmTemplateOptions = [
   },
 ] as const
 
-export type EvmTemplateIds = (typeof evmTemplateOptions)[number]['id'] | "custom"
+export type EvmTemplateIds = (typeof evmTemplateOptions)[number]['id'] | 'custom'
 
 export const svmTemplateOptions = [
   {
@@ -20,7 +20,7 @@ export const svmTemplateOptions = [
   },
 ] as const
 
-export type SolanaTemplateIds = (typeof svmTemplateOptions)[number]['id'] | "custom"
+export type SolanaTemplateIds = (typeof svmTemplateOptions)[number]['id'] | 'custom'
 
 export const templateOptions = {
   evm: evmTemplateOptions,

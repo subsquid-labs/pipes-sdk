@@ -1,13 +1,13 @@
 export const biomeConfig = {
-  $schema: "https://biomejs.dev/schemas/2.3.4/schema.json",
+  $schema: 'https://biomejs.dev/schemas/2.3.4/schema.json',
   vcs: {
     enabled: true,
-    clientKind: "git",
+    clientKind: 'git',
     useIgnoreFile: true,
   },
   formatter: {
     enabled: true,
-    indentStyle: "space",
+    indentStyle: 'space',
     indentWidth: 2,
   },
   linter: {
@@ -18,8 +18,8 @@ export const biomeConfig = {
   },
   javascript: {
     formatter: {
-      quoteStyle: "single",
-      semicolons: "asNeeded",
+      quoteStyle: 'single',
+      semicolons: 'asNeeded',
     },
   },
-};
+}

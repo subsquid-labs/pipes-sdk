@@ -1,4 +1,4 @@
-import { Sink } from "~/types/sink.js";
+import { Sink } from '~/types/sink.js'
 
 export const clickhouseDockerCompose = `services:
   clickhouse:
@@ -10,7 +10,7 @@ export const clickhouseDockerCompose = `services:
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: password
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
-`;
+`
 
 export const postgresDockerCompose = `services:
   postgres:
@@ -26,11 +26,8 @@ export const postgresDockerCompose = `services:
       interval: 10s
       timeout: 5s
       retries: 5
-`;
+`
 
 export function getDockerCompose(sink: Sink): string {
-  return sink === "clickhouse"
-    ? clickhouseDockerCompose
-    : postgresDockerCompose;
+  return sink === 'clickhouse' ? clickhouseDockerCompose : postgresDockerCompose
 }
-

@@ -50,7 +50,7 @@ export const clickhouseSinkTemplate = `clickhouseTarget({
         params: { latest: safeCursor.number },
       });
     },
-  })`;
+  })`
 
 export const postgresSinkTemplate = `drizzleTarget({
     db: drizzle(
@@ -78,4 +78,4 @@ export const postgresSinkTemplate = `drizzleTarget({
        */
 {{/hasCustomContracts}}
     },
-  })`;
+  })`
