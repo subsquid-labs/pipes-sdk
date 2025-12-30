@@ -155,35 +155,3 @@ export function generateImportStatement(imp: ParsedImport): string {
 
   return `${parts.join(" ")} ${importParts.join(", ")} from "${imp.from}";`;
 }
-
-// Usage example:
-function loadTemplateWithImports(filePath: string): {
-  imports: ParsedImport[];
-  code: string;
-} {
-  const content = readFileSync(filePath, "utf-8");
-  return parseImports(content);
-}
-
-// In your template loading code:
-function loadTemplates(templatePaths: string[]): {
-  mergedImports: string;
-  transformers: string[];
-} {
-  const allImports: ParsedImport[] = [];
-  const transformers: string[] = [];
-
-  for (const path of templatePaths) {
-    const { imports, code } = loadTemplateWithImports(path);
-    allImports.push(...imports);
-    transformers.push(code);
-  }
-
-  const merged = mergeImports(allImports);
-  const mergedImports = merged
-    .map(generateImportStatement)
-    .filter(Boolean)
-    .join("\n");
-
-  return { mergedImports, transformers };
-}

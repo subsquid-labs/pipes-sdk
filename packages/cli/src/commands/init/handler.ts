@@ -1,7 +1,15 @@
 import { execSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  writeFileSync,
+  readdirSync,
+  statSync,
+  copyFileSync,
+  mkdirSync,
+} from "node:fs";
 import { mkdir } from "node:fs/promises";
-import path from "node:path";
+import path, { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import Mustache from "mustache";
 import type { Config } from "../../types/config.js";
 import { getEvmChainId } from "../../config/networks.js";
@@ -49,6 +57,8 @@ export class InitHandler {
     this.writeStaticFiles(projectPath);
 
     this.writeTemplateFiles(projectPath);
+
+    await this.copyTemplateContracts(projectPath);
 
     this.installDependencies(projectPath);
 
@@ -127,6 +137,76 @@ export class InitHandler {
       stdio: "inherit",
     });
     console.log("Linting completed successfully!");
+  }
+
+  private async copyTemplateContracts(projectPath: string): Promise<void> {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const templateBaseDir = path.join(
+      __dirname,
+      "..",
+      "..",
+      "template",
+      this.config.chainType
+    );
+
+    const templateEntries = Object.entries(this.config.templates);
+    let hasContracts = false;
+
+    for (const [templateId] of templateEntries) {
+      const templateContractsDir = path.join(
+        templateBaseDir,
+        templateId,
+        "contracts"
+      );
+
+      if (existsSync(templateContractsDir)) {
+        hasContracts = true;
+        break;
+      }
+    }
+
+    if (!hasContracts) {
+      return;
+    }
+
+    const projectContractsDir = path.join(projectPath, "src/contracts");
+    await mkdir(projectContractsDir, { recursive: true });
+
+    for (const [templateId] of templateEntries) {
+      const templateContractsDir = path.join(
+        templateBaseDir,
+        templateId,
+        "contracts"
+      );
+
+      if (existsSync(templateContractsDir)) {
+        this.copyDirectoryRecursive(
+          templateContractsDir,
+          projectContractsDir
+        );
+      }
+    }
+  }
+
+  private copyDirectoryRecursive(
+    sourceDir: string,
+    targetDir: string
+  ): void {
+    const entries = readdirSync(sourceDir);
+
+    for (const entry of entries) {
+      const sourcePath = path.join(sourceDir, entry);
+      const targetPath = path.join(targetDir, entry);
+      const stat = statSync(sourcePath);
+
+      if (stat.isDirectory()) {
+        mkdirSync(targetPath, { recursive: true });
+        this.copyDirectoryRecursive(sourcePath, targetPath);
+      } else {
+        copyFileSync(sourcePath, targetPath);
+      }
+    }
   }
 
   private async generateContractTypes(projectPath: string): Promise<void> {
