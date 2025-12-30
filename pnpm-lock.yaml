@@ -88,6 +88,388 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/cli:
+    dependencies:
+      '@inquirer/prompts':
+        specifier: ^8.1.0
+        version: 8.1.0(@types/node@22.14.1)
+      '@subsquid/pipes':
+        specifier: workspace:*
+        version: link:../subsquid-pipes
+      commander:
+        specifier: ^14.0.2
+        version: 14.0.2
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+      inquirer:
+        specifier: ^13.1.0
+        version: 13.1.0(@types/node@22.14.1)
+      mustache:
+        specifier: ^4.2.0
+        version: 4.2.0
+    devDependencies:
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@types/mustache':
+        specifier: ^4.2.6
+        version: 4.2.6
+      '@types/node':
+        specifier: 22.14.1
+        version: 22.14.1
+      '@vitest/coverage-v8':
+        specifier: 3.2.4
+        version: 3.2.4(vitest@3.2.4(@types/debug@4.1.12)(@types/node@22.14.1)(jiti@2.6.0)(lightningcss@1.30.1)(tsx@4.20.6))
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: 3.2.4
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@22.14.1)(jiti@2.6.0)(lightningcss@1.30.1)(tsx@4.20.6)
+
+  packages/cli/swaps:
+    dependencies:
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      drizzle-kit:
+        specifier: ^0.31.6
+        version: 0.31.6
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/tran:
+    dependencies:
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      drizzle-kit:
+        specifier: ^0.31.6
+        version: 0.31.6
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/trans:
+    dependencies:
+      '@clickhouse/client':
+        specifier: ^1.14.0
+        version: 1.14.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/transfers:
+    dependencies:
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      drizzle-kit:
+        specifier: ^0.31.6
+        version: 0.31.6
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/transfers-and-swaps:
+    dependencies:
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      drizzle-kit:
+        specifier: ^0.31.6
+        version: 0.31.6
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/transferx:
+    dependencies:
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      drizzle-kit:
+        specifier: ^0.31.6
+        version: 0.31.6
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/tx:
+    dependencies:
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      drizzle-kit:
+        specifier: ^0.31.6
+        version: 0.31.6
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/txs:
+    dependencies:
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      drizzle-kit:
+        specifier: ^0.31.6
+        version: 0.31.6
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/xt:
+    dependencies:
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      drizzle-kit:
+        specifier: ^0.31.6
+        version: 0.31.6
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/pipe-ui:
     dependencies:
       '@number-flow/react':
@@ -1029,6 +1411,140 @@ packages:
     peerDependencies:
       graphql: ^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0
 
+  '@inquirer/ansi@2.0.2':
+    resolution: {integrity: sha512-SYLX05PwJVnW+WVegZt1T4Ip1qba1ik+pNJPDiqvk6zS5Y/i8PhRzLpGEtVd7sW0G8cMtkD8t4AZYhQwm8vnww==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+
+  '@inquirer/checkbox@5.0.3':
+    resolution: {integrity: sha512-xtQP2eXMFlOcAhZ4ReKP2KZvDIBb1AnCfZ81wWXG3DXLVH0f0g4obE0XDPH+ukAEMRcZT0kdX2AS1jrWGXbpxw==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/confirm@6.0.3':
+    resolution: {integrity: sha512-lyEvibDFL+NA5R4xl8FUmNhmu81B+LDL9L/MpKkZlQDJZXzG8InxiqYxiAlQYa9cqLLhYqKLQwZqXmSTqCLjyw==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/core@11.1.0':
+    resolution: {integrity: sha512-+jD/34T1pK8M5QmZD/ENhOfXdl9Zr+BrQAUc5h2anWgi7gggRq15ZbiBeLoObj0TLbdgW7TAIQRU2boMc9uOKQ==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/editor@5.0.3':
+    resolution: {integrity: sha512-wYyQo96TsAqIciP/r5D3cFeV8h4WqKQ/YOvTg5yOfP2sqEbVVpbxPpfV3LM5D0EP4zUI3EZVHyIUIllnoIa8OQ==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/expand@5.0.3':
+    resolution: {integrity: sha512-2oINvuL27ujjxd95f6K2K909uZOU2x1WiAl7Wb1X/xOtL8CgQ1kSxzykIr7u4xTkXkXOAkCuF45T588/YKee7w==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/external-editor@2.0.2':
+    resolution: {integrity: sha512-X/fMXK7vXomRWEex1j8mnj7s1mpnTeP4CO/h2gysJhHLT2WjBnLv4ZQEGpm/kcYI8QfLZ2fgW+9kTKD+jeopLg==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/figures@2.0.2':
+    resolution: {integrity: sha512-qXm6EVvQx/FmnSrCWCIGtMHwqeLgxABP8XgcaAoywsL0NFga9gD5kfG0gXiv80GjK9Hsoz4pgGwF/+CjygyV9A==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+
+  '@inquirer/input@5.0.3':
+    resolution: {integrity: sha512-4R0TdWl53dtp79Vs6Df2OHAtA2FVNqya1hND1f5wjHWxZJxwDMSNB1X5ADZJSsQKYAJ5JHCTO+GpJZ42mK0Otw==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/number@4.0.3':
+    resolution: {integrity: sha512-TjQLe93GGo5snRlu83JxE38ZPqj5ZVggL+QqqAF2oBA5JOJoxx25GG3EGH/XN/Os5WOmKfO8iLVdCXQxXRZIMQ==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/password@5.0.3':
+    resolution: {integrity: sha512-rCozGbUMAHedTeYWEN8sgZH4lRCdgG/WinFkit6ZPsp8JaNg2T0g3QslPBS5XbpORyKP/I+xyBO81kFEvhBmjA==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/prompts@8.1.0':
+    resolution: {integrity: sha512-LsZMdKcmRNF5LyTRuZE5nWeOjganzmN3zwbtNfcs6GPh3I2TsTtF1UYZlbxVfhxd+EuUqLGs/Lm3Xt4v6Az1wA==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/rawlist@5.1.0':
+    resolution: {integrity: sha512-yUCuVh0jW026Gr2tZlG3kHignxcrLKDR3KBp+eUgNz+BAdSeZk0e18yt2gyBr+giYhj/WSIHCmPDOgp1mT2niQ==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/search@4.0.3':
+    resolution: {integrity: sha512-lzqVw0YwuKYetk5VwJ81Ba+dyVlhseHPx9YnRKQgwXdFS0kEavCz2gngnNhnMIxg8+j1N/rUl1t5s1npwa7bqg==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/select@5.0.3':
+    resolution: {integrity: sha512-M+ynbwS0ecQFDYMFrQrybA0qL8DV0snpc4kKevCCNaTpfghsRowRY7SlQBeIYNzHqXtiiz4RG9vTOeb/udew7w==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
+  '@inquirer/type@4.0.2':
+    resolution: {integrity: sha512-cae7mzluplsjSdgFA6ACLygb5jC8alO0UUnFPyu0E7tNRPrL+q/f8VcSXp+cjZQ7l5CMpDpi2G1+IQvkOiL1Lw==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
   '@isaacs/balanced-match@4.0.1':
     resolution: {integrity: sha512-yzMTt9lEb8Gv7zRioUilSglI0c0smZ9k5D65677DLWLtWJaXIS3CqcGyUFByYKlnUj6TkjLVs54fBl6+TiGQDQ==}
     engines: {node: 20 || >=22}
@@ -1529,6 +2045,24 @@ packages:
   '@subsquid/logger@1.4.0':
     resolution: {integrity: sha512-Yep4hzpLfmm4pJMXuTnd3n7Hlo18Dce8vwKZduGE9n/p56cHq4BTbAuaXLK50vYKWx7Lyt2obVbJ4otVMWkyYg==}
 
+  '@subsquid/pipes@0.1.0-beta.10':
+    resolution: {integrity: sha512-mHwuBPB7W91tL1GBG4eJlKJPfmqXbrMj/DQlfdNhIskR+uf1znpOsaSAKKBZp5hVKekT90Bd+lT/aJgQ/InfQA==}
+    engines: {node: '>=22.15.0'}
+    peerDependencies:
+      '@clickhouse/client': 1.14.0
+      better-sqlite3: 12.4.5
+      drizzle-orm: 0.44.7
+      pg: 8.16.3
+    peerDependenciesMeta:
+      '@clickhouse/client':
+        optional: true
+      better-sqlite3:
+        optional: true
+      drizzle-orm:
+        optional: true
+      pg:
+        optional: true
+
   '@subsquid/rpc-client@4.13.0':
     resolution: {integrity: sha512-61lY/aaopNyDIaHmwjXH+HW02D1c1LbWQnfY0G/BkCy1sHhhI/4pUX6UyhvZAxMuy09sMep8+tib3a+VJcIAcA==}
 
@@ -1793,6 +2327,9 @@ packages:
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
 
+  '@types/mustache@4.2.6':
+    resolution: {integrity: sha512-t+8/QWTAhOFlrF1IVZqKnMRJi84EgkIK5Kh0p2JV4OLywUvCwJPFxbJAl7XAow7DVIHsF+xW9f1MVzg0L6Szjw==}
+
   '@types/node@22.13.10':
     resolution: {integrity: sha512-I6LPUvlRH+O6VRUqYOcMudhaIdUVWfsjnZavnsraHvpBwaEyMN29ry+0UVJhImYL16xsscu0aske3yA+uPOWfw==}
 
@@ -1801,6 +2338,9 @@ packages:
 
   '@types/node@22.18.13':
     resolution: {integrity: sha512-Bo45YKIjnmFtv6I1TuC8AaHBbqXtIo+Om5fE4QiU1Tj8QR/qt+8O3BAtOimG5IFmwaWiPmB3Mv3jtYzBA4Us2A==}
+
+  '@types/node@25.0.3':
+    resolution: {integrity: sha512-W609buLVRVmeW693xKfzHeIV6nJGGz98uCPfeXI1ELMLXVeKYZ9m15fAMSaUPBHYLGFsVRcMmSCksQOrZV9BYA==}
 
   '@types/pg@8.15.6':
     resolution: {integrity: sha512-NoaMtzhxOrubeL/7UZuNTrejB4MPAJ0RpxZqXQf2qXuVlTPuG6Y8p4u9dKRaue4yjmC7ZhzVO2/Yyyn25znrPQ==}
@@ -2068,6 +2608,9 @@ packages:
   character-reference-invalid@1.1.4:
     resolution: {integrity: sha512-mKKUkUbhPpQlCOfIuZkvSEgktjPFIsZKRRbC6KWVEMvlzblj3i3asQv5ODsrwt0N3pHAEvjP8KTQPHkp0+6jOg==}
 
+  chardet@2.1.1:
+    resolution: {integrity: sha512-PsezH1rqdV9VvyNhxxOW32/d75r01NY7TQCmOqomRo15ZSOKbpTFVsfjghxo6JloQUCGnH4k1LGu0R4yCLlWQQ==}
+
   check-error@2.1.1:
     resolution: {integrity: sha512-OAlb+T7V4Op9OwdkjmguYRqncdlx5JiofwOAUkmTF+jNdHwzTaTs4sRAGpzLF3oOz5xAyDGrPgeIDFQmDOTiJw==}
     engines: {node: '>= 16'}
@@ -2085,6 +2628,10 @@ packages:
 
   class-variance-authority@0.7.1:
     resolution: {integrity: sha512-Ka+9Trutv7G8M6WT6SeiRWz792K5qEqIGEGzXKhAE6xOWAY6pPH8U+9IY3oCMv6kqTmLsv7Xh/2w2RigkePMsg==}
+
+  cli-width@4.1.0:
+    resolution: {integrity: sha512-ouuZd4/dm2Sw5Gmqy6bGyNNNe1qt9RpmxveLSO7KcgsTnU7RXfsw+/bukWGo1abgBiMAic068rclZsO4IWmmxQ==}
+    engines: {node: '>= 12'}
 
   clsx@2.1.1:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
@@ -2106,6 +2653,10 @@ packages:
 
   comma-separated-tokens@1.0.8:
     resolution: {integrity: sha512-GHuDRO12Sypu2cV70d1dkA2EUmXHgntrzbpvOB+Qy+49ypNfGgFQIC2fhhXbnyrJRynDCAARsT7Ou0M6hirpfw==}
+
+  commander@14.0.2:
+    resolution: {integrity: sha512-TywoWNNRbhoD0BXs1P3ZEScW8W5iKrnbithIl0YH+uCmBd0QpPOA8yc82DS3BIE5Ma6FnBVUsJ7wVUDz4dvOWQ==}
+    engines: {node: '>=20'}
 
   commander@4.1.1:
     resolution: {integrity: sha512-NOKm8xhkzAjzFx8B2v5OAHT+u5pRQc2UCa2Vq9jYL/31o2wi9mxBA7LIFs3sV5VSC49z6pEhfbMULvShKj26WA==}
@@ -2308,6 +2859,10 @@ packages:
   dom-helpers@5.2.1:
     resolution: {integrity: sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==}
 
+  dotenv@17.2.3:
+    resolution: {integrity: sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w==}
+    engines: {node: '>=12'}
+
   drizzle-graphql@0.8.5:
     resolution: {integrity: sha512-MAqBwmj/kSZWIUQdYCsYtoZWxxVRcXWkhsqt0b6fY1XC171WHBK/jZiVWepO04tDsdaDuTvzlufDHJqNl3VVWQ==}
     peerDependencies:
@@ -2422,6 +2977,9 @@ packages:
 
   electron-to-chromium@1.5.224:
     resolution: {integrity: sha512-kWAoUu/bwzvnhpdZSIc6KUyvkI1rbRXMT0Eq8pKReyOyaPZcctMli+EgvcN1PAvwVc7Tdo4Fxi2PsLNDU05mdg==}
+
+  emoji-regex@10.6.0:
+    resolution: {integrity: sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A==}
 
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
@@ -2673,6 +3231,10 @@ packages:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
 
+  get-east-asian-width@1.4.0:
+    resolution: {integrity: sha512-QZjmEOC+IT1uk6Rx0sX22V6uHWVwbdbxf1faPqJ1QhLdGgsRGCZoyaQBm/piRdJy/D2um6hM1UP7ZEeQ4EkP+Q==}
+    engines: {node: '>=18'}
+
   get-intrinsic@1.3.0:
     resolution: {integrity: sha512-9fSjSaos/fRIVIp+xSJlE6lfwhES7LNtKaCBIamHsjr2na1BiABJPo0mOjjz8GJDURarmCPGqaiVg5mfjb98CQ==}
     engines: {node: '>= 0.4'}
@@ -2797,6 +3359,15 @@ packages:
 
   ini@1.3.8:
     resolution: {integrity: sha512-JV/yugV2uzW5iMRSiZAyDtQd+nxtUnjeLt0acNdw98kKLrvuRVyB80tsREOE7yvGVgalhZ6RNXCmEHkUKBKxew==}
+
+  inquirer@13.1.0:
+    resolution: {integrity: sha512-4vv4GS/9HLnn0radvmHlXUXiNkd2gYCBQ4U1rxZWBJDisu2Z06bzUM9CFU8pcu1vwuAQjo6O+CFiqCYNsEi6qQ==}
+    engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
 
   internmap@2.0.3:
     resolution: {integrity: sha512-5Hh7Y1wQbvY5ooGgPbDaL5iYLAPzMTUrjMulskHLH6wnv/A+1q5rgEaiuqEjB+oxGXIVZs1FF+R/KPN3ZSQYYg==}
@@ -3164,6 +3735,14 @@ packages:
 
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
+
+  mustache@4.2.0:
+    resolution: {integrity: sha512-71ippSywq5Yb7/tVYyGbkBggbU8H3u5Rz56fH60jGFgr8uHwxs+aSKeqmluIVzM0m0kB7xQjKS6qPfd0b2ZoqQ==}
+    hasBin: true
+
+  mute-stream@3.0.0:
+    resolution: {integrity: sha512-dkEJPVvun4FryqBmZ5KhDo0K9iDXAwn08tMLDinNdRBNPcYEDiWYysLcc6k3mjTMlbP9KyylvRpd4wFtwrT9rw==}
+    engines: {node: ^20.17.0 || >=22.9.0}
 
   mz@2.7.0:
     resolution: {integrity: sha512-z81GNO7nnYMEhrGh9LeymoE4+Yr0Wn5McHIZMK5cfQCl+NDX08sCZgUc9/6MHni9IWuFLm1Z3HTCXu2z9fN62Q==}
@@ -3638,8 +4217,15 @@ packages:
     resolution: {integrity: sha512-nLTrUKm2UyiL7rlhapu/Zl45FwNgkZGaCpZbIHajDYgwlJCOzLSk+cIPAnsEqV955GjILJnKbdQC1nVPz+gAYQ==}
     engines: {node: '>= 18'}
 
+  run-async@4.0.6:
+    resolution: {integrity: sha512-IoDlSLTs3Yq593mb3ZoKWKXMNu3UpObxhgA/Xuid5p4bbfi2jdY1Hj0m1K+0/tEuQTxIGMhQDqGjKb7RuxGpAQ==}
+    engines: {node: '>=0.12.0'}
+
   run-parallel@1.2.0:
     resolution: {integrity: sha512-5l4VyZR86LZ/lDxZTR6jqL8AFE2S0IFLMP26AbjsLVADxHdhB/c0GUsH+y39UfCi3dzz8OlQuPmnaJOMoDHQBA==}
+
+  rxjs@7.8.2:
+    resolution: {integrity: sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA==}
 
   safe-buffer@5.1.2:
     resolution: {integrity: sha512-Gd2UZBJDkXlY7GbJxfsE8/nvKkUEU1G38c1siN6QP6a9PT9MmHB8GnpscSmMJSoF8LOIrt8ud/wPtojys4G6+g==}
@@ -3807,6 +4393,10 @@ packages:
   string-width@5.1.2:
     resolution: {integrity: sha512-HnLOCR3vjcY8beoNLtcjZ5/nxn2afmME6lhrDrebokqMap+XbeW8n9TXpPDOqdGK5qcI3oT0GKTW6wC7EMiVqA==}
     engines: {node: '>=12'}
+
+  string-width@7.2.0:
+    resolution: {integrity: sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ==}
+    engines: {node: '>=18'}
 
   string_decoder@1.3.0:
     resolution: {integrity: sha512-hkRX8U1WjJFd8LsDJ2yQ/wWWxaopEsABU1XfkM8A+j0+85JAGppt16cr1Whg6KIbb4okU6Mql6BOj+uup/wKeA==}
@@ -4056,6 +4646,9 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
+  undici-types@7.16.0:
+    resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
+
   unicorn-magic@0.3.0:
     resolution: {integrity: sha512-+QBBXBCvifc56fsbuxZQ6Sic3wqqc3WWaqxs58gvJrcOuN83HGTCwz3oS5phzU9LthRNE9VrJCFCLUgHeeFnfA==}
     engines: {node: '>=18'}
@@ -4235,6 +4828,10 @@ packages:
   wrap-ansi@8.1.0:
     resolution: {integrity: sha512-si7QWI6zUMq56bESFvagtmzMdGOtoxfR+Sez11Mobfc7tm+VkUckk9bW2UeffTGVUbOksxmSw0AA2gs8g71NCQ==}
     engines: {node: '>=12'}
+
+  wrap-ansi@9.0.2:
+    resolution: {integrity: sha512-42AtmgqjV+X1VpdOfyTGOYRi0/zsoLqtXQckTmqTeybT+BDIbM/Guxo7x3pE2vtpr1ok6xRqM9OpBe+Jyoqyww==}
+    engines: {node: '>=18'}
 
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
@@ -4871,6 +5468,125 @@ snapshots:
     dependencies:
       graphql: 16.12.0
 
+  '@inquirer/ansi@2.0.2': {}
+
+  '@inquirer/checkbox@5.0.3(@types/node@22.14.1)':
+    dependencies:
+      '@inquirer/ansi': 2.0.2
+      '@inquirer/core': 11.1.0(@types/node@22.14.1)
+      '@inquirer/figures': 2.0.2
+      '@inquirer/type': 4.0.2(@types/node@22.14.1)
+    optionalDependencies:
+      '@types/node': 22.14.1
+
+  '@inquirer/confirm@6.0.3(@types/node@22.14.1)':
+    dependencies:
+      '@inquirer/core': 11.1.0(@types/node@22.14.1)
+      '@inquirer/type': 4.0.2(@types/node@22.14.1)
+    optionalDependencies:
+      '@types/node': 22.14.1
+
+  '@inquirer/core@11.1.0(@types/node@22.14.1)':
+    dependencies:
+      '@inquirer/ansi': 2.0.2
+      '@inquirer/figures': 2.0.2
+      '@inquirer/type': 4.0.2(@types/node@22.14.1)
+      cli-width: 4.1.0
+      mute-stream: 3.0.0
+      signal-exit: 4.1.0
+      wrap-ansi: 9.0.2
+    optionalDependencies:
+      '@types/node': 22.14.1
+
+  '@inquirer/editor@5.0.3(@types/node@22.14.1)':
+    dependencies:
+      '@inquirer/core': 11.1.0(@types/node@22.14.1)
+      '@inquirer/external-editor': 2.0.2(@types/node@22.14.1)
+      '@inquirer/type': 4.0.2(@types/node@22.14.1)
+    optionalDependencies:
+      '@types/node': 22.14.1
+
+  '@inquirer/expand@5.0.3(@types/node@22.14.1)':
+    dependencies:
+      '@inquirer/core': 11.1.0(@types/node@22.14.1)
+      '@inquirer/type': 4.0.2(@types/node@22.14.1)
+    optionalDependencies:
+      '@types/node': 22.14.1
+
+  '@inquirer/external-editor@2.0.2(@types/node@22.14.1)':
+    dependencies:
+      chardet: 2.1.1
+      iconv-lite: 0.7.0
+    optionalDependencies:
+      '@types/node': 22.14.1
+
+  '@inquirer/figures@2.0.2': {}
+
+  '@inquirer/input@5.0.3(@types/node@22.14.1)':
+    dependencies:
+      '@inquirer/core': 11.1.0(@types/node@22.14.1)
+      '@inquirer/type': 4.0.2(@types/node@22.14.1)
+    optionalDependencies:
+      '@types/node': 22.14.1
+
+  '@inquirer/number@4.0.3(@types/node@22.14.1)':
+    dependencies:
+      '@inquirer/core': 11.1.0(@types/node@22.14.1)
+      '@inquirer/type': 4.0.2(@types/node@22.14.1)
+    optionalDependencies:
+      '@types/node': 22.14.1
+
+  '@inquirer/password@5.0.3(@types/node@22.14.1)':
+    dependencies:
+      '@inquirer/ansi': 2.0.2
+      '@inquirer/core': 11.1.0(@types/node@22.14.1)
+      '@inquirer/type': 4.0.2(@types/node@22.14.1)
+    optionalDependencies:
+      '@types/node': 22.14.1
+
+  '@inquirer/prompts@8.1.0(@types/node@22.14.1)':
+    dependencies:
+      '@inquirer/checkbox': 5.0.3(@types/node@22.14.1)
+      '@inquirer/confirm': 6.0.3(@types/node@22.14.1)
+      '@inquirer/editor': 5.0.3(@types/node@22.14.1)
+      '@inquirer/expand': 5.0.3(@types/node@22.14.1)
+      '@inquirer/input': 5.0.3(@types/node@22.14.1)
+      '@inquirer/number': 4.0.3(@types/node@22.14.1)
+      '@inquirer/password': 5.0.3(@types/node@22.14.1)
+      '@inquirer/rawlist': 5.1.0(@types/node@22.14.1)
+      '@inquirer/search': 4.0.3(@types/node@22.14.1)
+      '@inquirer/select': 5.0.3(@types/node@22.14.1)
+    optionalDependencies:
+      '@types/node': 22.14.1
+
+  '@inquirer/rawlist@5.1.0(@types/node@22.14.1)':
+    dependencies:
+      '@inquirer/core': 11.1.0(@types/node@22.14.1)
+      '@inquirer/type': 4.0.2(@types/node@22.14.1)
+    optionalDependencies:
+      '@types/node': 22.14.1
+
+  '@inquirer/search@4.0.3(@types/node@22.14.1)':
+    dependencies:
+      '@inquirer/core': 11.1.0(@types/node@22.14.1)
+      '@inquirer/figures': 2.0.2
+      '@inquirer/type': 4.0.2(@types/node@22.14.1)
+    optionalDependencies:
+      '@types/node': 22.14.1
+
+  '@inquirer/select@5.0.3(@types/node@22.14.1)':
+    dependencies:
+      '@inquirer/ansi': 2.0.2
+      '@inquirer/core': 11.1.0(@types/node@22.14.1)
+      '@inquirer/figures': 2.0.2
+      '@inquirer/type': 4.0.2(@types/node@22.14.1)
+    optionalDependencies:
+      '@types/node': 22.14.1
+
+  '@inquirer/type@4.0.2(@types/node@22.14.1)':
+    optionalDependencies:
+      '@types/node': 22.14.1
+
   '@isaacs/balanced-match@4.0.1': {}
 
   '@isaacs/brace-expansion@5.0.0':
@@ -5344,6 +6060,28 @@ snapshots:
       '@subsquid/util-internal-json': 1.2.3
       supports-color: 8.1.1
 
+  '@subsquid/pipes@0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)':
+    dependencies:
+      '@subsquid/evm-abi': 0.3.1
+      '@subsquid/evm-codec': 0.3.0
+      '@subsquid/solana-stream': 0.3.1
+      '@subsquid/util-internal': 3.2.0
+      '@subsquid/util-internal-hex': 0.0.2
+      '@subsquid/util-internal-validation': 0.8.0(@subsquid/logger@1.4.0)
+      '@subsquid/util-timeout': 2.3.2
+      express: 5.1.0
+      pino: 9.12.0
+      pino-pretty: 13.1.1
+      prom-client: 15.1.3
+    optionalDependencies:
+      '@clickhouse/client': 1.14.0
+      better-sqlite3: 12.4.5
+      drizzle-orm: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+      pg: 8.16.3
+    transitivePeerDependencies:
+      - '@subsquid/logger'
+      - supports-color
+
   '@subsquid/rpc-client@4.13.0':
     dependencies:
       '@subsquid/http-client': 1.7.0
@@ -5549,7 +6287,7 @@ snapshots:
 
   '@types/better-sqlite3@7.6.13':
     dependencies:
-      '@types/node': 22.14.1
+      '@types/node': 25.0.3
 
   '@types/body-parser@1.19.6':
     dependencies:
@@ -5624,6 +6362,8 @@ snapshots:
   '@types/ms@2.1.0':
     optional: true
 
+  '@types/mustache@4.2.6': {}
+
   '@types/node@22.13.10':
     dependencies:
       undici-types: 6.20.0
@@ -5636,9 +6376,13 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/node@25.0.3':
+    dependencies:
+      undici-types: 7.16.0
+
   '@types/pg@8.15.6':
     dependencies:
-      '@types/node': 22.18.13
+      '@types/node': 25.0.3
       pg-protocol: 1.10.3
       pg-types: 2.2.0
 
@@ -5915,12 +6659,12 @@ snapshots:
 
   bun-types@1.3.2(@types/react@19.2.2):
     dependencies:
-      '@types/node': 22.18.13
+      '@types/node': 25.0.3
       '@types/react': 19.2.2
 
-  bundle-require@5.1.0(esbuild@0.25.10):
+  bundle-require@5.1.0(esbuild@0.25.11):
     dependencies:
-      esbuild: 0.25.10
+      esbuild: 0.25.11
       load-tsconfig: 0.2.5
 
   bytes@3.1.2: {}
@@ -5960,6 +6704,8 @@ snapshots:
 
   character-reference-invalid@1.1.4: {}
 
+  chardet@2.1.1: {}
+
   check-error@2.1.1: {}
 
   chokidar@4.0.3:
@@ -5973,6 +6719,8 @@ snapshots:
   class-variance-authority@0.7.1:
     dependencies:
       clsx: 2.1.1
+
+  cli-width@4.1.0: {}
 
   clsx@2.1.1: {}
 
@@ -5989,6 +6737,8 @@ snapshots:
       delayed-stream: 1.0.0
 
   comma-separated-tokens@1.0.8: {}
+
+  commander@14.0.2: {}
 
   commander@4.1.1: {}
 
@@ -6155,6 +6905,8 @@ snapshots:
       '@babel/runtime': 7.28.4
       csstype: 3.1.3
 
+  dotenv@17.2.3: {}
+
   drizzle-graphql@0.8.5(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(graphql@16.12.0):
     dependencies:
       drizzle-orm: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
@@ -6192,6 +6944,8 @@ snapshots:
   ee-first@1.1.1: {}
 
   electron-to-chromium@1.5.224: {}
+
+  emoji-regex@10.6.0: {}
 
   emoji-regex@8.0.0: {}
 
@@ -6558,6 +7312,8 @@ snapshots:
 
   gensync@1.0.0-beta.2: {}
 
+  get-east-asian-width@1.4.0: {}
+
   get-intrinsic@1.3.0:
     dependencies:
       call-bind-apply-helpers: 1.0.2
@@ -6696,6 +7452,18 @@ snapshots:
   inherits@2.0.4: {}
 
   ini@1.3.8: {}
+
+  inquirer@13.1.0(@types/node@22.14.1):
+    dependencies:
+      '@inquirer/ansi': 2.0.2
+      '@inquirer/core': 11.1.0(@types/node@22.14.1)
+      '@inquirer/prompts': 8.1.0(@types/node@22.14.1)
+      '@inquirer/type': 4.0.2(@types/node@22.14.1)
+      mute-stream: 3.0.0
+      run-async: 4.0.6
+      rxjs: 7.8.2
+    optionalDependencies:
+      '@types/node': 22.14.1
 
   internmap@2.0.3: {}
 
@@ -6988,6 +7756,10 @@ snapshots:
   ms@2.0.0: {}
 
   ms@2.1.3: {}
+
+  mustache@4.2.0: {}
+
+  mute-stream@3.0.0: {}
 
   mz@2.7.0:
     dependencies:
@@ -7493,9 +8265,15 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  run-async@4.0.6: {}
+
   run-parallel@1.2.0:
     dependencies:
       queue-microtask: 1.2.3
+
+  rxjs@7.8.2:
+    dependencies:
+      tslib: 2.8.1
 
   safe-buffer@5.1.2: {}
 
@@ -7691,6 +8469,12 @@ snapshots:
       emoji-regex: 9.2.2
       strip-ansi: 7.1.2
 
+  string-width@7.2.0:
+    dependencies:
+      emoji-regex: 10.6.0
+      get-east-asian-width: 1.4.0
+      strip-ansi: 7.1.2
+
   string_decoder@1.3.0:
     dependencies:
       safe-buffer: 5.2.1
@@ -7843,12 +8627,12 @@ snapshots:
 
   tsup@8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3):
     dependencies:
-      bundle-require: 5.1.0(esbuild@0.25.10)
+      bundle-require: 5.1.0(esbuild@0.25.11)
       cac: 6.7.14
       chokidar: 4.0.3
       consola: 3.4.2
       debug: 4.4.3
-      esbuild: 0.25.10
+      esbuild: 0.25.11
       fix-dts-default-cjs-exports: 1.0.1
       joycon: 3.1.1
       picocolors: 1.1.1
@@ -7941,6 +8725,8 @@ snapshots:
   undici-types@6.20.0: {}
 
   undici-types@6.21.0: {}
+
+  undici-types@7.16.0: {}
 
   unicorn-magic@0.3.0: {}
 
@@ -8064,7 +8850,7 @@ snapshots:
 
   vite@7.1.7(@types/node@22.14.1)(jiti@2.6.0)(lightningcss@1.30.1)(tsx@4.20.6):
     dependencies:
-      esbuild: 0.25.10
+      esbuild: 0.25.11
       fdir: 6.5.0(picomatch@4.0.3)
       picomatch: 4.0.3
       postcss: 8.5.6
@@ -8175,6 +8961,12 @@ snapshots:
     dependencies:
       ansi-styles: 6.2.3
       string-width: 5.1.2
+      strip-ansi: 7.1.2
+
+  wrap-ansi@9.0.2:
+    dependencies:
+      ansi-styles: 6.2.3
+      string-width: 7.2.0
       strip-ansi: 7.1.2
 
   wrappy@1.0.2: {}

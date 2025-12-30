@@ -2,15 +2,7 @@ import Mustache from "mustache";
 import { Config } from "~/types/config.js";
 import { NetworkType } from "~/types/network.js";
 
-export const schemasTemplate = `import {
-  integer,
-  numeric,
-  pgTable,
-  primaryKey,
-  timestamp,
-  varchar,
-} from 'drizzle-orm/pg-core'
-
+export const schemasTemplate = `
 {{#schemas}}
 {{{schema}}}
 

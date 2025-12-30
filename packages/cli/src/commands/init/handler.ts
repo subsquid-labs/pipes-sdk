@@ -44,19 +44,16 @@ export class InitHandler {
   private async scaffoldProject(): Promise<void> {
     const projectPath = path.resolve(this.config.projectFolder);
 
-    // Create src directory
     await mkdir(path.join(projectPath, "src"), { recursive: true });
 
-    // Write static config files
     this.writeStaticFiles(projectPath);
 
-    // Write template files
     this.writeTemplateFiles(projectPath);
 
-    // Install dependencies
     this.installDependencies(projectPath);
 
-    // Generate contract types for custom contracts
+    this.lintProject(projectPath);
+
     if (this.config.contractAddresses.length > 0) {
       await this.generateContractTypes(projectPath);
     }
@@ -82,17 +79,14 @@ export class InitHandler {
   }
 
   private writeTemplateFiles(projectPath: string): void {
-    // Render package.json
     const packageJson = Mustache.render(packageJsonTemplate, {
       projectName: this.config.projectFolder,
     });
     writeFileSync(path.join(projectPath, "package.json"), packageJson);
 
-    // Render src/index.ts from starter template
     const indexTs = renderStarterTemplate(this.config);
     writeFileSync(path.join(projectPath, "src/index.ts"), indexTs);
 
-    // PostgreSQL-specific files
     if (this.config.sink === "postgresql") {
       writeFileSync(
         path.join(projectPath, "drizzle.config.ts"),
@@ -124,6 +118,15 @@ export class InitHandler {
     }
 
     console.log("Dependencies installed successfully!");
+  }
+
+  private lintProject(projectPath: string): void {
+    console.log("Linting project...");
+    execSync(`pnpm lint`, {
+      cwd: projectPath,
+      stdio: "inherit",
+    });
+    console.log("Linting completed successfully!");
   }
 
   private async generateContractTypes(projectPath: string): Promise<void> {

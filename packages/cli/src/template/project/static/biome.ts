@@ -1,5 +1,5 @@
 export const biomeConfig = {
-  $schema: "https://biomejs.dev/schemas/2.0.0/schema.json",
+  $schema: "https://biomejs.dev/schemas/2.3.4/schema.json",
   vcs: {
     enabled: true,
     clientKind: "git",
@@ -18,8 +18,8 @@ export const biomeConfig = {
   },
   javascript: {
     formatter: {
-      quoteStyle: "double",
-      semicolons: "always",
+      quoteStyle: "single",
+      semicolons: "asNeeded",
     },
   },
 };

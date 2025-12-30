@@ -9,8 +9,6 @@ export class SqdAbiService {
     const outputDir = `${projectPath}/src/contracts/`;
     const apiKey = process.env["ETHERSCAN_API"];
 
-    console.log(`ETHERSCAN_API: ${apiKey}`);
-
     for (const address of contractAddresses) {
       const cmd = `npx @subsquid/evm-typegen@latest ${outputDir} ${address}${
         apiKey

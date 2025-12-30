@@ -11,6 +11,10 @@ export const evmTemplateOptions = [
     name: "Erc20 Transfers",
     id: "erc20-transfers",
   },
+  {
+    name: "Uniswap V3 Swaps",
+    id: "uniswap-v3-swaps",
+  },
 ] as const;
 
 export type EvmTemplateIds = (typeof evmTemplateOptions)[number]["id"];

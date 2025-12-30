@@ -1,6 +1,10 @@
 import type { Sink } from "~/types/sink.js";
 
-export const baseDependencies = ["@subsquid/pipes"];
+export const baseDependencies = [
+  "@subsquid/pipes",
+  "@subsquid/evm-codec",
+  "@subsquid/evm-abi",
+];
 
 export const baseDevDependencies = [
   "typescript",

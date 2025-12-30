@@ -1,5 +1,5 @@
 {
-  "name": "transfers",
+  "name": "transfers-and-swaps",
   "version": "0.0.1",
   "type": "module",
   "private": true,
@@ -11,6 +11,8 @@
     "format": "biome format . --write"
   },
   "dependencies": {
+    "@subsquid/evm-abi": "0.3.1",
+    "@subsquid/evm-codec": "0.3.0",
     "@subsquid/pipes": "0.1.0-beta.10",
     "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.6",

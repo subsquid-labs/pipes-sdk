@@ -36,3 +36,5 @@ local/
 **/*.sqlite
 **/*.sqlite-shm
 **/*.sqlite-wal
+
+.cursor
