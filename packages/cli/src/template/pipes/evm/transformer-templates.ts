@@ -1,11 +1,9 @@
-import { dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { EvmTemplateIds } from '~/config/templates.js'
+import { getDirname } from '~/template/get-dirname.js'
 import { TemplateParser } from '~/template/template-parser.js'
 import { TransformerTemplate } from '~/types/templates.js'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
+const __dirname = getDirname('evm')
 const parser = new TemplateParser(__dirname)
 
 export const evmTemplates: Record<EvmTemplateIds, TransformerTemplate> = {

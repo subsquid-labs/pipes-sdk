@@ -22,8 +22,20 @@ export function findPackageRoot(): string {
 
   // ESM mode - use createRequire
   try {
-    const require = createRequire(import.meta.url || 'file:///')
-    const packageJsonPath = require.resolve(`${PACKAGE_NAME}/package.json`)
+    // In CJS, import.meta.url is undefined, so we need a valid URL for createRequire
+    let requireContext: string
+    try {
+      if (typeof import.meta !== 'undefined' && import.meta.url) {
+        requireContext = import.meta.url
+      } else {
+        throw new Error('CJS mode - use require.resolve path above')
+      }
+    } catch {
+      throw new Error('Cannot create require context')
+    }
+    
+    const requireFn = createRequire(requireContext)
+    const packageJsonPath = requireFn.resolve(`${PACKAGE_NAME}/package.json`)
     return dirname(packageJsonPath)
   } catch {
     // Fallback: search from common locations
