@@ -168,7 +168,10 @@ export class InitHandler {
 
   private async copyClickHouseMigrations(projectPath: string): Promise<void> {
     const packageRoot = findPackageRoot()
-    const templateBaseDir = path.join(packageRoot, 'src', 'template', 'pipes', this.config.chainType)
+    // Try dist/template first (for bundled builds), then fall back to src/template
+    const distTemplateDir = path.join(packageRoot, 'dist', 'template', 'pipes', this.config.chainType)
+    const srcTemplateDir = path.join(packageRoot, 'src', 'template', 'pipes', this.config.chainType)
+    const templateBaseDir = existsSync(distTemplateDir) ? distTemplateDir : srcTemplateDir
 
     const migrationsDir = path.join(projectPath, 'src/migrations')
     await mkdir(migrationsDir, { recursive: true })
@@ -197,7 +200,10 @@ export class InitHandler {
 
   private async copyTemplateContracts(projectPath: string): Promise<void> {
     const packageRoot = findPackageRoot()
-    const templateBaseDir = path.join(packageRoot, 'src', 'template', 'pipes', this.config.chainType)
+    // Try dist/template first (for bundled builds), then fall back to src/template
+    const distTemplateDir = path.join(packageRoot, 'dist', 'template', 'pipes', this.config.chainType)
+    const srcTemplateDir = path.join(packageRoot, 'src', 'template', 'pipes', this.config.chainType)
+    const templateBaseDir = existsSync(distTemplateDir) ? distTemplateDir : srcTemplateDir
 
     const templateEntries = Object.entries(this.config.templates)
     let hasContracts = false

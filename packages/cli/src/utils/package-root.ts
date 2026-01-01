@@ -2,7 +2,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 
-const PACKAGE_NAME = '@subsquid/pipes-cli'
+// Package name - must match package.json
+// Using dynamic import to get the actual package name from package.json
+const PACKAGE_NAME = '@iankressin/pipes-cli'
 
 /**
  * Finds the package root directory by resolving the package location.
