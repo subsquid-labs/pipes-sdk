@@ -9,6 +9,18 @@ export const evmTemplateOptions = [
     name: 'Uniswap V3 Swaps',
     id: 'uniswap-v3-swaps',
   },
+  {
+    name: 'Morpho Blue',
+    id: 'morpho-blue',
+  },
+  {
+    name: 'Uniswap V4',
+    id: 'uniswap-v4',
+  },
+  {
+    name: 'Polymarket',
+    id: 'polymarket',
+  },
 ] as const
 
 export type EvmTemplateIds = (typeof evmTemplateOptions)[number]['id'] | 'custom'

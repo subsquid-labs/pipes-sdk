@@ -1,17 +1,11 @@
 export const clickhouseSinkTemplate = `clickhouseTarget({
     client: createClient({
-      username: 'default',
-      password: 'password',
-      url: 'http://localhost:8123',
+        username: process.env.CLICKHOUSE_USER ?? (() => { throw new Error('CLICKHOUSE_USER is not set')})(),
+        password: process.env.CLICKHOUSE_PASSWORD ?? (() => { throw new Error('CLICKHOUSE_PASSWORD is not set')})(),
+        url: process.env.CLICKHOUSE_URL ?? (() => { throw new Error('CLICKHOUSE_URL is not set')})(),
     }),
     onStart: async ({ store }) => {
-{{#templates}}
-{{#hasTable}}
-      await store.command({
-        query: \`{{{table}}}\`,
-      });
-{{/hasTable}}
-{{/templates}}
+      await store.executeFiles('./src/migrations')
     },
     onData: async ({ data, store }) => {
 {{#templates}}
@@ -19,7 +13,7 @@ export const clickhouseSinkTemplate = `clickhouseTarget({
 {{^excludeFromInsert}}
       await store.insert({
         table: '{{{tableName}}}',
-        values: toSnakeKeysArray(data.{{{compositeKey}}}),
+        values: toSnakeKeysArray(data.{{{variableName}}}),
         format: 'JSONEachRow',
       });
 {{/excludeFromInsert}}
@@ -62,7 +56,7 @@ export const postgresSinkTemplate = `drizzleTarget({
 {{#templates}}
 {{#hasTable}}
 {{^excludeFromInsert}}
-      for (const values of chunk(data.{{{compositeKey}}})) {
+      for (const values of chunk(data.{{{variableName}}})) {
         await tx.insert({{{drizzleTableName}}}).values(values)
       }
 {{/excludeFromInsert}}

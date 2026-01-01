@@ -38,3 +38,5 @@ local/
 **/*.sqlite-wal
 
 .cursor
+
+scaffolds/

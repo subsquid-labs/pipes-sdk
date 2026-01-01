@@ -1,6 +1,6 @@
 import { commonAbis, evmDecoder } from '@subsquid/pipes/evm'
 
-evmDecoder({
+const erc20Transfers = evmDecoder({
   profiler: { id: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
   range: { from: 'latest' },
   // Uncomment the line below to filter by contract addresses

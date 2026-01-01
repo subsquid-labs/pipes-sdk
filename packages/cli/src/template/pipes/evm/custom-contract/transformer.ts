@@ -1,6 +1,6 @@
 import { evmDecoder } from '@subsquid/pipes/evm'
 
-evmDecoder({
+const customContract = evmDecoder({
   range: { from: 'latest' },
   contracts: [],
   events: {},

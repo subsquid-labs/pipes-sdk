@@ -1,4 +1,6 @@
+import path from 'node:path'
 import { checkbox, input, select } from '@inquirer/prompts'
+import chalk from 'chalk'
 import { NetworkTemplate, templates } from '~/template/index.js'
 import { networks } from '../../config/networks.js'
 import { sinks } from '../../config/sinks.js'
@@ -7,26 +9,62 @@ import type { Config } from '../../types/config.js'
 import { chainTypes, type NetworkType } from '../../types/network.js'
 import { InitHandler } from './handler.js'
 
-export class InitConfig {
+export class InitPrompt {
   async run() {
-    const config = await this.promptConfig()
-    this.displaySummary(config)
-    const handler = new InitHandler(config)
-    await handler.handle()
+    try {
+      const config = await this.promptConfig()
+      const handler = new InitHandler(config)
+      await handler.handle()
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error
+      }
+      throw new Error(`Failed to initialize project: ${String(error)}`)
+    }
   }
 
   async promptConfig(): Promise<Config<NetworkType>> {
     const projectFolder = await input({
-      message: 'Project folder:',
+      message: `Where should we create your new project? ${chalk.dim('Enter a folder name or path:')}`,
+      validate: (value: string) => {
+        if (!value || value.trim().length === 0) {
+          return 'Project folder cannot be empty'
+        }
+
+        const trimmed = value.trim()
+
+        // Check for invalid characters in path
+        const invalidChars = /[<>:"|?*\x00-\x1f]/
+        if (invalidChars.test(trimmed)) {
+          return 'Project folder contains invalid characters'
+        }
+
+        // Check for reserved names on Windows
+        const reservedNames = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|$)/i
+        if (reservedNames.test(trimmed)) {
+          return 'Project folder name is reserved'
+        }
+
+        try {
+          path.resolve(trimmed)
+        } catch {
+          return 'Invalid path format'
+        }
+
+        return true
+      },
     })
 
     const chainType = await select<NetworkType>({
-      message: 'Chain type:',
-      choices: chainTypes,
+      message: "Now, let's choose the type of blockchain you'd like to use:",
+      choices: chainTypes.map((ct) => ({
+        ...ct,
+        disabled: ct.value === 'svm' ? '(Coming soon)' : false,
+      })),
     })
 
     const network = await select({
-      message: 'Chain:',
+      message: `Now, let's select the network you'd like to use. ${chalk.dim('(Tip: you can type to search)')}`,
       choices: networks[chainType].map((n) => ({
         name: n.name,
         value: n.slug,
@@ -34,7 +72,7 @@ export class InitConfig {
     })
 
     const pipelineType = await select({
-      message: 'Pipeline type:',
+      message: `How would you like to build your pipeline? ${chalk.dim('Start from one of our templates or provide your own contract addresses')}`,
       choices: [
         { name: 'Use templates', value: 'templates' },
         { name: 'Custom contract', value: 'custom' },
@@ -60,7 +98,7 @@ export class InitConfig {
     }
 
     const sink = await select({
-      message: 'Sink:',
+      message: 'Where would you like to store your data?',
       choices: sinks.map((s) => ({ name: s.name, value: s.id })),
     })
 
@@ -79,11 +117,13 @@ export class InitConfig {
   private promptTemplates(chainType: NetworkType): Promise<NetworkTemplate<'evm'> | NetworkTemplate<'svm'>>
   private async promptTemplates(chainType: NetworkType): Promise<NetworkTemplate<NetworkType>> {
     if (chainType === 'evm') {
+      const disabledTemplates = ['morpho-blue', 'uniswap-v4', 'polymarket']
       const selected = await checkbox({
         message: 'Templates:',
         choices: templateOptions.evm.map((t) => ({
           name: t.name,
           value: t.id,
+          disabled: disabledTemplates.includes(t.id) ? '(Coming soon)' : false,
         })),
       })
       return selected.reduce<NetworkTemplate<'evm'>>((acc, id) => {
@@ -102,23 +142,5 @@ export class InitConfig {
       acc[id] = templates.svm[id]
       return acc
     }, {})
-  }
-
-  private displaySummary(config: Config<NetworkType>): void {
-    const isCustomContract = config.contractAddresses.length > 0
-
-    console.log('')
-    console.log(`√ Project folder: ${config.projectFolder}`)
-    console.log(`√ Chain type: ${config.chainType.toUpperCase()}`)
-    console.log(`√ Chain: ${config.network}`)
-    console.log(`√ Pipeline type: ${isCustomContract ? 'Custom contract' : 'Templates'}`)
-    if (isCustomContract) {
-      console.log(`√ Contract address: ${config.contractAddresses[0]}`)
-    } else {
-      console.log(`√ Templates: ${Object.keys(config.templates).join(', ')}`)
-    }
-    console.log(`√ Sink: ${config.sink}`)
-    console.log('')
-    console.log(`✅ Project created at ./${config.projectFolder}`)
   }
 }

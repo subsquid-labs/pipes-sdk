@@ -1,6 +1,13 @@
+import { Config } from '~/types/config.js'
 import { NetworkType } from '~/types/network.js'
-import { evmTemplates } from './evm/transformer-templates.js'
-import { svmTemplates } from './svm/templates.js'
+import { evmTemplates } from './pipes/evm/transformer-templates.js'
+import { svmTemplates } from './pipes/svm/templates.js'
+
+export abstract class TemplateBuilder<N extends NetworkType> {
+  constructor(protected config: Config<N>) {}
+
+  abstract build(): Promise<string> | string
+}
 
 export const templates = {
   evm: evmTemplates,

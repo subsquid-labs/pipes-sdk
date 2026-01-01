@@ -96,6 +96,9 @@ importers:
       '@subsquid/pipes':
         specifier: workspace:*
         version: link:../subsquid-pipes
+      chalk:
+        specifier: ^5.6.2
+        version: 5.6.2
       commander:
         specifier: ^14.0.2
         version: 14.0.2
@@ -108,6 +111,9 @@ importers:
       mustache:
         specifier: ^4.2.0
         version: 4.2.0
+      ora:
+        specifier: ^9.0.0
+        version: 9.0.0
     devDependencies:
       '@subsquid/evm-abi':
         specifier: 0.3.1
@@ -131,7 +137,50 @@ importers:
         specifier: 3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.14.1)(jiti@2.6.0)(lightningcss@1.30.1)(tsx@4.20.6)
 
-  packages/cli/clikc:
+  packages/cli/asdf:
+    dependencies:
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      '@subsquid/util-internal-validation':
+        specifier: latest
+        version: 0.8.0(@subsquid/logger@1.4.0)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      drizzle-kit:
+        specifier: ^0.31.6
+        version: 0.31.6
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/chx:
     dependencies:
       '@clickhouse/client':
         specifier: ^1.14.0
@@ -145,6 +194,52 @@ importers:
       '@subsquid/pipes':
         specifier: 0.1.0-beta.10
         version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/f:
+    dependencies:
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      '@subsquid/util-internal-validation':
+        specifier: latest
+        version: 0.8.0(@subsquid/logger@1.4.0)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      drizzle-kit:
+        specifier: ^0.31.6
+        version: 0.31.6
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
     devDependencies:
       '@biomejs/biome':
         specifier: 2.3.4
@@ -164,6 +259,9 @@ importers:
 
   packages/cli/hello:
     dependencies:
+      '@clickhouse/client':
+        specifier: ^1.14.0
+        version: 1.14.0
       '@subsquid/evm-abi':
         specifier: 0.3.1
         version: 0.3.1
@@ -176,15 +274,6 @@ importers:
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
-      drizzle-kit:
-        specifier: ^0.31.6
-        version: 0.31.6
-      drizzle-orm:
-        specifier: ^0.44.7
-        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
-      pg:
-        specifier: ^8.16.3
-        version: 8.16.3
     devDependencies:
       '@biomejs/biome':
         specifier: 2.3.4
@@ -202,88 +291,23 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/cli/swaps:
-    dependencies:
-      '@subsquid/evm-abi':
-        specifier: 0.3.1
-        version: 0.3.1
-      '@subsquid/evm-codec':
-        specifier: 0.3.0
-        version: 0.3.0
-      '@subsquid/pipes':
-        specifier: 0.1.0-beta.10
-        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
-      dotenv:
-        specifier: ^17.2.3
-        version: 17.2.3
-      drizzle-kit:
-        specifier: ^0.31.6
-        version: 0.31.6
-      drizzle-orm:
-        specifier: ^0.44.7
-        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
-      pg:
-        specifier: ^8.16.3
-        version: 8.16.3
-    devDependencies:
-      '@biomejs/biome':
-        specifier: 2.3.4
-        version: 2.3.4
-      '@types/node':
-        specifier: ^25.0.3
-        version: 25.0.3
-      tsup:
-        specifier: 8.5.0
-        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
-      tsx:
-        specifier: 4.20.6
-        version: 4.20.6
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  packages/cli/tran:
-    dependencies:
-      '@subsquid/pipes':
-        specifier: 0.1.0-beta.10
-        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
-      dotenv:
-        specifier: ^17.2.3
-        version: 17.2.3
-      drizzle-kit:
-        specifier: ^0.31.6
-        version: 0.31.6
-      drizzle-orm:
-        specifier: ^0.44.7
-        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
-      pg:
-        specifier: ^8.16.3
-        version: 8.16.3
-    devDependencies:
-      '@biomejs/biome':
-        specifier: 2.3.4
-        version: 2.3.4
-      '@types/node':
-        specifier: ^25.0.3
-        version: 25.0.3
-      tsup:
-        specifier: 8.5.0
-        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
-      tsx:
-        specifier: 4.20.6
-        version: 4.20.6
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  packages/cli/trans:
+  packages/cli/hello-wrold:
     dependencies:
       '@clickhouse/client':
         specifier: ^1.14.0
         version: 1.14.0
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
       '@subsquid/pipes':
         specifier: 0.1.0-beta.10
         version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
     devDependencies:
       '@biomejs/biome':
         specifier: 2.3.4
@@ -301,7 +325,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/cli/transfers:
+  packages/cli/pg:
     dependencies:
       '@subsquid/evm-abi':
         specifier: 0.3.1
@@ -312,6 +336,9 @@ importers:
       '@subsquid/pipes':
         specifier: 0.1.0-beta.10
         version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      '@subsquid/util-internal-validation':
+        specifier: latest
+        version: 0.8.0(@subsquid/logger@1.4.0)
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
@@ -341,7 +368,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/cli/transfers-and-swaps:
+  packages/cli/scaffold/asdf:
     dependencies:
       '@subsquid/evm-abi':
         specifier: 0.3.1
@@ -352,6 +379,9 @@ importers:
       '@subsquid/pipes':
         specifier: 0.1.0-beta.10
         version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      '@subsquid/util-internal-validation':
+        specifier: latest
+        version: 0.8.0(@subsquid/logger@1.4.0)
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
@@ -381,7 +411,25 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/cli/transferx:
+  packages/cli/scaffold/wer:
+    dependencies:
+      '@clickhouse/client':
+        specifier: ^1.14.0
+        version: 1.14.0
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+
+  packages/cli/scaffolds/afafafa:
     dependencies:
       '@subsquid/evm-abi':
         specifier: 0.3.1
@@ -392,6 +440,9 @@ importers:
       '@subsquid/pipes':
         specifier: 0.1.0-beta.10
         version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      '@subsquid/util-internal-validation':
+        specifier: latest
+        version: 0.8.0(@subsquid/logger@1.4.0)
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
@@ -421,7 +472,41 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/cli/tx:
+  packages/cli/scaffolds/asdfasfe:
+    dependencies:
+      '@clickhouse/client':
+        specifier: ^1.14.0
+        version: 1.14.0
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/scaffolds/asdff:
     dependencies:
       '@subsquid/evm-abi':
         specifier: 0.3.1
@@ -432,6 +517,9 @@ importers:
       '@subsquid/pipes':
         specifier: 0.1.0-beta.10
         version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      '@subsquid/util-internal-validation':
+        specifier: latest
+        version: 0.8.0(@subsquid/logger@1.4.0)
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
@@ -461,7 +549,41 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/cli/txs:
+  packages/cli/scaffolds/ch:
+    dependencies:
+      '@clickhouse/client':
+        specifier: ^1.14.0
+        version: 1.14.0
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/scaffolds/hello:
     dependencies:
       '@subsquid/evm-abi':
         specifier: 0.3.1
@@ -472,6 +594,9 @@ importers:
       '@subsquid/pipes':
         specifier: 0.1.0-beta.10
         version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      '@subsquid/util-internal-validation':
+        specifier: latest
+        version: 0.8.0(@subsquid/logger@1.4.0)
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
@@ -501,7 +626,109 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/cli/xt:
+  packages/cli/scaffolds/hello-w:
+    dependencies:
+      '@clickhouse/client':
+        specifier: ^1.14.0
+        version: 1.14.0
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/scaffolds/hello-world-pt-2:
+    dependencies:
+      '@clickhouse/client':
+        specifier: ^1.14.0
+        version: 1.14.0
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/scaffolds/migration:
+    dependencies:
+      '@clickhouse/client':
+        specifier: ^1.12.1
+        version: 1.14.0
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/scaffolds/pg:
     dependencies:
       '@subsquid/evm-abi':
         specifier: 0.3.1
@@ -512,6 +739,52 @@ importers:
       '@subsquid/pipes':
         specifier: 0.1.0-beta.10
         version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      '@subsquid/util-internal-validation':
+        specifier: latest
+        version: 0.8.0(@subsquid/logger@1.4.0)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      drizzle-kit:
+        specifier: ^0.31.6
+        version: 0.31.6
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3)
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 2.3.4
+        version: 2.3.4
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsup:
+        specifier: 8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/cli/scaffolds/pgx:
+    dependencies:
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@subsquid/pipes':
+        specifier: 0.1.0-beta.10
+        version: 0.1.0-beta.10(@clickhouse/client@1.14.0)(@subsquid/logger@1.4.0)(better-sqlite3@12.4.5)(drizzle-orm@0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.2(@types/react@19.2.2))(pg@8.16.3))(pg@8.16.3)
+      '@subsquid/util-internal-validation':
+        specifier: latest
+        version: 0.8.0(@subsquid/logger@1.4.0)
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
@@ -2670,6 +2943,10 @@ packages:
     resolution: {integrity: sha512-4zNhdJD/iOjSH0A05ea+Ke6MU5mmpQcbQsSOkgdaUMJ9zTlDTD/GYlwohmIE2u0gaxHYiVHEn1Fw9mZ/ktJWgw==}
     engines: {node: '>=18'}
 
+  chalk@5.6.2:
+    resolution: {integrity: sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA==}
+    engines: {node: ^12.17.0 || ^14.13 || >=16.0.0}
+
   character-entities-legacy@1.1.4:
     resolution: {integrity: sha512-3Xnr+7ZFS1uxeiUDvV02wQ+QDbc55o97tIV5zHScSPJpcLm/r0DFPcoY3tYRp+VZukxuMeKgXYmsXQHO05zQeA==}
 
@@ -2699,6 +2976,14 @@ packages:
 
   class-variance-authority@0.7.1:
     resolution: {integrity: sha512-Ka+9Trutv7G8M6WT6SeiRWz792K5qEqIGEGzXKhAE6xOWAY6pPH8U+9IY3oCMv6kqTmLsv7Xh/2w2RigkePMsg==}
+
+  cli-cursor@5.0.0:
+    resolution: {integrity: sha512-aCj4O5wKyszjMmDT4tZj93kxyydN/K5zPWSCe6/0AV/AA1pqe5ZBIw0a2ZfPQV7lL5/yb5HsUreJ6UFAF1tEQw==}
+    engines: {node: '>=18'}
+
+  cli-spinners@3.3.0:
+    resolution: {integrity: sha512-/+40ljC3ONVnYIttjMWrlL51nItDAbBrq2upN8BPyvGU/2n5Oxw3tbNwORCaNuNqLJnxGqOfjUuhsv7l5Q4IsQ==}
+    engines: {node: '>=18.20'}
 
   cli-width@4.1.0:
     resolution: {integrity: sha512-ouuZd4/dm2Sw5Gmqy6bGyNNNe1qt9RpmxveLSO7KcgsTnU7RXfsw+/bukWGo1abgBiMAic068rclZsO4IWmmxQ==}
@@ -3480,6 +3765,10 @@ packages:
   is-hexadecimal@1.0.4:
     resolution: {integrity: sha512-gyPJuv83bHMpocVYoqof5VDiZveEoGoFL8m3BXNb2VW8Xs+rz9kqO8LOQ5DH6EsuvilT1ApazU0pyl+ytbPtlw==}
 
+  is-interactive@2.0.0:
+    resolution: {integrity: sha512-qP1vozQRI+BMOPcjFzrjXuQvdak2pHNUMZoeG2eRbiSqyvbEf/wQtEOTOX1guk6E3t36RkaqiSt8A/6YElNxLQ==}
+    engines: {node: '>=12'}
+
   is-number@7.0.0:
     resolution: {integrity: sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng==}
     engines: {node: '>=0.12.0'}
@@ -3493,6 +3782,10 @@ packages:
 
   is-typedarray@1.0.0:
     resolution: {integrity: sha512-cyA56iCMHAh5CdzjJIa4aohJyeO1YbwLi3Jc35MmRU6poroFjIGZzUzupGiRPOjgHg9TLu43xbpwXk523fMxKA==}
+
+  is-unicode-supported@2.1.0:
+    resolution: {integrity: sha512-mE00Gnza5EEB3Ds0HfMyllZzbBrmLOX3vfWoj9A9PEnTfratQ/BcaJOuMhnkhjXvb2+FkY3VuHqtAGpTPmglFQ==}
+    engines: {node: '>=18'}
 
   isarray@2.0.5:
     resolution: {integrity: sha512-xHjhDr3cNBK0BzdUJSPXZntQUx/mwMS5Rw4A7lPJ90XGAO6ISP/ePDNuo0vhqOZU+UD5JoodwCAAoZQd3FeAKw==}
@@ -3647,6 +3940,10 @@ packages:
   lodash@4.17.21:
     resolution: {integrity: sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==}
 
+  log-symbols@7.0.1:
+    resolution: {integrity: sha512-ja1E3yCr9i/0hmBVaM0bfwDjnGy8I/s6PP4DFp+yP+a+mrHO4Rm7DtmnqROTUkHIkqffC84YY7AeqX6oFk0WFg==}
+    engines: {node: '>=18'}
+
   loglevel@1.9.2:
     resolution: {integrity: sha512-HgMmCqIJSAKqo68l0rS2AanEWfkxaZ5wNiEFb5ggm08lDs9Xl2KxBlX3PTcaD2chBM1gXAYf491/M2Rv8Jwayg==}
     engines: {node: '>= 0.6.0'}
@@ -3747,6 +4044,10 @@ packages:
     resolution: {integrity: sha512-x0Vn8spI+wuJ1O6S7gnbaQg8Pxh4NNHb7KSINmEWKiPE4RKOplvijn+NkmYmmRgP68mc70j2EbeTFRsrswaQeg==}
     engines: {node: '>=4'}
     hasBin: true
+
+  mimic-function@5.0.1:
+    resolution: {integrity: sha512-VP79XUPxV2CigYP3jWwAUFSku2aKqBH7uTAapFWCBqutsbmDo96KY5o8uh6U+/YSIn5OxJnXp73beVkpqMIGhA==}
+    engines: {node: '>=18'}
 
   mimic-response@3.1.0:
     resolution: {integrity: sha512-z0yWI+4FDrrweS8Zmt4Ej5HdJmky15+L2e6Wgn3+iK5fWzb6T3fhNFq2+MeTRb064c6Wr4N/wv0DzQTjNzHNGQ==}
@@ -3913,6 +4214,14 @@ packages:
 
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
+
+  onetime@7.0.0:
+    resolution: {integrity: sha512-VXJjc87FScF88uafS3JllDgvAm+c/Slfz06lorj2uAY34rlUu0Nt+v8wreiImcrgAjjIHp1rXpTDlLOGw29WwQ==}
+    engines: {node: '>=18'}
+
+  ora@9.0.0:
+    resolution: {integrity: sha512-m0pg2zscbYgWbqRR6ABga5c3sZdEon7bSgjnlXC64kxtxLOyjRcbbUkLj7HFyy/FTD+P2xdBWu8snGhYI0jc4A==}
+    engines: {node: '>=20'}
 
   p-event@6.0.1:
     resolution: {integrity: sha512-Q6Bekk5wpzW5qIyUP4gdMEujObYstZl6DMMOSenwBvV0BlE5LkDwkjs5yHbZmdCEq2o4RJx4tE1vwxFVf2FG1w==}
@@ -4267,6 +4576,10 @@ packages:
   resolve-pkg-maps@1.0.0:
     resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
 
+  restore-cursor@5.1.0:
+    resolution: {integrity: sha512-oMA2dcrw6u0YfxJQXm342bFKX/E4sG9rbTzO9ptUcR/e8A33cHuvStiYOwH7fszkZlZ1z/ta9AAoPk2F4qIOHA==}
+    engines: {node: '>=18'}
+
   retry@0.12.0:
     resolution: {integrity: sha512-9LkiTwjUh6rT555DtE9rTX+BKByPfrMzEAtnlEtdEwr3Nkffwiihqe2bWADg+OQRjt9gl6ICdmB/ZFDCGAtSow==}
     engines: {node: '>= 4'}
@@ -4453,6 +4766,10 @@ packages:
   std-env@3.9.0:
     resolution: {integrity: sha512-UGvjygr6F6tpH7o2qyqR6QYpwraIjKSdtzyBdyytFOHmPZY917kwdwLG0RbOjWOnKmnm3PeHjaoLLMie7kPLQw==}
 
+  stdin-discarder@0.2.2:
+    resolution: {integrity: sha512-UhDfHmA92YAlNnCfhmq0VeNL5bDbiZGg7sZ2IvPsXubGkiNa9EC+tUTsjBRsYUAz87btI6/1wf4XoVvQ3uRnmQ==}
+    engines: {node: '>=18'}
+
   stoppable@1.1.0:
     resolution: {integrity: sha512-KXDYZ9dszj6bzvnEMRYvxgeTHU74QBFL54XKtP3nyMuJ81CFYtABZ3bAzL2EdFUaEwJOBOgENyFj3R7oTzDyyw==}
     engines: {node: '>=4', npm: '>=6'}
@@ -4468,6 +4785,10 @@ packages:
   string-width@7.2.0:
     resolution: {integrity: sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ==}
     engines: {node: '>=18'}
+
+  string-width@8.1.0:
+    resolution: {integrity: sha512-Kxl3KJGb/gxkaUMOjRsQ8IrXiGW75O4E3RPjFIINOVH8AMl2SQ/yWdTzWwF3FevIX9LcMAjJW+GRwAlAbTSXdg==}
+    engines: {node: '>=20'}
 
   string_decoder@1.3.0:
     resolution: {integrity: sha512-hkRX8U1WjJFd8LsDJ2yQ/wWWxaopEsABU1XfkM8A+j0+85JAGppt16cr1Whg6KIbb4okU6Mql6BOj+uup/wKeA==}
@@ -4926,6 +5247,10 @@ packages:
   yn@3.1.1:
     resolution: {integrity: sha512-Ux4ygGWsu2c7isFWe8Yu1YluJmqVhxqK2cLXNQA5AcC3QfbGNpM7fu0Y8b/z16pXLnFxZYvWhd3fhBY9DLmC6Q==}
     engines: {node: '>=6'}
+
+  yoctocolors@2.1.2:
+    resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
+    engines: {node: '>=18'}
 
   zx@8.8.5:
     resolution: {integrity: sha512-SNgDF5L0gfN7FwVOdEFguY3orU5AkfFZm9B5YSHog/UDHv+lvmd82ZAsOenOkQixigwH2+yyH198AwNdKhj+RA==}
@@ -6363,7 +6688,7 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 22.14.1
+      '@types/node': 22.18.13
 
   '@types/chai@5.2.2':
     dependencies:
@@ -6371,7 +6696,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 22.14.1
+      '@types/node': 22.18.13
 
   '@types/d3-array@3.2.2': {}
 
@@ -6408,7 +6733,7 @@ snapshots:
 
   '@types/express-serve-static-core@4.19.6':
     dependencies:
-      '@types/node': 22.14.1
+      '@types/node': 22.18.13
       '@types/qs': 6.14.0
       '@types/range-parser': 1.2.7
       '@types/send': 0.17.5
@@ -6480,12 +6805,12 @@ snapshots:
   '@types/send@0.17.5':
     dependencies:
       '@types/mime': 1.3.5
-      '@types/node': 22.14.1
+      '@types/node': 22.18.13
 
   '@types/serve-static@1.15.8':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 22.14.1
+      '@types/node': 22.18.13
       '@types/send': 0.17.5
 
   '@types/unist@2.0.11': {}
@@ -6769,6 +7094,8 @@ snapshots:
       loupe: 3.2.1
       pathval: 2.0.1
 
+  chalk@5.6.2: {}
+
   character-entities-legacy@1.1.4: {}
 
   character-entities@1.2.4: {}
@@ -6790,6 +7117,12 @@ snapshots:
   class-variance-authority@0.7.1:
     dependencies:
       clsx: 2.1.1
+
+  cli-cursor@5.0.0:
+    dependencies:
+      restore-cursor: 5.1.0
+
+  cli-spinners@3.3.0: {}
 
   cli-width@4.1.0: {}
 
@@ -7565,6 +7898,8 @@ snapshots:
 
   is-hexadecimal@1.0.4: {}
 
+  is-interactive@2.0.0: {}
+
   is-number@7.0.0: {}
 
   is-promise@4.0.0: {}
@@ -7574,6 +7909,8 @@ snapshots:
       which-typed-array: 1.1.19
 
   is-typedarray@1.0.0: {}
+
+  is-unicode-supported@2.1.0: {}
 
   isarray@2.0.5: {}
 
@@ -7695,6 +8032,11 @@ snapshots:
 
   lodash@4.17.21: {}
 
+  log-symbols@7.0.1:
+    dependencies:
+      is-unicode-supported: 2.1.0
+      yoctocolors: 2.1.2
+
   loglevel@1.9.2: {}
 
   long@4.0.0: {}
@@ -7772,6 +8114,8 @@ snapshots:
       mime-db: 1.54.0
 
   mime@1.6.0: {}
+
+  mimic-function@5.0.1: {}
 
   mimic-response@3.1.0: {}
 
@@ -7918,6 +8262,22 @@ snapshots:
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
+
+  onetime@7.0.0:
+    dependencies:
+      mimic-function: 5.0.1
+
+  ora@9.0.0:
+    dependencies:
+      chalk: 5.6.2
+      cli-cursor: 5.0.0
+      cli-spinners: 3.3.0
+      is-interactive: 2.0.0
+      is-unicode-supported: 2.1.0
+      log-symbols: 7.0.1
+      stdin-discarder: 0.2.2
+      string-width: 8.1.0
+      strip-ansi: 7.1.2
 
   p-event@6.0.1:
     dependencies:
@@ -8292,6 +8652,11 @@ snapshots:
 
   resolve-pkg-maps@1.0.0: {}
 
+  restore-cursor@5.1.0:
+    dependencies:
+      onetime: 7.0.0
+      signal-exit: 4.1.0
+
   retry@0.12.0: {}
 
   retry@0.13.1: {}
@@ -8526,6 +8891,8 @@ snapshots:
 
   std-env@3.9.0: {}
 
+  stdin-discarder@0.2.2: {}
+
   stoppable@1.1.0: {}
 
   string-width@4.2.3:
@@ -8543,6 +8910,11 @@ snapshots:
   string-width@7.2.0:
     dependencies:
       emoji-regex: 10.6.0
+      get-east-asian-width: 1.4.0
+      strip-ansi: 7.1.2
+
+  string-width@8.1.0:
+    dependencies:
       get-east-asian-width: 1.4.0
       strip-ansi: 7.1.2
 
@@ -8921,7 +9293,7 @@ snapshots:
 
   vite@7.1.7(@types/node@22.14.1)(jiti@2.6.0)(lightningcss@1.30.1)(tsx@4.20.6):
     dependencies:
-      esbuild: 0.25.11
+      esbuild: 0.25.10
       fdir: 6.5.0(picomatch@4.0.3)
       picomatch: 4.0.3
       postcss: 8.5.6
@@ -9051,5 +9423,7 @@ snapshots:
   yallist@5.0.0: {}
 
   yn@3.1.1: {}
+
+  yoctocolors@2.1.2: {}
 
   zx@8.8.5: {}

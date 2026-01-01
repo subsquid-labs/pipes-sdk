@@ -9,7 +9,6 @@ export const clickhouseDockerCompose = `services:
       CLICKHOUSE_DB: pipes
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: password
-      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
 `
 
 export const postgresDockerCompose = `services:

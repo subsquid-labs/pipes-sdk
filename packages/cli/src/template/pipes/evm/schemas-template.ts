@@ -1,7 +1,6 @@
 import Mustache from 'mustache'
 import { Config } from '~/types/config.js'
 import { NetworkType } from '~/types/network.js'
-import { TransformerTemplate } from '~/types/templates.js'
 import { generateImportStatement, mergeImports, parseImports } from '~/utils/merge-imports.js'
 
 export const schemasTemplate = `{{#mergedImports}}

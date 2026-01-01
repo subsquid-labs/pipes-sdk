@@ -1,6 +1,6 @@
 import { bigint, integer, pgTable, primaryKey, varchar } from 'drizzle-orm/pg-core'
 
-export const uniswapV3Swaps = pgTable(
+export const uniswapV3SwapsTable = pgTable(
   'uniswap_v3_swaps',
   {
     blockNumber: integer().notNull(),

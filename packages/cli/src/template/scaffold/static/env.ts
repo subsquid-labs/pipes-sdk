@@ -1,9 +1,9 @@
 import { Sink } from '~/types/sink.js'
 
 export const clickhouseEnvTemplate = `CLICKHOUSE_URL=http://localhost:8123
-CLICKHOUSE_DATABASE=default
+CLICKHOUSE_DATABASE=pipes
 CLICKHOUSE_USER=default
-CLICKHOUSE_PASSWORD=default
+CLICKHOUSE_PASSWORD=password
 `
 
 export const postgresEnvTemplate = `DB_CONNECTION_STR=postgresql://postgres:password@localhost:5432/pipes
