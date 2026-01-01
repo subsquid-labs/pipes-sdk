@@ -1,13 +1,13 @@
 import path from 'node:path'
 import { checkbox, input, select } from '@inquirer/prompts'
 import chalk from 'chalk'
+import { InitHandler } from '~/commands/init/handler.js'
+import { networks } from '~/config/networks.js'
+import { sinks } from '~/config/sinks.js'
+import { templateOptions } from '~/config/templates.js'
 import { NetworkTemplate, templates } from '~/template/index.js'
-import { networks } from '../../config/networks.js'
-import { sinks } from '../../config/sinks.js'
-import { templateOptions } from '../../config/templates.js'
-import type { Config } from '../../types/config.js'
-import { chainTypes, type NetworkType } from '../../types/network.js'
-import { InitHandler } from './handler.js'
+import type { Config } from '~/types/config.js'
+import { chainTypes, type NetworkType } from '~/types/network.js'
 
 export class InitPrompt {
   async run() {
@@ -33,16 +33,24 @@ export class InitPrompt {
 
         const trimmed = value.trim()
 
-        // Check for invalid characters in path
+        /*
+         * Check for invalid characters in path.
+         * This pattern matches any of: angle brackets < >, colon :, double quote ", pipe |, question mark ?, asterisk *,
+         * as well as ASCII control characters (hex 00-1F, inclusive).
+         */
         const invalidChars = /[<>:"|?*\x00-\x1f]/
         if (invalidChars.test(trimmed)) {
-          return 'Project folder contains invalid characters'
+          return 'Project folder contains invalid characters (forbidden: <, >, :, ", |, ?, *, ASCII 0-31)'
         }
 
-        // Check for reserved names on Windows
+        /*
+         * Check for reserved names on Windows
+         * This pattern matches any of: CON, PRN, AUX, NUL, COM[1-9], LPT[1-9],
+         * as well as any name ending with a period.
+         */
         const reservedNames = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|$)/i
         if (reservedNames.test(trimmed)) {
-          return 'Project folder name is reserved'
+          return 'Project folder name is reserved (forbidden: CON, PRN, AUX, NUL, COM[1-9], LPT[1-9])'
         }
 
         try {
@@ -57,10 +65,7 @@ export class InitPrompt {
 
     const chainType = await select<NetworkType>({
       message: "Now, let's choose the type of blockchain you'd like to use:",
-      choices: chainTypes.map((ct) => ({
-        ...ct,
-        disabled: ct.value === 'svm' ? '(Coming soon)' : false,
-      })),
+      choices: chainTypes,
     })
 
     const network = await select({
@@ -79,7 +84,7 @@ export class InitPrompt {
       ],
     })
 
-    let selectedTemplateMap: NetworkTemplate<NetworkType>
+    let selectedTemplateMap: NetworkTemplate<NetworkType> = {}
     let contractAddresses: string[] = []
 
     if (pipelineType === 'templates') {
@@ -87,7 +92,7 @@ export class InitPrompt {
     } else {
       if (chainType === 'evm') {
         selectedTemplateMap = { custom: templates.evm.custom }
-      } else {
+      } else if (chainType === 'svm') {
         selectedTemplateMap = { custom: templates.svm.custom }
       }
 

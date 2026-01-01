@@ -27,8 +27,8 @@ export type EvmTemplateIds = (typeof evmTemplateOptions)[number]['id'] | 'custom
 
 export const svmTemplateOptions = [
   {
-    name: 'Orca Swaps',
-    id: 'orca-swaps',
+    name: 'Token balances',
+    id: 'token-balances',
   },
 ] as const
 

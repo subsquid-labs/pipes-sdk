@@ -1,7 +1,7 @@
 import Mustache from 'mustache'
 import { Sink } from '~/types/sink.js'
 import { generateImportStatement, mergeImports, parseImports } from '~/utils/merge-imports.js'
-import { TemplateBuilder } from '../../index.js'
+import { TemplateBuilder } from '~/template/index.js'
 import { clickhouseSinkTemplate, postgresSinkTemplate } from './sink-templates.js'
 
 export const template = (sink: Sink) => `{{#mergedImports}}
@@ -10,8 +10,8 @@ export const template = (sink: Sink) => `{{#mergedImports}}
 
 {{#templates}}
 {{{transformer}}}
-{{/templates}}
 
+{{/templates}}
 {{#customContracts}}
 const {{{compositeKey}}} = evmDecoder({
   range: { from: 'latest' },
@@ -69,6 +69,10 @@ export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
     ],
     memory: [],
   }
+  private static readonly BASE_IMPORTS: string[] = [
+    'import "dotenv/config"',
+    'import { evmDecoder, evmPortalSource, commonAbis } from "@subsquid/pipes/evm"',
+  ]
 
   build(): string {
     const templateEntries = Object.entries(this.config.templates)
@@ -129,14 +133,16 @@ export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
   }
 
   private addBaseImports(allImportStrings: string[]): void {
-    allImportStrings.push('import "dotenv/config"')
-    allImportStrings.push('import { evmDecoder, evmPortalSource, commonAbis } from "@subsquid/pipes/evm"')
+    allImportStrings.push(...EvmTemplateBuilder.BASE_IMPORTS)
   }
 
   private addTemplateImports(allImportStrings: string[], templateEntries: [string, any][]): void {
     for (const [, value] of templateEntries) {
       if (value.imports && value.imports.length > 0) {
-        allImportStrings.push(...value.imports)
+        const cleanedImports = value.imports.map((imp: string) =>
+          imp.replace(/from\s+['"]node_modules\//g, (match) => match.replace('node_modules/', '')),
+        )
+        allImportStrings.push(...cleanedImports)
       }
     }
   }

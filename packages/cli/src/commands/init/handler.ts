@@ -3,10 +3,12 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSy
 import { mkdir } from 'node:fs/promises'
 import path, { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import chalk from 'chalk'
 import Mustache from 'mustache'
 import ora from 'ora'
 import { EvmTemplateBuilder } from '~/template/pipes/evm/evm-template-builder.js'
 import { renderSchemasTemplate } from '~/template/pipes/evm/schemas-template.js'
+import { SolanaTemplateBuilder } from '~/template/pipes/svm/solana-template-builder.js'
 import {
   biomeConfig,
   clickhouseUtilsTemplate,
@@ -18,12 +20,10 @@ import {
   packageJsonTemplate,
   tsconfigConfig,
 } from '~/template/scaffold/index.js'
-import { SolanaTemplateBuilder } from '~/template/pipes/svm/solana-template-builder.js'
 import type { NetworkType } from '~/types/network.js'
 import { getEvmChainId } from '../../config/networks.js'
 import { SqdAbiService } from '../../services/sqd-abi.js'
 import type { Config } from '../../types/config.js'
-import chalk from 'chalk'
 
 export class InitHandler {
   constructor(private readonly config: Config<NetworkType>) {}
@@ -104,7 +104,7 @@ export class InitHandler {
     })
     writeFileSync(path.join(projectPath, 'package.json'), packageJson)
 
-    const indexTs = this.buildIndexTs(projectPath)
+    const indexTs = this.buildIndexTs()
     writeFileSync(path.join(projectPath, 'src/index.ts'), indexTs)
 
     if (this.config.sink === 'postgresql') {
@@ -121,7 +121,7 @@ export class InitHandler {
     }
   }
 
-  private buildIndexTs(projectPath: string): string {
+  private buildIndexTs(): string {
     if (this.config.chainType === 'evm') {
       const builder = new EvmTemplateBuilder(this.config as Config<'evm'>)
       return builder.build()
