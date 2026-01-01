@@ -1,7 +1,10 @@
 import { createTransformer } from '@subsquid/pipes'
 import { PortalStreamData } from '@subsquid/pipes/portal-client'
-import { Block as SolanaBlock, FieldSelection as SolanaFieldSelection } from 'node_modules/@subsquid/pipes/dist/portal-client/query/solana.js'
 import { SolanaQueryBuilder } from '@subsquid/pipes/solana'
+import {
+  Block as SolanaBlock,
+  FieldSelection as SolanaFieldSelection,
+} from 'node_modules/@subsquid/pipes/dist/portal-client/query/solana.js'
 
 interface TokenBalance {
   blockNumber: number

@@ -1,9 +1,9 @@
 import Mustache from 'mustache'
 import { TemplateBuilder } from '~/template/index.js'
 import { Sink } from '~/types/sink.js'
-import { clickhouseSinkTemplate, postgresSinkTemplate } from '../evm/sink-templates.js'
-import { generateImportStatement, mergeImports, parseImports } from '~/utils/merge-imports.js'
 import { TransformerTemplate } from '~/types/templates.js'
+import { generateImportStatement, mergeImports, parseImports } from '~/utils/merge-imports.js'
+import { clickhouseSinkTemplate, postgresSinkTemplate } from '../evm/sink-templates.js'
 
 export const template = (sink: Sink) => `{{#mergedImports}}
 {{{.}}}

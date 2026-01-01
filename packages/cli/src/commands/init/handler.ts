@@ -58,7 +58,7 @@ export class InitHandler {
 
       if (this.config.sink === 'postgresql') {
         spinner.text = 'Generating database migrations'
-        await new Promise(resolve => setImmediate(resolve))
+        await new Promise((resolve) => setImmediate(resolve))
         this.generateDatabaseMigrations(projectPath)
       }
 
@@ -263,26 +263,26 @@ export class InitHandler {
   private nextSteps(projectPath: string): void {
     const sep = '─'.repeat(64)
     const pathLine = `📁 Project created in ${projectPath}`
-  
+
     const cmd = (s: string) => `\x1b[1m${s}\x1b[0m` // bold
     const hint = (s: string) => `\x1b[2m${s}\x1b[0m` // dim
-  
+
     console.log(`\n${sep}`)
 
     console.log(`${pathLine}\n`)
-  
+
     console.log('Next steps\n')
-  
+
     console.log(`1) Enter the folder`)
     console.log(`   ${cmd(`cd ${projectPath}`)}\n`)
-  
+
     console.log(`2) Start your database (Docker)`)
     console.log(`   ${cmd('docker compose up -d')}\n`)
-  
+
     if (this.config.sink === 'postgresql') {
       console.log(`3) Apply migrations`)
       console.log(`   ${cmd('pnpm db:migrate')}\n`)
-  
+
       console.log(`4) Start the pipeline`)
       console.log(`   ${cmd('pnpm dev')}\n`)
     } else if (this.config.sink === 'clickhouse') {
@@ -292,7 +292,11 @@ export class InitHandler {
       console.log(`3) Start the pipeline`)
       console.log(`   ${cmd('pnpm dev')}\n`)
     }
-    console.log(chalk.dim(`Need help? Check our documentation at ${chalk.bold.underline('https://beta.docs.sqd.dev/en/sdk/pipes-sdk')}`))
+    console.log(
+      chalk.dim(
+        `Need help? Check our documentation at ${chalk.bold.underline('https://beta.docs.sqd.dev/en/sdk/pipes-sdk')}`,
+      ),
+    )
     console.log(`${sep}\n`)
   }
 }

@@ -1,8 +1,8 @@
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { SolanaTemplateIds } from '~/config/templates.js'
-import { TransformerTemplate } from '~/types/templates.js'
 import { TemplateParser } from '~/template/template-parser.js'
+import { TransformerTemplate } from '~/types/templates.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
