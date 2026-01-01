@@ -18,7 +18,7 @@
   },
   "scripts": {
     "dev": "tsx src/index.ts init",
-    "build": "tsup-node",
+    "build": "tsup",
     "lint": "biome check . --write",
     "test": "vitest run",
     "coverage": "vitest run --coverage"
