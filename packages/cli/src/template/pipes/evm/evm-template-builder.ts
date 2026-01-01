@@ -1,7 +1,8 @@
 import Mustache from 'mustache'
-import { Sink } from '~/types/sink.js'
-import { generateImportStatement, mergeImports, parseImports } from '~/utils/merge-imports.js'
 import { TemplateBuilder } from '~/template/index.js'
+import { Sink } from '~/types/sink.js'
+import { TransformerTemplate } from '~/types/templates.js'
+import { generateImportStatement, mergeImports, parseImports } from '~/utils/merge-imports.js'
 import { clickhouseSinkTemplate, postgresSinkTemplate } from './sink-templates.js'
 
 export const template = (sink: Sink) => `{{#mergedImports}}
@@ -59,13 +60,13 @@ void main()
 export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
   private static readonly SYNC_IMPORTS: Record<Sink, string[]> = {
     clickhouse: [
-        'import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse"',
-        'import { createClient } from "@clickhouse/client"',
-        'import { toSnakeKeysArray } from "./utils/index.js"',
+      'import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse"',
+      'import { createClient } from "@clickhouse/client"',
+      'import { toSnakeKeysArray } from "./utils/index.js"',
     ],
     postgresql: [
-        'import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres"',
-        'import { drizzle } from "drizzle-orm/node-postgres"',
+      'import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres"',
+      'import { drizzle } from "drizzle-orm/node-postgres"',
     ],
     memory: [],
   }
@@ -99,7 +100,7 @@ export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
     return [
       {
         address: this.config.contractAddresses[0]!,
-        eventsAlias: 'contract1Events',
+        eventsAlias: 'myContractEvents',
       },
     ]
   }
@@ -110,15 +111,15 @@ export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
     }
     return [
       {
-        compositeKey: 'contract1',
+        compositeKey: 'myContract',
         address: this.config.contractAddresses[0]!,
-        eventsAlias: 'contract1Events',
+        eventsAlias: 'myContractEvents',
       },
     ]
   }
 
   private collectAllImports(
-    templateEntries: [string, any][],
+    templateEntries: [string, TransformerTemplate][],
     contractImports: { address: string; eventsAlias: string }[],
   ): string[] {
     const allImportStrings: string[] = []
@@ -136,7 +137,7 @@ export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
     allImportStrings.push(...EvmTemplateBuilder.BASE_IMPORTS)
   }
 
-  private addTemplateImports(allImportStrings: string[], templateEntries: [string, any][]): void {
+  private addTemplateImports(allImportStrings: string[], templateEntries: [string, TransformerTemplate][]): void {
     for (const [, value] of templateEntries) {
       if (value.imports && value.imports.length > 0) {
         const cleanedImports = value.imports.map((imp: string) =>
@@ -151,7 +152,7 @@ export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
     allImportStrings.push(...EvmTemplateBuilder.SYNC_IMPORTS[this.config.sink])
   }
 
-  private addSchemaImports(allImportStrings: string[], templateEntries: [string, any][]): void {
+  private addSchemaImports(allImportStrings: string[], templateEntries: [string, TransformerTemplate][]): void {
     if (this.config.sink === 'postgresql') {
       for (const [, value] of templateEntries) {
         if (value.drizzleTableName) {
@@ -178,7 +179,7 @@ export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
   }
 
   private buildTemplateValues(
-    templateEntries: [string, any][],
+    templateEntries: [string, TransformerTemplate][],
     customContracts: { compositeKey: string; address: string; eventsAlias: string }[],
     isCustomContractFlow: boolean,
     mergedImportStatements: string[],
@@ -192,7 +193,7 @@ export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
     }
   }
 
-  private buildTemplateEntries(templateEntries: [string, any][], isCustomContractFlow: boolean) {
+  private buildTemplateEntries(templateEntries: [string, TransformerTemplate][], isCustomContractFlow: boolean) {
     return templateEntries.map(([key, value], index) => {
       const table = this.config.sink === 'clickhouse' ? value.clickhouseTableTemplate : value.drizzleSchema
       const isCustomInCustomFlow = isCustomContractFlow && key === 'custom'

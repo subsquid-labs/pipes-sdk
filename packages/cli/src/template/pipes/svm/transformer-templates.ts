@@ -9,16 +9,20 @@ const __dirname = dirname(__filename)
 const parser = new TemplateParser(__dirname)
 
 export const svmTemplates: Record<SolanaTemplateIds, TransformerTemplate> = {
-  custom: {
-    compositeKey: 'custom',
-    transformer: `solanaInstructionDecoder({
-        range: { from: "latest" },
-        programId: [],
-        instructions: {},
-    })`,
-    tableName: 'customContract',
-    drizzleTableName: 'customContract',
-  },
+  custom: (() => {
+    const parsed = parser.parseTemplateFile('custom-contract/transformer.ts')
+    const drizzleSchema = parser.readTemplateFile('custom-contract/pg-table.ts')
+    return {
+      compositeKey: 'custom',
+      transformer: '',
+      imports: parsed.imports,
+      variableName: parsed.variableName,
+      tableName: 'custom_contract',
+      clickhouseTableTemplate: parser.readTemplateFile('custom-contract/clickhouse-table.sql'),
+      drizzleSchema,
+      drizzleTableName: parser.extractVariableName(drizzleSchema),
+    }
+  })(),
   'token-balances': (() => {
     const parsed = parser.parseTemplateFile('token-balances/transformer.ts')
     const drizzleSchema = parser.readTemplateFile('token-balances/pg-table.ts')

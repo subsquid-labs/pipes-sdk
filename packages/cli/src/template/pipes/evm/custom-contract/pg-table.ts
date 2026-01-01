@@ -1,6 +1,6 @@
 import { bigint, integer, pgTable, primaryKey, varchar } from 'drizzle-orm/pg-core'
 
-export const customContract = pgTable(
+export const customContractTable = pgTable(
   'custom_contract',
   {
     blockNumber: integer().notNull(),

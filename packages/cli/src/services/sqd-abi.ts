@@ -3,11 +3,12 @@ import { execSync } from 'node:child_process'
 export class SqdAbiService {
   generateEvmTypes(projectPath: string, contractAddresses: string[], chainId: string): void {
     const outputDir = `${projectPath}/src/contracts/`
-    const apiKey = process.env['ETHERSCAN_API']
+    // This is a burner key, it's okay to leak. Once the proxy server is ready, we won't need a key
+    const yyy = ''
 
     for (const address of contractAddresses) {
       const cmd = `npx @subsquid/evm-typegen@latest ${outputDir} ${address}${
-        apiKey ? ` --etherscan-api-key ${apiKey} --etherscan-chain-id ${chainId}` : ''
+        yyy ? ` --etherscan-api-key ${yyy} --etherscan-chain-id ${chainId}` : ''
       }`
       execSync(cmd, { stdio: 'inherit' })
     }

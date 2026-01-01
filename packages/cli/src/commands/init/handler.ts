@@ -1,8 +1,7 @@
 import { execSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
-import path, { dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import chalk from 'chalk'
 import Mustache from 'mustache'
 import ora from 'ora'
@@ -24,6 +23,7 @@ import type { NetworkType } from '~/types/network.js'
 import { getEvmChainId } from '../../config/networks.js'
 import { SqdAbiService } from '../../services/sqd-abi.js'
 import type { Config } from '../../types/config.js'
+import { findPackageRoot } from '../../utils/package-root.js'
 
 export class InitHandler {
   constructor(private readonly config: Config<NetworkType>) {}
@@ -167,9 +167,8 @@ export class InitHandler {
   }
 
   private async copyClickHouseMigrations(projectPath: string): Promise<void> {
-    const __filename = fileURLToPath(import.meta.url)
-    const __dirname = dirname(__filename)
-    const templateBaseDir = path.join(__dirname, '..', '..', 'template', 'pipes', this.config.chainType)
+    const packageRoot = findPackageRoot()
+    const templateBaseDir = path.join(packageRoot, 'src', 'template', 'pipes', this.config.chainType)
 
     const migrationsDir = path.join(projectPath, 'src/migrations')
     await mkdir(migrationsDir, { recursive: true })
@@ -197,9 +196,8 @@ export class InitHandler {
   }
 
   private async copyTemplateContracts(projectPath: string): Promise<void> {
-    const __filename = fileURLToPath(import.meta.url)
-    const __dirname = dirname(__filename)
-    const templateBaseDir = path.join(__dirname, '..', '..', 'template', 'pipes', this.config.chainType)
+    const packageRoot = findPackageRoot()
+    const templateBaseDir = path.join(packageRoot, 'src', 'template', 'pipes', this.config.chainType)
 
     const templateEntries = Object.entries(this.config.templates)
     let hasContracts = false

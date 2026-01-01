@@ -1,17 +1,35 @@
-import Mustache from "mustache";
-import { TemplateBuilder } from "~/template/index.js";
-import { Sink } from "~/types/sink.js";
-import { clickhouseSinkTemplate, postgresSinkTemplate } from "../evm/sink-templates.js";
-import { generateImportStatement, mergeImports, parseImports } from "~/utils/merge-imports.js";
+import Mustache from 'mustache'
+import { TemplateBuilder } from '~/template/index.js'
+import { Sink } from '~/types/sink.js'
+import { clickhouseSinkTemplate, postgresSinkTemplate } from '../evm/sink-templates.js'
+import { generateImportStatement, mergeImports, parseImports } from '~/utils/merge-imports.js'
+import { TransformerTemplate } from '~/types/templates.js'
 
 export const template = (sink: Sink) => `{{#mergedImports}}
 {{{.}}}
 {{/mergedImports}}
 
 {{#templates}}
+{{^excludeFromComposite}}
 {{{transformer}}}
 
+{{/excludeFromComposite}}
 {{/templates}}
+{{#customContracts}}
+const {{{compositeKey}}} = solanaInstructionDecoder({
+  range: { from: 'latest' },
+  programId: [programId],
+  /**
+   * Or optionally use only a subset of events by passing the events object directly:
+   * \`\`\`ts
+   * instructions: {
+   *   transfers: myProgramInstructions.instructions.Swap,
+   * },
+   * \`\`\`
+   */
+  instructions: {{{eventsAlias}}}, 
+})
+{{/customContracts}}
 
 export async function main() {
   await solanaPortalSource({
@@ -19,7 +37,9 @@ export async function main() {
   })
   .pipeComposite({
 {{#templates}}
+{{^excludeFromComposite}}
     {{{variableName}}},
+{{/excludeFromComposite}}
 {{/templates}}
 {{#customContracts}}
     {{{compositeKey}}},
@@ -29,7 +49,7 @@ export async function main() {
    * Start transforming the data coming from the source.
    * \`\`\`ts
    * .pipe(({ contract1 }) => {
-   *   return contract1.SomeEvent.map(e => {
+   *   return contract1.SomeInstruction.map(e => {
    *     // do something
    *   })
    * })
@@ -44,13 +64,13 @@ void main()
 export class SolanaTemplateBuilder extends TemplateBuilder<'svm'> {
   private static readonly SYNC_IMPORTS: Record<Sink, string[]> = {
     clickhouse: [
-        'import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse"',
-        'import { createClient } from "@clickhouse/client"',
-        'import { toSnakeKeysArray } from "./utils/index.js"',
+      'import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse"',
+      'import { createClient } from "@clickhouse/client"',
+      'import { toSnakeKeysArray } from "./utils/index.js"',
     ],
     postgresql: [
-        'import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres"',
-        'import { drizzle } from "drizzle-orm/node-postgres"',
+      'import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres"',
+      'import { drizzle } from "drizzle-orm/node-postgres"',
     ],
     memory: [],
   }
@@ -66,12 +86,17 @@ export class SolanaTemplateBuilder extends TemplateBuilder<'svm'> {
     const contractImports = this.collectContractImports(isCustomContractFlow)
     const allImportStrings = this.collectAllImports(templateEntries, contractImports)
     const mergedImportStatements = this.parseAndMergeImports(allImportStrings)
-    const values = this.buildTemplateValues(templateEntries, contractImports, isCustomContractFlow, mergedImportStatements)
+    const values = this.buildTemplateValues(
+      templateEntries,
+      contractImports,
+      isCustomContractFlow,
+      mergedImportStatements,
+    )
     return Mustache.render(template(this.config.sink), values)
   }
 
   private buildTemplateValues(
-    templateEntries: [string, any][],
+    templateEntries: [string, TransformerTemplate][],
     customContracts: { compositeKey: string; address: string; eventsAlias: string }[],
     isCustomContractFlow: boolean,
     mergedImportStatements: string[],
@@ -85,7 +110,7 @@ export class SolanaTemplateBuilder extends TemplateBuilder<'svm'> {
     }
   }
 
-  private buildTemplateEntries(templateEntries: [string, any][], isCustomContractFlow: boolean) {
+  private buildTemplateEntries(templateEntries: [string, TransformerTemplate][], isCustomContractFlow: boolean) {
     return templateEntries.map(([key, value], index) => {
       const table = this.config.sink === 'clickhouse' ? value.clickhouseTableTemplate : value.drizzleSchema
       const isCustomInCustomFlow = isCustomContractFlow && key === 'custom'
@@ -98,6 +123,7 @@ export class SolanaTemplateBuilder extends TemplateBuilder<'svm'> {
         table,
         hasTable: Boolean(table),
         excludeFromInsert: isCustomInCustomFlow,
+        excludeFromComposite: isCustomInCustomFlow,
         last: index === templateEntries.length - 1,
       }
     })
@@ -109,14 +135,17 @@ export class SolanaTemplateBuilder extends TemplateBuilder<'svm'> {
     }
     return [
       {
-        compositeKey: 'contract1',
+        compositeKey: 'myProgram',
         address: this.config.contractAddresses[0]!,
-        eventsAlias: 'contract1Events',
+        eventsAlias: 'myProgramInstructions',
       },
     ]
   }
 
-  private collectAllImports(templateEntries: [string, any][], contractImports: { address: string; eventsAlias: string }[]): string[] {
+  private collectAllImports(
+    templateEntries: [string, any][],
+    contractImports: { address: string; eventsAlias: string }[],
+  ): string[] {
     const allImportStrings: string[] = []
     allImportStrings.push(...SolanaTemplateBuilder.BASE_IMPORTS)
     allImportStrings.push(...SolanaTemplateBuilder.SYNC_IMPORTS[this.config.sink])
@@ -126,12 +155,11 @@ export class SolanaTemplateBuilder extends TemplateBuilder<'svm'> {
     return allImportStrings
   }
 
-  private buildContractImports(
-    contractImports: { address: string; eventsAlias: string }[],
-  ): string[] {
+  private buildContractImports(contractImports: { address: string; eventsAlias: string }[]): string[] {
     const imports: string[] = []
     for (const contract of contractImports) {
-      imports.push(`import { events as ${contract.eventsAlias} } from "./contracts/${contract.address}.js"`)
+      imports.push(`import { events as ${contract.eventsAlias} } from "./contracts/${contract.address}/index.js"`)
+      imports.push(`import { programId } from "./contracts/${contract.address}/index.js"`)
     }
     return imports
   }
