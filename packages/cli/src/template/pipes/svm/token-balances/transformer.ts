@@ -35,7 +35,7 @@ export const tokenBalances = createTransformer<
         },
       })
       .addTokenBalance({
-        range: { from: '372,195,730', to: '+1000' },
+        range: { from: '372,195,730' },
         request: {
           // You can filter in that way. it is much faster, but the query has a limit of 5000 addresses
           // preMint: ['tokenProgramId']
