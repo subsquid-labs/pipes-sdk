@@ -1,4 +1,7 @@
-import { execSync } from 'node:child_process'
+import { exec, execSync } from 'node:child_process'
+import { promisify } from 'node:util'
+
+const execAsync = promisify(exec)
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
@@ -37,6 +40,8 @@ const configJsonSchema = z.object({
   sink: z.enum(['clickhouse', 'postgresql', 'memory']),
 })
 
+const squidfix = (text: string) => `[🦑 PIPES SDK] ${text} `
+
 type ConfigJson = z.infer<typeof configJsonSchema>
 
 export class InitHandler {
@@ -45,38 +50,44 @@ export class InitHandler {
   async handle(): Promise<void> {
     const spinner = ora('Setting up new Pipes SDK project...').start()
     try {
-      spinner.text = 'Creating project folder'
+      spinner.text = squidfix('Creating project folder')
       await this.createProjectFolder(this.config.projectFolder)
 
       const projectPath = path.resolve(this.config.projectFolder)
 
       await mkdir(path.join(projectPath, 'src'), { recursive: true })
 
+      spinner.text = squidfix('Writing static files')
       this.writeStaticFiles(projectPath)
 
+      spinner.text = squidfix('Writing template files')
       this.writeTemplateFiles(projectPath)
 
       if (this.config.sink === 'clickhouse') {
+        spinner.text = squidfix('Copying ClickHouse migrations')
         await this.copyClickHouseMigrations(projectPath)
       }
 
+      spinner.text = squidfix('Copying template contracts')
       await this.copyTemplateContracts(projectPath)
 
-      this.installDependencies(projectPath)
+      spinner.text = squidfix('Installing dependencies')
+      await this.installDependencies(projectPath, spinner)
 
-      this.lintProject(projectPath)
+      spinner.text = squidfix('Linting project')
+      await this.lintProject(projectPath)
 
       if (this.config.contractAddresses.length > 0) {
+        spinner.text = squidfix('Generating contract types')
         await this.generateContractTypes(projectPath)
       }
 
       if (this.config.sink === 'postgresql') {
-        spinner.text = 'Generating database migrations'
-        await new Promise((resolve) => setImmediate(resolve))
-        this.generateDatabaseMigrations(projectPath)
+        spinner.text = squidfix('Generating database migrations')
+        await this.generateDatabaseMigrations(projectPath)
       }
 
-      spinner.succeed(`${this.config.projectFolder} project initialized successfully`)
+      spinner.succeed(`${squidfix(this.config.projectFolder)} project initialized successfully`)
 
       this.nextSteps(projectPath)
     } catch (error) {
@@ -151,24 +162,22 @@ export class InitHandler {
     throw new Error('Invalid chain type')
   }
 
-  private installDependencies(projectPath: string): void {
-    execSync('pnpm install --dangerously-allow-all-builds', {
+  private async installDependencies(projectPath: string, spinner: ReturnType<typeof ora>): Promise<void> {
+    // Use async exec to allow spinner to animate during installation
+    await execAsync('pnpm install --dangerously-allow-all-builds', {
       cwd: projectPath,
-      stdio: 'ignore',
     })
   }
 
-  private lintProject(projectPath: string): void {
-    execSync(`pnpm lint`, {
+  private async lintProject(projectPath: string): Promise<void> {
+    await execAsync('pnpm lint', {
       cwd: projectPath,
-      stdio: 'ignore',
     })
   }
 
-  private generateDatabaseMigrations(projectPath: string): void {
-    execSync(`pnpm db:generate`, {
+  private async generateDatabaseMigrations(projectPath: string): Promise<void> {
+    await execAsync('pnpm db:generate', {
       cwd: projectPath,
-      stdio: 'ignore',
     })
   }
 
