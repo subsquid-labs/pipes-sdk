@@ -16,6 +16,24 @@
   "bin": {
     "pipes": "./dist/index.cjs"
   },
+  "exports": {
+    ".": "./dist/index.cjs",
+    "./config/networks": {
+      "types": "./dist/config/networks.d.ts",
+      "import": "./dist/config/networks.js",
+      "require": "./dist/config/networks.cjs"
+    },
+    "./config/templates": {
+      "types": "./dist/config/templates.d.ts",
+      "import": "./dist/config/templates.js",
+      "require": "./dist/config/templates.cjs"
+    },
+    "./config/sinks": {
+      "types": "./dist/config/sinks.d.ts",
+      "import": "./dist/config/sinks.js",
+      "require": "./dist/config/sinks.cjs"
+    }
+  },
   "scripts": {
     "dev": "tsx src/index.ts init",
     "build": "tsup",
@@ -31,8 +49,7 @@
     "drizzle-orm": "^0.44.7",
     "inquirer": "^13.1.0",
     "mustache": "^4.2.0",
-    "ora": "^5.4.1",
-    "zod": "^3.23.8"
+    "ora": "^5.4.1"
   },
   "devDependencies": {
     "@subsquid/evm-abi": "0.3.1",

@@ -1,4 +1,4 @@
-import { NetworkType } from '~/types/network.js'
+import type { NetworkType } from '~/types/network.js'
 
 export const evmTemplateOptions = [
   {

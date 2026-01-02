@@ -39,19 +39,38 @@ function copyTemplates() {
   copyRecursive(srcTemplateDir, distTemplateDir)
 }
 
-export default defineConfig({
-  entry: ['src/index.ts'],
-  outDir: 'dist',
-  format: ['cjs'],
-  clean: true,
-  bundle: true,
-  splitting: false,
-  sourcemap: true,
-  tsconfig: 'tsconfig.json',
-  banner: {
-    js: '#!/usr/bin/env node\n',
+export default defineConfig([
+  // Main CLI entry - CJS only (for binary)
+  {
+    entry: ['src/index.ts'],
+    outDir: 'dist',
+    format: ['cjs'],
+    clean: true,
+    bundle: true,
+    splitting: false,
+    sourcemap: true,
+    tsconfig: 'tsconfig.json',
+    banner: {
+      js: '#!/usr/bin/env node\n',
+    },
+    onSuccess: async () => {
+      copyTemplates()
+    },
   },
-  onSuccess: async () => {
-    copyTemplates()
+  // Config files - both ESM and CJS (for UI and CLI)
+  {
+    entry: {
+      'config/networks': 'src/config/networks.ts',
+      'config/templates': 'src/config/templates.ts',
+      'config/sinks': 'src/config/sinks.ts',
+    },
+    outDir: 'dist',
+    format: ['esm', 'cjs'],
+    clean: false,
+    bundle: true,
+    splitting: false,
+    sourcemap: true,
+    tsconfig: 'tsconfig.json',
+    dts: true,
   },
-})
+])

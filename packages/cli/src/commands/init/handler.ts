@@ -5,7 +5,6 @@ import path from 'node:path'
 import chalk from 'chalk'
 import Mustache from 'mustache'
 import ora from 'ora'
-import { z } from 'zod'
 import { EvmTemplateBuilder } from '~/template/pipes/evm/evm-template-builder.js'
 import { renderSchemasTemplate } from '~/template/pipes/evm/schemas-template.js'
 import { SolanaTemplateBuilder } from '~/template/pipes/svm/solana-template-builder.js'
@@ -23,21 +22,8 @@ import {
 import type { NetworkType } from '~/types/network.js'
 import { getEvmChainId } from '../../config/networks.js'
 import { SqdAbiService } from '../../services/sqd-abi.js'
-import { templates } from '../../template/index.js'
 import type { Config } from '../../types/config.js'
 import { findPackageRoot } from '../../utils/package-root.js'
-
-const configJsonSchema = z.object({
-  projectFolder: z.string().min(1),
-  chainType: z.enum(['evm', 'svm']),
-  network: z.string().min(1),
-  pipelineMode: z.enum(['templates', 'custom']),
-  templates: z.array(z.string()),
-  contractAddresses: z.array(z.string()),
-  sink: z.enum(['clickhouse', 'postgresql', 'memory']),
-})
-
-type ConfigJson = z.infer<typeof configJsonSchema>
 
 export class InitHandler {
   constructor(private readonly config: Config<NetworkType>) {}
@@ -318,61 +304,5 @@ export class InitHandler {
       ),
     )
     console.log(`${sep}\n`)
-  }
-
-  static fromJson(jsonString: string): InitHandler {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(jsonString)
-    } catch (error) {
-      throw new Error(`Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`)
-    }
-
-    const validated = configJsonSchema.parse(parsed)
-    const config = InitHandler.transformToConfig(validated)
-    return new InitHandler(config)
-  }
-
-  private static transformToConfig(json: ConfigJson): Config<NetworkType> {
-    const { chainType, pipelineMode, templates: templateIds, contractAddresses, ...rest } = json
-
-    let templateMap: Config<NetworkType>['templates']
-
-    if (pipelineMode === 'templates') {
-      if (chainType === 'evm') {
-        templateMap = templateIds.reduce<Config<'evm'>['templates']>(
-          (acc: Config<'evm'>['templates'], id: string) => {
-            if (id in templates.evm) {
-              acc[id as keyof typeof templates.evm] = templates.evm[id as keyof typeof templates.evm]
-            }
-            return acc
-          },
-          {},
-        )
-      } else {
-        templateMap = templateIds.reduce<Config<'svm'>['templates']>(
-          (acc: Config<'svm'>['templates'], id: string) => {
-            if (id in templates.svm) {
-              acc[id as keyof typeof templates.svm] = templates.svm[id as keyof typeof templates.svm]
-            }
-            return acc
-          },
-          {},
-        )
-      }
-    } else {
-      if (chainType === 'evm') {
-        templateMap = { custom: templates.evm.custom } as Config<'evm'>['templates']
-      } else {
-        templateMap = { custom: templates.svm.custom } as Config<'svm'>['templates']
-      }
-    }
-
-    return {
-      ...rest,
-      chainType,
-      templates: templateMap,
-      contractAddresses,
-    } as Config<NetworkType>
   }
 }
