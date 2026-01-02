@@ -6,6 +6,9 @@ import chalk from 'chalk'
 import Mustache from 'mustache'
 import ora from 'ora'
 import { z } from 'zod'
+import { getEvmChainId } from '~/config/networks.js'
+import { SqdAbiService } from '~/services/sqd-abi.js'
+import { templates } from '~/template/index.js'
 import { EvmTemplateBuilder } from '~/template/pipes/evm/evm-template-builder.js'
 import { renderSchemasTemplate } from '~/template/pipes/evm/schemas-template.js'
 import { SolanaTemplateBuilder } from '~/template/pipes/svm/solana-template-builder.js'
@@ -17,14 +20,11 @@ import {
   getDockerCompose,
   getEnvTemplate,
   gitignoreContent,
-  packageJsonTemplate,
+  renderPackageJson,
   tsconfigConfig,
 } from '~/template/scaffold/index.js'
-import type { NetworkType } from '~/types/network.js'
-import { getEvmChainId } from '~/config/networks.js'
-import { SqdAbiService } from '~/services/sqd-abi.js'
-import { templates } from '~/template/index.js'
 import type { Config } from '~/types/config.js'
+import type { NetworkType } from '~/types/network.js'
 import { findPackageRoot } from '~/utils/package-root.js'
 
 const configJsonSchema = z.object({
@@ -112,10 +112,13 @@ export class InitHandler {
   }
 
   private writeTemplateFiles(projectPath: string): void {
-    const packageJson = Mustache.render(packageJsonTemplate, {
-      projectName: this.config.projectFolder,
-      hasPostgresScripts: this.config.sink === 'postgresql',
-    })
+    const { dependencies, devDependencies } = getDependencies(this.config.sink)
+    const packageJson = renderPackageJson(
+      this.config.projectFolder,
+      dependencies,
+      devDependencies,
+      this.config.sink === 'postgresql',
+    )
     writeFileSync(path.join(projectPath, 'package.json'), packageJson)
 
     const indexTs = this.buildIndexTs()
@@ -149,21 +152,10 @@ export class InitHandler {
   }
 
   private installDependencies(projectPath: string): void {
-    const { dependencies, devDependencies } = getDependencies(this.config.sink)
-
-    if (dependencies.length > 0) {
-      execSync(`pnpm add ${dependencies.join(' ')}`, {
-        cwd: projectPath,
-        stdio: 'ignore',
-      })
-    }
-
-    if (devDependencies.length > 0) {
-      execSync(`pnpm add -D ${devDependencies.join(' ')}`, {
-        cwd: projectPath,
-        stdio: 'ignore',
-      })
-    }
+    execSync('pnpm install --dangerously-allow-all-builds', {
+      cwd: projectPath,
+      stdio: 'ignore',
+    })
   }
 
   private lintProject(projectPath: string): void {
@@ -284,9 +276,6 @@ export class InitHandler {
     const sep = '─'.repeat(64)
     const pathLine = `📁 Project created in ${projectPath}`
 
-    const cmd = (s: string) => `\x1b[1m${s}\x1b[0m` // bold
-    const hint = (s: string) => `\x1b[2m${s}\x1b[0m` // dim
-
     console.log(`\n${sep}`)
 
     console.log(`${pathLine}\n`)
@@ -294,23 +283,23 @@ export class InitHandler {
     console.log('Next steps\n')
 
     console.log(`1) Enter the folder`)
-    console.log(`   ${cmd(`cd ${projectPath}`)}\n`)
+    console.log(`   ${chalk.bold(`cd ${projectPath}`)}\n`)
 
     console.log(`2) Start your database (Docker)`)
-    console.log(`   ${cmd('docker compose up -d')}\n`)
+    console.log(`   ${chalk.bold('docker compose up -d')}\n`)
 
     if (this.config.sink === 'postgresql') {
       console.log(`3) Apply migrations`)
-      console.log(`   ${cmd('pnpm db:migrate')}\n`)
+      console.log(`   ${chalk.bold('pnpm db:migrate')}\n`)
 
       console.log(`4) Start the pipeline`)
-      console.log(`   ${cmd('pnpm dev')}\n`)
+      console.log(`   ${chalk.bold('pnpm dev')}\n`)
     } else if (this.config.sink === 'clickhouse') {
       console.log(`3) Start the pipeline`)
-      console.log(`   ${cmd('pnpm dev')}\n`)
+      console.log(`   ${chalk.bold('pnpm dev')}\n`)
     } else {
       console.log(`3) Start the pipeline`)
-      console.log(`   ${cmd('pnpm dev')}\n`)
+      console.log(`   ${chalk.bold('pnpm dev')}\n`)
     }
     console.log(
       chalk.dim(
@@ -339,25 +328,19 @@ export class InitHandler {
 
     if (pipelineMode === 'templates') {
       if (chainType === 'evm') {
-        templateMap = templateIds.reduce<Config<'evm'>['templates']>(
-          (acc: Config<'evm'>['templates'], id: string) => {
-            if (id in templates.evm) {
-              acc[id as keyof typeof templates.evm] = templates.evm[id as keyof typeof templates.evm]
-            }
-            return acc
-          },
-          {},
-        )
+        templateMap = templateIds.reduce<Config<'evm'>['templates']>((acc: Config<'evm'>['templates'], id: string) => {
+          if (id in templates.evm) {
+            acc[id as keyof typeof templates.evm] = templates.evm[id as keyof typeof templates.evm]
+          }
+          return acc
+        }, {})
       } else {
-        templateMap = templateIds.reduce<Config<'svm'>['templates']>(
-          (acc: Config<'svm'>['templates'], id: string) => {
-            if (id in templates.svm) {
-              acc[id as keyof typeof templates.svm] = templates.svm[id as keyof typeof templates.svm]
-            }
-            return acc
-          },
-          {},
-        )
+        templateMap = templateIds.reduce<Config<'svm'>['templates']>((acc: Config<'svm'>['templates'], id: string) => {
+          if (id in templates.svm) {
+            acc[id as keyof typeof templates.svm] = templates.svm[id as keyof typeof templates.svm]
+          }
+          return acc
+        }, {})
       }
     } else {
       if (chainType === 'evm') {
