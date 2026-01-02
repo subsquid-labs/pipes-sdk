@@ -1,4 +1,5 @@
 import { program } from 'commander'
+import { InitHandler } from './commands/init/handler.js'
 import { InitPrompt } from './commands/init/prompt.js'
 
 function formatError(error: unknown): string {
@@ -16,10 +17,16 @@ program.name('pipes').description('Subsquid Pipes CLI').version('0.1.0')
 program
   .command('init')
   .description('Initialize a new pipe project')
-  .action(async () => {
+  .option('--config <json>', 'JSON configuration string to skip prompts')
+  .action(async (options) => {
     try {
-      const initConfig = new InitPrompt()
-      await initConfig.run()
+      if (options.config) {
+        const handler = InitHandler.fromJson(options.config)
+        await handler.handle()
+      } else {
+        const initConfig = new InitPrompt()
+        await initConfig.run()
+      }
     } catch (error) {
       console.error(`\n❌ Error: ${formatError(error)}`)
       process.exit(1)
