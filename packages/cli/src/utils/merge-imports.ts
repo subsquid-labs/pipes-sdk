@@ -15,11 +15,11 @@ export function parseImports(content: string): {
   code: string
 } {
   const imports: ParsedImport[] = []
+  const importRanges: Array<{ start: number; end: number }> = []
 
   // Match side-effect imports: import "module" or import 'module'
   const sideEffectRegex = /import\s+['"]([^'"]+)['"];?/g
   let match
-  const importLines: number[] = []
 
   while ((match = sideEffectRegex.exec(content)) !== null) {
     const afterMatch = content.substring(match.index! + match[0].length).trim()
@@ -32,13 +32,16 @@ export function parseImports(content: string): {
         typeOnly: false,
         sideEffect: true,
       })
-      importLines.push(match.index!)
+      importRanges.push({
+        start: match.index!,
+        end: match.index! + match[0].length,
+      })
     }
   }
 
-  // Match import statements (handles default, named, namespace, type imports)
+  // Match import statements (handles default, named, namespace, type imports, including multiline)
   const importRegex =
-    /import\s+(?:(type\s+)?(?:(?:\*\s+as\s+(\w+))|(\w+)|(?:\{([^}]+)\})|(?:\{([^}]+)\}\s+as\s+(\w+))|(?:(\w+)\s*,\s*\{([^}]+)\})))\s+from\s+['"]([^'"]+)['"];?/g
+    /import\s+(?:(type\s+)?(?:(?:\*\s+as\s+(\w+))|(\w+)|(?:\{([\s\S]*?)\})|(?:\{([\s\S]*?)\}\s+as\s+(\w+))|(?:(\w+)\s*,\s*\{([\s\S]*?)\})))\s+from\s+['"]([^'"]+)['"];?/g
 
   while ((match = importRegex.exec(content)) !== null) {
     const [
@@ -79,16 +82,19 @@ export function parseImports(content: string): {
     }
 
     imports.push(parsed)
-    importLines.push(match.index!)
+    importRanges.push({
+      start: match.index!,
+      end: match.index! + match[0].length,
+    })
   }
 
-  // Remove import lines from code
   const lines = content.split('\n')
   const codeLines = lines.filter((_, index) => {
     const lineStart = lines.slice(0, index).join('\n').length + (index > 0 ? 1 : 0)
-    return !importLines.some((importStart) => {
-      const importEnd = content.indexOf('\n', importStart)
-      return lineStart >= importStart && lineStart <= (importEnd === -1 ? content.length : importEnd)
+    const lineEnd = lineStart + lines[index]!.length
+    return !importRanges.some((range) => {
+      // Check if this line overlaps with any import range
+      return (lineStart >= range.start && lineStart < range.end) || (lineEnd > range.start && lineEnd <= range.end) || (lineStart <= range.start && lineEnd >= range.end)
     })
   })
 

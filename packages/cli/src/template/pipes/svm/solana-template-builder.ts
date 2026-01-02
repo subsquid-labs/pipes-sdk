@@ -168,10 +168,7 @@ export class SolanaTemplateBuilder extends TemplateBuilder<'svm'> {
     const templateImports: string[] = []
     for (const [, value] of templateEntries) {
       if (value.imports && value.imports.length > 0) {
-        const cleanedImports = value.imports.map((imp: string) =>
-          imp.replace(/from\s+['"]node_modules\//g, (match) => match.replace('node_modules/', '')),
-        )
-        templateImports.push(...cleanedImports)
+        templateImports.push(...value.imports)
       }
     }
     return templateImports

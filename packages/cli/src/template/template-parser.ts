@@ -21,6 +21,10 @@ export class TemplateParser {
   } {
     const content = this.readTemplateFile(relativePath)
     const { imports, code } = parseImports(content)
+    // Clean node_modules/ from import paths
+    imports.forEach((imp) => {
+      imp.from = imp.from.replace(/^node_modules\//, '')
+    })
     const variableName = this.extractVariableName(code)
     return {
       imports: imports.map(generateImportStatement).filter((stmt) => stmt.length > 0),

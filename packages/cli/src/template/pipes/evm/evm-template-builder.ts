@@ -140,10 +140,7 @@ export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
   private addTemplateImports(allImportStrings: string[], templateEntries: [string, TransformerTemplate][]): void {
     for (const [, value] of templateEntries) {
       if (value.imports && value.imports.length > 0) {
-        const cleanedImports = value.imports.map((imp: string) =>
-          imp.replace(/from\s+['"]node_modules\//g, (match) => match.replace('node_modules/', '')),
-        )
-        allImportStrings.push(...cleanedImports)
+        allImportStrings.push(...value.imports)
       }
     }
   }
