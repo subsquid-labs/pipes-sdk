@@ -1,5 +1,3 @@
-import { readFileSync } from 'fs'
-
 // Utility to parse and merge imports
 interface ParsedImport {
   defaultImport?: string
@@ -94,14 +92,18 @@ export function parseImports(content: string): {
     const lineEnd = lineStart + lines[index]!.length
     return !importRanges.some((range) => {
       // Check if this line overlaps with any import range
-      return (lineStart >= range.start && lineStart < range.end) || (lineEnd > range.start && lineEnd <= range.end) || (lineStart <= range.start && lineEnd >= range.end)
+      return (
+        (lineStart >= range.start && lineStart < range.end) ||
+        (lineEnd > range.start && lineEnd <= range.end) ||
+        (lineStart <= range.start && lineEnd >= range.end)
+      )
     })
   })
 
   return { imports, code: codeLines.join('\n').trim() }
 }
 
-function parseNamedImports(namedStr: string): string[] {
+export function parseNamedImports(namedStr: string): string[] {
   return namedStr
     .split(',')
     .map((s) => s.trim())

@@ -83,10 +83,7 @@ export function findPackageRoot(): string {
   } catch {}
 
   // Method 5: Last resort - search from common locations
-  const searchPaths = [
-    join(process.cwd(), 'node_modules', PACKAGE_NAME),
-    process.cwd(),
-  ]
+  const searchPaths = [join(process.cwd(), 'node_modules', PACKAGE_NAME), process.cwd()]
 
   for (const start of searchPaths) {
     let current = start
@@ -107,7 +104,5 @@ export function findPackageRoot(): string {
   }
 
   // Final fallback - should not reach here in normal circumstances
-  throw new Error(
-    `Could not find package root for ${PACKAGE_NAME}. Please ensure the package is properly installed.`,
-  )
+  throw new Error(`Could not find package root for ${PACKAGE_NAME}. Please ensure the package is properly installed.`)
 }
