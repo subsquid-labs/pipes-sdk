@@ -53,7 +53,7 @@ export type IndexedKeys<T> = {
 type CodecValueType<T> = T extends Codec<any, infer TOut> ? TOut : never
 
 export type IndexedParams<T extends AbiEvent<any>> = {
-  [K in IndexedKeys<T['params']>]: CodecValueType<T['params'][K]>
+  [K in IndexedKeys<T['params']>]: CodecValueType<T['params'][K]> | CodecValueType<T['params'][K]>[]
 }
 
 export type EventWithArgs<T extends AbiEvent<any>> = {
@@ -164,12 +164,17 @@ function buildEventTopics<T extends AbiEvent<any>>(event: T, indexedParams: Part
     const indexedParam = (indexedParams as EventParams<T>)[k]
     if (!indexedParam) return
 
-    const eventParams = params[k] as Codec<any, any>
-    const sink = new Sink(1)
-    eventParams['encode'](sink, indexedParam)
+    const normalizedParams = Array.isArray(indexedParam) ? indexedParam : [indexedParam]
 
-    // TODO: need to consider that a param can take an array of values
-    return [sink.toString()]
+    const topicParams: string[] = []
+    for (const param of normalizedParams) {
+      const eventParams = params[k] as Codec<any, any>
+      const sink = new Sink(1)
+      eventParams['encode'](sink, param)
+      topicParams.push(sink.toString())
+    }
+
+    return topicParams
   })
 
   return {
@@ -305,31 +310,41 @@ export function evmDecoder<T extends Events, C extends Contracts>({
           ].join('\n'),
         )
 
-        // TODO: we should conditionally add the fields based on the events without params
-        queryBuilder
-          .addFields(decodedEventFields)
-          .addLog({
-            // pre-indexed stage
-            range: firstRange,
-            request: {
-              address: children.map((c) => c.childAddress), // fill addresses from factory events
-              topic0: eventTopic0,
-              transaction: true,
-            },
-          })
-          .addLog({
-            range: secondRange,
-            request: {
-              topic0: eventTopic0,
-              transaction: true,
-            },
-          })
+        queryBuilder.addFields(decodedEventFields)
+
+        if (eventsWithoutParams.length > 0) {
+          queryBuilder
+            .addLog({
+              // pre-indexed stage
+              range: firstRange,
+              request: {
+                address: children.map((c) => c.childAddress), // fill addresses from factory events
+                topic0: eventTopic0,
+                transaction: true,
+              },
+            })
+            .addLog({
+              range: secondRange,
+              request: {
+                topic0: eventTopic0,
+                transaction: true,
+              },
+            })
+        }
 
         for (const request of eventWithParamsRequest) {
-          queryBuilder.addLog({
-            range: decodedRange,
-            request,
-          })
+          queryBuilder
+            .addLog({
+              range: firstRange,
+              request: {
+                address: children.map((c) => c.childAddress), // fill addresses from factory events
+                ...request,
+              },
+            })
+            .addLog({
+              range: secondRange,
+              request,
+            })
         }
 
         return

@@ -33,8 +33,8 @@ describe('evmDecoder types', () => {
   it('type IndexedParams picks indexed params from ERC20 Transfer', () => {
     type Result = IndexedParams<typeof commonAbis.erc20.events.Transfer>
     expectTypeOf<Result>().toEqualTypeOf<{
-      from: string
-      to: string
+      from: string | string[]
+      to: string | string[]
     }>()
   })
 
@@ -53,8 +53,8 @@ describe('evmDecoder types', () => {
     expectTypeOf<Result>().toEqualTypeOf<{
       event: typeof commonAbis.erc20.events.Transfer
       params: {
-        from?: string
-        to?: string
+        from?: string | string[]
+        to?: string | string[]
       }
     }>()
 
@@ -88,8 +88,8 @@ describe('evmDecoder types', () => {
         | {
             event: typeof commonAbis.erc20.events.Transfer
             params: {
-              to?: string
-              from?: string
+              to?: string | string[]
+              from?: string | string[]
             }
           }
       Approval:
@@ -97,8 +97,8 @@ describe('evmDecoder types', () => {
         | {
             event: typeof commonAbis.erc20.events.Approval
             params: {
-              owner?: string
-              spender?: string
+              owner?: string | string[]
+              spender?: string | string[]
             }
           }
     }>()
@@ -112,8 +112,8 @@ describe('evmDecoder types', () => {
         | {
             event: typeof commonAbis.erc20.events.Transfer
             params: {
-              from?: string
-              to?: string
+              from?: string | string[]
+              to?: string | string[]
             }
           }
       Approval:
@@ -121,8 +121,8 @@ describe('evmDecoder types', () => {
         | {
             event: typeof commonAbis.erc20.events.Approval
             params: {
-              owner?: string
-              spender?: string
+              owner?: string | string[]
+              spender?: string | string[]
             }
           }
     }>()
@@ -139,9 +139,10 @@ describe('evmDecoder types', () => {
     expectTypeOf<Result['Approval']>().not.toEqualTypeOf<{
       event: typeof commonAbis.erc20.events.Approval
       params: {
-        owner?: string
-        spender?: string
-        value?: bigint
+        owner?: string | string[]
+        spender?: string | string
+        // Values isn't indexed
+        value?: bigint | bigint[]
       }
     }>()
   })
@@ -156,8 +157,8 @@ describe('evmDecoder types', () => {
           | {
               event: typeof commonAbis.erc20.events.Transfer
               params: {
-                from?: string
-                to?: string
+                from?: string | string[]
+                to?: string | string[]
               }
             }
         Approval:
@@ -165,8 +166,8 @@ describe('evmDecoder types', () => {
           | {
               event: typeof commonAbis.erc20.events.Approval
               params: {
-                owner?: string
-                spender?: string
+                owner?: string | string[]
+                spender?: string | string[]
               }
             }
       }
@@ -380,6 +381,39 @@ describe('evmDecoder queries', () => {
         transactionIndex: true,
       },
     })
+  })
+
+  it('event params should accept value or array of values', async () => {
+    const range = { from: 0, to: 100 }
+    const contracts = ['0x123']
+
+    const decoder = evmDecoder({
+      range,
+      contracts,
+      events: {
+        Transfer: {
+          event: commonAbis.erc20.events.Transfer,
+          params: {
+            from: ['0x1', '0x2'],
+            to: '0x3',
+          },
+        },
+      },
+    })
+
+    const capturedQueryBuilder = await captureQueryBuilder(decoder)
+
+    const requests = capturedQueryBuilder.getRequests()
+
+    expect(requests[0].request?.logs?.[0]?.topic0).toEqual([commonAbis.erc20.events.Transfer.topic])
+    expect(requests[0].request?.logs?.[0]?.topic1).toEqual([
+      '0x0000000000000000000000000000000000000000000000000000000000000001',
+      '0x0000000000000000000000000000000000000000000000000000000000000002',
+    ])
+    expect(requests[0].request?.logs?.[0]?.topic2).toEqual([
+      '0x0000000000000000000000000000000000000000000000000000000000000003',
+    ])
+    expect(requests[0].request?.logs?.[0]?.topic3).toEqual(undefined)
   })
 
   it('should build query with mixed events (with and without params)', async () => {
