@@ -1,28 +1,29 @@
 import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
-import { metricsServer } from '@subsquid/pipes/metrics/node'
 
 /**
- * Basic example demonstrating how to use pipes for processing EVM data.
- * This example shows how to:
- * - Create a data stream from Base Mainnet using Portal API
- * - Decode ERC20 transfer events
- * - Process the transformed events in a streaming fashion
+ * This example demonstrates how to filter EVM events by indexed parameters to reduce data transfer and processing.
+ * It shows how to:
+ * - Create a data stream from Ethereum mainnet using Portal API
+ * - Decode ERC20 transfer and approval events
+ * - Filter events by indexed parameters using the `params` property
  */
 async function cli() {
   const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-    metrics: metricsServer(),
   }).pipe(
     evmDecoder({
       range: { from: '24171448', to: '24171449' },
       events: {
-        // Listening for all approval events
-        // approvals: commonAbis.erc20.events.Approval,
-        // Listening to all transfers to zero address
+        // Use the AbiEvent instance directly for convenience if you need all the emitted events
+        approvals: commonAbis.erc20.events.Approval,
+        // Or filter by any of the indexed parameters defined in the contract
         transfers: {
           event: commonAbis.erc20.events.Transfer,
           params: {
-            to: '0x0000000000000000000000000000000000000000',
+            // For every event param you can use an array to match multiple values
+            from: ['0x87482e84503639466fad82d1dce97f800a410945'],
+            // Or pass a single value directly
+            to: '0x10b32a54eeb05d2c9cd1423b4ad90c3671a2ed5f',
           },
         },
       },
@@ -31,7 +32,7 @@ async function cli() {
 
   for await (const { data } of stream) {
     console.log({
-      // app: data.approvals.length,
+      app: data.approvals.length,
       tx: data.transfers.length,
     })
   }
