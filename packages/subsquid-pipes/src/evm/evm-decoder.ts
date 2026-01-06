@@ -232,6 +232,44 @@ function buildEventRequests<T extends AbiEvent<any>, C extends Contracts>(
     .filter((logRequest): logRequest is LogRequest => !!logRequest)
 }
 
+/**
+ * Decodes EVM events from portal data and optionally filters them by indexed parameters.
+ *
+ * This transformer extracts and decodes EVM events from blockchain data. You can either
+ * capture all instances of an event or filter by indexed parameters to reduce data transfer
+ * and processing overhead.
+ *
+ * @param args - Configuration object for the decoder
+ * @param args.range - Block range to query. See {@link PortalRange} for format details.
+ * @param args.contracts - Optional contract addresses to filter events from. Can be a {@link Factory} instance or an array of addresses
+ * @param args.events - Map of event names to event definitions. Each entry can be:
+ *   - An {@link AbiEvent} instance to capture all instances of that event
+ *   - An {@link EventWithArgs} object with `event` and `params` to filter by indexed parameters
+ * @param args.profiler - Optional {@link ProfilerOptions} configuration for performance monitoring
+ * @param args.onError - Optional error handler callback that receives {@link BatchCtx} and error
+ * @returns A {@link Transformer} that processes EVM portal data and returns {@link EventResponse} with decoded events
+ *
+ * @example
+ * ```ts
+ * evmDecoder({
+ *   range: { from: 'latest' },
+ *   events: {
+ *     // Use the AbiEvent instance directly for convenience if you need all the emitted events
+ *     approvals: commonAbis.erc20.events.Approval,
+ *     // Or filter by any of the indexed parameters defined in the contract
+ *     transfers: {
+ *       event: commonAbis.erc20.events.Transfer,
+ *       params: {
+ *         // For every event param you can use an array to match multiple values
+ *         from: ['0x87482e84503639466fad82d1dce97f800a410945'],
+ *         // Or pass a single value directly
+ *         to: '0x10b32a54eeb05d2c9cd1423b4ad90c3671a2ed5f',
+ *       },
+ *     },
+ *   },
+ * })
+ * ```
+ */
 export function evmDecoder<T extends Events, C extends Contracts>({
   range,
   contracts,
