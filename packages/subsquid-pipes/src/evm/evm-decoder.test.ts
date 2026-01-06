@@ -175,6 +175,54 @@ describe('evmDecoder types', () => {
 })
 
 describe('evmDecoder queries', () => {
+  it('should build query for events without params', async () => {
+    const range = { from: 0, to: 100 }
+    const contracts = ['0x123']
+
+    const decoder = evmDecoder({
+      range,
+      contracts,
+      events: {
+        Transfer: commonAbis.erc20.events.Transfer,
+      },
+    })
+
+    const capturedQueryBuilder = await captureQueryBuilder(decoder)
+
+    const requests = capturedQueryBuilder.getRequests()
+    const fields = capturedQueryBuilder.getFields()
+
+    expect(requests).toHaveLength(1)
+    expect(requests[0].request?.logs).toBeDefined()
+    expect(requests[0].request?.logs?.[0]?.topic0).toEqual([commonAbis.erc20.events.Transfer.topic])
+    expect(requests[0].request?.logs?.[0]?.topic1).toEqual(undefined)
+    expect(requests[0].request?.logs?.[0]?.topic2).toEqual(undefined)
+    expect(requests[0].request?.logs?.[0]?.topic3).toEqual(undefined)
+    expect(requests[0].request?.logs?.[0]?.address).toEqual(contracts)
+    expect(requests[0].request?.logs?.[0]?.transaction).toBe(true)
+    expect(fields).toMatchObject({
+      block: {
+        number: true,
+        hash: true,
+        timestamp: true,
+      },
+      transaction: {
+        from: true,
+        to: true,
+        hash: true,
+        sighash: true,
+      },
+      log: {
+        address: true,
+        topics: true,
+        data: true,
+        transactionHash: true,
+        logIndex: true,
+        transactionIndex: true,
+      },
+    })
+  })
+
   it('should build query batching events without params together', async () => {
     const range = { from: 0, to: 100 }
     const contracts = ['0x123']
@@ -227,52 +275,53 @@ describe('evmDecoder queries', () => {
     })
   })
 
-  it('should build query for events without params', async () => {
+  it('should build query with corresponding topics for each param', async () => {
     const range = { from: 0, to: 100 }
     const contracts = ['0x123']
 
-    const decoder = evmDecoder({
+    // `from` is topic1 on ERC20 Transfer event
+    const fromParamDecoder = evmDecoder({
       range,
       contracts,
       events: {
-        Transfer: commonAbis.erc20.events.Transfer,
+        Transfer: {
+          event: commonAbis.erc20.events.Transfer,
+          params: {
+            from: '0x1',
+          },
+        },
       },
     })
+    const fromDecoder = await captureQueryBuilder(fromParamDecoder)
+    const fromRequests = fromDecoder.getRequests()
+    expect(fromRequests[0].request?.logs?.[0]?.topic0).toEqual([commonAbis.erc20.events.Transfer.topic])
+    expect(fromRequests[0].request?.logs?.[0]?.topic1).toEqual([
+      '0x0000000000000000000000000000000000000000000000000000000000000001',
+    ])
+    expect(fromRequests[0].request?.logs?.[0]?.topic2).toEqual(undefined)
+    expect(fromRequests[0].request?.logs?.[0]?.topic3).toEqual(undefined)
 
-    const capturedQueryBuilder = await captureQueryBuilder(decoder)
-
-    const requests = capturedQueryBuilder.getRequests()
-    const fields = capturedQueryBuilder.getFields()
-
-    expect(requests).toHaveLength(1)
-    expect(requests[0].request?.logs).toBeDefined()
-    expect(requests[0].request?.logs?.[0]?.topic0).toEqual([commonAbis.erc20.events.Transfer.topic])
-    expect(requests[0].request?.logs?.[0]?.topic1).toEqual(undefined)
-    expect(requests[0].request?.logs?.[0]?.topic2).toEqual(undefined)
-    expect(requests[0].request?.logs?.[0]?.topic3).toEqual(undefined)
-    expect(requests[0].request?.logs?.[0]?.address).toEqual(contracts)
-    expect(requests[0].request?.logs?.[0]?.transaction).toBe(true)
-    expect(fields).toMatchObject({
-      block: {
-        number: true,
-        hash: true,
-        timestamp: true,
-      },
-      transaction: {
-        from: true,
-        to: true,
-        hash: true,
-        sighash: true,
-      },
-      log: {
-        address: true,
-        topics: true,
-        data: true,
-        transactionHash: true,
-        logIndex: true,
-        transactionIndex: true,
+    // `from` is topic2 on ERC20 Transfer event
+    const toParamDecoder = evmDecoder({
+      range,
+      contracts,
+      events: {
+        Transfer: {
+          event: commonAbis.erc20.events.Transfer,
+          params: {
+            to: '0x2',
+          },
+        },
       },
     })
+    const toDecoder = await captureQueryBuilder(toParamDecoder)
+    const toRequests = toDecoder.getRequests()
+    expect(toRequests[0].request?.logs?.[0]?.topic0).toEqual([commonAbis.erc20.events.Transfer.topic])
+    expect(toRequests[0].request?.logs?.[0]?.topic1).toEqual(undefined)
+    expect(toRequests[0].request?.logs?.[0]?.topic2).toEqual([
+      '0x0000000000000000000000000000000000000000000000000000000000000002',
+    ])
+    expect(fromRequests[0].request?.logs?.[0]?.topic3).toEqual(undefined)
   })
 
   it('should build query for events with params', async () => {
@@ -301,8 +350,12 @@ describe('evmDecoder queries', () => {
     expect(requests).toHaveLength(1)
     expect(requests[0].request?.logs).toBeDefined()
     expect(requests[0].request?.logs?.[0]?.topic0).toEqual([commonAbis.erc20.events.Transfer.topic])
-    expect(requests[0].request?.logs?.[0]?.topic1).toEqual(['0x1'])
-    expect(requests[0].request?.logs?.[0]?.topic2).toEqual(['0x2'])
+    expect(requests[0].request?.logs?.[0]?.topic1).toEqual([
+      '0x0000000000000000000000000000000000000000000000000000000000000001',
+    ])
+    expect(requests[0].request?.logs?.[0]?.topic2).toEqual([
+      '0x0000000000000000000000000000000000000000000000000000000000000002',
+    ])
     expect(requests[0].request?.logs?.[0]?.topic3).toEqual(undefined)
     expect(requests[0].request?.logs?.[0]?.address).toEqual(contracts)
     expect(requests[0].request?.logs?.[0]?.transaction).toBe(true)
@@ -365,8 +418,12 @@ describe('evmDecoder queries', () => {
 
     expect(requests[1].request?.logs).toBeDefined()
     expect(requests[1].request?.logs?.[0]?.topic0).toEqual([commonAbis.erc20.events.Approval.topic])
-    expect(requests[1].request?.logs?.[0]?.topic1).toEqual(['0x1'])
-    expect(requests[1].request?.logs?.[0]?.topic2).toEqual(['0x2'])
+    expect(requests[1].request?.logs?.[0]?.topic1).toEqual([
+      '0x0000000000000000000000000000000000000000000000000000000000000001',
+    ])
+    expect(requests[1].request?.logs?.[0]?.topic2).toEqual([
+      '0x0000000000000000000000000000000000000000000000000000000000000002',
+    ])
     expect(requests[1].request?.logs?.[0]?.topic3).toEqual(undefined)
     expect(requests[1].request?.logs?.[0]?.address).toEqual(contracts)
     expect(requests[1].request?.logs?.[0]?.transaction).toBe(true)
@@ -428,16 +485,24 @@ describe('evmDecoder queries', () => {
 
     expect(requests[0].request?.logs).toBeDefined()
     expect(requests[0].request?.logs?.[0]?.topic0).toEqual([commonAbis.erc20.events.Transfer.topic])
-    expect(requests[0].request?.logs?.[0]?.topic1).toEqual(['0x1'])
-    expect(requests[0].request?.logs?.[0]?.topic2).toEqual(['0x2'])
+    expect(requests[0].request?.logs?.[0]?.topic1).toEqual([
+      '0x0000000000000000000000000000000000000000000000000000000000000001',
+    ])
+    expect(requests[0].request?.logs?.[0]?.topic2).toEqual([
+      '0x0000000000000000000000000000000000000000000000000000000000000002',
+    ])
     expect(requests[0].request?.logs?.[0]?.topic3).toEqual(undefined)
     expect(requests[0].request?.logs?.[0]?.address).toEqual(contracts)
     expect(requests[0].request?.logs?.[0]?.transaction).toBe(true)
 
     expect(requests[1].request?.logs).toBeDefined()
     expect(requests[1].request?.logs?.[0]?.topic0).toEqual([commonAbis.erc20.events.Approval.topic])
-    expect(requests[1].request?.logs?.[0]?.topic1).toEqual(['0x3'])
-    expect(requests[1].request?.logs?.[0]?.topic2).toEqual(['0x4'])
+    expect(requests[1].request?.logs?.[0]?.topic1).toEqual([
+      '0x0000000000000000000000000000000000000000000000000000000000000003',
+    ])
+    expect(requests[1].request?.logs?.[0]?.topic2).toEqual([
+      '0x0000000000000000000000000000000000000000000000000000000000000004',
+    ])
     expect(requests[1].request?.logs?.[0]?.topic3).toEqual(undefined)
     expect(requests[1].request?.logs?.[0]?.address).toEqual(contracts)
     expect(requests[1].request?.logs?.[0]?.transaction).toBe(true)
