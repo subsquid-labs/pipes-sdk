@@ -219,7 +219,7 @@ function buildEventRequests<T extends AbiEvent<any>, C extends Contracts>(
 ) {
   return eventWithParams
     .map<LogRequest | undefined>((event) => {
-      // TODO: not sure how we should treat factories in this case. Need to figure out
+      // TODO: Factory event params will be fully implemented in a next PR
       if (Factory.isFactory(contracts)) return
 
       const topics = buildEventTopics(event.event, event.params)
