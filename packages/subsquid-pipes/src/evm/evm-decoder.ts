@@ -158,7 +158,13 @@ type LogParamTopics = Pick<LogRequest, 'topic0' | 'topic1' | 'topic2' | 'topic3'
 function buildEventTopics<T extends AbiEvent<any>>(event: T, indexedParams: Partial<IndexedParams<T>>): LogParamTopics {
   const params = event.params as EventParams<T>
 
-  const paramsByTopicOrder: (string[] | undefined)[] = Object.keys(params).map((k) => {
+  // Filter by indexed parameters to ensure correct topic assignment order
+  const indexedParamKeys = Object.keys(params).filter((k) => {
+    const param = params[k] as { indexed?: boolean }
+    return param?.indexed === true
+  })
+
+  const paramsByTopicOrder: (string[] | undefined)[] = indexedParamKeys.map((k) => {
     // TODO: this is being done because `IndexedParams` is not a subset of EventParams
     // and instead a completely different type. Should rework `IndexedParams` to avoid this casting
     const indexedParam = (indexedParams as EventParams<T>)[k]
@@ -185,7 +191,7 @@ function buildEventTopics<T extends AbiEvent<any>>(event: T, indexedParams: Part
   }
 }
 
-function getNormalizeEvents<T extends Events>(events: T) {
+function getNormalizedEvents<T extends Events>(events: T) {
   const normalizedEvents: EventWithArgs<
     T[keyof T] extends EventWithArgs<AbiEvent<any>> ? T[keyof T]['event'] : AbiEvent<any>
   >[] = []
@@ -281,7 +287,7 @@ export function evmDecoder<T extends Events, C extends Contracts>({
   EventResponse<T, C>,
   EvmQueryBuilder
 > {
-  const normalizedEvents = getNormalizeEvents(events)
+  const normalizedEvents = getNormalizedEvents(events)
   const { eventsWithParams, eventsWithoutParams } = splitEvents(normalizedEvents)
   const eventTopic0 = eventsWithoutParams.map((event) => event.event.topic)
   const eventWithParamsRequest = buildEventRequests(eventsWithParams, contracts)
