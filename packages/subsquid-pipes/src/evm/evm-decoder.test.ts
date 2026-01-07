@@ -619,22 +619,21 @@ describe('evmDecoder queries', () => {
           transfers2: duplicateEvent,
         },
       })
-  
+
       await decoder.query({
         queryBuilder: new EvmQueryBuilder(),
         logger,
         portal: {} as any,
       })
-  
+
       expect(errorSpy).toHaveBeenCalledTimes(1)
-      
+
       const errorCall = errorSpy.mock.calls[0][0]
-      console.log({ errorCall})
       expect(errorCall).toContain('Duplicate event topics detected')
       expect(errorCall).toContain('transfers1')
       expect(errorCall).toContain('transfers2')
       expect(errorCall).toContain(duplicateEvent.topic)
-  
+
       errorSpy.mockRestore()
     })
 
@@ -656,29 +655,28 @@ describe('evmDecoder queries', () => {
           },
         },
       })
-  
+
       await decoder.query({
         queryBuilder: new EvmQueryBuilder(),
         logger,
         portal: {} as any,
       })
-  
+
       expect(errorSpy).toHaveBeenCalledTimes(1)
-      
+
       const errorCall = errorSpy.mock.calls[0][0]
-      console.log({ errorCall})
       expect(errorCall).toContain('Duplicate event topics detected')
       expect(errorCall).toContain('transfers1')
       expect(errorCall).toContain('transfers2')
       expect(errorCall).toContain(duplicateEvent.topic)
-  
+
       errorSpy.mockRestore()
     })
-  
+
     it('should not log error when all events have unique topics', async () => {
       const logger = createTestLogger()
       const errorSpy = vi.spyOn(logger, 'error')
-  
+
       const decoder = evmDecoder({
         range: { from: 0, to: 100 },
         contracts: ['0x123'],
@@ -687,15 +685,15 @@ describe('evmDecoder queries', () => {
           approvals: commonAbis.erc20.events.Approval,
         },
       })
-  
+
       await decoder.query({
         queryBuilder: new EvmQueryBuilder(),
         logger,
         portal: {} as any,
       })
-  
+
       expect(errorSpy).not.toHaveBeenCalled()
-  
+
       errorSpy.mockRestore()
     })
   })
