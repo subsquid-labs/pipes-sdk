@@ -1,3 +1,5 @@
+import { event, indexed } from '@subsquid/evm-abi'
+import * as p from '@subsquid/evm-codec'
 import { beforeEach, describe, expect, expectTypeOf, it } from 'vitest'
 import { PortalRange, Transformer } from '~/core/index.js'
 import { createTestLogger } from '~/tests/test-logger.js'
@@ -516,30 +518,30 @@ describe('evmDecoder queries', () => {
     const fields = capturedQueryBuilder.getFields()
 
     expect(requests).toHaveLength(2)
-
-    expect(requests[0].request?.logs).toBeDefined()
-    expect(requests[0].request?.logs?.[0]?.topic0).toEqual([commonAbis.erc20.events.Transfer.topic])
-    expect(requests[0].request?.logs?.[0]?.topic1).toEqual([
-      '0x0000000000000000000000000000000000000000000000000000000000000001',
-    ])
-    expect(requests[0].request?.logs?.[0]?.topic2).toEqual([
-      '0x0000000000000000000000000000000000000000000000000000000000000002',
-    ])
-    expect(requests[0].request?.logs?.[0]?.topic3).toEqual(undefined)
-    expect(requests[0].request?.logs?.[0]?.address).toEqual(contracts)
-    expect(requests[0].request?.logs?.[0]?.transaction).toBe(true)
-
-    expect(requests[1].request?.logs).toBeDefined()
-    expect(requests[1].request?.logs?.[0]?.topic0).toEqual([commonAbis.erc20.events.Approval.topic])
-    expect(requests[1].request?.logs?.[0]?.topic1).toEqual([
-      '0x0000000000000000000000000000000000000000000000000000000000000003',
-    ])
-    expect(requests[1].request?.logs?.[0]?.topic2).toEqual([
-      '0x0000000000000000000000000000000000000000000000000000000000000004',
-    ])
-    expect(requests[1].request?.logs?.[0]?.topic3).toEqual(undefined)
-    expect(requests[1].request?.logs?.[0]?.address).toEqual(contracts)
-    expect(requests[1].request?.logs?.[0]?.transaction).toBe(true)
+    expect(requests[0].request).toEqual({
+      logs: [
+        {
+          topic0: [commonAbis.erc20.events.Transfer.topic],
+          topic1: ['0x0000000000000000000000000000000000000000000000000000000000000001'],
+          topic2: ['0x0000000000000000000000000000000000000000000000000000000000000002'],
+          topic3: undefined,
+          address: contracts,
+          transaction: true,
+        },
+      ],
+    })
+    expect(requests[1].request).toEqual({
+      logs: [
+        {
+          topic0: [commonAbis.erc20.events.Approval.topic],
+          topic1: ['0x0000000000000000000000000000000000000000000000000000000000000003'],
+          topic2: ['0x0000000000000000000000000000000000000000000000000000000000000004'],
+          topic3: undefined,
+          address: contracts,
+          transaction: true,
+        },
+      ],
+    })
 
     expect(fields).toMatchObject({
       block: {
@@ -561,6 +563,46 @@ describe('evmDecoder queries', () => {
         logIndex: true,
         transactionIndex: true,
       },
+    })
+  })
+
+  it('should build query for an event with indexed parameters around a non-indexed value', async () => {
+    const abi = {
+      CustomTransfer: event(
+        '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+        'Transfer(address,uint256,address)',
+        { from: indexed(p.address), value: p.uint256, to: indexed(p.address) },
+      ),
+    }
+
+    const decoder = evmDecoder({
+      range: { from: 0, to: 100 },
+      contracts: ['0x123'],
+      events: {
+        Transfer: {
+          event: abi.CustomTransfer,
+          params: {
+            from: '0x1',
+            to: '0x2',
+          },
+        },
+      },
+    })
+    const capturedQueryBuilder = await captureQueryBuilder(decoder)
+    const requests = capturedQueryBuilder.getRequests()
+
+    expect(requests).toHaveLength(1)
+    expect(requests[0].request).toEqual({
+      logs: [
+        {
+          topic0: [abi.CustomTransfer.topic],
+          topic1: ['0x0000000000000000000000000000000000000000000000000000000000000001'],
+          topic2: ['0x0000000000000000000000000000000000000000000000000000000000000002'],
+          topic3: undefined,
+          address: ['0x123'],
+          transaction: true,
+        },
+      ],
     })
   })
 })
