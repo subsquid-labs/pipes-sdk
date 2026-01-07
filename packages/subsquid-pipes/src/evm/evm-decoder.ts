@@ -149,13 +149,16 @@ ${d.props.slice(1).join(', ')} property will miss events due to the duplicate si
   })
 }
 
-function isEventWithArgs<T extends AbiEvent<any>>(value: unknown): value is EventWithArgs<T> {
+export function isEventWithArgs<T extends AbiEvent<any>>(value: unknown): value is EventWithArgs<T> {
   return typeof value === 'object' && value !== null && 'event' in value
 }
 
 type LogParamTopics = Pick<LogRequest, 'topic0' | 'topic1' | 'topic2' | 'topic3'>
 
-function buildEventTopics<T extends AbiEvent<any>>(event: T, indexedParams: Partial<IndexedParams<T>>): LogParamTopics {
+export function buildEventTopics<T extends AbiEvent<any>>(
+  event: T,
+  indexedParams: Partial<IndexedParams<T>>,
+): LogParamTopics {
   const params = event.params as EventParams<T>
 
   // Filter by indexed parameters to ensure correct topic assignment order
@@ -223,13 +226,10 @@ function buildEventRequests<T extends AbiEvent<any>, C extends Contracts>(
 ) {
   return eventWithParams
     .map<LogRequest | undefined>((event) => {
-      // TODO: Factory event params will be fully implemented in a next PR
-      if (Factory.isFactory(contracts)) return
-
       const topics = buildEventTopics(event.event, event.params)
       return {
         ...topics,
-        address: contracts,
+        address: Factory.isFactory(contracts) ? undefined : contracts,
         transaction: true,
       }
     })
@@ -397,10 +397,7 @@ export function evmDecoder<T extends Events, C extends Contracts>({
 
       queryBuilder.addLog({
         range: decodedRange,
-        request: {
-          address: contracts.factoryAddress(),
-          topic0: [contracts.factoryTopic()],
-        },
+        request: contracts.buildFactoryEventRequest(),
       })
 
       queryBuilder.addFields(decodedEventFields)

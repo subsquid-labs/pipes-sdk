@@ -1,11 +1,17 @@
 import { AbiEvent } from '@subsquid/evm-abi'
 import type { Codec } from '@subsquid/evm-codec'
-
 import { BlockCursor, createTarget, Logger, PortalRange, parsePortalRange } from '~/core/index.js'
 import { arrayify } from '~/internal/array.js'
 import { PortalClient } from '~/portal-client/client.js'
-import { Log } from '~/portal-client/query/evm.js'
-import { evmDecoder, FactoryEvent } from './evm-decoder.js'
+import { Log, LogRequest } from '~/portal-client/query/evm.js'
+import {
+  buildEventTopics,
+  EventWithArgs,
+  evmDecoder,
+  FactoryEvent,
+  IndexedParams,
+  isEventWithArgs,
+} from './evm-decoder.js'
 import { evmPortalSource } from './evm-portal-source.js'
 
 export type EventArgs = {
@@ -24,6 +30,7 @@ export type InternalFactoryEvent<T extends EventArgs> = {
 
 export interface FactoryPersistentAdapter<T extends InternalFactoryEvent<any>> {
   all(): Promise<T[]>
+  all(params: Partial<IndexedParams<AbiEvent<any>>>): Promise<T[]>
   lookup(parameter: string): Promise<T | null>
   save(entities: T[]): Promise<void>
   remove(blockNumber: number): Promise<void>
@@ -34,7 +41,7 @@ export type DecodedAbiEvent<T extends EventArgs> = ReturnType<AbiEvent<T>['decod
 
 export type FactoryOptions<T extends EventArgs> = {
   address: string | string[]
-  event: AbiEvent<T>
+  event: AbiEvent<T> | EventWithArgs<AbiEvent<T>>
   _experimental_preindex?: { from: number | string; to: number | string }
   parameter: keyof T | ((data: DecodedAbiEvent<T>) => string | null)
   database:
@@ -46,9 +53,20 @@ export class Factory<T extends EventArgs> {
   #batch: InternalFactoryEvent<T>[] = []
   #db?: FactoryPersistentAdapter<InternalFactoryEvent<T>>
   readonly #addresses: Set<string>
+  readonly #event: AbiEvent<T>
+  readonly #params: Partial<IndexedParams<AbiEvent<T>>>
 
   constructor(private options: FactoryOptions<T>) {
     this.#addresses = new Set(arrayify(this.options.address).map((a) => a.toLowerCase()))
+
+    // Normalize event: extract AbiEvent and params from EventWithArgs if needed
+    if (isEventWithArgs(this.options.event)) {
+      this.#event = this.options.event.event
+      this.#params = this.options.event.params
+    } else {
+      this.#event = this.options.event
+      this.#params = {}
+    }
   }
 
   factoryAddress(): string[] {
@@ -56,11 +74,37 @@ export class Factory<T extends EventArgs> {
   }
 
   factoryTopic() {
-    return this.options.event.topic
+    return this.#event.topic
+  }
+
+  factoryEventParams(): Partial<IndexedParams<AbiEvent<T>>> {
+    return this.#params
+  }
+
+  factoryEvent(): AbiEvent<T> {
+    return this.#event
+  }
+
+  buildFactoryEventRequest(): LogRequest {
+    const params = this.factoryEventParams()
+    const hasParams = Object.keys(params).length > 0
+
+    if (!hasParams) {
+      return {
+        address: this.factoryAddress(),
+        topic0: [this.factoryTopic()],
+      }
+    }
+
+    const topics = buildEventTopics(this.#event, params)
+    return {
+      address: this.factoryAddress(),
+      ...topics,
+    }
   }
 
   isFactoryEvent(log: any) {
-    return this.options.event.is(log)
+    return this.#event.is(log)
   }
 
   private assertDb() {
@@ -76,7 +120,7 @@ export class Factory<T extends EventArgs> {
   }
 
   async decode(log: Log, blockNumber: number) {
-    const decoded = this.options.event.decode(log)
+    const decoded = this.#event.decode(log)
     const contract =
       typeof this.options.parameter === 'function'
         ? this.options.parameter(decoded)
@@ -98,6 +142,7 @@ export class Factory<T extends EventArgs> {
     const memory = this.#batch.find((b) => b.childAddress === address)
     if (memory) {
       if (!this.#addresses.has(memory.factoryAddress)) return null
+      if (!this.matchesParams(memory.event)) return null
 
       return this.transform(memory)
     }
@@ -105,6 +150,7 @@ export class Factory<T extends EventArgs> {
     const fromDb = await this.assertDb().lookup(address)
     if (!fromDb) return null
     else if (!this.#addresses.has(fromDb.factoryAddress)) return null
+    else if (!this.matchesParams(fromDb.event)) return null
 
     return this.transform(fromDb)
   }
@@ -115,6 +161,23 @@ export class Factory<T extends EventArgs> {
       blockNumber: event.blockNumber,
       event: event.event,
     }
+  }
+
+  private matchesParams(event: DecodedAbiEvent<T>): boolean {
+    if (Object.keys(this.#params).length === 0) {
+      return true
+    }
+
+    for (const [key, expectedValue] of Object.entries(this.#params)) {
+      const eventValue = event[key as keyof T]
+      const expectedValues = Array.isArray(expectedValue) ? expectedValue : [expectedValue]
+
+      if (!expectedValues.some((ev) => String(ev).toLowerCase() === String(eventValue).toLowerCase())) {
+        return false
+      }
+    }
+
+    return true
   }
 
   preIndexRange() {
@@ -146,7 +209,7 @@ export class Factory<T extends EventArgs> {
           contracts: this.factoryAddress(),
           range,
           events: {
-            factory: this.options.event,
+            factory: Object.keys(this.#params).length > 0 ? { event: this.#event, params: this.#params } : this.#event,
           },
         }),
       )
@@ -184,7 +247,7 @@ export class Factory<T extends EventArgs> {
   }
 
   async getAllContracts() {
-    return this.assertDb().all()
+    return this.assertDb().all(this.#params)
   }
 
   async persist() {
@@ -202,6 +265,56 @@ export class Factory<T extends EventArgs> {
   }
 }
 
+/**
+ * Creates a Factory instance to track contract creation events and enable decoding events from dynamically created contracts.
+ *
+ * A Factory pattern is useful when you need to decode events from contracts that are created dynamically
+ * by factory contracts (e.g., Uniswap pools created by a factory). The factory tracks creation events,
+ * extracts child contract addresses, and stores them in a database for efficient lookup during event decoding.
+ *
+ * @param options - Configuration object for the factory
+ * @param options.address - Factory contract address(es) to monitor for creation events. Can be a single address or an array of addresses
+ * @param options.event - The factory event that signals contract creation. Can be:
+ *   - An {@link AbiEvent} instance to capture all creation events
+ *   - An {@link EventWithArgs} object with `event` and `params` to filter by indexed parameters
+ * @param options.parameter - Field name or function to extract the child contract address from the decoded factory event.
+ *   - If a string, it should be a key from the event's decoded data
+ *   - If a function, it receives the decoded event data and should return the contract address or null
+ * @param options.database - Database adapter for storing and querying factory events. Can be a {@link FactoryPersistentAdapter} instance or a Promise that resolves to one
+ * @param options._experimental_preindex - Optional block range for pre-indexing factory events. When provided, factory events in this range are indexed before processing, improving performance for large ranges
+ * @returns A {@link Factory} instance that can be used as the `contracts` parameter in {@link evmDecoder}
+ *
+ * @example
+ * ```ts
+ * factory({
+ *   address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+ *   event: factoryAbi.PoolCreated,
+ *   parameter: 'pool',
+ *   database: factorySqliteDatabase({
+ *     path: './uniswap3-eth-pools.sqlite',
+ *   }),
+ * })
+ * ```
+ *
+ * @example
+ * ```ts
+ * // Filter factory events by indexed parameters
+ * // You can also pass an array of values to match multiple token0 values
+ * factory({
+ *   address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+ *   event: {
+ *     event: factoryAbi.PoolCreated,
+ *     params: {
+ *       token0: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', // WETH
+ *     },
+ *   },
+ *   parameter: 'pool',
+ *   database: factorySqliteDatabase({
+ *     path: './uniswap3-eth-pools.sqlite',
+ *   }),
+ * })
+ * ```
+ */
 export function factory<T extends EventArgs>(options: FactoryOptions<T>) {
   return new Factory(options)
 }

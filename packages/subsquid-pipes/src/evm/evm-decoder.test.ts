@@ -13,6 +13,8 @@ import {
   IndexedKeys,
   IndexedParams,
 } from './evm-decoder.js'
+import { factory } from './factory.js'
+import { factorySqliteDatabase } from './factory-adapters/sqlite.js'
 import { evmPortalSource } from './evm-portal-source.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
 
@@ -25,6 +27,38 @@ async function captureQueryBuilder(decoder: Transformer<any, any, EvmQueryBuilde
   })
   return mockQueryBuilder
 }
+
+const factoryAbi = {
+  PoolCreated: event(
+    '0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118',
+    'PoolCreated(address,address,uint24,int24,address)',
+    {
+      token0: indexed(p.address),
+      token1: indexed(p.address),
+      fee: indexed(p.uint24),
+      tickSpacing: p.int24,
+      pool: p.address,
+    },
+  ),
+}
+
+const swapAbi = {
+  Swap: event(
+    '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67',
+    'Swap(address,address,int256,int256,uint160,uint128,int24)',
+    {
+      sender: indexed(p.address),
+      recipient: indexed(p.address),
+      amount0: p.int256,
+      amount1: p.int256,
+      sqrtPriceX96: p.uint160,
+      liquidity: p.uint128,
+      tick: p.int24,
+    },
+  ),
+}
+
+const FACTORY_ADDRESS = '0x1f98431c8ad98523631ae4a59f267346ea31f984'
 
 describe('evmDecoder types', () => {
   it('type IndexedKeys picks indexed params from ERC20 Transfer', async () => {
@@ -696,6 +730,74 @@ describe('evmDecoder queries', () => {
 
       errorSpy.mockRestore()
     })
+  })
+
+  it('should build query for Factory with params', async () => {
+    const db = await factorySqliteDatabase({ path: ':memory:' })
+    const range = { from: 0, to: 100 }
+
+    const decoder = evmDecoder({
+      range,
+      contracts: factory({
+        address: FACTORY_ADDRESS,
+        event: {
+          event: factoryAbi.PoolCreated,
+          params: {
+            token0: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+            token1: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+          },
+        },
+        parameter: 'pool',
+        database: db,
+      }),
+      events: {
+        swaps: swapAbi.Swap,
+      },
+    })
+
+    const capturedQueryBuilder = await captureQueryBuilder(decoder)
+
+    const requests = capturedQueryBuilder.getRequests()
+    const factoryRequest = requests.find((r) => r.request?.logs?.[0]?.address?.includes(FACTORY_ADDRESS))
+
+    expect(factoryRequest).toBeDefined()
+    expect(factoryRequest?.request?.logs?.[0]?.topic0).toEqual([factoryAbi.PoolCreated.topic])
+    expect(factoryRequest?.request?.logs?.[0]?.topic1).toEqual([
+      '0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+    ])
+    expect(factoryRequest?.request?.logs?.[0]?.topic2).toEqual([
+      '0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    ])
+    expect(factoryRequest?.request?.logs?.[0]?.topic3).toBeUndefined()
+  })
+
+  it('should build query for Factory without params', async () => {
+    const db = await factorySqliteDatabase({ path: ':memory:' })
+    const range = { from: 0, to: 100 }
+
+    const decoder = evmDecoder({
+      range,
+      contracts: factory({
+        address: FACTORY_ADDRESS,
+        event: factoryAbi.PoolCreated,
+        parameter: 'pool',
+        database: db,
+      }),
+      events: {
+        swaps: swapAbi.Swap,
+      },
+    })
+
+    const capturedQueryBuilder = await captureQueryBuilder(decoder)
+
+    const requests = capturedQueryBuilder.getRequests()
+    const factoryRequest = requests.find((r) => r.request?.logs?.[0]?.address?.includes(FACTORY_ADDRESS))
+
+    expect(factoryRequest).toBeDefined()
+    expect(factoryRequest?.request?.logs?.[0]?.topic0).toEqual([factoryAbi.PoolCreated.topic])
+    expect(factoryRequest?.request?.logs?.[0]?.topic1).toBeUndefined()
+    expect(factoryRequest?.request?.logs?.[0]?.topic2).toBeUndefined()
+    expect(factoryRequest?.request?.logs?.[0]?.topic3).toBeUndefined()
   })
 })
 
