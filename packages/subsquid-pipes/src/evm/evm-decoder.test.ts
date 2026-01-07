@@ -1,6 +1,6 @@
 import { event, indexed } from '@subsquid/evm-abi'
 import * as p from '@subsquid/evm-codec'
-import { beforeEach, describe, expect, expectTypeOf, it } from 'vitest'
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { PortalRange, Transformer } from '~/core/index.js'
 import { createTestLogger } from '~/tests/test-logger.js'
 import { closeMockPortal, createMockPortal, MockPortal, MockResponse, readAll } from '~/tests/test-server.js'
@@ -40,7 +40,7 @@ describe('evmDecoder types', () => {
     }>()
   })
 
-  it("type IndexedParams doesn't picks not indexed params from ERC20 Transfer", () => {
+  it("type IndexedParams doesn't pick not indexed params from ERC20 Transfer", () => {
     type Result = IndexedParams<typeof commonAbis.erc20.events.Transfer>
     expectTypeOf<Result>().not.toEqualTypeOf<{
       from: string
@@ -603,6 +603,100 @@ describe('evmDecoder queries', () => {
           transaction: true,
         },
       ],
+    })
+  })
+
+  describe('evmDecoder duplicate events', () => {
+    it('should log error when duplicate event topics are detected', async () => {
+      const logger = createTestLogger()
+      const errorSpy = vi.spyOn(logger, 'error')
+      const duplicateEvent = commonAbis.erc20.events.Transfer
+      const decoder = evmDecoder({
+        range: { from: 0, to: 100 },
+        contracts: ['0x123'],
+        events: {
+          transfers1: duplicateEvent,
+          transfers2: duplicateEvent,
+        },
+      })
+  
+      await decoder.query({
+        queryBuilder: new EvmQueryBuilder(),
+        logger,
+        portal: {} as any,
+      })
+  
+      expect(errorSpy).toHaveBeenCalledTimes(1)
+      
+      const errorCall = errorSpy.mock.calls[0][0]
+      console.log({ errorCall})
+      expect(errorCall).toContain('Duplicate event topics detected')
+      expect(errorCall).toContain('transfers1')
+      expect(errorCall).toContain('transfers2')
+      expect(errorCall).toContain(duplicateEvent.topic)
+  
+      errorSpy.mockRestore()
+    })
+
+    it('should log error when duplicate event topics are detected across AbiEvent and EventWithArgs', async () => {
+      const logger = createTestLogger()
+      const errorSpy = vi.spyOn(logger, 'error')
+      const duplicateEvent = commonAbis.erc20.events.Transfer
+      const decoder = evmDecoder({
+        range: { from: 0, to: 100 },
+        contracts: ['0x123'],
+        events: {
+          transfers1: duplicateEvent,
+          transfers2: {
+            event: duplicateEvent,
+            params: {
+              from: '0x1',
+              to: '0x2',
+            },
+          },
+        },
+      })
+  
+      await decoder.query({
+        queryBuilder: new EvmQueryBuilder(),
+        logger,
+        portal: {} as any,
+      })
+  
+      expect(errorSpy).toHaveBeenCalledTimes(1)
+      
+      const errorCall = errorSpy.mock.calls[0][0]
+      console.log({ errorCall})
+      expect(errorCall).toContain('Duplicate event topics detected')
+      expect(errorCall).toContain('transfers1')
+      expect(errorCall).toContain('transfers2')
+      expect(errorCall).toContain(duplicateEvent.topic)
+  
+      errorSpy.mockRestore()
+    })
+  
+    it('should not log error when all events have unique topics', async () => {
+      const logger = createTestLogger()
+      const errorSpy = vi.spyOn(logger, 'error')
+  
+      const decoder = evmDecoder({
+        range: { from: 0, to: 100 },
+        contracts: ['0x123'],
+        events: {
+          transfers: commonAbis.erc20.events.Transfer,
+          approvals: commonAbis.erc20.events.Approval,
+        },
+      })
+  
+      await decoder.query({
+        queryBuilder: new EvmQueryBuilder(),
+        logger,
+        portal: {} as any,
+      })
+  
+      expect(errorSpy).not.toHaveBeenCalled()
+  
+      errorSpy.mockRestore()
     })
   })
 })

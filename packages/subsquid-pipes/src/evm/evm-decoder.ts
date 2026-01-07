@@ -191,10 +191,8 @@ function buildEventTopics<T extends AbiEvent<any>>(event: T, indexedParams: Part
   }
 }
 
-function getNormalizedEvents<T extends Events>(events: T) {
-  const normalizedEvents: EventWithArgs<
-    T[keyof T] extends EventWithArgs<AbiEvent<any>> ? T[keyof T]['event'] : AbiEvent<any>
-  >[] = []
+function getNormalizedEvents<T extends Events>(events: T): EventWithArgs<AbiEvent<any>>[] {
+  const normalizedEvents: EventWithArgs<AbiEvent<any>>[] = []
 
   for (const eventName in events) {
     const event = events[eventName]
@@ -236,6 +234,17 @@ function buildEventRequests<T extends AbiEvent<any>, C extends Contracts>(
       }
     })
     .filter((logRequest): logRequest is LogRequest => !!logRequest)
+}
+
+function getDuplicateEvents<T extends Events>(events: T, duplicates: string[]) {
+  return duplicates.map((duplicate) => {
+    const props = Object.keys(events).filter((name) => {
+      const eventValue = events[name]
+      const eventAbi = isEventWithArgs(eventValue) ? eventValue.event : eventValue
+      return eventAbi.topic === duplicate
+    })
+    return { props, event: duplicate }
+  })
 }
 
 /**
@@ -299,15 +308,7 @@ export function evmDecoder<T extends Events, C extends Contracts>({
       const allEventTopics = normalizedEvents.map(({ event }) => event.topic)
       const duplicates = findDuplicates(allEventTopics)
       if (duplicates.length) {
-        const entries = Object.entries(normalizedEvents)
-        logger.error(
-          DUPLICATED_EVENTS(
-            duplicates.map((duplicate) => {
-              const props = entries.filter(([, event]) => event.event.topic === duplicate).map(([name]) => name)
-              return { props, event: duplicate }
-            }),
-          ),
-        )
+        logger.error(DUPLICATED_EVENTS(getDuplicateEvents(events, duplicates)))
       }
 
       if (!Factory.isFactory(contracts)) {
