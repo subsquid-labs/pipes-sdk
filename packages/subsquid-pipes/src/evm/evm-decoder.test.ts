@@ -13,10 +13,10 @@ import {
   IndexedKeys,
   IndexedParams,
 } from './evm-decoder.js'
-import { factory } from './factory.js'
-import { factorySqliteDatabase } from './factory-adapters/sqlite.js'
 import { evmPortalSource } from './evm-portal-source.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
+import { factory } from './factory.js'
+import { factorySqliteDatabase } from './factory-adapters/sqlite.js'
 
 async function captureQueryBuilder(decoder: Transformer<any, any, EvmQueryBuilder>) {
   const mockQueryBuilder = new EvmQueryBuilder()
