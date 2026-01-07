@@ -59,7 +59,6 @@ export class Factory<T extends EventArgs> {
   constructor(private options: FactoryOptions<T>) {
     this.#addresses = new Set(arrayify(this.options.address).map((a) => a.toLowerCase()))
 
-    // Normalize event: extract AbiEvent and params from EventWithArgs if needed
     if (isEventWithArgs(this.options.event)) {
       this.#event = this.options.event.event
       this.#params = this.options.event.params
