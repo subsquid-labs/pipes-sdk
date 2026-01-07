@@ -520,9 +520,11 @@ describe('Factory', () => {
     const weth = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
     const usdc = '0xdac17f958d2ee523a2206206994597c13d831ec7'
 
-    const getPipeline = async (token0: string) =>
-      evmPortalSource({
-        portal: (await createMockPortal(FILTERED_FACTORY)).url,
+    const getPipeline = async (token0: string) => {
+      mockPortal = await createMockPortal(FILTERED_FACTORY)
+
+      return evmPortalSource({
+        portal: mockPortal.url,
       }).pipe(
         evmDecoder({
           range: { from: 1, to: 2 },
@@ -542,6 +544,7 @@ describe('Factory', () => {
           },
         }).pipe((d) => d.swaps),
       )
+    }
 
     const firstRun = await getPipeline(weth)
     const firstRunRes = await readAll(firstRun)
