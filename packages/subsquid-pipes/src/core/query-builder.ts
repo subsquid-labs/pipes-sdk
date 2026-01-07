@@ -34,6 +34,10 @@ export abstract class QueryBuilder<F extends {}, R = any> {
   abstract mergeDataRequests(...requests: R[]): R
   abstract addFields(fields: F): QueryBuilder<F, R>
 
+  getRequests() {
+    return this.requests
+  }
+
   getFields() {
     return this.fields
   }
