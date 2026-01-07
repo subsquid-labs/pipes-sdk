@@ -13,9 +13,7 @@ const PACKAGE_NAME = '@iankressin/pipes-cli'
 export function findPackageRoot(): string {
   // Method 1: In CJS (production bundled), use __dirname if available
   // This is the most reliable method when running as a bundled CJS file
-  // @ts-expect-error - __dirname is available in CJS but not in ESM types
   if (typeof __dirname !== 'undefined') {
-    // @ts-expect-error - __dirname is available in CJS
     let current = __dirname
     // Walk up from dist/ (or wherever the bundled file is) to find package.json
     const maxDepth = 10 // Prevent infinite loops
