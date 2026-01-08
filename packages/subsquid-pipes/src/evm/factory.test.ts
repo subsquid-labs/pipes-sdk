@@ -1,12 +1,14 @@
 import { event, indexed } from '@subsquid/evm-abi'
 import * as p from '@subsquid/evm-codec'
 import { afterEach, describe, expect, it } from 'vitest'
-import { evmDecoder } from '~/evm/evm-decoder.js'
-import { factory } from '~/evm/factory.js'
-import { factorySqliteDatabase } from '~/evm/factory-adapters/sqlite.js'
+
 import { createMemoryTarget } from '~/targets/memory/memory-target.js'
-import { closeMockPortal, createMockPortal, MockPortal, MockResponse, readAll } from '../tests/index.js'
+import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/tests/index.js'
+
+import { evmDecoder } from './evm-decoder.js'
 import { evmPortalSource } from './evm-portal-source.js'
+import { factory } from './factory.js'
+import { factorySqliteDatabase } from './factory-adapters/sqlite.js'
 
 const factoryAbi = {
   PoolCreated: event(
@@ -505,20 +507,19 @@ describe('Factory', () => {
   })
 
   /**
- /**
-  * This test addresses a bug that occurred when starting the indexer with one set of factory
-  * event parameters, stopping, then restarting it with a different set for the same factory.
-  *
-  * On the first run, it returned the expected events. After a restart with different params,
-  * it returned both events matching the updated params and extra events from the previous run.
-  * This was because Factory.getContract only checked if the contract address was in the database,
-  * not whether the correct set of parameters had been used.
-  */
+   * This test addresses a bug that occurred when starting the indexer with one set of factory
+   * event parameters, stopping, then restarting it with a different set for the same factory.
+   *
+   * On the first run, it returned the expected events. After a restart with different params,
+   * it returned both events matching the updated params and extra events from the previous run.
+   * This was because Factory.getContract only checked if the contract address was in the database,
+   * not whether the correct set of parameters had been used.
+   */
   it('should only return events matching new factory parameters after second run with different params', async () => {
     // For this test is important to have a single instance of the database for both runs
     const db = await factorySqliteDatabase({ path: ':memory:' })
     const weth = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
-    const usdc = '0xdac17f958d2ee523a2206206994597c13d831ec7'
+    const usdt = '0xdac17f958d2ee523a2206206994597c13d831ec7'
 
     const getPipeline = async (token0: string) => {
       mockPortal = await createMockPortal(FILTERED_FACTORY)
@@ -552,14 +553,14 @@ describe('Factory', () => {
     expect(firstRunRes[0].contract).toBe('0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8')
     expect(firstRunRes[0].factory?.event.token0).toBe(weth)
 
-    const secondRun = await getPipeline(usdc)
+    const secondRun = await getPipeline(usdt)
     const secondRunRes = await readAll(secondRun)
     expect(secondRunRes).toHaveLength(1)
     expect(secondRunRes[0].contract).toBe('0x9db9e0e53058c89e5b94e29621a205198648425b')
-    expect(secondRunRes[0].factory?.event.token0).toBe(usdc)
+    expect(secondRunRes[0].factory?.event.token0).toBe(usdt)
   })
 
-  it('normalize params when reading all contacts from database', async () => {
+  it('normalizes params when reading all contracts from database', async () => {
     mockPortal = await createMockPortal(SIMPLE_CHILD)
 
     const contractsFactory = factory({
