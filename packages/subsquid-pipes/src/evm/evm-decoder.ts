@@ -1,18 +1,20 @@
 import type { AbiEvent, EventParams } from '@subsquid/evm-abi'
 import { Codec, Sink } from '@subsquid/evm-codec'
+
 import {
   BatchCtx,
+  PortalRange,
+  ProfilerOptions,
+  Transformer,
   createTransformer,
   formatBlock,
   formatNumber,
   formatWarning,
-  PortalRange,
-  ProfilerOptions,
   parsePortalRange,
-  Transformer,
 } from '~/core/index.js'
-import { findDuplicates } from '~/internal/array.js'
-import { Log, LogRequest } from '../portal-client/query/evm.js'
+import { arrayify, findDuplicates } from '~/internal/array.js'
+import { Log, LogRequest } from '~/portal-client/query/evm.js'
+
 import { EvmPortalData } from './evm-portal-source.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
 import { DecodedAbiEvent, Factory } from './factory.js'
@@ -42,7 +44,7 @@ export type DecodedEvent<D = object, F = unknown> = {
   }>
 }
 
-export type Events = Record<string, AbiEvent<any> | EventWithArgs<AbiEvent<any>>>
+export type Events = Record<string, AbiEvent<any> | EventWithArgsInput<AbiEvent<any>>>
 
 export type DecodeEventsFunctions<T extends Events> = ReturnType<ExtractEventType<EventsMap<T>[keyof T]>['decode']>
 
@@ -50,15 +52,29 @@ export type IndexedKeys<T> = {
   [K in keyof T]: T[K] extends { indexed: true } ? K : never
 }[keyof T]
 
-type CodecValueType<T> = T extends Codec<any, infer TOut> ? TOut : never
+type CodecValueType<T extends AbiEvent<any>, K extends keyof T['params']> = T['params'][K] extends Codec<
+  any,
+  infer TOut
+>
+  ? TOut
+  : never
 
-export type IndexedParams<T extends AbiEvent<any>> = {
-  [K in IndexedKeys<T['params']>]: CodecValueType<T['params'][K]> | CodecValueType<T['params'][K]>[]
+export type IndexedParamsInput<T extends AbiEvent<any>> = Partial<{
+  [K in IndexedKeys<T['params']>]: CodecValueType<T, K> | CodecValueType<T, K>[]
+}>
+
+export type IndexedParams<T extends AbiEvent<any>> = Partial<{
+  [K in IndexedKeys<T['params']>]: CodecValueType<T, K>[]
+}>
+
+export type EventWithArgsInput<T extends AbiEvent<any>> = {
+  event: T
+  params: IndexedParamsInput<T>
 }
 
 export type EventWithArgs<T extends AbiEvent<any>> = {
   event: T
-  params: Partial<IndexedParams<T>>
+  params: IndexedParams<T>
 }
 
 export type EventEntryFor<V> =
@@ -70,10 +86,10 @@ export type EventEntryFor<V> =
           params: infer P extends Record<PropertyKey, unknown>
         }
       ? // Reject params that include non-indexed keys
-        Exclude<keyof P, keyof Partial<IndexedParams<E>>> extends never
+        Exclude<keyof P, keyof Partial<IndexedParamsInput<E>>> extends never
         ? {
             event: E
-            params: Partial<IndexedParams<E>>
+            params: IndexedParamsInput<E>
           }
         : never
       : never
@@ -149,16 +165,15 @@ ${d.props.slice(1).join(', ')} property will miss events due to the duplicate si
   })
 }
 
-export function isEventWithArgs<T extends AbiEvent<any>>(value: unknown): value is EventWithArgs<T> {
-  return typeof value === 'object' && value !== null && 'event' in value
+export function isEventWithArgs<T extends AbiEvent<any>>(
+  value: unknown,
+): value is EventWithArgs<T> | EventWithArgsInput<T> {
+  return typeof value === 'object' && value !== null && 'event' in value && 'params' in value
 }
 
 type LogParamTopics = Pick<LogRequest, 'topic0' | 'topic1' | 'topic2' | 'topic3'>
 
-export function buildEventTopics<T extends AbiEvent<any>>(
-  event: T,
-  indexedParams: Partial<IndexedParams<T>>,
-): LogParamTopics {
+export function buildEventTopics<T extends AbiEvent<any>>(event: T, indexedParams: IndexedParams<T>): LogParamTopics {
   const params = event.params as EventParams<T>
 
   // Filter by indexed parameters to ensure correct topic assignment order
@@ -168,15 +183,11 @@ export function buildEventTopics<T extends AbiEvent<any>>(
   })
 
   const paramsByTopicOrder: (string[] | undefined)[] = indexedParamKeys.map((k) => {
-    // TODO: this is being done because `IndexedParams` is not a subset of EventParams
-    // and instead a completely different type. Should rework `IndexedParams` to avoid this casting
-    const indexedParam = (indexedParams as EventParams<T>)[k]
+    const indexedParam = indexedParams[k as keyof typeof indexedParams]
     if (!indexedParam) return
 
-    const normalizedParams = Array.isArray(indexedParam) ? indexedParam : [indexedParam]
-
     const topicParams: string[] = []
-    for (const param of normalizedParams) {
+    for (const param of indexedParam) {
       const eventParams = params[k] as Codec<any, any>
       const sink = new Sink(1)
       eventParams['encode'](sink, param)
@@ -194,6 +205,13 @@ export function buildEventTopics<T extends AbiEvent<any>>(
   }
 }
 
+export function getNormalizedEventParams<T extends AbiEvent<any>>(params: IndexedParamsInput<T>): IndexedParams<T> {
+  const entries = Object.entries(params)
+    .map(([key, value]) => [key, arrayify(value).map((v) => (typeof v === 'string' ? v.toLowerCase() : v))])
+    .filter(([_, value]) => value.length > 0)
+  return Object.fromEntries(entries) as IndexedParams<T>
+}
+
 function getNormalizedEvents<T extends Events>(events: T): EventWithArgs<AbiEvent<any>>[] {
   const normalizedEvents: EventWithArgs<AbiEvent<any>>[] = []
 
@@ -201,7 +219,10 @@ function getNormalizedEvents<T extends Events>(events: T): EventWithArgs<AbiEven
     const event = events[eventName]
 
     if (isEventWithArgs(event)) {
-      normalizedEvents.push(event)
+      normalizedEvents.push({
+        event: event.event,
+        params: getNormalizedEventParams(event.params),
+      } as EventWithArgs<AbiEvent<any>>)
     } else {
       normalizedEvents.push({
         event,
@@ -221,10 +242,10 @@ function splitEvents<T extends AbiEvent<any>>(normalizedEvents: EventWithArgs<T>
 }
 
 function buildEventRequests<T extends AbiEvent<any>, C extends Contracts>(
-  eventWithParams: EventWithArgs<T>[],
+  eventWithArgs: EventWithArgs<T>[],
   contracts?: C,
 ) {
-  return eventWithParams
+  return eventWithArgs
     .map<LogRequest | undefined>((event) => {
       const topics = buildEventTopics(event.event, event.params)
       return {

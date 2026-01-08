@@ -1,22 +1,26 @@
 import { event, indexed } from '@subsquid/evm-abi'
 import * as p from '@subsquid/evm-codec'
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
+
 import { PortalRange, Transformer } from '~/core/index.js'
 import { createTestLogger } from '~/tests/test-logger.js'
-import { closeMockPortal, createMockPortal, MockPortal, MockResponse, readAll } from '~/tests/test-server.js'
+import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/tests/test-server.js'
+
 import { commonAbis } from './abi/common.js'
 import {
   DecodedEventPipeArgs,
-  EventsMap,
   EventWithArgs,
-  evmDecoder,
+  EventWithArgsInput,
+  EventsMap,
   IndexedKeys,
   IndexedParams,
+  IndexedParamsInput,
+  evmDecoder,
 } from './evm-decoder.js'
-import { factory } from './factory.js'
-import { factorySqliteDatabase } from './factory-adapters/sqlite.js'
 import { evmPortalSource } from './evm-portal-source.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
+import { factory } from './factory.js'
+import { factorySqliteDatabase } from './factory-adapters/sqlite.js'
 
 async function captureQueryBuilder(decoder: Transformer<any, any, EvmQueryBuilder>) {
   const mockQueryBuilder = new EvmQueryBuilder()
@@ -69,17 +73,25 @@ describe('evmDecoder types', () => {
   it('type IndexedParams picks indexed params from ERC20 Transfer', () => {
     type Result = IndexedParams<typeof commonAbis.erc20.events.Transfer>
     expectTypeOf<Result>().toEqualTypeOf<{
-      from: string | string[]
-      to: string | string[]
+      from?: string[]
+      to?: string[]
+    }>()
+  })
+
+  it('type IndexedParamsInput picks indexed params from ERC20 Transfer', () => {
+    type Result = IndexedParamsInput<typeof commonAbis.erc20.events.Transfer>
+    expectTypeOf<Result>().toEqualTypeOf<{
+      from?: string | string[]
+      to?: string | string[]
     }>()
   })
 
   it("type IndexedParams doesn't pick not indexed params from ERC20 Transfer", () => {
     type Result = IndexedParams<typeof commonAbis.erc20.events.Transfer>
     expectTypeOf<Result>().not.toEqualTypeOf<{
-      from: string
-      to: string
-      value: number
+      from?: string
+      to?: string
+      value?: number
     }>()
   })
 
@@ -89,8 +101,8 @@ describe('evmDecoder types', () => {
     expectTypeOf<Result>().toEqualTypeOf<{
       event: typeof commonAbis.erc20.events.Transfer
       params: {
-        from?: string | string[]
-        to?: string | string[]
+        from?: string[]
+        to?: string[]
       }
     }>()
 
@@ -100,6 +112,17 @@ describe('evmDecoder types', () => {
         from?: string
         to?: string
         value?: bigint
+      }
+    }>()
+  })
+
+  it('type EventWithArgsInput only allows for indexed params', () => {
+    type Result = EventWithArgsInput<typeof commonAbis.erc20.events.Transfer>
+    expectTypeOf<Result>().toEqualTypeOf<{
+      event: typeof commonAbis.erc20.events.Transfer
+      params: {
+        from?: string | string[]
+        to?: string | string[]
       }
     }>()
   })
@@ -870,7 +893,7 @@ describe('evmDecoder transform', () => {
           },
         }),
       )
-      .pipe((e) => e.transfers)
+      .pipe((e) => e['transfers'])
 
     const res = await readAll(stream)
 
@@ -949,7 +972,7 @@ describe('evmDecoder transform', () => {
           },
         }),
       )
-      .pipe((e) => e.transfers)
+      .pipe((e) => e['transfers'])
 
     const res = await readAll(stream)
     expect(res).toMatchInlineSnapshot(`
@@ -1028,7 +1051,7 @@ describe('evmDecoder transform', () => {
           },
         }),
       )
-      .pipe((e) => [...e.transfers, ...e.approvals])
+      .pipe((e) => [...e['transfers'], ...e['approvals']])
 
     const res = await readAll(stream)
 

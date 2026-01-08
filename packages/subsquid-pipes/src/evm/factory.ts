@@ -1,16 +1,20 @@
 import { AbiEvent } from '@subsquid/evm-abi'
 import type { Codec } from '@subsquid/evm-codec'
-import { BlockCursor, createTarget, Logger, PortalRange, parsePortalRange } from '~/core/index.js'
+
+import { BlockCursor, Logger, PortalRange, createTarget, parsePortalRange } from '~/core/index.js'
 import { arrayify } from '~/internal/array.js'
 import { PortalClient } from '~/portal-client/client.js'
 import { Log, LogRequest } from '~/portal-client/query/evm.js'
+
 import {
-  buildEventTopics,
   EventWithArgs,
-  evmDecoder,
+  EventWithArgsInput,
   FactoryEvent,
   IndexedParams,
+  buildEventTopics,
+  evmDecoder,
   isEventWithArgs,
+  getNormalizedEventParams,
 } from './evm-decoder.js'
 import { evmPortalSource } from './evm-portal-source.js'
 
@@ -30,7 +34,7 @@ export type InternalFactoryEvent<T extends EventArgs> = {
 
 export interface FactoryPersistentAdapter<T extends InternalFactoryEvent<any>> {
   all(): Promise<T[]>
-  all(params: Partial<IndexedParams<AbiEvent<any>>>): Promise<T[]>
+  all(params: IndexedParams<AbiEvent<any>>): Promise<T[]>
   lookup(parameter: string): Promise<T | null>
   save(entities: T[]): Promise<void>
   remove(blockNumber: number): Promise<void>
@@ -41,7 +45,7 @@ export type DecodedAbiEvent<T extends EventArgs> = ReturnType<AbiEvent<T>['decod
 
 export type FactoryOptions<T extends EventArgs> = {
   address: string | string[]
-  event: AbiEvent<T> | EventWithArgs<AbiEvent<T>>
+  event: AbiEvent<T> | EventWithArgsInput<AbiEvent<T>>
   _experimental_preindex?: { from: number | string; to: number | string }
   parameter: keyof T | ((data: DecodedAbiEvent<T>) => string | null)
   database:
@@ -54,14 +58,14 @@ export class Factory<T extends EventArgs> {
   #db?: FactoryPersistentAdapter<InternalFactoryEvent<T>>
   readonly #addresses: Set<string>
   readonly #event: AbiEvent<T>
-  readonly #params: Partial<IndexedParams<AbiEvent<T>>>
+  readonly #params: IndexedParams<AbiEvent<T>>
 
   constructor(private options: FactoryOptions<T>) {
     this.#addresses = new Set(arrayify(this.options.address).map((a) => a.toLowerCase()))
 
     if (isEventWithArgs(this.options.event)) {
       this.#event = this.options.event.event
-      this.#params = this.options.event.params
+      this.#params = getNormalizedEventParams(this.options.event.params)
     } else {
       this.#event = this.options.event
       this.#params = {}
@@ -76,7 +80,7 @@ export class Factory<T extends EventArgs> {
     return this.#event.topic
   }
 
-  factoryEventParams(): Partial<IndexedParams<AbiEvent<T>>> {
+  factoryEventParams(): IndexedParams<AbiEvent<T>> {
     return this.#params
   }
 
@@ -167,10 +171,10 @@ export class Factory<T extends EventArgs> {
       return true
     }
 
-    for (const [key, expectedValue] of Object.entries(this.#params)) {
+    for (const [key, values] of Object.entries(this.#params)) {
+      // This value is being casted because TS isn't being able to infer the value of expectedValues out of `this.#params`.
+      const expectedValues = values as unknown[]
       const eventValue = event[key as keyof T]
-      const expectedValues = Array.isArray(expectedValue) ? expectedValue : [expectedValue]
-
       if (!expectedValues.some((ev) => String(ev).toLowerCase() === String(eventValue).toLowerCase())) {
         return false
       }
