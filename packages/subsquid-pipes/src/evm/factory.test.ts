@@ -286,7 +286,7 @@ describe('Factory', () => {
     `)
   })
 
-  it('should skip null', async () => {
+  it('should skip null parameter', async () => {
     mockPortal = await createMockPortal(SIMPLE_CHILD)
 
     const db = await factorySqliteDatabase({ path: ':memory:' })
@@ -557,5 +557,56 @@ describe('Factory', () => {
     expect(secondRunRes).toHaveLength(1)
     expect(secondRunRes[0].contract).toBe('0x9db9e0e53058c89e5b94e29621a205198648425b')
     expect(secondRunRes[0].factory?.event.token0).toBe(usdc)
+  })
+
+  it('normalize params when reading all contacts from database', async () => {
+    mockPortal = await createMockPortal(SIMPLE_CHILD)
+
+    const contractsFactory = factory({
+      address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+      event: {
+        event: factoryAbi.PoolCreated,
+        params: {
+          // Parameter in different case than emitted event
+          pool: '0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8'.toUpperCase(),
+        },
+      },
+      parameter: 'pool',
+      database: await factorySqliteDatabase({ path: ':memory:' }),
+    })
+
+    const stream = evmPortalSource({
+      portal: mockPortal.url,
+    }).pipe(
+      evmDecoder({
+        range: { from: 1, to: 2 },
+        contracts: contractsFactory,
+        events: {
+          swaps: poolAbi.Swap,
+        },
+      }).pipe((d) => d.swaps),
+    )
+
+    await readAll(stream)
+
+    const contracts = await contractsFactory.getAllContracts()
+    expect(contracts).toMatchInlineSnapshot(`
+      [
+        {
+          "blockNumber": 1,
+          "childAddress": "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
+          "event": {
+            "fee": 3000,
+            "pool": "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
+            "tickSpacing": 10,
+            "token0": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+            "token1": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          },
+          "factoryAddress": "0x1f98431c8ad98523631ae4a59f267346ea31f984",
+          "logIndex": 0,
+          "transactionIndex": 0,
+        },
+      ]
+    `)
   })
 })
