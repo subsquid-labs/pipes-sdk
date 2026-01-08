@@ -1,6 +1,8 @@
 import { AbiEvent } from '@subsquid/evm-abi'
-import { loadSqlite, SqliteOptions, SqliteSync } from '~/drivers/sqlite/sqlite.js'
+
+import { SqliteOptions, SqliteSync, loadSqlite } from '~/drivers/sqlite/sqlite.js'
 import { jsonParse, jsonStringify } from '~/internal/json.js'
+
 import { IndexedParams } from '../evm-decoder.js'
 import { FactoryPersistentAdapter, InternalFactoryEvent } from '../factory.js'
 
@@ -65,37 +67,23 @@ class SqliteFactoryAdapter implements FactoryPersistentAdapter<InternalFactoryEv
    *   matches all specified parameter values are returned.
    * @returns All factory events matching the provided parameters, or all events if no parameters are specified.
    */
-  async all(params?: Partial<IndexedParams<AbiEvent<any>>>) {
-    if (!params || Object.keys(params).length === 0) {
-      return this.allWithoutParams()
-    }
-    return this.allWithParams(params)
-  }
-
-  private allWithoutParams() {
-    return this.#db.all<Row>('SELECT * FROM factory').map((row): InternalFactoryEvent<any> => {
-      return {
-        childAddress: row.address,
-        factoryAddress: row.factory,
-        blockNumber: row.block_number,
-        transactionIndex: row.transaction_index,
-        logIndex: row.log_index,
-        event: jsonParse(row.event.toString()),
-      }
-    })
-  }
-
-  private allWithParams(params: Partial<IndexedParams<AbiEvent<any>>>) {
+  async all(params?: IndexedParams<AbiEvent<any>>) {
     const conditions: string[] = []
     const values: any[] = []
 
-    for (const [key, expectedValue] of Object.entries(params)) {
-      const expectedValues = Array.isArray(expectedValue) ? expectedValue : [expectedValue]
-      conditions.push(`json_extract(event, '$.${key}') IN (${expectedValues.map(() => '?').join(', ')})`)
-      values.push(...expectedValues)
+    if (params && Object.keys(params).length > 0) {
+      for (const [paramName, paramValue] of Object.entries(params)) {
+        // This value is being casted because TS isn't being able to infer the value of paramValue out of `params`.
+        const expectedValues = paramValue as unknown[]
+        const placeholders = expectedValues.map((v) => (typeof v === 'string' ? 'LOWER(?)' : '?')).join(', ')
+        conditions.push(`LOWER(json_extract(event, '$.${paramName}')) IN (${placeholders})`)
+        values.push(...expectedValues)
+      }
     }
 
-    const query = `SELECT * FROM factory WHERE ${conditions.join(' AND ')}`
+    const where = conditions.length === 0 ? '' : 'WHERE ' + conditions.join(' AND ')
+    const query = `SELECT * FROM "factory" ${where}`
+
     return this.#db.all<Row>(query, values).map((row): InternalFactoryEvent<any> => {
       return {
         childAddress: row.address,
