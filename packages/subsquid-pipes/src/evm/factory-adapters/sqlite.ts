@@ -1,5 +1,9 @@
-import { loadSqlite, SqliteOptions, SqliteSync } from '~/drivers/sqlite/sqlite.js'
+import { AbiEvent } from '@subsquid/evm-abi'
+
+import { SqliteOptions, SqliteSync, loadSqlite } from '~/drivers/sqlite/sqlite.js'
 import { jsonParse, jsonStringify } from '~/internal/json.js'
+
+import { IndexedParams } from '../evm-decoder.js'
 import { FactoryPersistentAdapter, InternalFactoryEvent } from '../factory.js'
 
 type Row = {
@@ -43,15 +47,44 @@ class SqliteFactoryAdapter implements FactoryPersistentAdapter<InternalFactoryEv
         transaction_index   INTEGER,
         log_index           INTEGER,
         event               BLOB,
-          PRIMARY KEY (address)
+        PRIMARY KEY (address)
       )
     `)
     this.#db.exec(`CREATE INDEX IF NOT EXISTS factory_block_number_idx ON factory (block_number)`)
     this.#db.exec('COMMIT')
   }
 
-  async all() {
-    return this.#db.all<Row>(`SELECT * FROM "factory"`).map((row): InternalFactoryEvent<any> => {
+  /**
+   * Retrieves all factory events from the database, optionally filtered by indexed event parameters.
+   *
+   * When no parameters are provided, returns all stored factory events.
+   * When parameters are provided, only returns factory events whose decoded event data matches the specified parameter values.
+   * This filtering is essential to avoid returning contracts from previous pipeline runs that used
+   * different or no parameter filters.
+   *
+   * @param params - Optional indexed parameters to filter factory events by. Each parameter can be
+   *   a single value or an array of values. When provided, only factory events whose event data
+   *   matches all specified parameter values are returned.
+   * @returns All factory events matching the provided parameters, or all events if no parameters are specified.
+   */
+  async all(params?: IndexedParams<AbiEvent<any>>) {
+    const conditions: string[] = []
+    const values: any[] = []
+
+    if (params) {
+      for (const [paramName, paramValue] of Object.entries(params)) {
+        // This value is being casted because TS isn't being able to infer the value of paramValue out of `params`.
+        const expectedValues = paramValue as unknown[]
+        const placeholders = expectedValues.map((v) => (typeof v === 'string' ? 'LOWER(?)' : '?')).join(', ')
+        conditions.push(`LOWER(json_extract(event, '$.${paramName}')) IN (${placeholders})`)
+        values.push(...expectedValues)
+      }
+    }
+
+    const where = conditions.length === 0 ? '' : 'WHERE ' + conditions.join(' AND ')
+    const query = `SELECT * FROM "factory" ${where}`
+
+    return this.#db.all<Row>(query, values).map((row): InternalFactoryEvent<any> => {
       return {
         childAddress: row.address,
         factoryAddress: row.factory,
@@ -63,6 +96,10 @@ class SqliteFactoryAdapter implements FactoryPersistentAdapter<InternalFactoryEv
     })
   }
 
+  /**
+   * TODO: should we consider parameters when looking up a contract address?
+   * Or are we okay with doing that filtering in memory?
+   */
   async lookup(address: string): Promise<InternalFactoryEvent<any> | null> {
     if (typeof this.#lookupCache[address] !== 'undefined') {
       return this.#lookupCache[address]
