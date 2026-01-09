@@ -71,7 +71,7 @@ class SqliteFactoryAdapter implements FactoryPersistentAdapter<InternalFactoryEv
     const conditions: string[] = []
     const values: any[] = []
 
-    if (params && Object.keys(params).length > 0) {
+    if (params) {
       for (const [paramName, paramValue] of Object.entries(params)) {
         // This value is being casted because TS isn't being able to infer the value of paramValue out of `params`.
         const expectedValues = paramValue as unknown[]
