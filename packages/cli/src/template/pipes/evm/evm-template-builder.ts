@@ -58,11 +58,11 @@ void main()
 `
 
 export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
-  private static readonly SYNC_IMPORTS: Record<Sink, string[]> = {
+  private static readonly SINK_IMPORTS: Record<Sink, string[]> = {
     clickhouse: [
       'import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse"',
       'import { createClient } from "@clickhouse/client"',
-      'import { toSnakeKeysArray } from "./utils/index.js"',
+      'import { serializeJsonWithBigInt, toSnakeKeysArray } from "./utils/index.js"',
     ],
     postgresql: [
       'import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres"',
@@ -146,7 +146,7 @@ export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
   }
 
   private addSinkSpecificImports(allImportStrings: string[]): void {
-    allImportStrings.push(...EvmTemplateBuilder.SYNC_IMPORTS[this.config.sink])
+    allImportStrings.push(...EvmTemplateBuilder.SINK_IMPORTS[this.config.sink])
   }
 
   private addSchemaImports(allImportStrings: string[], templateEntries: [string, TransformerTemplate][]): void {

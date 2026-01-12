@@ -3,6 +3,9 @@ export const clickhouseSinkTemplate = `clickhouseTarget({
         username: process.env.CLICKHOUSE_USER ?? (() => { throw new Error('CLICKHOUSE_USER is not set')})(),
         password: process.env.CLICKHOUSE_PASSWORD ?? (() => { throw new Error('CLICKHOUSE_PASSWORD is not set')})(),
         url: process.env.CLICKHOUSE_URL ?? (() => { throw new Error('CLICKHOUSE_URL is not set')})(),
+        json: {
+            stringify: serializeJsonWithBigInt,
+        },
     }),
     onStart: async ({ store }) => {
       await store.executeFiles('./src/migrations')

@@ -19,9 +19,9 @@ export const toSnakeKeysArray = <T extends Record<string, any>>(
   return obj.map((o) => toSnakeKeys(o))
 }
 
-// Clickhouse JSONEachRow format uses toJSON to convert BigInts to strings
-;(BigInt.prototype as any).toJSON = function () {
-return this.toString()
+export function serializeJsonWithBigInt(obj: unknown): string {
+  return JSON.stringify(obj, (_key, value) =>
+    typeof value === 'bigint' ? value.toString() : value,
+  )
 }
-
 `
