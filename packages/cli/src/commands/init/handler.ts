@@ -1,12 +1,9 @@
-import { exec, execSync } from 'node:child_process'
-import { promisify } from 'node:util'
-
-const execAsync = promisify(exec)
+import { exec } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
+import { promisify } from 'node:util'
 import chalk from 'chalk'
-import Mustache from 'mustache'
 import ora from 'ora'
 import { z } from 'zod'
 import { getEvmChainId } from '~/config/networks.js'
@@ -23,12 +20,15 @@ import {
   getDockerCompose,
   getEnvTemplate,
   gitignoreContent,
+  pnpmWorkspace,
   renderPackageJson,
   tsconfigConfig,
 } from '~/template/scaffold/index.js'
 import type { Config } from '~/types/config.js'
 import type { NetworkType } from '~/types/network.js'
 import { findPackageRoot } from '~/utils/package-root.js'
+
+const execAsync = promisify(exec)
 
 const configJsonSchema = z.object({
   projectFolder: z.string().min(1),
@@ -72,7 +72,7 @@ export class InitHandler {
       await this.copyTemplateContracts(projectPath)
 
       spinner.text = squidfix('Installing dependencies')
-      await this.installDependencies(projectPath, spinner)
+      await this.installDependencies(projectPath)
 
       spinner.text = squidfix('Linting project')
       await this.lintProject(projectPath)
@@ -120,6 +120,8 @@ export class InitHandler {
     writeFileSync(path.join(projectPath, 'docker-compose.yml'), getDockerCompose(this.config.sink))
 
     writeFileSync(path.join(projectPath, '.env'), getEnvTemplate(this.config.sink))
+
+    writeFileSync(path.join(projectPath, 'pnpm-workspace.yaml'), pnpmWorkspace)
   }
 
   private writeTemplateFiles(projectPath: string): void {
@@ -162,9 +164,8 @@ export class InitHandler {
     throw new Error('Invalid chain type')
   }
 
-  private async installDependencies(projectPath: string, spinner: ReturnType<typeof ora>): Promise<void> {
-    // Use async exec to allow spinner to animate during installation
-    await execAsync('pnpm install --dangerously-allow-all-builds', {
+  private async installDependencies(projectPath: string): Promise<void> {
+    await execAsync('pnpm install', {
       cwd: projectPath,
     })
   }
