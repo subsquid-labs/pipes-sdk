@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { generateImportStatement, mergeImports, parseImports, parseNamedImports } from './merge-imports.js'
+import { generateImportStatement, mergeImports, splitImportsAndCode, parseNamedImports } from './merge-imports.js'
 
 describe('parseImports', () => {
   it('should parse side-effect imports', () => {
     const content = 'import "./styles.css";'
-    const result = parseImports(content)
+    const result = splitImportsAndCode(content)
 
     expect(result.imports).toHaveLength(1)
     expect(result.imports[0]).toEqual({
@@ -18,7 +18,7 @@ describe('parseImports', () => {
 
   it('should parse default imports', () => {
     const content = 'import Pipes from "@subsquid/pipes";'
-    const result = parseImports(content)
+    const result = splitImportsAndCode(content)
 
     expect(result.imports).toHaveLength(1)
     expect(result.imports[0]).toEqual({
@@ -32,7 +32,7 @@ describe('parseImports', () => {
 
   it('should parse named imports', () => {
     const content = 'import { evmDecoder, evmPortalSource } from "@subsquid/pipes/evm";'
-    const result = parseImports(content)
+    const result = splitImportsAndCode(content)
 
     expect(result.imports).toHaveLength(1)
     expect(result.imports[0]).toEqual({
@@ -45,7 +45,7 @@ describe('parseImports', () => {
 
   it('should parse named imports with aliases', () => {
     const content = 'import { evmDecoder as decoder, evmPortalSource } from "@subsquid/pipes/evm";'
-    const result = parseImports(content)
+    const result = splitImportsAndCode(content)
 
     expect(result.imports).toHaveLength(1)
     expect(result.imports[0]).toEqual({
@@ -57,7 +57,7 @@ describe('parseImports', () => {
 
   it('should parse namespace imports', () => {
     const content = 'import * as Pipes from "@subsquid/pipes";'
-    const result = parseImports(content)
+    const result = splitImportsAndCode(content)
 
     expect(result.imports).toHaveLength(1)
     expect(result.imports[0]).toEqual({
@@ -70,7 +70,7 @@ describe('parseImports', () => {
 
   it('should parse type imports', () => {
     const content = 'import type { PortalRange } from "@subsquid/pipes";'
-    const result = parseImports(content)
+    const result = splitImportsAndCode(content)
 
     expect(result.imports).toHaveLength(1)
     expect(result.imports[0]).toEqual({
@@ -82,7 +82,7 @@ describe('parseImports', () => {
 
   it('should parse default with named imports', () => {
     const content = 'import Pipes, { PortalRange } from "@subsquid/pipes";'
-    const result = parseImports(content)
+    const result = splitImportsAndCode(content)
 
     expect(result.imports).toHaveLength(1)
     expect(result.imports[0]).toEqual({
@@ -99,7 +99,7 @@ describe('parseImports', () => {
       evmPortalSource,
       commonAbis
     } from "@subsquid/pipes/evm";`
-    const result = parseImports(content)
+    const result = splitImportsAndCode(content)
 
     expect(result.imports).toHaveLength(1)
     expect(result.imports[0]).toEqual({
@@ -113,7 +113,7 @@ describe('parseImports', () => {
     const content = `import Pipes from "@subsquid/pipes";
 import { evmDecoder } from "@subsquid/pipes/evm";
 import lodash from "lodash";`
-    const result = parseImports(content)
+    const result = splitImportsAndCode(content)
 
     expect(result.imports).toHaveLength(3)
     expect(result.imports[0]).toEqual({
@@ -141,7 +141,7 @@ import lodash from "lodash";`
 const stream = evmDecoder({
   range: { from: 'latest' },
 });`
-    const result = parseImports(content)
+    const result = splitImportsAndCode(content)
 
     expect(result.imports).toHaveLength(1)
     expect(result.code.trim()).toBe(`const stream = evmDecoder({
@@ -152,14 +152,14 @@ const stream = evmDecoder({
   it('should handle imports with semicolons and without', () => {
     const content = `import Pipes from "@subsquid/pipes"
 import { evmDecoder } from "@subsquid/pipes/evm";`
-    const result = parseImports(content)
+    const result = splitImportsAndCode(content)
 
     expect(result.imports).toHaveLength(2)
   })
 
   it('should handle named imports with namespace alias', () => {
     const content = 'import { a, b, c } as ns from "module";'
-    const result = parseImports(content)
+    const result = splitImportsAndCode(content)
 
     expect(result.imports).toHaveLength(1)
     expect(result.imports[0]).toEqual({
@@ -172,7 +172,7 @@ import { evmDecoder } from "@subsquid/pipes/evm";`
 
   it('should not treat import with from as side-effect', () => {
     const content = 'import "./styles.css" from "other";'
-    const result = parseImports(content)
+    const result = splitImportsAndCode(content)
 
     // Should not be parsed as side-effect since it has 'from'
     expect(result.imports.some((imp) => imp.sideEffect && imp.from === './styles.css')).toBe(false)
