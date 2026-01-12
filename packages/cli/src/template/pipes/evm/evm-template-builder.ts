@@ -1,11 +1,10 @@
 import Mustache from 'mustache'
 import { TemplateBuilder } from '~/template/index.js'
-import { Sink } from '~/types/sink.js'
 import { TransformerTemplate } from '~/types/templates.js'
-import { generateImportStatement, mergeImports, parseImports } from '~/utils/merge-imports.js'
-import { clickhouseSinkTemplate, postgresSinkTemplate } from './sink-templates.js'
+import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
+import { getSinkTemplate, renderSinkTemplate } from './sink-templates.js'
 
-export const template = (sink: Sink) => `{{#mergedImports}}
+export const template = `{{#mergedImports}}
 {{{.}}}
 {{/mergedImports}}
 
@@ -51,28 +50,16 @@ export async function main() {
    * })
    * \`\`\`
    */
-  .pipeTo(${sink === 'clickhouse' ? clickhouseSinkTemplate : postgresSinkTemplate})
+  .pipeTo({{{sinkTemplate}}})
 }
 
 void main()
 `
 
 export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
-  private static readonly SINK_IMPORTS: Record<Sink, string[]> = {
-    clickhouse: [
-      'import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse"',
-      'import { createClient } from "@clickhouse/client"',
-      'import { serializeJsonWithBigInt, toSnakeKeysArray } from "./utils/index.js"',
-    ],
-    postgresql: [
-      'import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres"',
-      'import { drizzle } from "drizzle-orm/node-postgres"',
-    ],
-    memory: [],
-  }
   private static readonly BASE_IMPORTS: string[] = [
     'import "dotenv/config"',
-    'import { evmDecoder, evmPortalSource, commonAbis } from "@subsquid/pipes/evm"',
+    'import { evmPortalSource } from "@subsquid/pipes/evm"',
   ]
 
   build(): string {
@@ -90,7 +77,7 @@ export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
       mergedImportStatements,
     )
 
-    return Mustache.render(template(this.config.sink), values)
+    return Mustache.render(template, values)
   }
 
   private buildContractImports(isCustomContractFlow: boolean) {
@@ -145,8 +132,17 @@ export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
     }
   }
 
-  private addSinkSpecificImports(allImportStrings: string[]): void {
-    allImportStrings.push(...EvmTemplateBuilder.SINK_IMPORTS[this.config.sink])
+  private addSinkSpecificImports(allImportStrings: string[]) {
+    const imports = this.getSinkImports()
+    allImportStrings.push(...imports)
+  }
+
+  private getSinkImports() {
+    const sinkTemplate = getSinkTemplate(this.config.sink)
+    const { imports } = splitImportsAndCode(sinkTemplate)
+    console.log(JSON.stringify({ imports }))
+
+    return mergeImports(imports).map(generateImportStatement)
   }
 
   private addSchemaImports(allImportStrings: string[], templateEntries: [string, TransformerTemplate][]): void {
@@ -170,7 +166,7 @@ export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
 
   private parseAndMergeImports(allImportStrings: string[]): string[] {
     const combinedImports = allImportStrings.join('\n')
-    const parsedImports = combinedImports ? parseImports(combinedImports).imports : []
+    const parsedImports = combinedImports ? splitImportsAndCode(combinedImports).imports : []
     const mergedImports = mergeImports(parsedImports)
     return mergedImports.map(generateImportStatement).filter((stmt: string) => stmt.length > 0)
   }
@@ -181,12 +177,19 @@ export class EvmTemplateBuilder extends TemplateBuilder<'evm'> {
     isCustomContractFlow: boolean,
     mergedImportStatements: string[],
   ) {
+    // TODO: change all templates to transformerTemplates
+    const transformerTemplates = this.buildTemplateEntries(templateEntries, isCustomContractFlow)
+
     return {
       network: this.config.network,
       mergedImports: mergedImportStatements,
-      templates: this.buildTemplateEntries(templateEntries, isCustomContractFlow),
+      templates: transformerTemplates,
       customContracts,
       hasCustomContracts: isCustomContractFlow,
+      sinkTemplate: renderSinkTemplate(this.config.sink, {
+        templates: transformerTemplates,
+        hasCustomContracts: isCustomContractFlow,
+      }),
     }
   }
 

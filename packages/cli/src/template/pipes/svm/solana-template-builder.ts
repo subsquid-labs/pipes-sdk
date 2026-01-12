@@ -2,7 +2,7 @@ import Mustache from 'mustache'
 import { TemplateBuilder } from '~/template/index.js'
 import { Sink } from '~/types/sink.js'
 import { TransformerTemplate } from '~/types/templates.js'
-import { generateImportStatement, mergeImports, parseImports } from '~/utils/merge-imports.js'
+import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
 import { clickhouseSinkTemplate, postgresSinkTemplate } from '../evm/sink-templates.js'
 
 export const template = (sink: Sink) => `{{#mergedImports}}
@@ -188,7 +188,7 @@ export class SolanaTemplateBuilder extends TemplateBuilder<'svm'> {
 
   private parseAndMergeImports(allImportStrings: string[]): string[] {
     const combinedImports = allImportStrings.join('\n')
-    const parsedImports = combinedImports ? parseImports(combinedImports).imports : []
+    const parsedImports = combinedImports ? splitImportsAndCode(combinedImports).imports : []
     const mergedImports = mergeImports(parsedImports)
     return mergedImports.map(generateImportStatement).filter((stmt: string) => stmt.length > 0)
   }

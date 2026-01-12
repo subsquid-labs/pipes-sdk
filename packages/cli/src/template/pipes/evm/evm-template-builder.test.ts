@@ -23,7 +23,7 @@ describe('EVM Template Builder', () => {
       import { commonAbis, evmDecoder, evmPortalSource } from "@subsquid/pipes/evm";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
       import { createClient } from "@clickhouse/client";
-      import { toSnakeKeysArray } from "./utils/index.js";
+      import { serializeJsonWithBigInt, toSnakeKeysArray } from "./utils/index.js";
 
       const erc20Transfers = evmDecoder({
         profiler: { id: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
@@ -69,6 +69,9 @@ describe('EVM Template Builder', () => {
               username: process.env.CLICKHOUSE_USER ?? (() => { throw new Error('CLICKHOUSE_USER is not set')})(),
               password: process.env.CLICKHOUSE_PASSWORD ?? (() => { throw new Error('CLICKHOUSE_PASSWORD is not set')})(),
               url: process.env.CLICKHOUSE_URL ?? (() => { throw new Error('CLICKHOUSE_URL is not set')})(),
+              json: {
+                  stringify: serializeJsonWithBigInt,
+              },
           }),
           onStart: async ({ store }) => {
             await store.executeFiles('./src/migrations')
@@ -119,7 +122,7 @@ describe('EVM Template Builder', () => {
       import { events as poolEvents } from "./contracts/pool.js";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
       import { createClient } from "@clickhouse/client";
-      import { toSnakeKeysArray } from "./utils/index.js";
+      import { serializeJsonWithBigInt, toSnakeKeysArray } from "./utils/index.js";
 
       const erc20Transfers = evmDecoder({
         profiler: { id: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
@@ -192,6 +195,9 @@ describe('EVM Template Builder', () => {
               username: process.env.CLICKHOUSE_USER ?? (() => { throw new Error('CLICKHOUSE_USER is not set')})(),
               password: process.env.CLICKHOUSE_PASSWORD ?? (() => { throw new Error('CLICKHOUSE_PASSWORD is not set')})(),
               url: process.env.CLICKHOUSE_URL ?? (() => { throw new Error('CLICKHOUSE_URL is not set')})(),
+              json: {
+                  stringify: serializeJsonWithBigInt,
+              },
           }),
           onStart: async ({ store }) => {
             await store.executeFiles('./src/migrations')

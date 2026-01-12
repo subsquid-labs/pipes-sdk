@@ -8,7 +8,7 @@ interface ParsedImport {
   sideEffect?: boolean
 }
 
-export function parseImports(content: string): {
+export function splitImportsAndCode(content: string): {
   imports: ParsedImport[]
   code: string
 } {

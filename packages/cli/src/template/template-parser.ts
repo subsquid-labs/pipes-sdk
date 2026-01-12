@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { generateImportStatement, parseImports } from '~/utils/merge-imports.js'
+import { generateImportStatement, splitImportsAndCode } from '~/utils/merge-imports.js'
 
 export class TemplateParser {
   constructor(private readonly __dirname: string) {}
@@ -20,7 +20,7 @@ export class TemplateParser {
     variableName: string
   } {
     const content = this.readTemplateFile(relativePath)
-    const { imports, code } = parseImports(content)
+    const { imports, code } = splitImportsAndCode(content)
     // Clean node_modules/ from import paths
     imports.forEach((imp) => {
       imp.from = imp.from.replace(/^node_modules\//, '')

@@ -1,4 +1,14 @@
-export const clickhouseSinkTemplate = `clickhouseTarget({
+import Mustache from 'mustache'
+import { Sink } from '~/types/sink.js'
+import { TransformerTemplate } from '~/types/templates.js'
+import { splitImportsAndCode } from '~/utils/merge-imports.js'
+
+export const clickhouseSinkTemplate = `
+import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
+import { createClient } from '@clickhouse/client'
+import { serializeJsonWithBigInt, toSnakeKeysArray } from './utils/index.js'
+
+clickhouseTarget({
     client: createClient({
         username: process.env.CLICKHOUSE_USER ?? (() => { throw new Error('CLICKHOUSE_USER is not set')})(),
         password: process.env.CLICKHOUSE_PASSWORD ?? (() => { throw new Error('CLICKHOUSE_PASSWORD is not set')})(),
@@ -49,7 +59,11 @@ export const clickhouseSinkTemplate = `clickhouseTarget({
     },
   })`
 
-export const postgresSinkTemplate = `drizzleTarget({
+export const postgresSinkTemplate = `
+import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
+import { drizzle } from 'drizzle-orm/node-postgres',
+
+drizzleTarget({
     db: drizzle(
       process.env.DB_CONNECTION_STR ??
         (() => { throw new Error('DB_CONNECTION_STR env missing') })(),
@@ -76,3 +90,21 @@ export const postgresSinkTemplate = `drizzleTarget({
 {{/hasCustomContracts}}
     },
   })`
+
+interface SinkTemplateParams {
+  hasCustomContracts: boolean
+  templates: TransformerTemplate[]
+}
+
+export function renderSinkTemplate(sink: Sink, params: SinkTemplateParams) {
+  const sinkTemplate = getSinkTemplate(sink)
+  const { code } = splitImportsAndCode(sinkTemplate)
+  return Mustache.render(code, params)
+}
+
+export function getSinkTemplate(sink: Sink): string {
+  if (sink === 'clickhouse') return clickhouseSinkTemplate
+  else if (sink === 'postgresql') return postgresSinkTemplate
+  else if (sink === 'memory') throw new Error('Memory not implemented')
+  else throw new Error(`Sink type ${sink} does not exist or its template not implemented`)
+}
