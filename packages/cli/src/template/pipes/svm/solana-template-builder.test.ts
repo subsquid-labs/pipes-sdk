@@ -20,12 +20,12 @@ describe('Solana Template Builder', () => {
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
-      import { SolanaQueryBuilder, solanaInstructionDecoder, solanaPortalSource } from "@subsquid/pipes/solana";
-      import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres";
-      import { drizzle } from "drizzle-orm/node-postgres";
+      import { SolanaQueryBuilder, solanaPortalSource } from "@subsquid/pipes/solana";
       import { createTransformer } from "@subsquid/pipes";
       import { PortalStreamData } from "@subsquid/pipes/portal-client";
       import { Block as SolanaBlock, FieldSelection as SolanaFieldSelection } from "@subsquid/pipes/dist/portal-client/query/solana.js";
+      import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres";
+      import { drizzle } from "drizzle-orm/node-postgres";
       import { tokenBalancesTable } from "./schemas.js";
 
       interface TokenBalance {
