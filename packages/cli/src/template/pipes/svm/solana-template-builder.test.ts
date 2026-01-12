@@ -7,7 +7,7 @@ describe('Solana Template Builder', () => {
   it('should build index.ts file using single pipe template', () => {
     const config: Config<'svm'> = {
       projectFolder: 'mock-folder',
-      chainType: 'svm',
+      networkType: 'svm',
       network: 'ethereum-mainnet',
       templates: {
         'token-balances': templates.svm['token-balances'],

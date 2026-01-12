@@ -152,11 +152,11 @@ export class InitHandler {
   }
 
   private buildIndexTs(): string {
-    if (this.config.chainType === 'evm') {
+    if (this.config.networkType === 'evm') {
       const builder = new EvmTemplateBuilder(this.config as Config<'evm'>)
       return builder.build()
     }
-    if (this.config.chainType === 'svm') {
+    if (this.config.networkType === 'svm') {
       const builder = new SolanaTemplateBuilder(this.config as Config<'svm'>)
       return builder.build()
     }
@@ -185,8 +185,8 @@ export class InitHandler {
   private async copyClickHouseMigrations(projectPath: string): Promise<void> {
     const packageRoot = findPackageRoot()
     // Try dist/template first (for bundled builds), then fall back to src/template
-    const distTemplateDir = path.join(packageRoot, 'dist', 'template', 'pipes', this.config.chainType)
-    const srcTemplateDir = path.join(packageRoot, 'src', 'template', 'pipes', this.config.chainType)
+    const distTemplateDir = path.join(packageRoot, 'dist', 'template', 'pipes', this.config.networkType)
+    const srcTemplateDir = path.join(packageRoot, 'src', 'template', 'pipes', this.config.networkType)
     const templateBaseDir = existsSync(distTemplateDir) ? distTemplateDir : srcTemplateDir
 
     const migrationsDir = path.join(projectPath, 'src/migrations')
@@ -217,8 +217,8 @@ export class InitHandler {
   private async copyTemplateContracts(projectPath: string): Promise<void> {
     const packageRoot = findPackageRoot()
     // Try dist/template first (for bundled builds), then fall back to src/template
-    const distTemplateDir = path.join(packageRoot, 'dist', 'template', 'pipes', this.config.chainType)
-    const srcTemplateDir = path.join(packageRoot, 'src', 'template', 'pipes', this.config.chainType)
+    const distTemplateDir = path.join(packageRoot, 'dist', 'template', 'pipes', this.config.networkType)
+    const srcTemplateDir = path.join(packageRoot, 'src', 'template', 'pipes', this.config.networkType)
     const templateBaseDir = existsSync(distTemplateDir) ? distTemplateDir : srcTemplateDir
 
     const templateEntries = Object.entries(this.config.templates)
@@ -271,7 +271,7 @@ export class InitHandler {
 
     const abiService = new SqdAbiService()
 
-    if (this.config.chainType === 'evm') {
+    if (this.config.networkType === 'evm') {
       const chainId = getEvmChainId(this.config.network)
       if (!chainId) {
         return
@@ -362,7 +362,7 @@ export class InitHandler {
 
     return {
       ...rest,
-      chainType,
+      networkType: chainType,
       templates: templateMap,
       contractAddresses,
     } as Config<NetworkType>

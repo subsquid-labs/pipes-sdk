@@ -109,7 +109,7 @@ export class InitPrompt {
 
     return {
       projectFolder,
-      chainType,
+      networkType: chainType,
       network,
       templates: selectedTemplateMap,
       contractAddresses,

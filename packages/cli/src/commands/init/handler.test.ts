@@ -42,7 +42,7 @@ describe('InitHandler', () => {
   it('creates expected base folder structure', async () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
-      chainType: 'evm',
+      networkType: 'evm',
       network: 'ethereum-mainnet',
       templates: {
         'erc20-transfers': templates.evm['erc20-transfers'],
@@ -62,7 +62,7 @@ describe('InitHandler', () => {
   it('creates project base files', async () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
-      chainType: 'evm',
+      networkType: 'evm',
       network: 'ethereum-mainnet',
       templates: {
         'erc20-transfers': templates.evm['erc20-transfers'],
@@ -84,7 +84,7 @@ describe('InitHandler', () => {
   it('creates project specific folders and files for clickhouse sink', async () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
-      chainType: 'evm',
+      networkType: 'evm',
       network: 'ethereum-mainnet',
       templates: {
         'erc20-transfers': templates.evm['erc20-transfers'],
@@ -115,7 +115,7 @@ describe('InitHandler', () => {
   it('creates project specific folders and files for postgresql sink', async () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
-      chainType: 'evm',
+      networkType: 'evm',
       network: 'ethereum-mainnet',
       templates: {
         'erc20-transfers': templates.evm['erc20-transfers'],

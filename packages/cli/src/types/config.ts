@@ -4,7 +4,7 @@ import { Sink } from './sink.js'
 
 export interface Config<N extends NetworkType> {
   projectFolder: string
-  chainType: N
+  networkType: N
   network: string // slug from networks
   templates: NetworkTemplate<N> // ids from templates
   contractAddresses: string[]

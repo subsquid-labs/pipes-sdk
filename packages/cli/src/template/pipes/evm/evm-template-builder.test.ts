@@ -7,7 +7,7 @@ describe('EVM Template Builder', () => {
   it('should build index.ts file using single pipe template', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
-      chainType: 'evm',
+      networkType: 'evm',
       network: 'ethereum-mainnet',
       templates: {
         'erc20-transfers': templates.evm['erc20-transfers'],
@@ -103,7 +103,7 @@ describe('EVM Template Builder', () => {
   it('should build index.ts combining multiple pipe templates', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
-      chainType: 'evm',
+      networkType: 'evm',
       network: 'ethereum-mainnet',
       templates: {
         'erc20-transfers': templates.evm['erc20-transfers'],

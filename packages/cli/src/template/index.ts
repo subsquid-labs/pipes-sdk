@@ -93,7 +93,7 @@ export abstract class TemplateBuilder<N extends NetworkType> {
   }
 
   private addBaseImports(allImportStrings: string[]): void {
-    allImportStrings.push(...TemplateBuilder.BASE_IMPORTS, ...TemplateBuilder.NETWORK_IMPORTS[this.config.chainType])
+    allImportStrings.push(...TemplateBuilder.BASE_IMPORTS, ...TemplateBuilder.NETWORK_IMPORTS[this.config.networkType])
   }
 
   private addTemplateImports(allImportStrings: string[], templateEntries: [string, TransformerTemplate][]): void {

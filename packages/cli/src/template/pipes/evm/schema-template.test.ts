@@ -7,7 +7,7 @@ describe('Schema template builder', () => {
   it('should build schema file for single pipe template', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
-      chainType: 'evm',
+      networkType: 'evm',
       network: 'ethereum-mainnet',
       templates: {
         'erc20-transfers': templates.evm['erc20-transfers'],
@@ -50,7 +50,7 @@ describe('Schema template builder', () => {
   it('should build schema file for multiple pipe templates', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
-      chainType: 'evm',
+      networkType: 'evm',
       network: 'ethereum-mainnet',
       templates: {
         'erc20-transfers': templates.evm['erc20-transfers'],
