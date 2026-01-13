@@ -1,7 +1,6 @@
 import { toCamelCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
-import { Config } from '~/types/config.js'
-import { NetworkType } from '~/types/network.js'
+import { Config, NetworkType } from '~/types/init.js'
 import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
 
 export const schemasTemplate = `{{#mergedImports}}

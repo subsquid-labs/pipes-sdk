@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { templates } from '~/templates/pipe-components/template-builder.js'
-import { Config } from '~/types/config.js'
+import { Config } from '~/types/init.js'
 import { EvmTemplateBuilder } from './evm-template-builder.js'
+import { templates } from './template-builder.js'
 
 describe('EVM Template Builder', () => {
   it('should build index.ts file using single pipe template', () => {
@@ -14,7 +14,7 @@ describe('EVM Template Builder', () => {
       sink: 'clickhouse',
     }
 
-    const indexerContent = new EvmTemplateBuilder(config).buildNew()
+    const indexerContent = new EvmTemplateBuilder(config).build()
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
@@ -107,7 +107,7 @@ describe('EVM Template Builder', () => {
       sink: 'clickhouse',
     }
 
-    const indexerContent = new EvmTemplateBuilder(config).buildNew()
+    const indexerContent = new EvmTemplateBuilder(config).build()
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
@@ -235,7 +235,7 @@ describe('EVM Template Builder', () => {
       sink: 'postgresql',
     }
 
-    const indexerContent = new EvmTemplateBuilder(config).buildNew()
+    const indexerContent = new EvmTemplateBuilder(config).build()
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";

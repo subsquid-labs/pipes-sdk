@@ -6,12 +6,14 @@ import { promisify } from 'node:util'
 import chalk from 'chalk'
 import ora from 'ora'
 import { z } from 'zod'
-import { getEvmChainId } from '~/config/networks.js'
+import { getEvmChainId } from '~/commands/init/config/networks.js'
 import { SqdAbiService } from '~/services/sqd-abi.js'
-import { EvmTemplateBuilder } from '~/templates/pipe-components/evm-template-builder.js'
-import { renderSchemasTemplate } from '~/templates/pipe-components/schemas-template.js'
-import { SvmTemplateBuilder } from '~/templates/pipe-components/svm-template-builder.js'
-import { templates } from '~/templates/pipe-components/template-builder.js'
+import type { Config, NetworkType } from '~/types/init.js'
+import { findPackageRoot } from '~/utils/package-root.js'
+import { EvmTemplateBuilder } from './templates/pipe-components/evm-template-builder.js'
+import { renderSchemasTemplate } from './templates/pipe-components/schemas-template.js'
+import { SvmTemplateBuilder } from './templates/pipe-components/svm-template-builder.js'
+import { templates } from './templates/pipe-components/template-builder.js'
 import {
   biomeConfig,
   clickhouseUtilsTemplate,
@@ -23,10 +25,7 @@ import {
   pnpmWorkspace,
   renderPackageJson,
   tsconfigConfig,
-} from '~/templates/project-files/index.js'
-import type { Config } from '~/types/config.js'
-import type { NetworkType } from '~/types/network.js'
-import { findPackageRoot } from '~/utils/package-root.js'
+} from './templates/project-files/index.js'
 
 const execAsync = promisify(exec)
 
@@ -153,11 +152,11 @@ export class InitHandler {
   private buildIndexTs(): string {
     if (this.config.networkType === 'evm') {
       const builder = new EvmTemplateBuilder(this.config as Config<'evm'>)
-      return builder.buildNew()
+      return builder.build()
     }
     if (this.config.networkType === 'svm') {
       const builder = new SvmTemplateBuilder(this.config as Config<'svm'>)
-      return builder.buildNew()
+      return builder.build()
     }
 
     throw new Error('Invalid chain type')

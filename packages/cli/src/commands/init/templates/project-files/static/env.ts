@@ -1,4 +1,4 @@
-import { Sink } from '~/types/sink.js'
+import { Sink } from "~/types/init.js"
 
 export const clickhouseEnvTemplate = `CLICKHOUSE_URL=http://localhost:8123
 CLICKHOUSE_DATABASE=pipes

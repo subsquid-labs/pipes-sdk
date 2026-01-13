@@ -1,6 +1,5 @@
 import Mustache from 'mustache'
-import { Sink } from '~/types/sink.js'
-import { TransformerTemplate } from '~/types/templates.js'
+import { Sink, TransformerTemplate } from "~/types/init.js"
 import { splitImportsAndCode } from '~/utils/merge-imports.js'
 import { tableToSchemaName } from './schemas-template.js'
 

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { EvmTemplateIds, SvmTemplateIds } from '~/config/templates.js'
+import { EvmTemplateIds, SvmTemplateIds } from '~/commands/init/config/templates.js'
 
 export class TemplateParser {
   constructor(private readonly __dirname: string) {}

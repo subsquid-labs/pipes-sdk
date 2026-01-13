@@ -3,8 +3,8 @@ import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { templates } from '~/templates/pipe-components/template-builder.js'
-import { Config } from '~/types/config.js'
+import { templates } from '~/commands/init/templates/pipe-components/template-builder.js'
+import { Config } from '~/types/init.js'
 import { InitHandler } from './handler.js'
 
 async function exists(p: string) {

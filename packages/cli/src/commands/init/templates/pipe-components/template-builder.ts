@@ -1,6 +1,6 @@
 import Mustache from 'mustache'
-import { Config } from '~/types/config.js'
-import { NetworkType } from '~/types/network.js'
+import { Config } from '~/types/init.js'
+import { NetworkType } from "~/types/init.js"
 import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
 import { customContractTemplate } from '../pipe-templates/evm/custom/transformer.js'
 import { evmTemplates } from '../pipe-templates/evm/index.js'
@@ -30,7 +30,7 @@ export abstract class TemplateBuilder<N extends NetworkType> {
 
   abstract renderTemplate(templateValues: TemplateValues): string
 
-  buildNew() {
+  build() {
     const transformerTemplates = this.getTransformerTemplates()
     const sinkTemplates = this.getSinkTemplate()
     const indexFileImports = [

@@ -1,4 +1,4 @@
-import { Sink } from '~/types/sink.js'
+import { Sink } from "~/types/init.js"
 
 export const clickhouseDockerCompose = `services:
   clickhouse:

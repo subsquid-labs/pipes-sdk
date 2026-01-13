@@ -1,4 +1,4 @@
-import type { Sink } from '~/types/sink.js'
+import type { Sink } from "~/types/init.js"
 
 export const baseDependencies: Record<string, string> = {
   '@subsquid/pipes': '^0.1.0-beta.10',

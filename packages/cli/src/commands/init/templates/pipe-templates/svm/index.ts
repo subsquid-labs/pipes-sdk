@@ -1,6 +1,6 @@
-import { SvmTemplateIds } from '~/config/templates.js'
+import { SvmTemplateIds } from '~/commands/init/config/templates.js'
 import { TemplateParser } from '~/templates/pipe-templates/template-parser.js'
-import { TransformerTemplate } from '~/types/templates.js'
+import { TransformerTemplate } from "~/types/init.js"
 import { getTemplateDirname } from '~/utils/fs.js'
 
 const templateParser = new TemplateParser(getTemplateDirname('svm'))

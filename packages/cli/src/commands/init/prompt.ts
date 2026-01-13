@@ -2,13 +2,12 @@ import path from 'node:path'
 import { checkbox, input, select } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { InitHandler } from '~/commands/init/handler.js'
-import { networks } from '~/config/networks.js'
-import { sinks } from '~/config/sinks.js'
-import { templateOptions } from '~/config/templates.js'
-import { templates } from '~/templates/pipe-components/template-builder.js'
-import type { Config } from '~/types/config.js'
-import { chainTypes, type NetworkType } from '~/types/network.js'
-import { TransformerTemplate } from '~/types/templates.js'
+import { networks } from '~/commands/init/config/networks.js'
+import { sinks } from '~/commands/init/config/sinks.js'
+import { templateOptions } from '~/commands/init/config/templates.js'
+import type { Config } from '~/types/init.js'
+import { chainTypes, type NetworkType, TransformerTemplate } from "~/types/init.js"
+import { templates } from './templates/pipe-components/template-builder.js'
 
 export class InitPrompt {
   async run() {

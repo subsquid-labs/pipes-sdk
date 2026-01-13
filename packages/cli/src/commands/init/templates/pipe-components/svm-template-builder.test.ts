@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { templates } from '~/templates/pipe-components/template-builder.js'
-import { Config } from '~/types/config.js'
+import { Config } from '~/types/init.js'
 import { SvmTemplateBuilder } from './svm-template-builder.js'
+import { templates } from './template-builder.js'
 
 describe('SVM Template Builder', () => {
   it('should build index.ts file using single pipe template', () => {
@@ -16,7 +16,7 @@ describe('SVM Template Builder', () => {
       sink: 'postgresql',
     }
 
-    const indexerContent = new SvmTemplateBuilder(config).buildNew()
+    const indexerContent = new SvmTemplateBuilder(config).build()
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";

@@ -1,4 +1,4 @@
-import type { NetworkType } from '~/types/network.js'
+import type { NetworkType } from "~/types/init.js"
 
 interface TemplateOption {
   name: string

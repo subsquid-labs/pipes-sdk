@@ -4,7 +4,7 @@ export class SqdAbiService {
   generateEvmTypes(projectPath: string, contractAddresses: string[], chainId: string): void {
     const outputDir = `${projectPath}/src/contracts/`
     // This is a burner key, it's okay to leak. Once the proxy server is ready, we won't need a key
-    const etherscanKey = 'N1NYFQMYX8MKUDHXUQ93TTI9MS496KNC5F'
+    const etherscanKey = ''
 
     for (const address of contractAddresses) {
       console.log({

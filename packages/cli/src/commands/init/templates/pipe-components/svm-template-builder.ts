@@ -1,5 +1,5 @@
 import Mustache from 'mustache'
-import { TemplateBuilder, TemplateValues } from '~/templates/pipe-components/template-builder.js'
+import { TemplateBuilder, TemplateValues } from './template-builder.js'
 
 export const template = `{{#deduplicatedImports}}
 {{{.}}}

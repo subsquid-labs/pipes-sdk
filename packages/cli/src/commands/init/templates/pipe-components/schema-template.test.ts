@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { templates } from '~/templates/pipe-components/template-builder.js'
-import { Config } from '~/types/config.js'
+import { Config } from '~/types/init.js'
 import { renderSchemasTemplate } from './schemas-template.js'
+import { templates } from './template-builder.js'
 
 describe('Schema template builder', () => {
   it('should build schema file for single pipe template', () => {
@@ -9,12 +9,10 @@ describe('Schema template builder', () => {
       projectFolder: 'mock-folder',
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: {
-        'erc20-transfers': templates.evm['erc20-transfers'],
-      },
+      templates: [templates.evm['erc20-transfers']],
       contractAddresses: [],
       sink: 'postgresql',
-    } as const
+    }
 
     const schemaContent = renderSchemasTemplate(config)
 
@@ -52,10 +50,10 @@ describe('Schema template builder', () => {
       projectFolder: 'mock-folder',
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: {
-        'erc20-transfers': templates.evm['erc20-transfers'],
-        'uniswap-v3-swaps': templates.evm['uniswap-v3-swaps'],
-      },
+      templates: [
+        templates.evm['erc20-transfers'],
+        templates.evm['uniswap-v3-swaps'],
+      ],
       contractAddresses: [],
       sink: 'postgresql',
     }
