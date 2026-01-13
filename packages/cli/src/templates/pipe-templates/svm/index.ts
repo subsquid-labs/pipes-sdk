@@ -1,11 +1,11 @@
-import { SolanaTemplateIds } from '~/config/templates.js'
-import { TemplateParser } from '~/templates/template-parser.js'
+import { SvmTemplateIds } from '~/config/templates.js'
+import { TemplateParser } from '~/templates/pipe-templates/template-parser.js'
 import { TransformerTemplate } from '~/types/templates.js'
 import { getTemplateDirname } from '~/utils/fs.js'
 
 const templateParser = new TemplateParser(getTemplateDirname('svm'))
 
-export const svmTemplates: Record<SolanaTemplateIds, TransformerTemplate> = {
+export const svmTemplates: Record<SvmTemplateIds, TransformerTemplate> = {
   custom: (() => ({
     name: 'custom',
     tableName: 'custom_contract',

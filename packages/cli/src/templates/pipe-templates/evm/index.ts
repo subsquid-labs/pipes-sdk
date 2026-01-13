@@ -1,5 +1,5 @@
 import { EvmTemplateIds } from '~/config/templates.js'
-import { TemplateParser } from '~/templates/template-parser.js'
+import { TemplateParser } from '~/templates/pipe-templates/template-parser.js'
 import { TransformerTemplate } from '~/types/templates.js'
 import { getTemplateDirname } from '~/utils/fs.js'
 
