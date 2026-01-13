@@ -1,6 +1,5 @@
 import Mustache from 'mustache'
-import { Sink, TransformerTemplate } from "~/types/init.js"
-import { splitImportsAndCode } from '~/utils/merge-imports.js'
+import { Sink, TransformerTemplate } from '~/types/init.js'
 import { tableToSchemaName } from './schemas-template.js'
 
 export const clickhouseSinkTemplate = `
@@ -10,9 +9,9 @@ import { serializeJsonWithBigInt, toSnakeKeysArray } from './utils/index.js'
 
 clickhouseTarget({
     client: createClient({
-        username: process.env.CLICKHOUSE_USER ?? (() => { throw new Error('CLICKHOUSE_USER is not set')})(),
-        password: process.env.CLICKHOUSE_PASSWORD ?? (() => { throw new Error('CLICKHOUSE_PASSWORD is not set')})(),
-        url: process.env.CLICKHOUSE_URL ?? (() => { throw new Error('CLICKHOUSE_URL is not set')})(),
+        username: env.CLICKHOUSE_USER,
+        password: env.CLICKHOUSE_PASSWORD,
+        url: env.CLICKHOUSE_URL,
         json: {
             stringify: serializeJsonWithBigInt,
         },
@@ -66,11 +65,15 @@ import {
 } from './schemas.js'
 
 drizzleTarget({
-    db: drizzle(
-      process.env.DB_CONNECTION_STR ??
-        (() => { throw new Error('DB_CONNECTION_STR env missing') })(),
-    ),
-    tables: [{{#templates}}{{{schemaName}}}{{^last}}, {{/last}}{{/templates}}{{#customTemplates}}{{{schemaName}}}{{^last}}, {{/last}}{{/customTemplates}}],
+    db: drizzle(env.DB_CONNECTION_STR),
+    tables: [
+      {{#templates}}
+      {{{schemaName}}},
+      {{/templates}}
+      {{#customTemplates}}
+      {{{schemaName}}},
+      {{/customTemplates}}
+    ],
     onData: async ({ tx, data }) => {
 {{#templates}}
       for (const values of chunk(data.{{{name}}})) {
@@ -94,12 +97,6 @@ interface SinkTemplateParams {
   templates: TransformerTemplate[]
 }
 
-export function renderSinkTemplate__(sink: Sink, params: SinkTemplateParams) {
-  const sinkTemplate = getSinkTemplate(sink)
-  const { code } = splitImportsAndCode(sinkTemplate)
-  return Mustache.render(code, params)
-}
-
 export function getSinkTemplate(sink: Sink): string {
   if (sink === 'clickhouse') return clickhouseSinkTemplate
   else if (sink === 'postgresql') return postgresSinkTemplate
@@ -109,11 +106,10 @@ export function getSinkTemplate(sink: Sink): string {
 
 export function renderSinkTemplate(sink: Sink, params: SinkTemplateParams): string {
   const sinkTemplate = getSinkTemplate(sink)
-  const transformerTemplatesWithSchema = params.templates
-      .map((t) => ({
-        ...t,
-        schemaName: tableToSchemaName(t.tableName),
-      }))
+  const transformerTemplatesWithSchema = params.templates.map((t) => ({
+    ...t,
+    schemaName: tableToSchemaName(t.tableName),
+  }))
 
   /**
    * TODO: we should merge these two arrays once we implement codegen for custom contracts

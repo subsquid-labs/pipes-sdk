@@ -21,12 +21,17 @@ describe('SVM Template Builder', () => {
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
       import { SolanaQueryBuilder, solanaPortalSource } from "@subsquid/pipes/solana";
+      import { z } from "zod";
       import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres";
       import { drizzle } from "drizzle-orm/node-postgres";
       import { tokenBalancesTable } from "./schemas.js";
       import { createTransformer } from "@subsquid/pipes";
       import { PortalStreamData } from "@subsquid/pipes/portal-client";
       import { Block as SolanaBlock, FieldSelection as SolanaFieldSelection } from "@subsquid/pipes/dist/portal-client/query/solana.js";
+
+      const env = z.object({
+        DB_CONNECTION_STR: z.string(),
+      }).parse(process.env)
 
       interface TokenBalance {
         blockNumber: number
@@ -117,11 +122,10 @@ describe('SVM Template Builder', () => {
          * \`\`\`
          */
         .pipeTo(drizzleTarget({
-          db: drizzle(
-            process.env.DB_CONNECTION_STR ??
-              (() => { throw new Error('DB_CONNECTION_STR env missing') })(),
-          ),
-          tables: [tokenBalancesTable, ],
+          db: drizzle(env.DB_CONNECTION_STR),
+          tables: [
+            tokenBalancesTable,
+          ],
           onData: async ({ tx, data }) => {
             for (const values of chunk(data.tokenBalances)) {
               await tx.insert(tokenBalancesTable).values(values)

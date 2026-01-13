@@ -5,6 +5,8 @@ export const template = `{{#deduplicatedImports}}
 {{{.}}}
 {{/deduplicatedImports}}
 
+{{{envTemplate}}}
+
 {{#transformerTemplates}}
 {{{code}}}
 

@@ -6,6 +6,7 @@ export const baseDependencies: Record<string, string> = {
   '@subsquid/evm-abi': '0.3.1',
   dotenv: '^16.4.5',
   'better-sqlite3': '^12.5.0',
+  zod: '^4.3.4',
 }
 
 export const baseDevDependencies: Record<string, string> = {

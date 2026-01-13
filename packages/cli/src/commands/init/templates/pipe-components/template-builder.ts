@@ -4,6 +4,7 @@ import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/ut
 import { customContractTemplate } from '../pipe-templates/evm/custom/transformer.js'
 import { evmTemplates } from '../pipe-templates/evm/index.js'
 import { svmTemplates } from '../pipe-templates/svm/index.js'
+import { getEnvTemplate } from './env.js'
 import { renderSinkTemplate } from './sink-templates.js'
 
 export interface BuiltTransformerTemplate {
@@ -16,6 +17,7 @@ export interface TemplateValues {
   deduplicatedImports: string[]
   transformerTemplates: BuiltTransformerTemplate[]
   sinkTemplate: string
+  envTemplate: string
 }
 
 export abstract class TemplateBuilder<N extends NetworkType> {
@@ -32,25 +34,29 @@ export abstract class TemplateBuilder<N extends NetworkType> {
   build() {
     const transformerTemplates = this.getTransformerTemplates()
     const sinkTemplates = this.getSinkTemplate()
-    const indexFileImports = [
+    const envTemplate = getEnvTemplate(this.config.sink)
+    const componentsCode = [
       TemplateBuilder.BASE_IMPORTS,
       TemplateBuilder.NETWORK_IMPORTS[this.config.networkType],
+      envTemplate,
       sinkTemplates,
       transformerTemplates.map((t) => t.code),
     ].flat()
-    const deduplicatedImports = this.deduplicateImports(indexFileImports)
+    const deduplicatedImports = this.deduplicateImports(componentsCode)
 
     const transformersCode = transformerTemplates.map((t) => ({
       name: t.name,
       code: splitImportsAndCode(t.code).code,
     }))
-    const sinkTemplate = splitImportsAndCode(this.getSinkTemplate()).code
+    const sinkCode = splitImportsAndCode(this.getSinkTemplate()).code
+    const envCode = splitImportsAndCode(envTemplate).code
 
     return this.renderTemplate({
       network: this.config.network,
       deduplicatedImports,
+      envTemplate: envCode,
       transformerTemplates: transformersCode,
-      sinkTemplate,
+      sinkTemplate: sinkCode,
     })
   }
 

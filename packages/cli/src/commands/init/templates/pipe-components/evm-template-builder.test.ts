@@ -19,9 +19,16 @@ describe('EVM Template Builder', () => {
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
       import { commonAbis, evmDecoder, evmPortalSource } from "@subsquid/pipes/evm";
+      import { z } from "zod";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
       import { createClient } from "@clickhouse/client";
       import { serializeJsonWithBigInt, toSnakeKeysArray } from "./utils/index.js";
+
+      const env = z.object({
+        CLICKHOUSE_USER: z.string(),
+        CLICKHOUSE_PASSWORD: z.string(),
+        CLICKHOUSE_URL: z.string(),
+      }).parse(process.env)
 
       const erc20Transfers = evmDecoder({
         profiler: { id: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
@@ -63,9 +70,9 @@ describe('EVM Template Builder', () => {
          */
         .pipeTo(clickhouseTarget({
           client: createClient({
-              username: process.env.CLICKHOUSE_USER ?? (() => { throw new Error('CLICKHOUSE_USER is not set')})(),
-              password: process.env.CLICKHOUSE_PASSWORD ?? (() => { throw new Error('CLICKHOUSE_PASSWORD is not set')})(),
-              url: process.env.CLICKHOUSE_URL ?? (() => { throw new Error('CLICKHOUSE_URL is not set')})(),
+              username: env.CLICKHOUSE_USER,
+              password: env.CLICKHOUSE_PASSWORD,
+              url: env.CLICKHOUSE_URL,
               json: {
                   stringify: serializeJsonWithBigInt,
               },
@@ -112,11 +119,18 @@ describe('EVM Template Builder', () => {
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
       import { commonAbis, evmDecoder, evmPortalSource, factory, factorySqliteDatabase } from "@subsquid/pipes/evm";
+      import { z } from "zod";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
       import { createClient } from "@clickhouse/client";
       import { serializeJsonWithBigInt, toSnakeKeysArray } from "./utils/index.js";
       import { events as factoryEvents } from "./contracts/factory.js";
       import { events as poolEvents } from "./contracts/pool.js";
+
+      const env = z.object({
+        CLICKHOUSE_USER: z.string(),
+        CLICKHOUSE_PASSWORD: z.string(),
+        CLICKHOUSE_URL: z.string(),
+      }).parse(process.env)
 
       const erc20Transfers = evmDecoder({
         profiler: { id: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
@@ -185,9 +199,9 @@ describe('EVM Template Builder', () => {
          */
         .pipeTo(clickhouseTarget({
           client: createClient({
-              username: process.env.CLICKHOUSE_USER ?? (() => { throw new Error('CLICKHOUSE_USER is not set')})(),
-              password: process.env.CLICKHOUSE_PASSWORD ?? (() => { throw new Error('CLICKHOUSE_PASSWORD is not set')})(),
-              url: process.env.CLICKHOUSE_URL ?? (() => { throw new Error('CLICKHOUSE_URL is not set')})(),
+              username: env.CLICKHOUSE_USER,
+              password: env.CLICKHOUSE_PASSWORD,
+              url: env.CLICKHOUSE_URL,
               json: {
                   stringify: serializeJsonWithBigInt,
               },
@@ -240,10 +254,15 @@ describe('EVM Template Builder', () => {
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
       import { evmDecoder, evmPortalSource } from "@subsquid/pipes/evm";
+      import { z } from "zod";
       import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres";
       import { drizzle } from "drizzle-orm/node-postgres";
       import { customContractTable } from "./schemas.js";
       import { events as myContractEvents } from "./contracts/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2.js";
+
+      const env = z.object({
+        DB_CONNECTION_STR: z.string(),
+      }).parse(process.env)
 
       const custom = evmDecoder({
         range: { from: 'latest' },
@@ -277,11 +296,10 @@ describe('EVM Template Builder', () => {
          * \`\`\`
          */
         .pipeTo(drizzleTarget({
-          db: drizzle(
-            process.env.DB_CONNECTION_STR ??
-              (() => { throw new Error('DB_CONNECTION_STR env missing') })(),
-          ),
-          tables: [customContractTable, ],
+          db: drizzle(env.DB_CONNECTION_STR),
+          tables: [
+            customContractTable,
+          ],
           onData: async ({ tx, data }) => {
             /**
              * Once the data is transformed, you can insert it into the database.
