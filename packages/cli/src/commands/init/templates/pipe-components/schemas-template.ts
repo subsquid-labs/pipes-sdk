@@ -21,17 +21,12 @@ export default {
 export const tableToSchemaName = (tableName: string) => `${toCamelCase(tableName)}Table`
 
 export function renderSchemasTemplate(config: Config<NetworkType>): string {
-  const templateEntries = Object.entries(config.templates)
-  const allImportStrings: string[] = []
-
   // Extract imports from each schema file
-  for (const [, value] of templateEntries) {
-    if (value.drizzleSchema) {
-      const { imports } = splitImportsAndCode(value.drizzleSchema)
-      const importStatements = imports.map(generateImportStatement).filter((stmt) => stmt.length > 0)
-      allImportStrings.push(...importStatements)
-    }
-  }
+  const allImportStrings = config.templates.flatMap((template) => {
+    if (!template.drizzleSchema) return []
+    const { imports } = splitImportsAndCode(template.drizzleSchema)
+    return imports.map(generateImportStatement).filter((stmt) => stmt.length > 0)
+  })
 
   // Merge all imports
   const combinedImports = allImportStrings.join('\n')
@@ -40,18 +35,18 @@ export function renderSchemasTemplate(config: Config<NetworkType>): string {
   const mergedImportStatements = mergedImports.map(generateImportStatement).filter((stmt) => stmt.length > 0)
 
   // Extract code (without imports) from each schema file
-  const schemas = templateEntries
-    .map(([, value]) => {
-      if (!value.drizzleSchema) return
+  const schemas = config.templates
+    .map((template) => {
+      if (!template.drizzleSchema) return
 
-      const { code } = splitImportsAndCode(value.drizzleSchema)
+      const { code } = splitImportsAndCode(template.drizzleSchema)
 
       return {
         schema: code,
-        schemaName: tableToSchemaName(value.tableName),
+        schemaName: tableToSchemaName(template.tableName),
       }
     })
-    .filter((value): value is { schema: string; schemaName: string } => !!value)
+    .filter((t): t is { schema: string; schemaName: string } => !!t)
 
   return Mustache.render(schemasTemplate, {
     mergedImports: mergedImportStatements,

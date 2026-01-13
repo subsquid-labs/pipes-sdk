@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Config } from '~/types/init.js'
+import { svmTemplates } from '../pipe-templates/svm/index.js'
 import { SvmTemplateBuilder } from './svm-template-builder.js'
-import { templates } from './template-builder.js'
 
 describe('SVM Template Builder', () => {
   it('should build index.ts file using single pipe template', () => {
@@ -10,7 +10,7 @@ describe('SVM Template Builder', () => {
       networkType: 'svm',
       network: 'ethereum-mainnet',
       templates: [
-        templates.svm['token-balances'],
+        svmTemplates['tokenBalances'],
       ],
       contractAddresses: [],
       sink: 'postgresql',

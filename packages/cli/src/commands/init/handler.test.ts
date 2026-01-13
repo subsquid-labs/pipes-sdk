@@ -3,7 +3,7 @@ import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { templates } from '~/commands/init/templates/pipe-components/template-builder.js'
+import { evmTemplates } from '~/commands/init/templates/pipe-templates/evm/index.js'
 import { Config } from '~/types/init.js'
 import { InitHandler } from './handler.js'
 
@@ -44,7 +44,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [templates.evm['erc20-transfers']],
+      templates: [evmTemplates['erc20Transfers']],
       contractAddresses: [],
       sink: 'clickhouse',
     }
@@ -62,7 +62,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [templates.evm['erc20-transfers']],
+      templates: [evmTemplates['erc20Transfers']],
       contractAddresses: [],
       sink: 'clickhouse',
     }
@@ -82,7 +82,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [templates.evm['erc20-transfers']],
+      templates: [evmTemplates['erc20Transfers']],
       contractAddresses: [],
       sink: 'clickhouse',
     }
@@ -111,7 +111,8 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [templates.evm['erc20-transfers']],
+                                 
+      templates: [evmTemplates['erc20Transfers']],
       contractAddresses: [],
       sink: 'postgresql',
     }
@@ -146,7 +147,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [templates.evm['uniswap-v3-swaps']],
+      templates: [evmTemplates['uniswapV3Swaps']],
       contractAddresses: [],
       sink: 'clickhouse',
     }

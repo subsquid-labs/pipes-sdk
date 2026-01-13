@@ -8,12 +8,15 @@ import ora from 'ora'
 import { z } from 'zod'
 import { getEvmChainId } from '~/commands/init/config/networks.js'
 import { SqdAbiService } from '~/services/sqd-abi.js'
-import type { Config, NetworkType } from '~/types/init.js'
+import { type Config, type NetworkType, networkTypes, type Sink, sinkTypes } from '~/types/init.js'
+import { getTemplateDirname } from '~/utils/fs.js'
 import { findPackageRoot } from '~/utils/package-root.js'
+import { EvmTemplateIds, SvmTemplateIds } from './config/templates.js'
 import { EvmTemplateBuilder } from './templates/pipe-components/evm-template-builder.js'
 import { renderSchemasTemplate } from './templates/pipe-components/schemas-template.js'
 import { SvmTemplateBuilder } from './templates/pipe-components/svm-template-builder.js'
-import { templates } from './templates/pipe-components/template-builder.js'
+import { evmTemplates } from './templates/pipe-templates/evm/index.js'
+import { svmTemplates } from './templates/pipe-templates/svm/index.js'
 import {
   biomeConfig,
   clickhouseUtilsTemplate,
@@ -26,18 +29,27 @@ import {
   renderPackageJson,
   tsconfigConfig,
 } from './templates/project-files/index.js'
-import { getTemplateDirname } from '~/utils/fs.js'
 
 const execAsync = promisify(exec)
 
-const configJsonSchema = z.object({
-  projectFolder: z.string().min(1),
-  chainType: z.enum(['evm', 'svm']),
-  network: z.string().min(1),
-  templates: z.array(z.string()),
-  contractAddresses: z.array(z.string()),
-  sink: z.enum(['clickhouse', 'postgresql', 'memory']),
-})
+const configJsonSchema = z
+  .object({
+    projectFolder: z.string().min(1),
+    networkType: z.enum(networkTypes.map((n) => n.value)),
+    network: z.string().min(1),
+    templates: z.array(z.string()),
+    contractAddresses: z.array(z.string()),
+    sink: z.enum(sinkTypes.map((s) => s.value)),
+  })
+  .transform((data) => {
+    const networkType = data.networkType as NetworkType
+    return {
+      ...data,
+      networkType,
+      sink: data.sink as Sink,
+      templates: data.templates as typeof networkType extends 'evm' ? EvmTemplateIds[] : SvmTemplateIds[],
+    }
+  })
 
 const squidfix = (text: string) => `[🦑 PIPES SDK] ${text} `
 
@@ -111,15 +123,10 @@ export class InitHandler {
 
   private writeStaticFiles(projectPath: string): void {
     writeFileSync(path.join(projectPath, 'biome.json'), JSON.stringify(biomeConfig, null, 2))
-
     writeFileSync(path.join(projectPath, 'tsconfig.json'), JSON.stringify(tsconfigConfig, null, 2))
-
     writeFileSync(path.join(projectPath, '.gitignore'), gitignoreContent)
-
     writeFileSync(path.join(projectPath, 'docker-compose.yml'), getDockerCompose(this.config.sink))
-
     writeFileSync(path.join(projectPath, '.env'), getEnvTemplate(this.config.sink))
-
     writeFileSync(path.join(projectPath, 'pnpm-workspace.yaml'), pnpmWorkspace)
   }
 
@@ -325,12 +332,22 @@ export class InitHandler {
   }
 
   private static transformToConfig(json: ConfigJson): Config<NetworkType> {
-    const { chainType, templates: templateIds, contractAddresses, ...rest } = json
-    const selectedTemplates = templateIds.map((id) => templates[chainType][id])
+    const { networkType, templates: templateIds, contractAddresses, ...rest } = json
+    const selectedTemplates = templateIds.map((id) => {
+      if (networkType === 'evm') {
+        const template = evmTemplates[id as EvmTemplateIds]
+        if (!template) throw new Error(`Template ${id} not found for EVM network`)
+        return template
+      } else {
+        const template = svmTemplates[id as SvmTemplateIds]
+        if (!template) throw new Error(`Template ${id} not found for SVM network`)
+        return template
+      }
+    })
 
     return {
       ...rest,
-      networkType: chainType,
+      networkType,
       templates: selectedTemplates,
       contractAddresses,
     } as Config<NetworkType>

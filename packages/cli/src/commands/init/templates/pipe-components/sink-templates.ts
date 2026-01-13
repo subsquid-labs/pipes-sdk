@@ -1,5 +1,5 @@
 import Mustache from 'mustache'
-import { Sink, TransformerTemplate } from '~/types/init.js'
+import { NetworkType, Sink, TransformerTemplate } from '~/types/init.js'
 import { tableToSchemaName } from './schemas-template.js'
 
 export const clickhouseSinkTemplate = `
@@ -23,7 +23,7 @@ clickhouseTarget({
 {{#templates}}
       await store.insert({
         table: '{{{tableName}}}',
-        values: toSnakeKeysArray(data.{{{name}}}),
+        values: toSnakeKeysArray(data.{{{templateId}}}),
         format: 'JSONEachRow',
       });
 {{/templates}}
@@ -76,7 +76,7 @@ drizzleTarget({
     ],
     onData: async ({ tx, data }) => {
 {{#templates}}
-      for (const values of chunk(data.{{{name}}})) {
+      for (const values of chunk(data.{{{templateId}}})) {
         await tx.insert({{{schemaName}}}).values(values)
       }
 {{/templates}}
@@ -94,7 +94,7 @@ drizzleTarget({
 
 interface SinkTemplateParams {
   hasCustomContracts: boolean
-  templates: TransformerTemplate[]
+  templates: TransformerTemplate<NetworkType>[]
 }
 
 export function getSinkTemplate(sink: Sink): string {
@@ -117,7 +117,7 @@ export function renderSinkTemplate(sink: Sink, params: SinkTemplateParams): stri
    */
   return Mustache.render(sinkTemplate, {
     ...params,
-    templates: transformerTemplatesWithSchema.filter((t) => t.name !== 'custom'),
-    customTemplates: transformerTemplatesWithSchema.filter((t) => t.name === 'custom'),
+    templates: transformerTemplatesWithSchema.filter((t) => t.templateId !== 'custom'),
+    customTemplates: transformerTemplatesWithSchema.filter((t) => t.templateId === 'custom'),
   })
 }

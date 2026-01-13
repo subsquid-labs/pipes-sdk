@@ -9,7 +9,7 @@ describe('Schema template builder', () => {
       projectFolder: 'mock-folder',
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [templates.evm['erc20-transfers']],
+      templates: [templates.evm['erc20Transfers']],
       contractAddresses: [],
       sink: 'postgresql',
     }
@@ -51,8 +51,8 @@ describe('Schema template builder', () => {
       networkType: 'evm',
       network: 'ethereum-mainnet',
       templates: [
-        templates.evm['erc20-transfers'],
-        templates.evm['uniswap-v3-swaps'],
+        templates.evm['erc20Transfers'],
+        templates.evm['uniswapV3Swaps'],
       ],
       contractAddresses: [],
       sink: 'postgresql',

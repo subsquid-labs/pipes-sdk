@@ -17,7 +17,7 @@ export async function main() {
   })
   .pipeComposite({
 {{#transformerTemplates}}
-    {{{name}}},
+    {{{templateId}}},
 {{/transformerTemplates}}
   })
   /**

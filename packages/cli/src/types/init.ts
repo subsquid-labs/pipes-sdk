@@ -1,23 +1,29 @@
+import { EvmTemplateIds, SvmTemplateIds } from "~/commands/init/config/templates.js"
+
 export interface Config<N extends NetworkType> {
   projectFolder: string
   networkType: N
   network: string // slug from networks
-  templates: TransformerTemplate[]
+  templates: TransformerTemplate<N>[]
   contractAddresses: string[]
   sink: Sink
 }
 
-export const chainTypes = [
+export const networkTypes = [
   { name: 'EVM', value: 'evm' },
   { name: 'SVM', value: 'svm' },
 ] as const
+export type NetworkType = (typeof networkTypes)[number]['value']
 
-export type NetworkType = (typeof chainTypes)[number]['value']
+export const sinkTypes = [
+  { name: 'ClickHouse', value: 'clickhouse' },
+  { name: 'PostgreSQL', value: 'postgresql' },
+  { name: 'Memory', value: 'memory' },
+] as const
+export type Sink = (typeof sinkTypes)[number]['value']
 
-export type Sink = 'clickhouse' | 'postgresql' | 'memory'
-
-export interface TransformerTemplate {
-  name: string
+export interface TransformerTemplate<N extends NetworkType> {
+  templateId: N extends 'evm' ? EvmTemplateIds : SvmTemplateIds
   folderName: string
   code: string
   tableName: string

@@ -8,7 +8,7 @@ import { getEnvTemplate } from './env.js'
 import { renderSinkTemplate } from './sink-templates.js'
 
 export interface BuiltTransformerTemplate {
-  name: string
+  templateId: string
   code: string
 }
 
@@ -45,7 +45,7 @@ export abstract class TemplateBuilder<N extends NetworkType> {
     const deduplicatedImports = this.deduplicateImports(componentsCode)
 
     const transformersCode = transformerTemplates.map((t) => ({
-      name: t.name,
+      templateId: t.templateId,
       code: splitImportsAndCode(t.code).code,
     }))
     const sinkCode = splitImportsAndCode(this.getSinkTemplate()).code
@@ -62,11 +62,11 @@ export abstract class TemplateBuilder<N extends NetworkType> {
 
   private getTransformerTemplates() {
     return this.config.templates.map((template) => {
-      if (template.name === 'custom') {
+      if (template.templateId === 'custom') {
         const [address] = this.config.contractAddresses
-        return { code: Mustache.render(customContractTemplate, { address }), name: 'custom' }
+        return { code: Mustache.render(customContractTemplate, { address }), templateId: 'custom' }
       }
-      return { code: template.code, name: template.name }
+      return { code: template.code, templateId: template.templateId }
     })
   }
 
@@ -83,9 +83,9 @@ export abstract class TemplateBuilder<N extends NetworkType> {
   }
 }
 
-export const templates = {
+export const templates: Record<NetworkType, typeof evmTemplates | typeof svmTemplates> = {
   evm: evmTemplates,
   svm: svmTemplates,
-} as const satisfies Record<NetworkType, typeof evmTemplates | typeof svmTemplates>
+}
 
 export type NetworkTemplate<N extends NetworkType> = keyof (typeof templates)[N]

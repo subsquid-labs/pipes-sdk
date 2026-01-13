@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Config } from '~/types/init.js'
+import { evmTemplates } from '../pipe-templates/evm/index.js'
 import { EvmTemplateBuilder } from './evm-template-builder.js'
-import { templates } from './template-builder.js'
 
 describe('EVM Template Builder', () => {
   it('should build index.ts file using single pipe template', () => {
@@ -9,7 +9,7 @@ describe('EVM Template Builder', () => {
       projectFolder: 'mock-folder',
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [templates.evm['erc20-transfers']],
+      templates: [evmTemplates['erc20Transfers']],
       contractAddresses: [],
       sink: 'clickhouse',
     }
@@ -109,7 +109,7 @@ describe('EVM Template Builder', () => {
       projectFolder: 'mock-folder',
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [templates.evm['erc20-transfers'], templates.evm['uniswap-v3-swaps']],
+      templates: [evmTemplates['erc20Transfers'], evmTemplates['uniswapV3Swaps']],
       contractAddresses: [],
       sink: 'clickhouse',
     }
@@ -244,7 +244,7 @@ describe('EVM Template Builder', () => {
       projectFolder: 'mock-folder',
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [templates.evm['custom']],
+      templates: [evmTemplates['custom']],
       contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
       sink: 'postgresql',
     }

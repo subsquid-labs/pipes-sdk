@@ -6,8 +6,10 @@ import { networks } from '~/commands/init/config/networks.js'
 import { sinks } from '~/commands/init/config/sinks.js'
 import { templateOptions } from '~/commands/init/config/templates.js'
 import type { Config } from '~/types/init.js'
-import { chainTypes, type NetworkType, TransformerTemplate } from "~/types/init.js"
+import { networkTypes, type NetworkType, TransformerTemplate } from "~/types/init.js"
 import { templates } from './templates/pipe-components/template-builder.js'
+import { evmTemplates } from './templates/pipe-templates/evm/index.js'
+import { svmTemplates } from './templates/pipe-templates/svm/index.js'
 
 export class InitPrompt {
   async run() {
@@ -65,7 +67,7 @@ export class InitPrompt {
 
     const networkType = await select<NetworkType>({
       message: "Now, let's choose the type of blockchain you'd like to use:",
-      choices: chainTypes,
+      choices: networkTypes,
     })
 
     const network = await select({
@@ -84,7 +86,7 @@ export class InitPrompt {
       ],
     })
 
-    let selectedTemplates: TransformerTemplate[] = []
+    let selectedTemplates: TransformerTemplate<NetworkType>[] = []
     let contractAddresses: string[] = []
 
     if (pipelineType === 'templates') {
@@ -113,10 +115,10 @@ export class InitPrompt {
     }
   }
 
-  private promptTemplates(chainType: 'evm'): Promise<TransformerTemplate[]>
-  private promptTemplates(chainType: 'svm'): Promise<TransformerTemplate[]>
-  private promptTemplates(chainType: NetworkType): Promise<TransformerTemplate[]>
-  private async promptTemplates(chainType: NetworkType): Promise<TransformerTemplate[]> {
+  private promptTemplates(chainType: 'evm'): Promise<TransformerTemplate<NetworkType>[]>
+  private promptTemplates(chainType: 'svm'): Promise<TransformerTemplate<NetworkType>[]>
+  private promptTemplates(chainType: NetworkType): Promise<TransformerTemplate<NetworkType>[]>
+  private async promptTemplates(chainType: NetworkType): Promise<TransformerTemplate<NetworkType>[]> {
     if (chainType === 'evm') {
       const selected = await checkbox({
         message: 'Templates:',
@@ -126,8 +128,8 @@ export class InitPrompt {
           disabled: t.disabled ? '(Coming soon)' : false,
         })),
       })
-      return selected.reduce<TransformerTemplate[]>((acc, id) => {
-        acc.push(templates.evm[id])
+      return selected.reduce<TransformerTemplate<'evm'>[]>((acc, id) => {
+        acc.push(evmTemplates[id])
         return acc
       }, [])
     }
@@ -138,8 +140,8 @@ export class InitPrompt {
         value: t.id,
       })),
     })
-    return selected.reduce<TransformerTemplate[]>((acc, id) => {
-      acc.push(templates.svm[id])
+    return selected.reduce<TransformerTemplate<'svm'>[]>((acc, id) => {
+      acc.push(svmTemplates[id])
       return acc
     }, [])
   }

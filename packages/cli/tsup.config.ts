@@ -1,6 +1,6 @@
-import { defineConfig } from 'tsup'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
+import { defineConfig } from 'tsup'
 
 /**
  * Copy templates to dist after build.
@@ -60,9 +60,9 @@ export default defineConfig([
   // Config files - both ESM and CJS (for UI and CLI)
   {
     entry: {
-      'config/networks': 'src/config/networks.ts',
-      'config/templates': 'src/config/templates.ts',
-      'config/sinks': 'src/config/sinks.ts',
+      'config/networks': 'src/commands/init/config/networks.ts',
+      'config/templates': 'src/commands/init/config/templates.ts',
+      'config/sinks': 'src/commands/init/config/sinks.ts',
     },
     outDir: 'dist',
     format: ['esm', 'cjs'],

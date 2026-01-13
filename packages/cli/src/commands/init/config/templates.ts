@@ -6,23 +6,23 @@ interface TemplateOption {
   disabled?: boolean
 }
 
-export const evmTemplateOptions: TemplateOption[] = [
+export const evmTemplateOptions = [
   {
     name: 'Erc20 Transfers',
-    id: 'erc20-transfers',
+    id: 'erc20Transfers',
   },
   {
     name: 'Uniswap V3 Swaps',
-    id: 'uniswap-v3-swaps',
+    id: 'uniswapV3Swaps',
   },
   {
     name: 'Morpho Blue',
-    id: 'morpho-blue',
+    id: 'morphoBlueSwaps',
     disabled: true,
   },
   {
     name: 'Uniswap V4',
-    id: 'uniswap-v4',
+    id: 'uniswapV4Swaps',
     disabled: true,
   },
   {
@@ -30,17 +30,16 @@ export const evmTemplateOptions: TemplateOption[] = [
     id: 'polymarket',
     disabled: true,
   },
-] as const
+] satisfies readonly TemplateOption[]
 
-export type EvmTemplateIds = (typeof evmTemplateOptions)[number]['id'] | 'custom'
-
-export const svmTemplateOptions: TemplateOption[] = [
+export const svmTemplateOptions = [
   {
     name: 'Token balances',
-    id: 'token-balances',
+    id: 'tokenBalances',
   },
-] as const
+] satisfies readonly TemplateOption[]
 
+export type EvmTemplateIds = (typeof evmTemplateOptions)[number]['id'] | 'custom'
 export type SvmTemplateIds = (typeof svmTemplateOptions)[number]['id'] | 'custom'
 
 export const templateOptions = {
