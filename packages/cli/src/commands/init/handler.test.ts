@@ -3,7 +3,7 @@ import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { templates } from '~/template/index.js'
+import { templates } from '~/templates/pipe-components/template-builder.js'
 import { Config } from '~/types/config.js'
 import { InitHandler } from './handler.js'
 
@@ -44,9 +44,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: {
-        'erc20-transfers': templates.evm['erc20-transfers'],
-      },
+      templates: [templates.evm['erc20-transfers']],
       contractAddresses: [],
       sink: 'clickhouse',
     }
@@ -64,9 +62,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: {
-        'erc20-transfers': templates.evm['erc20-transfers'],
-      },
+      templates: [templates.evm['erc20-transfers']],
       contractAddresses: [],
       sink: 'clickhouse',
     }
@@ -86,9 +82,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: {
-        'erc20-transfers': templates.evm['erc20-transfers'],
-      },
+      templates: [templates.evm['erc20-transfers']],
       contractAddresses: [],
       sink: 'clickhouse',
     }
@@ -117,9 +111,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: {
-        'erc20-transfers': templates.evm['erc20-transfers'],
-      },
+      templates: [templates.evm['erc20-transfers']],
       contractAddresses: [],
       sink: 'postgresql',
     }

@@ -1,32 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import { templates } from '~/template/index.js'
+import { templates } from '~/templates/pipe-components/template-builder.js'
 import { Config } from '~/types/config.js'
-import { SolanaTemplateBuilder } from './solana-template-builder.js'
+import { SvmTemplateBuilder } from './svm-template-builder.js'
 
-describe('Solana Template Builder', () => {
+describe('SVM Template Builder', () => {
   it('should build index.ts file using single pipe template', () => {
     const config: Config<'svm'> = {
       projectFolder: 'mock-folder',
       networkType: 'svm',
       network: 'ethereum-mainnet',
-      templates: {
-        'token-balances': templates.svm['token-balances'],
-      },
+      templates: [
+        templates.svm['token-balances'],
+      ],
       contractAddresses: [],
       sink: 'postgresql',
     }
 
-    const indexerContent = new SolanaTemplateBuilder(config).build()
+    const indexerContent = new SvmTemplateBuilder(config).buildNew()
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
       import { SolanaQueryBuilder, solanaPortalSource } from "@subsquid/pipes/solana";
-      import { createTransformer } from "@subsquid/pipes";
-      import { PortalStreamData } from "@subsquid/pipes/portal-client";
-      import { Block as SolanaBlock, FieldSelection as SolanaFieldSelection } from "@subsquid/pipes/dist/portal-client/query/solana.js";
       import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres";
       import { drizzle } from "drizzle-orm/node-postgres";
       import { tokenBalancesTable } from "./schemas.js";
+      import { createTransformer } from "@subsquid/pipes";
+      import { PortalStreamData } from "@subsquid/pipes/portal-client";
+      import { Block as SolanaBlock, FieldSelection as SolanaFieldSelection } from "@subsquid/pipes/dist/portal-client/query/solana.js";
 
       interface TokenBalance {
         blockNumber: number
@@ -99,7 +99,6 @@ describe('Solana Template Builder', () => {
           ),
       })
 
-
       export async function main() {
         await solanaPortalSource({
           portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
@@ -108,7 +107,7 @@ describe('Solana Template Builder', () => {
           tokenBalances,
         })
         /**
-         * Start transforming the data coming from the source.
+         * Or optionally use only a subset of events by passing the events object directly:
          * \`\`\`ts
          * .pipe(({ contract1 }) => {
          *   return contract1.SomeInstruction.map(e => {
@@ -122,7 +121,7 @@ describe('Solana Template Builder', () => {
             process.env.DB_CONNECTION_STR ??
               (() => { throw new Error('DB_CONNECTION_STR env missing') })(),
           ),
-          tables: [tokenBalancesTable],
+          tables: [tokenBalancesTable, ],
           onData: async ({ tx, data }) => {
             for (const values of chunk(data.tokenBalances)) {
               await tx.insert(tokenBalancesTable).values(values)

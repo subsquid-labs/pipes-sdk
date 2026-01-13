@@ -1,1 +1,0 @@
-import { solanaInstructionDecoder } from '@subsquid/pipes/solana'

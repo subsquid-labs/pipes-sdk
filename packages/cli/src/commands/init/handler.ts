@@ -8,10 +8,10 @@ import ora from 'ora'
 import { z } from 'zod'
 import { getEvmChainId } from '~/config/networks.js'
 import { SqdAbiService } from '~/services/sqd-abi.js'
-import { templates } from '~/template/index.js'
-import { EvmTemplateBuilder } from '~/template/pipes/evm/evm-template-builder.js'
-import { renderSchemasTemplate } from '~/template/pipes/evm/schemas-template.js'
-import { SolanaTemplateBuilder } from '~/template/pipes/svm/solana-template-builder.js'
+import { EvmTemplateBuilder } from '~/templates/pipe-components/evm-template-builder.js'
+import { renderSchemasTemplate } from '~/templates/pipe-components/schemas-template.js'
+import { SvmTemplateBuilder } from '~/templates/pipe-components/svm-template-builder.js'
+import { templates } from '~/templates/pipe-components/template-builder.js'
 import {
   biomeConfig,
   clickhouseUtilsTemplate,
@@ -23,7 +23,7 @@ import {
   pnpmWorkspace,
   renderPackageJson,
   tsconfigConfig,
-} from '~/template/scaffold/index.js'
+} from '~/templates/project-files/index.js'
 import type { Config } from '~/types/config.js'
 import type { NetworkType } from '~/types/network.js'
 import { findPackageRoot } from '~/utils/package-root.js'
@@ -34,7 +34,6 @@ const configJsonSchema = z.object({
   projectFolder: z.string().min(1),
   chainType: z.enum(['evm', 'svm']),
   network: z.string().min(1),
-  pipelineMode: z.enum(['templates', 'custom']),
   templates: z.array(z.string()),
   contractAddresses: z.array(z.string()),
   sink: z.enum(['clickhouse', 'postgresql', 'memory']),
@@ -154,11 +153,11 @@ export class InitHandler {
   private buildIndexTs(): string {
     if (this.config.networkType === 'evm') {
       const builder = new EvmTemplateBuilder(this.config as Config<'evm'>)
-      return builder.build()
+      return builder.buildNew()
     }
     if (this.config.networkType === 'svm') {
-      const builder = new SolanaTemplateBuilder(this.config as Config<'svm'>)
-      return builder.build()
+      const builder = new SvmTemplateBuilder(this.config as Config<'svm'>)
+      return builder.buildNew()
     }
 
     throw new Error('Invalid chain type')
@@ -205,7 +204,7 @@ export class InitHandler {
 
     // Handle custom contract template if present
     if (this.config.contractAddresses.length > 0) {
-      const customContractSourceFile = path.join(templateBaseDir, 'custom-contract', 'clickhouse-table.sql')
+      const customContractSourceFile = path.join(templateBaseDir, 'custom', 'clickhouse-table.sql')
 
       if (existsSync(customContractSourceFile)) {
         const targetFile = path.join(migrationsDir, 'custom-contract-migration.sql')
@@ -332,38 +331,13 @@ export class InitHandler {
   }
 
   private static transformToConfig(json: ConfigJson): Config<NetworkType> {
-    const { chainType, pipelineMode, templates: templateIds, contractAddresses, ...rest } = json
-
-    let templateMap: Config<NetworkType>['templates']
-
-    if (pipelineMode === 'templates') {
-      if (chainType === 'evm') {
-        templateMap = templateIds.reduce<Config<'evm'>['templates']>((acc: Config<'evm'>['templates'], id: string) => {
-          if (id in templates.evm) {
-            acc[id as keyof typeof templates.evm] = templates.evm[id as keyof typeof templates.evm]
-          }
-          return acc
-        }, {})
-      } else {
-        templateMap = templateIds.reduce<Config<'svm'>['templates']>((acc: Config<'svm'>['templates'], id: string) => {
-          if (id in templates.svm) {
-            acc[id as keyof typeof templates.svm] = templates.svm[id as keyof typeof templates.svm]
-          }
-          return acc
-        }, {})
-      }
-    } else {
-      if (chainType === 'evm') {
-        templateMap = { custom: templates.evm.custom } as Config<'evm'>['templates']
-      } else {
-        templateMap = { custom: templates.svm.custom } as Config<'svm'>['templates']
-      }
-    }
+    const { chainType, templates: templateIds, contractAddresses, ...rest } = json
+    const selectedTemplates = templateIds.map((id) => templates[chainType][id])
 
     return {
       ...rest,
       networkType: chainType,
-      templates: templateMap,
+      templates: selectedTemplates,
       contractAddresses,
     } as Config<NetworkType>
   }

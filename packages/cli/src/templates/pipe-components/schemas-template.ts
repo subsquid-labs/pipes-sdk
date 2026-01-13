@@ -1,3 +1,4 @@
+import { toCamelCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 import { Config } from '~/types/config.js'
 import { NetworkType } from '~/types/network.js'
@@ -13,10 +14,12 @@ export const schemasTemplate = `{{#mergedImports}}
 {{/schemas}}
 export default {
 {{#schemas}}
-  {{{tableName}}},
+  {{{schemaName}}},
 {{/schemas}}
 }
 `
+
+export const tableToSchemaName = (tableName: string) => `${toCamelCase(tableName)}Table`
 
 export function renderSchemasTemplate(config: Config<NetworkType>): string {
   const templateEntries = Object.entries(config.templates)
@@ -46,10 +49,10 @@ export function renderSchemasTemplate(config: Config<NetworkType>): string {
 
       return {
         schema: code,
-        tableName: value.drizzleTableName,
+        schemaName: tableToSchemaName(value.tableName),
       }
     })
-    .filter((value): value is { schema: string; tableName: string } => !!value)
+    .filter((value): value is { schema: string; schemaName: string } => !!value)
 
   return Mustache.render(schemasTemplate, {
     mergedImports: mergedImportStatements,

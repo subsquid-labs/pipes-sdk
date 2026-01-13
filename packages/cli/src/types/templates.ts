@@ -1,10 +1,7 @@
 export interface TransformerTemplate {
-  compositeKey: string
-  transformer: string
-  imports?: string[]
-  variableName?: string
+  name: string
+  code: string
   tableName: string
   clickhouseTableTemplate?: string
-  drizzleTableName?: string
   drizzleSchema?: string
 }

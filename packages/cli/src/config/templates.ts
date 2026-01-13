@@ -1,6 +1,12 @@
 import type { NetworkType } from '~/types/network.js'
 
-export const evmTemplateOptions = [
+interface TemplateOption {
+  name: string
+  id: string
+  disabled?: boolean
+}
+
+export const evmTemplateOptions: TemplateOption[] = [
   {
     name: 'Erc20 Transfers',
     id: 'erc20-transfers',
@@ -12,20 +18,23 @@ export const evmTemplateOptions = [
   {
     name: 'Morpho Blue',
     id: 'morpho-blue',
+    disabled: true,
   },
   {
     name: 'Uniswap V4',
     id: 'uniswap-v4',
+    disabled: true,
   },
   {
     name: 'Polymarket',
     id: 'polymarket',
+    disabled: true,
   },
 ] as const
 
 export type EvmTemplateIds = (typeof evmTemplateOptions)[number]['id'] | 'custom'
 
-export const svmTemplateOptions = [
+export const svmTemplateOptions: TemplateOption[] = [
   {
     name: 'Token balances',
     id: 'token-balances',

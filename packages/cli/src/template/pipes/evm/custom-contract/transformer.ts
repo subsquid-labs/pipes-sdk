@@ -1,1 +1,0 @@
-import { evmDecoder } from '@subsquid/pipes/evm'

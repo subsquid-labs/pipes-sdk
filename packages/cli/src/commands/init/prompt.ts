@@ -5,9 +5,10 @@ import { InitHandler } from '~/commands/init/handler.js'
 import { networks } from '~/config/networks.js'
 import { sinks } from '~/config/sinks.js'
 import { templateOptions } from '~/config/templates.js'
-import { NetworkTemplate, templates } from '~/template/index.js'
+import { templates } from '~/templates/pipe-components/template-builder.js'
 import type { Config } from '~/types/config.js'
 import { chainTypes, type NetworkType } from '~/types/network.js'
+import { TransformerTemplate } from '~/types/templates.js'
 
 export class InitPrompt {
   async run() {
@@ -63,14 +64,14 @@ export class InitPrompt {
       },
     })
 
-    const chainType = await select<NetworkType>({
+    const networkType = await select<NetworkType>({
       message: "Now, let's choose the type of blockchain you'd like to use:",
       choices: chainTypes,
     })
 
     const network = await select({
       message: `Now, let's select the network you'd like to use. ${chalk.dim('(Tip: you can type to search)')}`,
-      choices: networks[chainType].map((n) => ({
+      choices: networks[networkType].map((n) => ({
         name: n.name,
         value: n.slug,
       })),
@@ -84,17 +85,13 @@ export class InitPrompt {
       ],
     })
 
-    let selectedTemplateMap: NetworkTemplate<NetworkType> = {}
+    let selectedTemplates: TransformerTemplate[] = []
     let contractAddresses: string[] = []
 
     if (pipelineType === 'templates') {
-      selectedTemplateMap = await this.promptTemplates(chainType)
+      selectedTemplates = await this.promptTemplates(networkType)
     } else {
-      if (chainType === 'evm') {
-        selectedTemplateMap = { custom: templates.evm.custom }
-      } else if (chainType === 'svm') {
-        selectedTemplateMap = { custom: templates.svm.custom }
-      }
+      selectedTemplates = [templates[networkType]['custom']]
 
       const contractAddress = await input({
         message: 'Contract address:',
@@ -109,32 +106,31 @@ export class InitPrompt {
 
     return {
       projectFolder,
-      networkType: chainType,
+      networkType: networkType,
       network,
-      templates: selectedTemplateMap,
+      templates: selectedTemplates,
       contractAddresses,
       sink,
     }
   }
 
-  private promptTemplates(chainType: 'evm'): Promise<NetworkTemplate<'evm'>>
-  private promptTemplates(chainType: 'svm'): Promise<NetworkTemplate<'svm'>>
-  private promptTemplates(chainType: NetworkType): Promise<NetworkTemplate<'evm'> | NetworkTemplate<'svm'>>
-  private async promptTemplates(chainType: NetworkType): Promise<NetworkTemplate<NetworkType>> {
+  private promptTemplates(chainType: 'evm'): Promise<TransformerTemplate[]>
+  private promptTemplates(chainType: 'svm'): Promise<TransformerTemplate[]>
+  private promptTemplates(chainType: NetworkType): Promise<TransformerTemplate[]>
+  private async promptTemplates(chainType: NetworkType): Promise<TransformerTemplate[]> {
     if (chainType === 'evm') {
-      const disabledTemplates = ['morpho-blue', 'uniswap-v4', 'polymarket']
       const selected = await checkbox({
         message: 'Templates:',
         choices: templateOptions.evm.map((t) => ({
           name: t.name,
           value: t.id,
-          disabled: disabledTemplates.includes(t.id) ? '(Coming soon)' : false,
+          disabled: t.disabled ? '(Coming soon)' : false,
         })),
       })
-      return selected.reduce<NetworkTemplate<'evm'>>((acc, id) => {
-        acc[id] = templates.evm[id]
+      return selected.reduce<TransformerTemplate[]>((acc, id) => {
+        acc.push(templates.evm[id])
         return acc
-      }, {})
+      }, [])
     }
     const selected = await checkbox({
       message: 'Templates:',
@@ -143,9 +139,9 @@ export class InitPrompt {
         value: t.id,
       })),
     })
-    return selected.reduce<NetworkTemplate<'svm'>>((acc, id) => {
-      acc[id] = templates.svm[id]
+    return selected.reduce<TransformerTemplate[]>((acc, id) => {
+      acc.push(templates.svm[id])
       return acc
-    }, {})
+    }, [])
   }
 }

@@ -2,6 +2,7 @@ import Mustache from 'mustache'
 import { Sink } from '~/types/sink.js'
 import { TransformerTemplate } from '~/types/templates.js'
 import { splitImportsAndCode } from '~/utils/merge-imports.js'
+import { tableToSchemaName } from './schemas-template.js'
 
 export const clickhouseSinkTemplate = `
 import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
@@ -22,15 +23,11 @@ clickhouseTarget({
     },
     onData: async ({ data, store }) => {
 {{#templates}}
-{{#hasTable}}
-{{^excludeFromInsert}}
       await store.insert({
         table: '{{{tableName}}}',
-        values: toSnakeKeysArray(data.{{{variableName}}}),
+        values: toSnakeKeysArray(data.{{{name}}}),
         format: 'JSONEachRow',
       });
-{{/excludeFromInsert}}
-{{/hasTable}}
 {{/templates}}
 {{#hasCustomContracts}}
       /**
@@ -48,9 +45,7 @@ clickhouseTarget({
       await store.removeAllRows({
         tables: [
 {{#templates}}
-{{#hasTable}}
           '{{{tableName}}}',
-{{/hasTable}}
 {{/templates}}
         ],
         where: 'block_number > {latest:UInt32}',
@@ -62,28 +57,32 @@ clickhouseTarget({
 export const postgresSinkTemplate = `
 import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
 import { drizzle } from 'drizzle-orm/node-postgres',
+import {
+  {{#templates}}
+  {{{schemaName}}},
+  {{/templates}}
+  {{#customTemplates}}
+  {{{schemaName}}},
+  {{/customTemplates}}
+} from './schemas.js'
 
 drizzleTarget({
     db: drizzle(
       process.env.DB_CONNECTION_STR ??
         (() => { throw new Error('DB_CONNECTION_STR env missing') })(),
     ),
-    tables: [{{#templates}}{{{drizzleTableName}}}{{^last}}, {{/last}}{{/templates}}],
+    tables: [{{#templates}}{{{schemaName}}}{{^last}}, {{/last}}{{/templates}}{{#customTemplates}}{{{schemaName}}}{{^last}}, {{/last}}{{/customTemplates}}],
     onData: async ({ tx, data }) => {
 {{#templates}}
-{{#hasTable}}
-{{^excludeFromInsert}}
-      for (const values of chunk(data.{{{variableName}}})) {
-        await tx.insert({{{drizzleTableName}}}).values(values)
+      for (const values of chunk(data.{{{name}}})) {
+        await tx.insert({{{schemaName}}}).values(values)
       }
-{{/excludeFromInsert}}
-{{/hasTable}}
 {{/templates}}
 {{#hasCustomContracts}}
       /**
        * Once the data is transformed, you can insert it into the database.
        *  
-       * for (const values of chunk(data.custom)) {
+       * for (const values of chunk(data.custom.MyContractEvent)) {
        *   await tx.insert(customContract).values(values)
        * }
        */
@@ -96,7 +95,7 @@ interface SinkTemplateParams {
   templates: TransformerTemplate[]
 }
 
-export function renderSinkTemplate(sink: Sink, params: SinkTemplateParams) {
+export function renderSinkTemplate__(sink: Sink, params: SinkTemplateParams) {
   const sinkTemplate = getSinkTemplate(sink)
   const { code } = splitImportsAndCode(sinkTemplate)
   return Mustache.render(code, params)
@@ -107,4 +106,23 @@ export function getSinkTemplate(sink: Sink): string {
   else if (sink === 'postgresql') return postgresSinkTemplate
   else if (sink === 'memory') throw new Error('Memory not implemented')
   else throw new Error(`Sink type ${sink} does not exist or its template not implemented`)
+}
+
+export function renderSinkTemplate(sink: Sink, params: SinkTemplateParams): string {
+  const sinkTemplate = getSinkTemplate(sink)
+  const transformerTemplatesWithSchema = params.templates
+      .map((t) => ({
+        ...t,
+        schemaName: tableToSchemaName(t.tableName),
+      }))
+
+  /**
+   * TODO: we should merge these two arrays once we implement codegen for custom contracts
+   * meaning tables, schemas, decoders, etc.
+   */
+  return Mustache.render(sinkTemplate, {
+    ...params,
+    templates: transformerTemplatesWithSchema.filter((t) => t.name !== 'custom'),
+    customTemplates: transformerTemplatesWithSchema.filter((t) => t.name === 'custom'),
+  })
 }

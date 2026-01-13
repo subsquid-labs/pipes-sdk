@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { templates } from '~/template/index.js'
+import { templates } from '~/templates/pipe-components/template-builder.js'
 import { Config } from '~/types/config.js'
 import { renderSchemasTemplate } from './schemas-template.js'
 
