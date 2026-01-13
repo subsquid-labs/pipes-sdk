@@ -26,6 +26,7 @@ import {
   renderPackageJson,
   tsconfigConfig,
 } from './templates/project-files/index.js'
+import { getTemplateDirname } from '~/utils/fs.js'
 
 const execAsync = promisify(exec)
 
@@ -213,17 +214,11 @@ export class InitHandler {
   }
 
   private async copyTemplateContracts(projectPath: string): Promise<void> {
-    const packageRoot = findPackageRoot()
-    // Try dist/template first (for bundled builds), then fall back to src/template
-    const distTemplateDir = path.join(packageRoot, 'dist', 'template', 'pipes', this.config.networkType)
-    const srcTemplateDir = path.join(packageRoot, 'src', 'template', 'pipes', this.config.networkType)
-    const templateBaseDir = existsSync(distTemplateDir) ? distTemplateDir : srcTemplateDir
-
-    const templateEntries = Object.entries(this.config.templates)
+    const templateBaseDir = getTemplateDirname(this.config.networkType)
     let hasContracts = false
 
-    for (const [templateId] of templateEntries) {
-      const templateContractsDir = path.join(templateBaseDir, templateId, 'contracts')
+    for (const template of this.config.templates) {
+      const templateContractsDir = path.join(templateBaseDir, template.folderName, 'contracts')
 
       if (existsSync(templateContractsDir)) {
         hasContracts = true
@@ -238,8 +233,8 @@ export class InitHandler {
     const projectContractsDir = path.join(projectPath, 'src/contracts')
     await mkdir(projectContractsDir, { recursive: true })
 
-    for (const [templateId] of templateEntries) {
-      const templateContractsDir = path.join(templateBaseDir, templateId, 'contracts')
+    for (const template of this.config.templates) {
+      const templateContractsDir = path.join(templateBaseDir, template.folderName, 'contracts')
 
       if (existsSync(templateContractsDir)) {
         this.copyDirectoryRecursive(templateContractsDir, projectContractsDir)

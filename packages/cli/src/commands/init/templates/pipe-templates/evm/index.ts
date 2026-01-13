@@ -8,16 +8,19 @@ const templateParser = new TemplateParser(getTemplateDirname('evm'))
 export const evmTemplates: Record<EvmTemplateIds, TransformerTemplate> = {
   custom: (() => ({
     name: 'custom',
+    folderName: 'custom',
     tableName: 'custom_contract',
     ...templateParser.readTemplateFiles('custom'),
   }))(),
   'erc20-transfers': (() => ({
     name: 'erc20Transfers',
+    folderName: 'erc20-transfers',
     tableName: 'erc20_transfers',
     ...templateParser.readTemplateFiles('erc20-transfers'),
   }))(),
   'uniswap-v3-swaps': (() => ({
     name: 'uniswapV3Swaps',
+    folderName: 'uniswap-v3-swaps',
     tableName: 'uniswap_v3_swaps',
     ...templateParser.readTemplateFiles('uniswap-v3-swaps'),
   }))(),
@@ -25,6 +28,7 @@ export const evmTemplates: Record<EvmTemplateIds, TransformerTemplate> = {
   // Coming soon templates
   'morpho-blue': {
     name: 'morphoBlueSwaps',
+    folderName: 'morpho-blue',
     tableName: 'morpho_blue_swaps',
     code: '',
     clickhouseTableTemplate: '',
@@ -32,6 +36,7 @@ export const evmTemplates: Record<EvmTemplateIds, TransformerTemplate> = {
   },
   'uniswap-v4': {
     name: 'uniswapV4Swaps',
+    folderName: 'uniswap-v4',
     tableName: 'uniswap_v4_swaps',
     code: '',
     clickhouseTableTemplate: '',
@@ -39,6 +44,7 @@ export const evmTemplates: Record<EvmTemplateIds, TransformerTemplate> = {
   },
   polymarket: {
     name: 'polymarketSwaps',
+    folderName: 'polymarket',
     tableName: 'polymarket_swaps',
     code: '',
     clickhouseTableTemplate: '',

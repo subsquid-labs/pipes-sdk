@@ -18,6 +18,7 @@ export type Sink = 'clickhouse' | 'postgresql' | 'memory'
 
 export interface TransformerTemplate {
   name: string
+  folderName: string
   code: string
   tableName: string
   clickhouseTableTemplate?: string

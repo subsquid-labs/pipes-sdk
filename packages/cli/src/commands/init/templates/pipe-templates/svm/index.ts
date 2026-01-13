@@ -8,11 +8,13 @@ const templateParser = new TemplateParser(getTemplateDirname('svm'))
 export const svmTemplates: Record<SvmTemplateIds, TransformerTemplate> = {
   custom: (() => ({
     name: 'custom',
+    folderName: 'custom',
     tableName: 'custom_contract',
     ...templateParser.readTemplateFiles('custom'),
   }))(),
   'token-balances': (() => ({
     name: 'tokenBalances',
+    folderName: 'token-balances',
     tableName: 'token_balances',
     ...templateParser.readTemplateFiles('token-balances'),
   }))(),

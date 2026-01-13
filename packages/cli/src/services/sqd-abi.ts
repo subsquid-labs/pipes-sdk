@@ -7,16 +7,7 @@ export class SqdAbiService {
     const etherscanKey = ''
 
     for (const address of contractAddresses) {
-      console.log({
-        address,
-        outputDir,
-        chainId,
-        etherscanKey,
-      })
-
       const cmd = `npx @subsquid/evm-typegen@latest ${outputDir} ${address} ${etherscanKey ? ` --etherscan-api-key ${etherscanKey}` : ''} ${chainId ? ` --etherscan-chain-id ${chainId}` : ''}`
-
-      console.log({ cmd })
 
       execSync(cmd, { stdio: 'inherit' })
     }

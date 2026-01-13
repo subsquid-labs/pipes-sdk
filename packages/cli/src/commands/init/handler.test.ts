@@ -140,4 +140,21 @@ describe('InitHandler', () => {
       "
     `)
   })
+
+  it('generates additional folders from pipe templates', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [templates.evm['uniswap-v3-swaps']],
+      contractAddresses: [],
+      sink: 'clickhouse',
+    }
+
+    await new InitHandler(config).handle()
+
+    await expect(isDir(path.join(projectDir, 'src/contracts'))).resolves.toBe(true)
+    await expect(isFile(path.join(projectDir, 'src/contracts/factory.ts'))).resolves.toBe(true)
+    await expect(isFile(path.join(projectDir, 'src/contracts/pool.ts'))).resolves.toBe(true)
+  })
 })
