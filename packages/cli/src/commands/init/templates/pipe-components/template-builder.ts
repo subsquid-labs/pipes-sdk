@@ -1,6 +1,5 @@
 import Mustache from 'mustache'
-import { Config } from '~/types/init.js'
-import { NetworkType } from "~/types/init.js"
+import { Config, NetworkType } from '~/types/init.js'
 import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
 import { customContractTemplate } from '../pipe-templates/evm/custom/transformer.js'
 import { evmTemplates } from '../pipe-templates/evm/index.js'
@@ -34,15 +33,14 @@ export abstract class TemplateBuilder<N extends NetworkType> {
     const transformerTemplates = this.getTransformerTemplates()
     const sinkTemplates = this.getSinkTemplate()
     const indexFileImports = [
-        TemplateBuilder.BASE_IMPORTS,
-        TemplateBuilder.NETWORK_IMPORTS[this.config.networkType],
-        sinkTemplates,
-        transformerTemplates.map(t => t.code),
+      TemplateBuilder.BASE_IMPORTS,
+      TemplateBuilder.NETWORK_IMPORTS[this.config.networkType],
+      sinkTemplates,
+      transformerTemplates.map((t) => t.code),
     ].flat()
     const deduplicatedImports = this.deduplicateImports(indexFileImports)
 
-
-    const transformersCode = transformerTemplates.map(t => ({
+    const transformersCode = transformerTemplates.map((t) => ({
       name: t.name,
       code: splitImportsAndCode(t.code).code,
     }))
@@ -60,7 +58,7 @@ export abstract class TemplateBuilder<N extends NetworkType> {
     return this.config.templates.map((template) => {
       if (template.name === 'custom') {
         const [address] = this.config.contractAddresses
-        return  { code: Mustache.render(customContractTemplate, { address }), name: 'custom' }
+        return { code: Mustache.render(customContractTemplate, { address }), name: 'custom' }
       }
       return { code: template.code, name: template.name }
     })
@@ -84,4 +82,4 @@ export const templates = {
   svm: svmTemplates,
 } as const satisfies Record<NetworkType, typeof evmTemplates | typeof svmTemplates>
 
-export type NetworkTemplate<N extends NetworkType> = keyof typeof templates[N]
+export type NetworkTemplate<N extends NetworkType> = keyof (typeof templates)[N]
