@@ -12,8 +12,8 @@ import { findPackageRoot } from '~/utils/package-root.js'
 export function getTemplateDirname(folder: 'evm' | 'svm'): string {
   const packageRoot = findPackageRoot()
 
-  const distTemplatePath = join(packageRoot, 'dist', 'templates', 'pipe-templates', folder)
-  const srcTemplatePath = join(packageRoot, 'src', 'templates', 'pipe-templates', folder)
+  const distTemplatePath = join(packageRoot, 'dist', 'commands', 'init', 'templates', 'pipe-templates', folder)
+  const srcTemplatePath = join(packageRoot, 'src', 'commands', 'init', 'templates', 'pipe-templates', folder)
 
   if (existsSync(distTemplatePath)) {
     return distTemplatePath
