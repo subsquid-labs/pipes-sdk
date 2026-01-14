@@ -1,6 +1,6 @@
 import type { Sink } from "~/types/init.js"
 
-export const baseDependencies: Record<string, string> = {
+const baseDependencies: Record<string, string> = {
   '@subsquid/pipes': '^0.1.0-beta.10',
   '@subsquid/evm-codec': '0.3.0',
   '@subsquid/evm-abi': '0.3.1',
@@ -9,7 +9,7 @@ export const baseDependencies: Record<string, string> = {
   zod: '^4.3.4',
 }
 
-export const baseDevDependencies: Record<string, string> = {
+const baseDevDependencies: Record<string, string> = {
   typescript: '^5.9.2',
   '@biomejs/biome': '^2.3.4',
   tsx: '^4.20.6',
@@ -17,7 +17,7 @@ export const baseDevDependencies: Record<string, string> = {
   '@types/node': '^22.14.1',
 }
 
-export const sinkDependencies: Record<Sink, Record<string, string>> = {
+const sinkDependencies: Record<Sink, Record<string, string>> = {
   clickhouse: {
     '@clickhouse/client': '^1.15.0',
   },
@@ -29,7 +29,7 @@ export const sinkDependencies: Record<Sink, Record<string, string>> = {
   memory: {},
 }
 
-export function getDependencies(sink: Sink): {
+export function renderDependencies(sink: Sink): {
   dependencies: Record<string, string>
   devDependencies: Record<string, string>
   dependencyNames: string[]

@@ -1,6 +1,6 @@
 import Mustache from 'mustache'
 
-export const packageJsonTemplate = `{
+const packageJsonTemplate = `{
   "name": "{{projectName}}",
   "version": "0.0.1",
   "type": "module",
@@ -14,8 +14,8 @@ export const packageJsonTemplate = `{
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push"{{/hasPostgresScripts}}
   },
-  "dependencies": {{{dependenciesJson}}},
-  "devDependencies": {{{devDependenciesJson}}}
+  "dependencies": {{{dependencies}}},
+  "devDependencies": {{{devDependencies}}}
 }`
 
 function formatDependencies(deps: Record<string, string>): string {
@@ -25,16 +25,19 @@ function formatDependencies(deps: Record<string, string>): string {
   return `{\n${entries.join(',\n')}\n  }`
 }
 
+interface PackageJsonTemplateValues {
+  projectName: string
+  dependencies: Record<string, string>
+  devDependencies: Record<string, string>
+  hasPostgresScripts: boolean
+}
+
 export function renderPackageJson(
-  projectName: string,
-  dependencies: Record<string, string>,
-  devDependencies: Record<string, string>,
-  hasPostgresScripts: boolean,
+  values: PackageJsonTemplateValues,
 ): string {
   return Mustache.render(packageJsonTemplate, {
-    projectName,
-    dependenciesJson: formatDependencies(dependencies),
-    devDependenciesJson: formatDependencies(devDependencies),
-    hasPostgresScripts,
+    ...values,
+    dependencies: formatDependencies(values.dependencies),
+    devDependencies: formatDependencies(values.devDependencies),
   })
 }

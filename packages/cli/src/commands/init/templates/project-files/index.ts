@@ -1,15 +1,12 @@
-export {
-  baseDependencies,
-  baseDevDependencies,
-  getDependencies,
-  sinkDependencies,
-} from './dependencies.js'
-export { biomeConfig } from './static/biome.js'
-export { getDockerCompose } from './static/docker-compose.js'
+export { renderDependencies } from './dynamic/dependencies.js'
+export { renderDockerCompose } from './dynamic/docker-compose.js'
+export { renderDockerfile } from './dynamic/docker-file.js'
+export { renderEnvTemplate } from './dynamic/env.js'
+export { renderPackageJson } from './dynamic/package-json.js'
+export { renderReadme } from './dynamic/readme.js'
+export { biomeConfigTemplate } from './static/biome.js'
 export { drizzleConfigTemplate } from './static/drizzle-config.js'
-export { getEnvTemplate } from './static/env.js'
-export { gitignoreContent } from './static/gitignore.js'
-export { pnpmWorkspace } from './static/pnpm-workspace.js'
-export { tsconfigConfig } from './static/tsconfig.js'
+export { gitignoreTemplate } from './static/gitignore.js'
+export { pnpmWorkspaceTemplate } from './static/pnpm-workspace.js'
+export { tsconfigConfigTemplate } from './static/tsconfig.js'
 export { clickhouseUtilsTemplate } from './static/utils.js'
-export { packageJsonTemplate, renderPackageJson } from './templates/package-json.js'

@@ -4,7 +4,7 @@ export class SqdAbiService {
   generateEvmTypes(projectPath: string, contractAddresses: string[], chainId: string): void {
     const outputDir = `${projectPath}/src/contracts/`
     // This is a burner key, it's okay to leak. Once the proxy server is ready, we won't need a key
-    const etherscanKey = ''
+    const etherscanKey = 'N1NYFQMYX8MKUDHXUQ93TTI9MS496KNC5F'
 
     for (const address of contractAddresses) {
       const cmd = `npx @subsquid/evm-typegen@latest ${outputDir} ${address} ${etherscanKey ? ` --etherscan-api-key ${etherscanKey}` : ''} ${chainId ? ` --etherscan-chain-id ${chainId}` : ''}`

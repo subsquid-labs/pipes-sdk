@@ -1,4 +1,4 @@
-export const tsconfigConfig = {
+export const tsconfigConfigTemplate = {
   compilerOptions: {
     target: 'ES2022',
     module: 'NodeNext',

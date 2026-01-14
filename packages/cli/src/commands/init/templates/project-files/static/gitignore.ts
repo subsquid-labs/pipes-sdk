@@ -1,4 +1,4 @@
-export const gitignoreContent = `# Dependencies
+export const gitignoreTemplate = `# Dependencies
 node_modules/
 
 # Build output

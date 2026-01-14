@@ -18,7 +18,6 @@ import {
   sinkTypes,
 } from '~/types/init.js'
 import { getTemplateDirname } from '~/utils/fs.js'
-import { findPackageRoot } from '~/utils/package-root.js'
 import { EvmTemplateIds, SvmTemplateIds } from './config/templates.js'
 import { EvmTemplateBuilder } from './templates/pipe-components/evm-template-builder.js'
 import { renderSchemasTemplate } from './templates/pipe-components/schemas-template.js'
@@ -26,16 +25,18 @@ import { SvmTemplateBuilder } from './templates/pipe-components/svm-template-bui
 import { evmTemplates } from './templates/pipe-templates/evm/index.js'
 import { svmTemplates } from './templates/pipe-templates/svm/index.js'
 import {
-  biomeConfig,
+  biomeConfigTemplate,
   clickhouseUtilsTemplate,
   drizzleConfigTemplate,
-  getDependencies,
-  getDockerCompose,
-  getEnvTemplate,
-  gitignoreContent,
-  pnpmWorkspace,
+  gitignoreTemplate,
+  pnpmWorkspaceTemplate,
+  renderDependencies,
+  renderDockerCompose,
+  renderDockerfile,
+  renderEnvTemplate,
   renderPackageJson,
-  tsconfigConfig,
+  renderReadme,
+  tsconfigConfigTemplate,
 } from './templates/project-files/index.js'
 
 const execAsync = promisify(exec)
@@ -63,10 +64,21 @@ const configJsonSchema = z
 
 type ConfigJson = z.infer<typeof configJsonSchema>
 
+type ConfigWithName = Config<NetworkType> & { projectName: string }
+
 const squidfix = (text: string) => `[🦑 PIPES SDK] ${text} `
 
 export class InitHandler {
-  constructor(private readonly config: Config<NetworkType>) {}
+  private readonly config: ConfigWithName
+
+  constructor(config: Config<NetworkType>) {
+    const pathParts = config.projectFolder.split('/')
+
+    this.config = {
+      ...config,
+      projectName: pathParts[pathParts.length - 1] ?? config.projectFolder,
+    }
+  }
 
   async handle(): Promise<void> {
     const spinner = ora('\nSetting up new Pipes SDK project...').start()
@@ -132,29 +144,59 @@ export class InitHandler {
   }
 
   private writeStaticFiles(projectPath: string): void {
-    writeFileSync(path.join(projectPath, 'biome.json'), JSON.stringify(biomeConfig, null, 2))
-    writeFileSync(path.join(projectPath, 'tsconfig.json'), JSON.stringify(tsconfigConfig, null, 2))
-    writeFileSync(path.join(projectPath, '.gitignore'), gitignoreContent)
-    writeFileSync(path.join(projectPath, 'docker-compose.yml'), getDockerCompose(this.config.sink))
-    writeFileSync(path.join(projectPath, '.env'), getEnvTemplate(this.config.sink))
+    writeFileSync(path.join(projectPath, 'biome.json'), JSON.stringify(biomeConfigTemplate, null, 2))
+    writeFileSync(path.join(projectPath, 'tsconfig.json'), JSON.stringify(tsconfigConfigTemplate, null, 2))
+    writeFileSync(path.join(projectPath, '.gitignore'), gitignoreTemplate)
 
     if (this.config.packageManager === 'pnpm') {
-      writeFileSync(path.join(projectPath, 'pnpm-workspace.yaml'), pnpmWorkspace)
+      writeFileSync(path.join(projectPath, 'pnpm-workspace.yaml'), pnpmWorkspaceTemplate)
     }
   }
 
   private writeTemplateFiles(projectPath: string): void {
-    const { dependencies, devDependencies } = getDependencies(this.config.sink)
-    const packageJson = renderPackageJson(
-      this.config.projectFolder,
-      dependencies,
-      devDependencies,
-      this.config.sink === 'postgresql',
+    const { dependencies, devDependencies } = renderDependencies(this.config.sink)
+    writeFileSync(
+      path.join(projectPath, 'package.json'),
+      renderPackageJson({
+        projectName: this.config.projectName,
+        dependencies,
+        devDependencies,
+        hasPostgresScripts: this.config.sink === 'postgresql',
+      }),
     )
-    writeFileSync(path.join(projectPath, 'package.json'), packageJson)
 
-    const indexTs = this.buildIndexTs()
-    writeFileSync(path.join(projectPath, 'src/index.ts'), indexTs)
+    writeFileSync(
+      path.join(projectPath, 'Dockerfile'),
+      renderDockerfile({
+        isPostgres: this.config.sink === 'postgresql',
+      }),
+    )
+
+    writeFileSync(
+      path.join(projectPath, 'docker-compose.yml'),
+      renderDockerCompose({
+        projectName: this.config.projectName,
+        sink: this.config.sink,
+      }),
+    )
+
+    writeFileSync(
+      path.join(projectPath, '.env'),
+      renderEnvTemplate({
+        sink: this.config.sink,
+      }),
+    )
+
+    writeFileSync(
+      path.join(projectPath, 'README.md'),
+      renderReadme({
+        packageManager: this.config.packageManager,
+        projectName: this.config.projectName,
+        hasPostgresScripts: this.config.sink === 'postgresql',
+      }),
+    )
+
+    writeFileSync(path.join(projectPath, 'src/index.ts'), this.renderIndexerTs())
 
     if (this.config.sink === 'postgresql') {
       writeFileSync(path.join(projectPath, 'drizzle.config.ts'), drizzleConfigTemplate)
@@ -170,7 +212,7 @@ export class InitHandler {
     }
   }
 
-  private buildIndexTs(): string {
+  private renderIndexerTs(): string {
     if (this.config.networkType === 'evm') {
       const builder = new EvmTemplateBuilder(this.config as Config<'evm'>)
       return builder.build()
@@ -202,29 +244,23 @@ export class InitHandler {
   }
 
   private async copyClickHouseMigrations(projectPath: string): Promise<void> {
-    const packageRoot = findPackageRoot()
-    // Try dist/template first (for bundled builds), then fall back to src/template
-    const distTemplateDir = path.join(packageRoot, 'dist', 'template', 'pipes', this.config.networkType)
-    const srcTemplateDir = path.join(packageRoot, 'src', 'template', 'pipes', this.config.networkType)
-    const templateBaseDir = existsSync(distTemplateDir) ? distTemplateDir : srcTemplateDir
-
-    const migrationsDir = path.join(projectPath, 'src/migrations')
+    const defaultMigrationFileName = 'clickhouse-table.sql'
+    const templateBaseDir = getTemplateDirname(this.config.networkType)
+    const migrationsDir = path.join(projectPath, 'migrations')
     await mkdir(migrationsDir, { recursive: true })
 
-    const templateEntries = Object.entries(this.config.templates)
-
-    for (const [templateId] of templateEntries) {
-      const sourceFile = path.join(templateBaseDir, templateId, 'clickhouse-table.sql')
+    for (const template of this.config.templates) {
+      const sourceFile = path.join(templateBaseDir, template.folderName, defaultMigrationFileName)
 
       if (existsSync(sourceFile)) {
-        const targetFile = path.join(migrationsDir, `${templateId}-migration.sql`)
+        const targetFile = path.join(migrationsDir, `${template.folderName}-migration.sql`)
         copyFileSync(sourceFile, targetFile)
       }
     }
 
     // Handle custom contract template if present
     if (this.config.contractAddresses.length > 0) {
-      const customContractSourceFile = path.join(templateBaseDir, 'custom', 'clickhouse-table.sql')
+      const customContractSourceFile = path.join(templateBaseDir, 'custom', defaultMigrationFileName)
 
       if (existsSync(customContractSourceFile)) {
         const targetFile = path.join(migrationsDir, 'custom-contract-migration.sql')

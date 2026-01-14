@@ -1,4 +1,4 @@
-export const biomeConfig = {
+export const biomeConfigTemplate = {
   $schema: 'https://biomejs.dev/schemas/2.3.11/schema.json',
   files: {
     ignoreUnknown: true,

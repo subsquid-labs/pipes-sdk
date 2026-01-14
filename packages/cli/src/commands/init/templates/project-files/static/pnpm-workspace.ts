@@ -1,4 +1,4 @@
-export const pnpmWorkspace = `onlyBuiltDependencies:
+export const pnpmWorkspaceTemplate = `onlyBuiltDependencies:
   - better-sqlite3
   - bufferutil 
   - es5-ext

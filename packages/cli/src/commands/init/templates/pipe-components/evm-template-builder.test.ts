@@ -20,6 +20,7 @@ describe('EVM Template Builder', () => {
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
       import { commonAbis, evmDecoder, evmPortalSource } from "@subsquid/pipes/evm";
+      import path from "node:path";
       import { z } from "zod";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
       import { createClient } from "@clickhouse/client";
@@ -86,7 +87,8 @@ describe('EVM Template Builder', () => {
               },
           }),
           onStart: async ({ store }) => {
-            await store.executeFiles('./src/migrations')
+            const migrationsDir = path.join(process.cwd(), 'migrations')
+            await store.executeFiles(migrationsDir)
           },
           onData: async ({ data, store }) => {
             await store.insert({
@@ -127,6 +129,7 @@ describe('EVM Template Builder', () => {
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
+      import path from "node:path";
       import { commonAbis, evmDecoder, evmPortalSource, factory, factorySqliteDatabase } from "@subsquid/pipes/evm";
       import { z } from "zod";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
@@ -223,7 +226,8 @@ describe('EVM Template Builder', () => {
               },
           }),
           onStart: async ({ store }) => {
-            await store.executeFiles('./src/migrations')
+            const migrationsDir = path.join(process.cwd(), 'migrations')
+            await store.executeFiles(migrationsDir)
           },
           onData: async ({ data, store }) => {
             await store.insert({

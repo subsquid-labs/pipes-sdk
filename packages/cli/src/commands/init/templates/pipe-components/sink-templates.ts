@@ -3,6 +3,7 @@ import { NetworkType, Sink, TransformerTemplate } from '~/types/init.js'
 import { tableToSchemaName } from './schemas-template.js'
 
 export const clickhouseSinkTemplate = `
+import path from 'node:path'
 import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
 import { createClient } from '@clickhouse/client'
 import { serializeJsonWithBigInt, toSnakeKeysArray } from './utils/index.js'
@@ -24,7 +25,8 @@ clickhouseTarget({
         },
     }),
     onStart: async ({ store }) => {
-      await store.executeFiles('./src/migrations')
+      const migrationsDir = path.join(process.cwd(), 'migrations')
+      await store.executeFiles(migrationsDir)
     },
     onData: async ({ data, store }) => {
 {{#templates}}

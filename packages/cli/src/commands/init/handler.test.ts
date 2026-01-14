@@ -20,6 +20,11 @@ async function isDir(p: string) {
   return st.isDirectory()
 }
 
+async function isDirEmpty(p: string) {
+  const files = await readdir(p)
+  return files.length === 0
+}
+
 async function isFile(p: string) {
   const st = await stat(p)
   return st.isFile()
@@ -30,12 +35,13 @@ function fileContent(p: string) {
 }
 
 describe('InitHandler', () => {
+  const PROJECT_NAME = 'my-project'
   let tmpRoot: string
   let projectDir: string
 
   beforeEach(async () => {
     tmpRoot = await mkdtemp(path.join(tmpdir(), 'my-cli-'))
-    projectDir = path.join(tmpRoot, 'my-project')
+    projectDir = path.join(tmpRoot, PROJECT_NAME)
   })
 
   afterEach(async () => {
@@ -77,7 +83,16 @@ describe('InitHandler', () => {
     const filesInRoot = await readdir(projectDir)
 
     expect(filesInRoot).toEqual(
-      expect.arrayContaining(['package.json', 'biome.json', 'tsconfig.json', '.env', '.gitignore', 'pnpm-lock.yaml']),
+      expect.arrayContaining([
+        'package.json',
+        'biome.json',
+        'tsconfig.json',
+        '.env',
+        '.gitignore',
+        'pnpm-lock.yaml',
+        'Dockerfile',
+        'docker-compose.yml',
+      ]),
     )
   })
 
@@ -99,11 +114,29 @@ describe('InitHandler', () => {
     expect(packageJsonContent).to.not.include('"db:migrate": "drizzle-kit migrate"')
     expect(packageJsonContent).to.not.include('"db:push": "drizzle-kit push"')
 
-    await expect(isDir(path.join(projectDir, 'src/migrations'))).resolves.toBe(true)
+    await expect(isDir(path.join(projectDir, 'migrations'))).resolves.toBe(true)
+    await expect(isDirEmpty(path.join(projectDir, 'migrations'))).resolves.toBe(false)
+
     const dockerComposePath = path.join(projectDir, 'docker-compose.yml')
     await expect(isFile(dockerComposePath)).resolves.toBe(true)
     await expect(fileContent(dockerComposePath)).resolves.toMatchInlineSnapshot(`
       "services:
+        my-project:
+          build:
+            context: .
+            dockerfile: Dockerfile
+          environment:
+            CLICKHOUSE_URL: http://clickhouse:8123
+            CLICKHOUSE_DATABASE: pipes
+            CLICKHOUSE_USER: default
+            CLICKHOUSE_PASSWORD: password
+          command: ["sh", "-lc", "node dist/index.js"]
+          depends_on:
+            clickhouse:
+              condition: service_healthy
+          restart: unless-stopped
+          profiles: ["with-pipeline"]
+
         clickhouse:
           image: clickhouse/clickhouse-server:latest
           ports:
@@ -112,6 +145,12 @@ describe('InitHandler', () => {
             CLICKHOUSE_DB: pipes
             CLICKHOUSE_USER: default
             CLICKHOUSE_PASSWORD: password
+          healthcheck:
+            test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+            interval: 3s
+            timeout: 5s
+            retries: 5
+
       "
     `)
   })
@@ -142,6 +181,19 @@ describe('InitHandler', () => {
     await expect(isFile(dockerComposePath)).resolves.toBe(true)
     await expect(fileContent(dockerComposePath)).resolves.toMatchInlineSnapshot(`
       "services:
+        my-project:
+          build:
+            context: .
+            dockerfile: Dockerfile
+          environment:
+            DB_CONNECTION_STR: postgresql://postgres:password@postgres:5432/pipes
+          command: ["sh", "-lc", "pnpm db:generate && pnpm db:migrate && node dist/index.js"]
+          depends_on:
+            postgres:
+              condition: service_healthy
+          restart: unless-stopped
+          profiles: ["with-pipeline"]
+
         postgres:
           image: postgres:latest
           environment:
@@ -152,9 +204,10 @@ describe('InitHandler', () => {
             - "5432:5432"
           healthcheck:
             test: ["CMD-SHELL", "pg_isready -U postgres"]
-            interval: 10s
+            interval: 3s
             timeout: 5s
             retries: 5
+
       "
     `)
   })
