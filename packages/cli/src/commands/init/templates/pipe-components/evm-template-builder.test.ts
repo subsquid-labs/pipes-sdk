@@ -12,6 +12,7 @@ describe('EVM Template Builder', () => {
       templates: [evmTemplates['erc20Transfers']],
       contractAddresses: [],
       sink: 'clickhouse',
+      packageManager: 'pnpm',
     }
 
     const indexerContent = new EvmTemplateBuilder(config).build()
@@ -119,6 +120,7 @@ describe('EVM Template Builder', () => {
       templates: [evmTemplates['erc20Transfers'], evmTemplates['uniswapV3Swaps']],
       contractAddresses: [],
       sink: 'clickhouse',
+      packageManager: 'pnpm',
     }
 
     const indexerContent = new EvmTemplateBuilder(config).build()
@@ -261,6 +263,7 @@ describe('EVM Template Builder', () => {
       templates: [evmTemplates['custom']],
       contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
       sink: 'postgresql',
+      packageManager: 'pnpm',
     }
 
     const indexerContent = new EvmTemplateBuilder(config).build()

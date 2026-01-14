@@ -14,6 +14,7 @@ describe('SVM Template Builder', () => {
       ],
       contractAddresses: [],
       sink: 'postgresql',
+      packageManager: 'pnpm',
     }
 
     const indexerContent = new SvmTemplateBuilder(config).build()

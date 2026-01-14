@@ -7,7 +7,16 @@ export interface Config<N extends NetworkType> {
   templates: TransformerTemplate<N>[]
   contractAddresses: string[]
   sink: Sink
+  packageManager: PackageManager
 }
+
+export const packageManagerTypes = [
+  { name: 'pnpm', value: 'pnpm' },
+  { name: 'yarn', value: 'yarn' },
+  { name: 'npm', value: 'npm' },
+  { name: 'bun', value: 'bun' },
+] as const
+export type PackageManager = (typeof packageManagerTypes)[number]['value']
 
 export const networkTypes = [
   { name: 'EVM', value: 'evm' },

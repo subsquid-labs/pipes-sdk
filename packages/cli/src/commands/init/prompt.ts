@@ -1,12 +1,12 @@
 import path from 'node:path'
 import { checkbox, input, select } from '@inquirer/prompts'
 import chalk from 'chalk'
-import { InitHandler } from '~/commands/init/handler.js'
 import { networks } from '~/commands/init/config/networks.js'
 import { sinks } from '~/commands/init/config/sinks.js'
 import { templateOptions } from '~/commands/init/config/templates.js'
-import type { Config } from '~/types/init.js'
-import { networkTypes, type NetworkType, TransformerTemplate } from "~/types/init.js"
+import { InitHandler } from '~/commands/init/handler.js'
+import type { Config, PackageManager } from '~/types/init.js'
+import { type NetworkType, networkTypes, packageManagerTypes, TransformerTemplate } from "~/types/init.js"
 import { templates } from './templates/pipe-components/template-builder.js'
 import { evmTemplates } from './templates/pipe-templates/evm/index.js'
 import { svmTemplates } from './templates/pipe-templates/svm/index.js'
@@ -65,6 +65,11 @@ export class InitPrompt {
       },
     })
 
+    const packageManager = await select<PackageManager>({
+      message: 'Which package manager would you like to use?',
+      choices: packageManagerTypes,
+    })
+
     const networkType = await select<NetworkType>({
       message: "Now, let's choose the type of blockchain you'd like to use:",
       choices: networkTypes,
@@ -112,6 +117,7 @@ export class InitPrompt {
       templates: selectedTemplates,
       contractAddresses,
       sink,
+      packageManager,
     }
   }
 

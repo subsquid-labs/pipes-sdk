@@ -12,6 +12,7 @@ describe('Schema template builder', () => {
       templates: [templates.evm['erc20Transfers']],
       contractAddresses: [],
       sink: 'postgresql',
+      packageManager: 'pnpm',
     }
 
     const schemaContent = renderSchemasTemplate(config)
@@ -56,6 +57,7 @@ describe('Schema template builder', () => {
       ],
       contractAddresses: [],
       sink: 'postgresql',
+      packageManager: 'pnpm',
     }
 
     const schemaContent = renderSchemasTemplate(config)

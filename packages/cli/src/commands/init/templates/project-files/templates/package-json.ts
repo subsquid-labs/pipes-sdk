@@ -9,11 +9,10 @@ export const packageJsonTemplate = `{
     "dev": "tsx src/index.ts",
     "start": "tsx src/index.ts",
     "build": "tsup src/index.ts --format esm --dts",
-    "lint": "biome check . --write",
-    "format": "biome format . --write"{{#hasPostgresScripts}},
-    "db:generate": "pnpm drizzle-kit generate",
-    "db:migrate": "pnpm drizzle-kit migrate",
-    "db:push": "pnpm drizzle-kit push"{{/hasPostgresScripts}}
+    "lint": "biome check . --write"{{#hasPostgresScripts}},
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push"{{/hasPostgresScripts}}
   },
   "dependencies": {{{dependenciesJson}}},
   "devDependencies": {{{devDependenciesJson}}}

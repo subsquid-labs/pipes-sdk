@@ -1,5 +1,9 @@
 export const biomeConfig = {
-  $schema: 'https://biomejs.dev/schemas/2.3.4/schema.json',
+  $schema: 'https://biomejs.dev/schemas/2.3.11/schema.json',
+  files: {
+    ignoreUnknown: true,
+    includes: ['**/*.ts', '**/*.json', '!**/node_modules/**', '!**/dist/**'],
+  },
   vcs: {
     enabled: true,
     clientKind: 'git',
@@ -9,6 +13,7 @@ export const biomeConfig = {
     enabled: true,
     indentStyle: 'space',
     indentWidth: 2,
+    lineWidth: 120,
   },
   linter: {
     enabled: true,

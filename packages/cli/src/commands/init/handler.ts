@@ -8,7 +8,15 @@ import ora from 'ora'
 import { z } from 'zod'
 import { getEvmChainId } from '~/commands/init/config/networks.js'
 import { SqdAbiService } from '~/services/sqd-abi.js'
-import { type Config, type NetworkType, networkTypes, type Sink, sinkTypes } from '~/types/init.js'
+import {
+  type Config,
+  type NetworkType,
+  networkTypes,
+  type PackageManager,
+  packageManagerTypes,
+  type Sink,
+  sinkTypes,
+} from '~/types/init.js'
 import { getTemplateDirname } from '~/utils/fs.js'
 import { findPackageRoot } from '~/utils/package-root.js'
 import { EvmTemplateIds, SvmTemplateIds } from './config/templates.js'
@@ -36,6 +44,7 @@ const configJsonSchema = z
   .object({
     projectFolder: z.string().min(1),
     networkType: z.enum(networkTypes.map((n) => n.value)),
+    packageManager: z.enum(packageManagerTypes.map((p) => p.value)),
     network: z.string().min(1),
     templates: z.array(z.string()),
     contractAddresses: z.array(z.string()),
@@ -47,19 +56,20 @@ const configJsonSchema = z
       ...data,
       networkType,
       sink: data.sink as Sink,
+      packageManager: data.packageManager as PackageManager,
       templates: data.templates as typeof networkType extends 'evm' ? EvmTemplateIds[] : SvmTemplateIds[],
     }
   })
 
-const squidfix = (text: string) => `[🦑 PIPES SDK] ${text} `
-
 type ConfigJson = z.infer<typeof configJsonSchema>
+
+const squidfix = (text: string) => `[🦑 PIPES SDK] ${text} `
 
 export class InitHandler {
   constructor(private readonly config: Config<NetworkType>) {}
 
   async handle(): Promise<void> {
-    const spinner = ora('Setting up new Pipes SDK project...').start()
+    const spinner = ora('\nSetting up new Pipes SDK project...').start()
     try {
       spinner.text = squidfix('Creating project folder')
       await this.createProjectFolder(this.config.projectFolder)
@@ -127,7 +137,10 @@ export class InitHandler {
     writeFileSync(path.join(projectPath, '.gitignore'), gitignoreContent)
     writeFileSync(path.join(projectPath, 'docker-compose.yml'), getDockerCompose(this.config.sink))
     writeFileSync(path.join(projectPath, '.env'), getEnvTemplate(this.config.sink))
-    writeFileSync(path.join(projectPath, 'pnpm-workspace.yaml'), pnpmWorkspace)
+
+    if (this.config.packageManager === 'pnpm') {
+      writeFileSync(path.join(projectPath, 'pnpm-workspace.yaml'), pnpmWorkspace)
+    }
   }
 
   private writeTemplateFiles(projectPath: string): void {
@@ -171,19 +184,19 @@ export class InitHandler {
   }
 
   private async installDependencies(projectPath: string): Promise<void> {
-    await execAsync('pnpm install', {
+    await execAsync(`${this.config.packageManager} install`, {
       cwd: projectPath,
     })
   }
 
   private async lintProject(projectPath: string): Promise<void> {
-    await execAsync('pnpm lint', {
+    await execAsync(`${this.config.packageManager} run lint`, {
       cwd: projectPath,
     })
   }
 
   private async generateDatabaseMigrations(projectPath: string): Promise<void> {
-    await execAsync('pnpm db:generate', {
+    await execAsync(`${this.config.packageManager} run db:generate`, {
       cwd: projectPath,
     })
   }
@@ -282,6 +295,7 @@ export class InitHandler {
     }
   }
 
+  // TODO: single string message
   private nextSteps(projectPath: string): void {
     const sep = '─'.repeat(64)
     const pathLine = `📁 Project created in ${projectPath}`
@@ -300,16 +314,16 @@ export class InitHandler {
 
     if (this.config.sink === 'postgresql') {
       console.log(`3) Apply migrations`)
-      console.log(`   ${chalk.bold('pnpm db:migrate')}\n`)
+      console.log(`   ${chalk.bold(`${this.config.packageManager} run db:migrate`)}\n`)
 
       console.log(`4) Start the pipeline`)
-      console.log(`   ${chalk.bold('pnpm dev')}\n`)
+      console.log(`   ${chalk.bold(`${this.config.packageManager} run dev`)}\n`)
     } else if (this.config.sink === 'clickhouse') {
       console.log(`3) Start the pipeline`)
-      console.log(`   ${chalk.bold('pnpm dev')}\n`)
+      console.log(`   ${chalk.bold(`${this.config.packageManager} run dev`)}\n`)
     } else {
       console.log(`3) Start the pipeline`)
-      console.log(`   ${chalk.bold('pnpm dev')}\n`)
+      console.log(`   ${chalk.bold(`${this.config.packageManager} run dev`)}\n`)
     }
     console.log(
       chalk.dim(
