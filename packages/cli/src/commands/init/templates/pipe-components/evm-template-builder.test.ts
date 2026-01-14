@@ -76,6 +76,13 @@ describe('EVM Template Builder', () => {
               json: {
                   stringify: serializeJsonWithBigInt,
               },
+              clickhouse_settings: {
+                  date_time_input_format: 'best_effort',
+                  date_time_output_format: 'iso',
+                  output_format_json_named_tuples_as_objects: 1,
+                  output_format_json_quote_64bit_floats: 1,
+                  output_format_json_quote_64bit_integers: 1,
+              },
           }),
           onStart: async ({ store }) => {
             await store.executeFiles('./src/migrations')
@@ -204,6 +211,13 @@ describe('EVM Template Builder', () => {
               url: env.CLICKHOUSE_URL,
               json: {
                   stringify: serializeJsonWithBigInt,
+              },
+              clickhouse_settings: {
+                  date_time_input_format: 'best_effort',
+                  date_time_output_format: 'iso',
+                  output_format_json_named_tuples_as_objects: 1,
+                  output_format_json_quote_64bit_floats: 1,
+                  output_format_json_quote_64bit_integers: 1,
               },
           }),
           onStart: async ({ store }) => {
