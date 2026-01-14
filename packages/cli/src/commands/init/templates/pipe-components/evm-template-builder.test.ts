@@ -34,7 +34,7 @@ describe('EVM Template Builder', () => {
 
       const erc20Transfers = evmDecoder({
         profiler: { id: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
-        range: { from: 'latest' },
+        range: { from: '12,369,621' },
         // Uncomment the line below to filter by contract addresses
         // contracts: ["0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"], // WETH on Ethereum mainnet
         events: {
@@ -146,7 +146,7 @@ describe('EVM Template Builder', () => {
 
       const erc20Transfers = evmDecoder({
         profiler: { id: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
-        range: { from: 'latest' },
+        range: { from: '12,369,621' },
         // Uncomment the line below to filter by contract addresses
         // contracts: ["0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"], // WETH on Ethereum mainnet
         events: {
@@ -166,7 +166,7 @@ describe('EVM Template Builder', () => {
       )
 
       const uniswapV3Swaps = evmDecoder({
-        range: { from: 'latest' }, // Uniswap V3 Factory deployment block: 12,369,621
+        range: { from: '12,369,621' }, // Uniswap V3 Factory deployment block
         contracts: factory({
           address: ['0x1f98431c8ad98523631ae4a59f267346ea31f984'], // Uniswap V3 Factory address on Ethereum mainnet. Replace with the factory address for the network you are using.
           event: factoryEvents.PoolCreated,

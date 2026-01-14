@@ -335,7 +335,6 @@ export class InitHandler {
     }
   }
 
-  // TODO: single string message
   private nextSteps(projectPath: string): void {
     const sep = `${chalk.green('─'.repeat(64))}`
 

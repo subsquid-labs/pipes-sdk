@@ -3,7 +3,7 @@ import { events as factoryEvents } from './contracts/factory.js'
 import { events as poolEvents } from './contracts/pool.js'
 
 const uniswapV3Swaps = evmDecoder({
-  range: { from: 'latest' }, // Uniswap V3 Factory deployment block: 12,369,621
+  range: { from: '12,369,621' }, // Uniswap V3 Factory deployment block
   contracts: factory({
     address: ['0x1f98431c8ad98523631ae4a59f267346ea31f984'], // Uniswap V3 Factory address on Ethereum mainnet. Replace with the factory address for the network you are using.
     event: factoryEvents.PoolCreated,

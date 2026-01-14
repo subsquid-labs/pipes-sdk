@@ -2,7 +2,7 @@ import { commonAbis, evmDecoder } from '@subsquid/pipes/evm'
 
 const erc20Transfers = evmDecoder({
   profiler: { id: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
-  range: { from: 'latest' },
+  range: { from: '12,369,621' },
   // Uncomment the line below to filter by contract addresses
   // contracts: ["0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"], // WETH on Ethereum mainnet
   events: {
