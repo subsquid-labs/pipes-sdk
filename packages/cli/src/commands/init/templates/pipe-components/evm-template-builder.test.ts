@@ -20,8 +20,8 @@ describe('EVM Template Builder', () => {
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
       import { commonAbis, evmDecoder, evmPortalSource } from "@subsquid/pipes/evm";
-      import path from "node:path";
       import { z } from "zod";
+      import path from "node:path";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
       import { createClient } from "@clickhouse/client";
       import { serializeJsonWithBigInt, toSnakeKeysArray } from "./utils/index.js";
@@ -129,9 +129,9 @@ describe('EVM Template Builder', () => {
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
-      import path from "node:path";
       import { commonAbis, evmDecoder, evmPortalSource, factory, factorySqliteDatabase } from "@subsquid/pipes/evm";
       import { z } from "zod";
+      import path from "node:path";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
       import { createClient } from "@clickhouse/client";
       import { serializeJsonWithBigInt, toSnakeKeysArray } from "./utils/index.js";
