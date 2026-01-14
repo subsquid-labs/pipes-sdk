@@ -19,6 +19,7 @@ import {
 } from '~/types/init.js'
 import { getTemplateDirname } from '~/utils/fs.js'
 import { EvmTemplateIds, SvmTemplateIds } from './config/templates.js'
+import { InvalidNetworkTypeError, TemplateNotFoundError } from './errors.js'
 import { EvmTemplateBuilder } from './templates/pipe-components/evm-template-builder.js'
 import { renderSchemasTemplate } from './templates/pipe-components/schemas-template.js'
 import { SvmTemplateBuilder } from './templates/pipe-components/svm-template-builder.js'
@@ -44,7 +45,10 @@ const execAsync = promisify(exec)
 const configJsonSchema = z
   .object({
     projectFolder: z.string().min(1),
-    networkType: z.enum(networkTypes.map((n) => n.value)),
+    networkType: z.enum(
+      networkTypes.map((n) => n.value),
+      { error: (iss) => InvalidNetworkTypeError.getErrorMessage(iss.input) },
+    ),
     packageManager: z.enum(packageManagerTypes.map((p) => p.value)),
     network: z.string().min(1),
     templates: z.array(z.string()),
@@ -66,7 +70,7 @@ type ConfigJson = z.infer<typeof configJsonSchema>
 
 type ConfigWithName = Config<NetworkType> & { projectName: string }
 
-const squidfix = (text: string) => `[🦑 PIPES SDK] ${text} `
+const squidfix = (text: string) => chalk.gray(`[🦑 PIPES SDK] ${text} `)
 
 export class InitHandler {
   private readonly config: ConfigWithName
@@ -81,7 +85,7 @@ export class InitHandler {
   }
 
   async handle(): Promise<void> {
-    const spinner = ora('\nSetting up new Pipes SDK project...').start()
+    const spinner = ora('\n\nSetting up new Pipes SDK project...').start()
     try {
       spinner.text = squidfix('Creating project folder')
       await this.createProjectFolder(this.config.projectFolder)
@@ -120,7 +124,7 @@ export class InitHandler {
         await this.generateDatabaseMigrations(projectPath)
       }
 
-      spinner.succeed(`${squidfix(this.config.projectFolder)} project initialized successfully`)
+      spinner.succeed(`${squidfix(`${this.config.projectFolder} project initialized successfully`)}`)
 
       this.nextSteps(projectPath)
     } catch (error) {
@@ -222,7 +226,7 @@ export class InitHandler {
       return builder.build()
     }
 
-    throw new Error('Invalid chain type')
+    throw new InvalidNetworkTypeError(this.config.networkType)
   }
 
   private async installDependencies(projectPath: string): Promise<void> {
@@ -333,52 +337,65 @@ export class InitHandler {
 
   // TODO: single string message
   private nextSteps(projectPath: string): void {
-    const sep = '─'.repeat(64)
-    const pathLine = `📁 Project created in ${projectPath}`
+    const sep = `${chalk.green('─'.repeat(64))}`
 
-    console.log(`\n${sep}`)
+    const pgMessage = `3) Apply migrations
+     ${chalk.gray.italic(`${this.config.packageManager} run db:migrate`)}
 
-    console.log(`${pathLine}\n`)
+  4) Start the pipeline
+     ${chalk.gray.italic(`${this.config.packageManager} run dev`)}`
 
-    console.log('Next steps\n')
+    const clickhouseMessage = `3) Start the pipeline
+     ${chalk.gray.italic(`${this.config.packageManager} run dev`)}`
 
-    console.log(`1) Enter the folder`)
-    console.log(`   ${chalk.bold(`cd ${projectPath}`)}\n`)
+    const message = `
+  ${sep}
 
-    console.log(`2) Start your database (Docker)`)
-    console.log(`   ${chalk.bold('docker compose up -d')}\n`)
+            ${chalk.bold.green('🦑 YOUR PIPES SDK PROJECT IS READY TO GO 🦑')}
 
-    if (this.config.sink === 'postgresql') {
-      console.log(`3) Apply migrations`)
-      console.log(`   ${chalk.bold(`${this.config.packageManager} run db:migrate`)}\n`)
+  ${sep}
 
-      console.log(`4) Start the pipeline`)
-      console.log(`   ${chalk.bold(`${this.config.packageManager} run dev`)}\n`)
-    } else if (this.config.sink === 'clickhouse') {
-      console.log(`3) Start the pipeline`)
-      console.log(`   ${chalk.bold(`${this.config.packageManager} run dev`)}\n`)
-    } else {
-      console.log(`3) Start the pipeline`)
-      console.log(`   ${chalk.bold(`${this.config.packageManager} run dev`)}\n`)
-    }
-    console.log(
-      chalk.dim(
-        `Need help? Check our documentation at ${chalk.bold.underline('https://beta.docs.sqd.dev/en/sdk/pipes-sdk')}`,
-      ),
-    )
-    console.log(`${sep}\n`)
+  ${chalk.gray.bold("What's next?")}
+
+
+  ${chalk.bold.yellow('⚡ QUICKSTART')}
+
+  1) Enter the project folder
+    ${chalk.gray.italic(`cd ${projectPath}`)}
+
+  2) Start collecting data
+    ${chalk.gray.italic('docker compose --profile with-pipeline up')}
+
+
+  ${chalk.bold.blue('💻 DEVELOPMENT')}
+
+  1) Enter the project folder
+     ${chalk.gray.italic(`cd ${projectPath}`)}
+
+  2) Start your ${sinkTypes.find((s) => s.value === this.config.sink)?.name} database
+     ${chalk.gray.italic('docker compose up -d')}
+
+  ${this.config.sink === 'postgresql' ? pgMessage : clickhouseMessage}
+
+  ${chalk.gray('Need help? Check our documentation at')} ${chalk.bold.gray.underline('https://beta.docs.sqd.dev/en/sdk/pipes-sdk')}`
+
+    console.log(message)
   }
+
   static fromJson(jsonString: string): InitHandler {
     let parsed: unknown
     try {
       parsed = JSON.parse(jsonString)
+      const result = configJsonSchema.safeParse(parsed)
+
+      if (result.error) throw new Error(z.prettifyError(result.error))
+
+      const config = InitHandler.transformToConfig(result.data)
+
+      return new InitHandler(config)
     } catch (error) {
       throw new Error(`Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`)
     }
-
-    const validated = configJsonSchema.parse(parsed)
-    const config = InitHandler.transformToConfig(validated)
-    return new InitHandler(config)
   }
 
   private static transformToConfig(json: ConfigJson): Config<NetworkType> {
@@ -386,11 +403,11 @@ export class InitHandler {
     const selectedTemplates = templateIds.map((id) => {
       if (networkType === 'evm') {
         const template = evmTemplates[id as EvmTemplateIds]
-        if (!template) throw new Error(`Template ${id} not found for EVM network`)
+        if (!template) throw new TemplateNotFoundError(id, networkType)
         return template
       } else {
         const template = svmTemplates[id as SvmTemplateIds]
-        if (!template) throw new Error(`Template ${id} not found for SVM network`)
+        if (!template) throw new TemplateNotFoundError(id, networkType)
         return template
       }
     })
