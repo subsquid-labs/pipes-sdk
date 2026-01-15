@@ -26,6 +26,7 @@ import { SvmTemplateBuilder } from './templates/pipe-components/svm-template-bui
 import { evmTemplates } from './templates/pipe-templates/evm/index.js'
 import { svmTemplates } from './templates/pipe-templates/svm/index.js'
 import {
+  agentsTemplate,
   biomeConfigTemplate,
   clickhouseUtilsTemplate,
   drizzleConfigTemplate,
@@ -151,6 +152,7 @@ export class InitHandler {
     writeFileSync(path.join(projectPath, 'biome.json'), JSON.stringify(biomeConfigTemplate, null, 2))
     writeFileSync(path.join(projectPath, 'tsconfig.json'), JSON.stringify(tsconfigConfigTemplate, null, 2))
     writeFileSync(path.join(projectPath, '.gitignore'), gitignoreTemplate)
+    writeFileSync(path.join(projectPath, 'AGENTS.md'), agentsTemplate)
 
     if (this.config.packageManager === 'pnpm') {
       writeFileSync(path.join(projectPath, 'pnpm-workspace.yaml'), pnpmWorkspaceTemplate)
