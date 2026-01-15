@@ -173,27 +173,28 @@ export class TokenInfo {
   // ==========================================================================
 
   /**
-   * Fetches token info for the given addresses.
+   * Fetches token info for the given address(es).
    *
    * Results are cached - subsequent calls for the same addresses are instant.
    *
-   * @param addresses - Token contract addresses to look up
+   * @param addresses - Token contract address or array of addresses
    * @returns Map of lowercase address to token info
    *
    * @example
    * ```ts
-   * const metadata = await tokens.get([
-   *   '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC
-   *   '0xdAC17F958D2ee523a2206206994597C13D831ec7', // USDT
-   * ])
+   * // Single address
+   * const result = await tokens.get('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
+   * console.log(result.get('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')?.symbol) // 'USDC'
    *
-   * const usdc = metadata.get('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
-   * console.log(usdc?.symbol) // 'USDC'
+   * // Multiple addresses
+   * const result = await tokens.get(['0xA0b86991...', '0xdAC17F95...'])
    * ```
    */
-  async get(addresses: string[]): Promise<Map<string, Token>> {
+  async get(addresses: string[] | string): Promise<Map<string, Token>> {
     await this.ensureInitialized()
-
+    if (typeof addresses === 'string') {
+      addresses = [addresses]
+    }
     const normalized = addresses.map((a) => a.toLowerCase())
     const unique = [...new Set(normalized)]
 
