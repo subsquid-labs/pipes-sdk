@@ -1,81 +1,79 @@
-import {event, indexed} from '@subsquid/evm-abi'
+import { event, indexed } from '@subsquid/evm-abi'
 import * as p from '@subsquid/evm-codec'
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import {createTestLogger} from '~/tests/test-logger.js'
-import {closeMockPortal, createMockPortal, MockPortal, MockResponse, readAll} from '~/tests/index.js'
+import { createTestLogger } from '~/tests/test-logger.js'
+import { closeMockPortal, createMockPortal, MockPortal, MockResponse, readAll } from '~/tests/index.js'
 
-import {EvmMulticallAddresses} from './constants.js'
-import {tokenMetadata, unknownMetadata} from './index.js'
-import {Token, TokenStore} from './types.js'
-import {evmDecoder, evmPortalSource, factory, factorySqliteDatabase} from '~/evm/index.js'
+import { EvmMulticallAddress } from './constants.js'
+import { tokenInfo, unknownToken, TokenStore } from './index.js'
+import { Token } from './types.js'
+import { evmDecoder, evmPortalSource } from '~/evm/index.js'
 
-class MockTokenMetadataStore implements TokenStore {
+class MockTokenStore implements TokenStore {
   private tokens = new Map<string, Token>()
 
-  migrate() {
-  }
+  migrate() {}
 
   save(tokens: Token[]) {
-    tokens.forEach((t) => this.tokens.set(t.address, t))
+    tokens.forEach((t) => this.tokens.set(t.address.toLowerCase(), t))
   }
 
   async get(addresses: string[]): Promise<Record<string, Token>> {
     const result: Record<string, Token> = {}
     addresses.forEach((addr) => {
-      const token = this.tokens.get(addr)
+      const token = this.tokens.get(addr.toLowerCase())
       if (token) result[addr] = token
     })
     return result
   }
 }
 
-describe('unknownMetadata', () => {
+describe('unknownToken', () => {
   it('should return unknown metadata for an address', () => {
     const address = '0x1234567890123456789012345678901234567890'
-    const metadata = unknownMetadata(address)
+    const metadata = unknownToken(address)
 
     expect(metadata).toEqual({
-      symbol: 'UKN',
-      name: 'Unknown',
+      symbol: 'UNKNOWN',
+      name: 'Unknown Token',
       decimals: 18,
-      address,
+      address: address.toLowerCase(),
     })
   })
 })
 
-
-describe('tokenMetadata', () => {
-  let store: MockTokenMetadataStore
+describe('tokenInfo', () => {
+  let store: MockTokenStore
   let logger: ReturnType<typeof createTestLogger>
 
   beforeEach(() => {
-    store = new MockTokenMetadataStore()
+    store = new MockTokenStore()
     logger = createTestLogger()
   })
 
   describe('constructor', () => {
     it('should throw error when no RPC endpoints provided', () => {
       expect(() => {
-        tokenMetadata({
+        tokenInfo({
           store,
-          rpcPool: [],
-          multicallAddress: EvmMulticallAddresses['ethereum-mainnet'],
+          rpc: [],
+          multicallAddress: EvmMulticallAddress,
           logger,
         })
-      }).toThrow('Token metadata service requires at least one RPC endpoint')
+      }).toThrow('TokenInfo requires at least one RPC endpoint')
     })
 
-    it('should initialize with native ETH token in cache', () => {
-      const service = tokenMetadata({
+    it('should initialize with native ETH token in cache', async () => {
+      const service = tokenInfo({
         store,
-        rpcPool: ['http://localhost:8545'],
-        multicallAddress: EvmMulticallAddresses['ethereum-mainnet'],
+        rpc: 'http://localhost:8545',
+        multicallAddress: EvmMulticallAddress,
         logger,
       })
 
-      const nativeToken = service.tokenMetadataCache.get('0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee')
-      expect(nativeToken).toEqual({
+      const nativeToken = await service.get(['0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'])
+      expect(nativeToken.get('0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee')).toEqual({
         name: 'Ether',
         symbol: 'ETH',
         decimals: 18,
@@ -84,23 +82,24 @@ describe('tokenMetadata', () => {
     })
   })
 
-  describe('migrate', () => {
-    it('should call store migrate', async () => {
+  describe('auto-initialization', () => {
+    it('should call store migrate automatically on first use', async () => {
       const migrateSpy = vi.spyOn(store, 'migrate')
-      const service = tokenMetadata({
+      const service = tokenInfo({
         store,
-        rpcPool: ['http://localhost:8545'],
-        multicallAddress: EvmMulticallAddresses['ethereum-mainnet'],
+        rpc: 'http://localhost:8545',
+        multicallAddress: EvmMulticallAddress,
         logger,
       })
 
-      await service.migrate()
+      // Trigger initialization by calling get()
+      await service.get(['0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'])
 
       expect(migrateSpy).toHaveBeenCalled()
     })
   })
 
-  describe('enrichEventsWithTokenMetadata', () => {
+  describe('enrich', () => {
     it('should enrich events with token metadata', async () => {
       const testTokenMetadata: Token = {
         address: '0x1234567890123456789012345678901234567890',
@@ -110,26 +109,26 @@ describe('tokenMetadata', () => {
       }
       store.save([testTokenMetadata])
 
-      const service = tokenMetadata({
+      const service = tokenInfo({
         store,
-        rpcPool: ['http://localhost:8545'],
-        multicallAddress: EvmMulticallAddresses['ethereum-mainnet'],
+        rpc: 'http://localhost:8545',
+        multicallAddress: EvmMulticallAddress,
         logger,
       })
-      await service.migrate()
 
-      const events = [
-        {address: '0x1234567890123456789012345678901234567890', value: 100n},
-      ]
+      const events = [{ address: '0x1234567890123456789012345678901234567890', value: 100n }]
 
-      const result = await service.enrichEventsWithToken(events)
+      const enricher = service.enrich('address')
+      const result = await enricher(events)
 
       expect(result[0]).toMatchObject({
         address: '0x1234567890123456789012345678901234567890',
         value: 100n,
-        decimals: 18,
-        symbol: 'TEST',
-        name: 'Test Token',
+        addressMetadata: {
+          decimals: 18,
+          symbol: 'TEST',
+          name: 'Test Token',
+        },
       })
     })
 
@@ -142,51 +141,49 @@ describe('tokenMetadata', () => {
       }
       store.save([testTokenMetadata])
 
-      const service = tokenMetadata({
+      const service = tokenInfo({
         store,
-        rpcPool: ['http://localhost:8545'],
-        multicallAddress: EvmMulticallAddresses['ethereum-mainnet'],
+        rpc: 'http://localhost:8545',
+        multicallAddress: EvmMulticallAddress,
         logger,
       })
-      await service.migrate()
 
-      const events = [
-        {tokenAddr: '0x1234567890123456789012345678901234567890', value: 100n},
-      ]
+      const events = [{ tokenAddr: '0x1234567890123456789012345678901234567890', value: 100n }]
 
-      const result = await service.enrichEventsWithToken(events, 'tokenAddr')
+      const enricher = service.enrich('tokenAddr')
+      const result = await enricher(events)
 
       expect(result[0]).toMatchObject({
         tokenAddr: '0x1234567890123456789012345678901234567890',
         value: 100n,
-        decimals: 18,
-        symbol: 'TEST',
-        name: 'Test Token',
+        tokenAddrMetadata: {
+          decimals: 18,
+          symbol: 'TEST',
+          name: 'Test Token',
+        },
       })
     })
 
-    it('should enrich with unknown metadata when token not found in store and RPC fails', async () => {
+    it('should return undefined metadata when token not found in store and RPC fails', async () => {
       // Use a mock store that never finds tokens
-      const emptyStore = new MockTokenMetadataStore()
+      const emptyStore = new MockTokenStore()
 
-      const service = tokenMetadata({
+      const service = tokenInfo({
         store: emptyStore,
-        rpcPool: ['http://localhost:8545'], // This won't connect, causing RPC to fail
-        multicallAddress: EvmMulticallAddresses['ethereum-mainnet'],
+        rpc: 'http://localhost:8545', // This won't connect, causing RPC to fail
+        multicallAddress: EvmMulticallAddress,
         logger,
       })
-      await service.migrate()
 
-      const events = [
-        {address: '0x9999999999999999999999999999999999999999', value: 100n},
-      ]
+      const events = [{ address: '0x9999999999999999999999999999999999999999', value: 100n }]
 
-      const result = await service.enrichEventsWithToken(events)
+      const enricher = service.enrich('address')
+      const result = await enricher(events)
 
-      // Service will return event with unknown/empty metadata when RPC fails
-      // The exact behavior depends on error handling in the service
+      // Service will return event with undefined metadata when RPC fails
       expect(result[0]).toHaveProperty('address', '0x9999999999999999999999999999999999999999')
       expect(result[0]).toHaveProperty('value', 100n)
+      expect(result[0]).toHaveProperty('addressMetadata')
     })
   })
 })
@@ -211,7 +208,7 @@ describe('e2e tests as transformer', () => {
       statusCode: 200,
       data: [
         {
-          header: {number: 1, hash: '0x1', timestamp: 2000},
+          header: { number: 1, hash: '0x1', timestamp: 2000 },
           logs: [
             {
               // WETH transfer
@@ -236,11 +233,11 @@ describe('e2e tests as transformer', () => {
     if (mockPortal) await closeMockPortal(mockPortal)
   })
 
-  it('should enrich decoded events with token metadata using transform()', async () => {
+  it('should enrich decoded events with token metadata using enrich()', async () => {
     mockPortal = await createMockPortal(TRANSFER_MOCK_RESPONSE)
 
     // Pre-populate the store with token metadata
-    const store = new MockTokenMetadataStore()
+    const store = new MockTokenStore()
     store.save([
       {
         address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
@@ -250,28 +247,25 @@ describe('e2e tests as transformer', () => {
       },
     ])
 
-    const tokenService = tokenMetadata({
+    const tokenService = tokenInfo({
       store,
-      rpcPool: ['http://localhost:8545'],
-      multicallAddress: EvmMulticallAddresses['ethereum-mainnet'],
-      logger: createTestLogger(),
+      rpc: 'http://localhost:8545',
     })
-    await tokenService.migrate()
 
     const stream = evmPortalSource({
       portal: mockPortal.url,
     })
       .pipe(
         evmDecoder({
-          range: {from: 0, to: 1},
+          range: { from: 0, to: 1 },
           events: {
             transfers: erc20Abi.Transfer,
           },
         }),
       )
       .pipe((decoded) => decoded.transfers)
-      // Use the transform method to enrich with token metadata
-      .pipe(tokenService.transform('contract'))
+      // Use the enrich method to add token metadata
+      .pipe(tokenService.enrich('contract'))
 
     const results = await readAll(stream)
 
@@ -287,11 +281,11 @@ describe('e2e tests as transformer', () => {
     })
   })
 
-  it('should enrich multiple address fields using transform() with array of keys', async () => {
+  it('should enrich multiple address fields using enrich() with array of keys', async () => {
     mockPortal = await createMockPortal(TRANSFER_MOCK_RESPONSE)
 
     // Pre-populate the store with token metadata
-    const store = new MockTokenMetadataStore()
+    const store = new MockTokenStore()
     store.save([
       {
         address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
@@ -307,20 +301,19 @@ describe('e2e tests as transformer', () => {
       },
     ])
 
-    const tokenService = tokenMetadata({
+    const tokenService = tokenInfo({
       store,
-      rpcPool: ['http://localhost:8545'],
-      multicallAddress: EvmMulticallAddresses['ethereum-mainnet'],
+      rpc: 'http://localhost:8545',
+      multicallAddress: EvmMulticallAddress,
       logger: createTestLogger(),
     })
-    await tokenService.migrate()
 
     const stream = evmPortalSource({
       portal: mockPortal.url,
     })
       .pipe(
         evmDecoder({
-          range: {from: 0, to: 1},
+          range: { from: 0, to: 1 },
           events: {
             transfers: erc20Abi.Transfer,
           },
@@ -334,7 +327,7 @@ describe('e2e tests as transformer', () => {
         })),
       )
       // Enrich both token and sender addresses with metadata
-      .pipe(tokenService.transform(['token', 'sender']))
+      .pipe(tokenService.enrich(['token', 'sender']))
 
     const results = await readAll(stream)
 

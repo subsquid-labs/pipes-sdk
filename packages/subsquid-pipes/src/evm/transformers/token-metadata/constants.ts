@@ -2,12 +2,7 @@ import { Token } from './types.js'
 
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-export const EvmMulticallAddresses = {
-  'ethereum-mainnet': '0xcA11bde05977b3631167028862bE2a173976CA11',
-  'base-mainnet': '0xcA11bde05977b3631167028862bE2a173976CA11',
-} as const
-
-export type EvmNetwork = keyof typeof EvmMulticallAddresses
+export const EvmMulticallAddress = '0xcA11bde05977b3631167028862bE2a173976CA11'
 
 export const USDC = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
 export const USDT = '0xdac17f958d2ee523a2206206994597c13d831ec7'

@@ -1,5 +1,7 @@
 import { ClickHouseClient } from '@clickhouse/client'
-import { Token, TokenStore } from '../types.js'
+
+import { Token } from '../types.js'
+import { TokenStore } from './types.js'
 
 const nullToUndefined = (x: any) => {
   for (const key in x) {
@@ -8,7 +10,7 @@ const nullToUndefined = (x: any) => {
   return x
 }
 
-export class ClickHouseTokenMetadataStore implements TokenStore {
+export class ClickHouseTokenStore implements TokenStore {
   constructor(private readonly client: ClickHouseClient) {}
 
   async migrate(): Promise<void> {

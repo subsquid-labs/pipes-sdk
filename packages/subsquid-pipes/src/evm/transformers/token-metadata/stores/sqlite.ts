@@ -1,6 +1,7 @@
 import { loadSqlite, SqliteOptions, SqliteSync } from '~/drivers/sqlite/sqlite.js'
 
-import { Token, TokenStore } from '../types.js'
+import { Token } from '../types.js'
+import { TokenStore } from './types.js'
 
 type Row = {
   address: string
@@ -9,8 +10,15 @@ type Row = {
   name: string
 }
 
-export class SqliteTokenMetadataStore implements TokenStore {
+export class SqliteTokenStore implements TokenStore {
   constructor(private db: SqliteSync) {}
+
+  static async create(options: SqliteOptions): Promise<SqliteTokenStore> {
+    const db = await loadSqlite(options)
+    const store = new SqliteTokenStore(db)
+    store.migrate()
+    return store
+  }
 
   migrate() {
     this.db.exec(`
@@ -60,11 +68,4 @@ export class SqliteTokenMetadataStore implements TokenStore {
       return res
     }, {})
   }
-}
-
-export async function createSqliteTokenMetadataStore(options: SqliteOptions) {
-  const db = await loadSqlite(options)
-  const store = new SqliteTokenMetadataStore(db)
-  store.migrate()
-  return store
 }
