@@ -99,6 +99,40 @@ describe('tokenInfo', () => {
     })
   })
 
+  describe('in-memory only (no store)', () => {
+    it('should work without a store configured', async () => {
+      const service = tokenInfo({
+        rpc: 'http://localhost:8545',
+        logger,
+      })
+
+      // Native ETH should be available from cache
+      const result = await service.get(['0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'])
+
+      expect(result.get('0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee')).toEqual({
+        address: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        name: 'Ether',
+        symbol: 'ETH',
+        decimals: 18,
+      })
+    })
+
+    it('should cache tokens in memory without store', async () => {
+      const service = tokenInfo({
+        rpc: 'http://localhost:8545',
+        logger,
+      })
+
+      // First call - ETH is pre-cached
+      const result1 = await service.get(['0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'])
+      expect(result1.size).toBe(1)
+
+      // Second call - should return from cache
+      const result2 = await service.get(['0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'])
+      expect(result2.get('0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee')?.symbol).toBe('ETH')
+    })
+  })
+
   describe('enrich', () => {
     it('should enrich events with token metadata', async () => {
       const testTokenMetadata: Token = {
