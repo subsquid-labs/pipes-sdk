@@ -2,7 +2,7 @@ import { createClient } from '@clickhouse/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { evmPortalSource } from '~/evm/index.js'
-import { blockQuery, blockTransformer, closeMockPortal, createMockPortal, MockPortal } from '~/tests/index.js'
+import { MockPortal, blockQuery, blockTransformer, closeMockPortal, createMockPortal } from '~/tests/index.js'
 
 import { clickhouseTarget } from './clickouse-target.js'
 
@@ -49,7 +49,7 @@ describe('Clickhouse state', () => {
             { header: { number: 4, hash: '0x4', timestamp: 4000 } },
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
-          finalizedHead: { number: 2, hash: '0x2' },
+          head: { finalized: { number: 2, hash: '0x2' } },
         },
       ])
 
@@ -103,17 +103,17 @@ describe('Clickhouse state', () => {
         {
           statusCode: 200,
           data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
-          finalizedHead: { number: 1000, hash: '0x1000' },
+          head: { finalized: { number: 1000, hash: '0x1000' } },
         },
         {
           statusCode: 200,
           data: [{ header: { number: 2, hash: '0x2', timestamp: 2000 } }],
-          finalizedHead: { number: 1000, hash: '0x1000' },
+          head: { finalized: { number: 1000, hash: '0x1000' } },
         },
         {
           statusCode: 200,
           data: [{ header: { number: 3, hash: '0x3', timestamp: 3000 } }],
-          finalizedHead: { number: 1000, hash: '0x1000' },
+          head: { finalized: { number: 1000, hash: '0x1000' } },
         },
       ])
 
@@ -312,9 +312,11 @@ describe('Clickhouse state', () => {
             { header: { number: 4, hash: '0x4' } },
             { header: { number: 5, hash: '0x5' } },
           ],
-          finalizedHead: {
-            number: 1,
-            hash: '0x1',
+          head: {
+            finalized: {
+              number: 1,
+              hash: '0x1',
+            },
           },
         },
 
@@ -626,9 +628,11 @@ describe('Clickhouse state', () => {
             { header: { number: 4, hash: '0x4', timestamp: 4000 } },
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
-          finalizedHead: {
-            number: 1,
-            hash: '0x1',
+          head: {
+            finalized: {
+              number: 1,
+              hash: '0x1',
+            },
           },
         },
 

@@ -1,9 +1,11 @@
 import fs from 'node:fs/promises'
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
 import { PortalBatch } from '~/core/index.js'
 import { evmPortalSource } from '~/evm/index.js'
 import { portalSqliteCache } from '~/portal-cache/node/node-sqlite-cache-adapter.js'
-import { blockQuery, blockTransformer, closeMockPortal, createMockPortal, MockPortal } from '~/tests/index.js'
+import { MockPortal, blockQuery, blockTransformer, closeMockPortal, createMockPortal } from '~/tests/index.js'
 
 // Transform batch to only include data and meta without any functions or complex objects
 const transformBatch = ({
@@ -79,7 +81,7 @@ describe('Portal cache', () => {
             { header: { number: 4, hash: '0x4', timestamp: 4000 } },
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
-          finalizedHead: { number: 5, hash: '0x5' },
+          head: { finalized: { number: 5, hash: '0x5' } },
           validateRequest: (res) => {
             expect(res.fromBlock).toBe(0)
           },
@@ -198,7 +200,7 @@ describe('Portal cache', () => {
             { header: { number: 9, hash: '0x9', timestamp: 9000 } },
             { header: { number: 10, hash: '0x10', timestamp: 10000 } },
           ],
-          finalizedHead: { number: 20, hash: '0x20' },
+          head: { finalized: { number: 20, hash: '0x20' } },
           validateRequest: (req) => {
             expect(req.fromBlock).toBe(6)
           },
@@ -212,7 +214,7 @@ describe('Portal cache', () => {
             { header: { number: 4, hash: '0x4', timestamp: 4000 } },
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
-          finalizedHead: { number: 20, hash: '0x20' },
+          head: { finalized: { number: 20, hash: '0x20' } },
           validateRequest: (req) => {
             expect(req.fromBlock).toBe(0)
           },
@@ -332,7 +334,7 @@ describe('Portal cache', () => {
             { header: { number: 4, hash: '0x4', timestamp: 4000 } },
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
-          finalizedHead: { number: 2, hash: '0x2' },
+          head: { finalized: { number: 2, hash: '0x2' } },
           validateRequest: (req) => {
             expect(req.fromBlock).toBe(0)
           },
@@ -344,7 +346,7 @@ describe('Portal cache', () => {
             { header: { number: 4, hash: '0x4', timestamp: 4000 } },
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
-          finalizedHead: { number: 5, hash: '0x5' },
+          head: { finalized: { number: 5, hash: '0x5' } },
           validateRequest: (req) => {
             expect(req.fromBlock).toBe(3)
           },

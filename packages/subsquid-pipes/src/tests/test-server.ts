@@ -1,4 +1,4 @@
-import { createServer, IncomingMessage, Server, ServerResponse } from 'http'
+import { IncomingMessage, Server, ServerResponse, createServer } from 'http'
 
 export type MockData<T extends object = any> = T
 
@@ -25,7 +25,10 @@ export type MockResponse =
         }
         logs?: any[]
       }[]
-      finalizedHead?: { number: number; hash: string }
+      head?: {
+        finalized?: { number: number; hash: string }
+        latest?: { number: number }
+      }
       validateRequest?: ValidateRequest
     }
   | {
@@ -102,12 +105,9 @@ export async function createMockPortal(
           case 200:
             res.writeHead(mockResp.statusCode, {
               'Content-Type': 'application/jsonl',
-              ...(mockResp.finalizedHead
-                ? {
-                    'X-Sqd-Finalized-Head-Number': mockResp.finalizedHead.number,
-                    'X-Sqd-Finalized-Head-Hash': mockResp.finalizedHead.hash,
-                  }
-                : {}),
+              'X-Sqd-Finalized-Head-Number': mockResp.head?.finalized?.number,
+              'X-Sqd-Finalized-Head-Hash': mockResp.head?.finalized?.hash,
+              'X-Sqd-Head-Number': mockResp.head?.latest?.number,
             })
             // Send each mock data item as a JSON line
             mockResp.data.forEach((data) => {

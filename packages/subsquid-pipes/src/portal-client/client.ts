@@ -1,5 +1,7 @@
-import { createFuture, Future, unexpectedCase, wait, withErrorContext } from '@subsquid/util-internal'
 import { Readable } from 'stream'
+
+import { Future, createFuture, unexpectedCase, wait, withErrorContext } from '@subsquid/util-internal'
+
 import {
   HttpBody,
   HttpClient,
@@ -10,6 +12,7 @@ import {
 } from '~/http-client/index.js'
 import { partition } from '~/internal/array.js'
 import { npmVersion } from '~/version.js'
+
 import { ForkException } from './fork-exception.js'
 import { GetBlock, PortalQuery, Query } from './query/index.js'
 
@@ -77,12 +80,14 @@ export interface PortalStreamOptions {
   finalized?: boolean
 }
 
+type PortalHead = {
+  finalized?: BlockRef
+  latest?: { number: number }
+}
+
 export type PortalStreamData<B> = {
   blocks: B[]
-  head: {
-    finalized?: BlockRef
-    latest?: { number: number }
-  }
+  head: PortalHead
   meta: {
     bytes: number
     requestedFromBlock: number
@@ -181,9 +186,8 @@ export class PortalClient {
       switch (res.status) {
         case 200:
         case 204:
-          let { finalized, latest } = getHeadFromHeaders(res.headers)
-
-          let stream = res.body && res.status === 200 ? splitLines(res.body) : undefined
+          const { finalized, latest } = getHeadFromHeaders(res.headers)
+          const stream = res.body && res.status === 200 ? splitLines(res.body) : undefined
 
           return {
             head: {
@@ -226,7 +230,7 @@ function createPortalStream<Q extends Query>(
     query: Q,
     options?: RequestOptions,
   ) => Promise<{
-    finalizedHead?: BlockRef
+    head: PortalHead
     stream?: AsyncIterable<string[]> | null | undefined
   }>,
 ): PortalStream<GetBlock<Q>> {
@@ -258,8 +262,6 @@ function createPortalStream<Q extends Query>(
         },
       )
 
-      const finalizedHead = res.finalizedHead
-
       // We are on head
       // TODO should we check response status 204 instead?
       if (!('stream' in res)) {
@@ -271,9 +273,7 @@ function createPortalStream<Q extends Query>(
             lastBlockReceivedAt: new Date(),
             requests,
           },
-          head: {
-            finalized: finalizedHead,
-          },
+          head: res.head,
         })
         buffer.flush()
         if (headPollInterval > 0) {
@@ -311,15 +311,17 @@ function createPortalStream<Q extends Query>(
             }
           }
 
+          const finalizedHead = res.head.finalized?.number
+
           // Split blocks into finalized and unfinalized
-          const [finalizedBlocks, unfinalizedBlocks] = finalizedHead?.number
-            ? partition(blocks, ({ block }) => block.header?.number <= finalizedHead.number)
+          const [finalizedBlocks, unfinalizedBlocks] = finalizedHead
+            ? partition(blocks, ({ block }) => block.header?.number <= finalizedHead)
             : [blocks, []]
 
           // Push finalized blocks as a batch
           await buffer.put({
             blocks: finalizedBlocks.map((b) => b.block),
-            head: { finalized: finalizedHead },
+            head: res.head,
             meta: {
               bytes: finalizedBlocks.reduce((a, b) => a + b.bytes, 0),
               requestedFromBlock,
@@ -332,7 +334,7 @@ function createPortalStream<Q extends Query>(
             await buffer.put(
               {
                 blocks: [block],
-                head: { finalized: finalizedHead },
+                head: res.head,
                 meta: {
                   bytes,
                   requestedFromBlock,
@@ -457,8 +459,7 @@ class PortalStreamBuffer<B> {
     }
 
     this.buffer.blocks.push(...data.blocks)
-    this.buffer.head.finalized = data.head.finalized
-    this.buffer.head.latest = data.head.latest
+    this.buffer.head = data.head
     this.buffer.meta.bytes += data.meta.bytes
     this.buffer.meta.requests = mergeRequests(this.buffer.meta.requests, data.meta.requests)
     this.buffer.meta.requestedFromBlock = Math.min(this.buffer.meta.requestedFromBlock, data.meta.requestedFromBlock)

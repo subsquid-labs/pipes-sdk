@@ -330,7 +330,7 @@ export class HttpClient implements BaseHttpClient {
       }
     }
 
-    // If Node.js version >= 24.4.0, include 'zstd' in Accept-Encoding header
+    // If Node.js version >= 24.4.0, include 'zstd' in the Accept-Encoding header
     // to leverage built-in zstd support for better compression.
     if (isNodeVersionGreaterOrEqual(24, 4, 0)) {
       req.headers.set('accept-encoding', 'gzip, zstd')

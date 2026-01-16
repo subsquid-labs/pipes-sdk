@@ -6,7 +6,5 @@ export function isNodeVersionGreaterOrEqual(major: number, minor = 0, patch = 0)
 
   const [M, m, p] = process.versions.node.split('.').map(Number)
 
-  if (M !== major) return M >= major
-  if (m !== minor) return m >= minor
-  return p >= patch
+  return M > major || (M === major && m > minor) || (M === major && m === minor && p >= patch)
 }

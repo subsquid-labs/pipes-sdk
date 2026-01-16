@@ -389,7 +389,7 @@ describe('Factory', () => {
             ],
           },
         ],
-        finalizedHead: { number: 1, hash: '0x1' },
+        head: { finalized: { number: 1, hash: '0x1' } },
       },
       {
         statusCode: 409,
@@ -424,7 +424,7 @@ describe('Factory', () => {
             logs: [],
           },
         ],
-        finalizedHead: { number: 3, hash: '0x3a' },
+        head: { finalized: { number: 3, hash: '0x3a' } },
       },
     ])
 
