@@ -79,7 +79,10 @@ export interface PortalStreamOptions {
 
 export type PortalStreamData<B> = {
   blocks: B[]
-  finalizedHead?: BlockRef
+  head: {
+    finalized?: BlockRef
+    latest?: { number: number }
+  }
   meta: {
     bytes: number
     requestedFromBlock: number
@@ -155,10 +158,7 @@ export class PortalClient {
     return res.body ?? undefined
   }
 
-  getStream<Q extends Query>(
-    query: Q,
-    options?: PortalStreamOptions,
-  ): PortalStream<GetBlock<Q>> {
+  getStream<Q extends Query>(query: Q, options?: PortalStreamOptions): PortalStream<GetBlock<Q>> {
     const settings = {
       request: {},
       ...this.#options,
@@ -180,16 +180,17 @@ export class PortalClient {
 
       switch (res.status) {
         case 200:
-          let finalizedHead = getFinalizedHeadHeader(res.headers)
-          let stream = res.body ? splitLines(res.body) : undefined
+        case 204:
+          let { finalized, latest } = getHeadFromHeaders(res.headers)
+
+          let stream = res.body && res.status === 200 ? splitLines(res.body) : undefined
 
           return {
-            finalizedHead,
+            head: {
+              finalized,
+              latest,
+            },
             stream,
-          }
-        case 204:
-          return {
-            finalizedHead: getFinalizedHeadHeader(res.headers),
           }
         default:
           throw unexpectedCase(res.status)
@@ -270,7 +271,9 @@ function createPortalStream<Q extends Query>(
             lastBlockReceivedAt: new Date(),
             requests,
           },
-          finalizedHead,
+          head: {
+            finalized: finalizedHead,
+          },
         })
         buffer.flush()
         if (headPollInterval > 0) {
@@ -316,7 +319,7 @@ function createPortalStream<Q extends Query>(
           // Push finalized blocks as a batch
           await buffer.put({
             blocks: finalizedBlocks.map((b) => b.block),
-            finalizedHead,
+            head: { finalized: finalizedHead },
             meta: {
               bytes: finalizedBlocks.reduce((a, b) => a + b.bytes, 0),
               requestedFromBlock,
@@ -329,7 +332,7 @@ function createPortalStream<Q extends Query>(
             await buffer.put(
               {
                 blocks: [block],
-                finalizedHead,
+                head: { finalized: finalizedHead },
                 meta: {
                   bytes,
                   requestedFromBlock,
@@ -443,6 +446,7 @@ class PortalStreamBuffer<B> {
     if (this.buffer == null) {
       this.buffer = {
         blocks: [],
+        head: {},
         meta: {
           bytes: 0,
           lastBlockReceivedAt: new Date(),
@@ -453,7 +457,8 @@ class PortalStreamBuffer<B> {
     }
 
     this.buffer.blocks.push(...data.blocks)
-    this.buffer.finalizedHead = data.finalizedHead
+    this.buffer.head.finalized = data.head.finalized
+    this.buffer.head.latest = data.head.latest
     this.buffer.meta.bytes += data.meta.bytes
     this.buffer.meta.requests = mergeRequests(this.buffer.meta.requests, data.meta.requests)
     this.buffer.meta.requestedFromBlock = Math.min(this.buffer.meta.requestedFromBlock, data.meta.requestedFromBlock)
@@ -598,16 +603,25 @@ class LineSplitter {
   }
 }
 
-function getFinalizedHeadHeader(headers: HttpResponse['headers']) {
-  let finalizedHeadHash = headers.get('X-Sqd-Finalized-Head-Hash')
-  let finalizedHeadNumber = headers.get('X-Sqd-Finalized-Head-Number')
+function getHeadFromHeaders(headers: HttpResponse['headers']) {
+  const finalizedHeadHash = headers.get('X-Sqd-Finalized-Head-Hash')
+  const finalizedHeadNumber = headers.get('X-Sqd-Finalized-Head-Number')
+  const headNumber = headers.get('X-Sqd-Head-Number')
 
-  return finalizedHeadHash != null && finalizedHeadNumber != null
-    ? {
-        hash: finalizedHeadHash,
-        number: parseInt(finalizedHeadNumber),
-      }
-    : undefined
+  return {
+    finalized:
+      finalizedHeadHash && finalizedHeadNumber
+        ? {
+            hash: finalizedHeadHash,
+            number: parseInt(finalizedHeadNumber, 10),
+          }
+        : undefined,
+    latest: headNumber
+      ? {
+          number: parseInt(headNumber, 10),
+        }
+      : undefined,
+  }
 }
 
 function isStreamAbortedError(err: unknown) {

@@ -2,6 +2,8 @@ import { addErrorContext, ensureError, wait } from '@subsquid/util-internal'
 import { addTimeout } from '@subsquid/util-timeout'
 
 import { type Logger } from '~/core/logger.js'
+import { isNodeVersionGreaterOrEqual } from '~/internal/runtime.js'
+
 import type { HttpBody } from './body.js'
 
 export type { HttpBody }
@@ -326,6 +328,12 @@ export class HttpClient implements BaseHttpClient {
       } else {
         req.url += `?${qs}`
       }
+    }
+
+    // If Node.js version >= 24.4.0, include 'zstd' in Accept-Encoding header
+    // to leverage built-in zstd support for better compression.
+    if (isNodeVersionGreaterOrEqual(24, 4, 0)) {
+      req.headers.set('accept-encoding', 'gzip, zstd')
     }
 
     if (!req.headers.has('user-agent')) {

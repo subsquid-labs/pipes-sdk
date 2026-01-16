@@ -1,18 +1,19 @@
 import { CompositePipe, compositeTransformer } from '~/core/composite-transformer.js'
 import {
   GetBlock,
-  isForkException,
   PortalClient,
   PortalClientOptions,
   PortalStream,
   Query,
+  isForkException,
 } from '~/portal-client/index.js'
+
 import { last } from '../internal/array.js'
-import { formatWarning, Logger } from './logger.js'
+import { Logger, formatWarning } from './logger.js'
 import { Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
 import { Profiler, Span } from './profiling.js'
 import { ProgressState, StartState } from './progress-tracker.js'
-import { hashQuery, QueryBuilder } from './query-builder.js'
+import { QueryBuilder, hashQuery } from './query-builder.js'
 import { Target } from './target.js'
 import { Transformer, TransformerOptions } from './transformer.js'
 import { BlockCursor, Ctx } from './types.js'
@@ -34,7 +35,7 @@ export interface PortalCache {
 export type BatchCtx = {
   head: {
     finalized?: BlockCursor
-    unfinalized?: BlockCursor
+    latest?: BlockCursor
   }
   state: {
     initial: number
@@ -189,10 +190,10 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
         if (blocks.length > 0) {
           // TODO WTF with any?
           const lastBatchBlock = last(blocks as { header: { number: number } }[])
-          const finalized = batch.finalizedHead?.number
+          const finalizedHead = batch.head.finalized?.number
 
           const lastBlockNumber = Math.max(
-            Math.min(last(bounded)?.range?.to || finalized || Infinity),
+            Math.min(last(bounded)?.range?.to || batch.head.latest?.number || batch.head.finalized?.number || Infinity),
             lastBatchBlock.header?.number || -Infinity,
           )
 
@@ -204,9 +205,8 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
               lastBlockReceivedAt: batch.meta.lastBlockReceivedAt,
             },
             head: {
-              finalized: batch.finalizedHead,
-              // TODO expose from portal
-              unfinalized: undefined,
+              finalized: batch.head.finalized,
+              latest: batch.head.latest,
             },
             query: {
               url: this.#portal.getUrl(),
@@ -219,8 +219,8 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
               initial,
               current: cursorFromHeader(lastBatchBlock as any),
               last: lastBlockNumber,
-              rollbackChain: finalized
-                ? batch.blocks.filter((b) => b.header.number >= finalized).map(cursorFromHeader)
+              rollbackChain: finalizedHead
+                ? batch.blocks.filter((b) => b.header.number >= finalizedHead).map(cursorFromHeader)
                 : [],
             },
 
