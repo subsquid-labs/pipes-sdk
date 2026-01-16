@@ -2,16 +2,6 @@ import { IncomingMessage, Server, ServerResponse, createServer } from 'http'
 
 export type MockData<T extends object = any> = T
 
-export interface BlockHeader {
-  hash: string
-  height: number
-  parentHash: string
-  status: string
-  newRoot: string
-  timestamp: number
-  sequencerAddress: string
-}
-
 type ValidateRequest = (res: any) => unknown
 
 export type MockResponse =
@@ -103,12 +93,20 @@ export async function createMockPortal(
 
         switch (mockResp.statusCode) {
           case 200:
-            res.writeHead(mockResp.statusCode, {
+            const headers: Record<string, string | number> = {
               'Content-Type': 'application/jsonl',
-              'X-Sqd-Finalized-Head-Number': mockResp.head?.finalized?.number,
-              'X-Sqd-Finalized-Head-Hash': mockResp.head?.finalized?.hash,
-              'X-Sqd-Head-Number': mockResp.head?.latest?.number,
-            })
+            }
+            if (mockResp.head?.finalized?.number) {
+              headers['X-Sqd-Finalized-Head-Number'] = mockResp.head.finalized.number
+            }
+            if (mockResp.head?.finalized?.hash) {
+              headers['X-Sqd-Finalized-Head-Hash'] = mockResp.head.finalized.hash
+            }
+            if (mockResp.head?.latest?.number) {
+              headers['X-Sqd-Head-Number'] = mockResp.head.latest.number
+            }
+
+            res.writeHead(mockResp.statusCode, headers)
             // Send each mock data item as a JSON line
             mockResp.data.forEach((data) => {
               res.write(JSON.stringify(data) + '\n')
