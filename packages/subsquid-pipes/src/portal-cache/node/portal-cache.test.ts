@@ -136,7 +136,7 @@ describe('Portal cache', () => {
                   "hash": "0x5",
                   "number": 5,
                 },
-                "unfinalized": undefined,
+                "latest": undefined,
               },
               "meta": {
                 "bytesSize": 265,
@@ -276,7 +276,7 @@ describe('Portal cache', () => {
                   "hash": "0x20",
                   "number": 20,
                 },
-                "unfinalized": undefined,
+                "latest": undefined,
               },
               "meta": {
                 "bytesSize": 265,
@@ -323,7 +323,7 @@ describe('Portal cache', () => {
       expect(rows).toHaveLength(2)
     })
 
-    it('should support block gaps and exclude unfinalized blocks', async () => {
+    it('should support block gaps and exclude latest blocks', async () => {
       mockPortal = await createMockPortal([
         {
           statusCode: 200,
@@ -390,7 +390,7 @@ describe('Portal cache', () => {
                   "hash": "0x2",
                   "number": 2,
                 },
-                "unfinalized": undefined,
+                "latest": undefined,
               },
               "meta": {
                 "bytesSize": 159,
@@ -448,7 +448,7 @@ describe('Portal cache', () => {
                   "hash": "0x2",
                   "number": 2,
                 },
-                "unfinalized": undefined,
+                "latest": undefined,
               },
               "meta": {
                 "bytesSize": 53,
@@ -501,7 +501,7 @@ describe('Portal cache', () => {
                   "hash": "0x2",
                   "number": 2,
                 },
-                "unfinalized": undefined,
+                "latest": undefined,
               },
               "meta": {
                 "bytesSize": 53,
@@ -563,7 +563,7 @@ describe('Portal cache', () => {
                   "hash": "0x2",
                   "number": 2,
                 },
-                "unfinalized": undefined,
+                "latest": undefined,
               },
               "meta": {
                 "bytesSize": 159,
@@ -626,7 +626,7 @@ describe('Portal cache', () => {
                   "hash": "0x5",
                   "number": 5,
                 },
-                "unfinalized": undefined,
+                "latest": undefined,
               },
               "meta": {
                 "bytesSize": 159,
