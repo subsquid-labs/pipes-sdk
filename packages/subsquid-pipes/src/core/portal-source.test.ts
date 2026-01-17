@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
+
 import { evmPortalSource } from '~/evm/index.js'
 import {
+  MockPortal,
   blockTransformer,
   closeMockPortal,
   createFinalizedMockPortal,
   createMockPortal,
-  MockPortal,
   readAll,
 } from '~/tests/index.js'
 
@@ -14,6 +15,47 @@ describe('Portal abstract stream', () => {
 
   afterEach(async () => {
     await closeMockPortal(mockPortal)
+  })
+
+  describe('common', () => {
+    it('should expose finalization headers', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 2, hash: '0x456' } }],
+          head: {
+            finalized: { number: 10, hash: '0xfinalized' },
+            latest: { number: 12 },
+          },
+        },
+      ])
+
+      const stream = evmPortalSource({
+        portal: mockPortal.url,
+        query: { from: 0, to: 2 },
+      }).pipe(blockTransformer())
+
+      let firstCtx
+      for await (const { ctx } of stream) {
+        firstCtx = {
+          head: ctx.head,
+        }
+      }
+
+      expect(firstCtx).toMatchInlineSnapshot(`
+        {
+          "head": {
+            "finalized": {
+              "hash": "0xfinalized",
+              "number": 10,
+            },
+            "latest": {
+              "number": 12,
+            },
+          },
+        }
+      `)
+    })
   })
 
   describe('unfinalized', () => {

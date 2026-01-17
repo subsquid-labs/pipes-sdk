@@ -99,7 +99,7 @@ export abstract class PortalCacheNodeJs<ImplOptions> implements PortalCache {
       fromBlock: cursor.number,
       parentBlockHash: cursor.hash,
     } as Q)) {
-      const finalizedHead = batch.finalizedHead?.number
+      const finalizedHead = batch.head.finalized?.number
       // TODO add warning
       if (!finalizedHead) {
         yield batch

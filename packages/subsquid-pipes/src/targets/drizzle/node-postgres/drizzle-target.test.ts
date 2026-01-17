@@ -3,15 +3,17 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 import { integer, pgTable, varchar } from 'drizzle-orm/pg-core'
 import { Pool, QueryResultRow } from 'pg'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
+
 import { evmPortalSource } from '~/evm/index.js'
 import {
+  MockPortal,
+  MockResponse,
   blockQuery,
   blockTransformer,
   closeMockPortal,
   createMockPortal,
-  MockPortal,
-  MockResponse,
 } from '~/tests/index.js'
+
 import { drizzleTarget } from './index.js'
 
 const dsnUrl = process.env['TEST_POSTGRES_DSN'] || `postgresql://postgres:postgres@localhost:5432/postgres`
@@ -67,7 +69,7 @@ describe('Drizzle target', () => {
             { header: { number: 4, hash: '0x4', timestamp: 4000 } },
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
-          finalizedHead: { number: 2, hash: '0x2' },
+          head: { finalized: { number: 2, hash: '0x2' } },
         },
       ])
 
@@ -109,7 +111,7 @@ describe('Drizzle target', () => {
             { header: { number: 4, hash: '0x4', timestamp: 4000 } },
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
-          finalizedHead: { number: 2, hash: '0x2' },
+          head: { finalized: { number: 2, hash: '0x2' } },
         },
       ])
 
@@ -275,9 +277,11 @@ describe('Drizzle target', () => {
             { header: { number: 4, hash: '0x4' } },
             { header: { number: 5, hash: '0x5' } },
           ],
-          finalizedHead: {
-            number: 1,
-            hash: '0x1',
+          head: {
+            finalized: {
+              number: 1,
+              hash: '0x1',
+            },
           },
         },
 
@@ -416,9 +420,11 @@ describe('Drizzle target', () => {
             // 1. The First response is okay, it gets 5 blocks
             statusCode: 200,
             data: [{ header: { number: block, hash: `0x${block}` } }],
-            finalizedHead: {
-              number: 1,
-              hash: '0x1',
+            head: {
+              finalized: {
+                number: 1,
+                hash: '0x1',
+              },
             },
           }
         }),
@@ -505,9 +511,11 @@ describe('Drizzle target', () => {
             // 1. The First response is okay, it gets 5 blocks
             statusCode: 200,
             data: [{ header: { number: block, hash: `0x${block}` } }],
-            finalizedHead: {
-              number: 1,
-              hash: '0x1',
+            head: {
+              finalized: {
+                number: 1,
+                hash: '0x1',
+              },
             },
           }
         }),
@@ -628,9 +636,11 @@ describe('Drizzle target', () => {
             // 1. The First response is okay, it gets 5 blocks
             statusCode: 200,
             data: [{ header: { number: block, hash: `0x${block}` } }],
-            finalizedHead: {
-              number: 1,
-              hash: '0x1',
+            head: {
+              finalized: {
+                number: 1,
+                hash: '0x1',
+              },
             },
           }
         }),
