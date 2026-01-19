@@ -2,7 +2,7 @@ import { createClient } from '@clickhouse/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { evmPortalSource } from '~/evm/index.js'
-import { blockQuery, blockTransformer, closeMockPortal, createMockPortal, MockPortal } from '~/tests/index.js'
+import { MockPortal, blockQuery, blockTransformer, closeMockPortal, createMockPortal } from '~/tests/index.js'
 
 import { clickhouseTarget } from './clickouse-target.js'
 
@@ -49,7 +49,7 @@ describe('Clickhouse state', () => {
             { header: { number: 4, hash: '0x4', timestamp: 4000 } },
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
-          finalizedHead: { number: 2, hash: '0x2' },
+          head: { finalized: { number: 2, hash: '0x2' } },
         },
       ])
 
@@ -103,17 +103,17 @@ describe('Clickhouse state', () => {
         {
           statusCode: 200,
           data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
-          finalizedHead: { number: 1000, hash: '0x1000' },
+          head: { finalized: { number: 1000, hash: '0x1000' } },
         },
         {
           statusCode: 200,
           data: [{ header: { number: 2, hash: '0x2', timestamp: 2000 } }],
-          finalizedHead: { number: 1000, hash: '0x1000' },
+          head: { finalized: { number: 1000, hash: '0x1000' } },
         },
         {
           statusCode: 200,
           data: [{ header: { number: 3, hash: '0x3', timestamp: 3000 } }],
-          finalizedHead: { number: 1000, hash: '0x1000' },
+          head: { finalized: { number: 1000, hash: '0x1000' } },
         },
       ])
 
@@ -312,9 +312,11 @@ describe('Clickhouse state', () => {
             { header: { number: 4, hash: '0x4' } },
             { header: { number: 5, hash: '0x5' } },
           ],
-          finalizedHead: {
-            number: 1,
-            hash: '0x1',
+          head: {
+            finalized: {
+              number: 1,
+              hash: '0x1',
+            },
           },
         },
 
@@ -473,7 +475,7 @@ describe('Clickhouse state', () => {
             { header: { number: 4, hash: '0x4' } },
             { header: { number: 5, hash: '0x5' } },
           ],
-          finalizedHead: { number: 1, hash: '0x1' },
+          head: { finalized: { number: 1, hash: '0x1' } },
         },
         {
           // 2. A deep reorg happens
@@ -492,7 +494,7 @@ describe('Clickhouse state', () => {
         {
           statusCode: 200,
           data: [{ header: { number: 2, hash: '0x2a' } }, { header: { number: 3, hash: '0x3a' } }],
-          finalizedHead: { number: 2, hash: '0x2a' },
+          head: { finalized: { number: 2, hash: '0x2a' } },
         },
         // we mock 2 responses here as the first will fail
         ...new Array(2).fill({
@@ -503,7 +505,7 @@ describe('Clickhouse state', () => {
             { header: { number: 6, hash: '0x6a' } },
             { header: { number: 7, hash: '0x7a' } },
           ],
-          finalizedHead: { number: 4, hash: '0x4a' },
+          head: { finalized: { number: 4, hash: '0x4a' } },
           validateRequest: (req: any) => {
             expect(req).toMatchObject({
               type: 'evm',
@@ -626,9 +628,11 @@ describe('Clickhouse state', () => {
             { header: { number: 4, hash: '0x4', timestamp: 4000 } },
             { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
-          finalizedHead: {
-            number: 1,
-            hash: '0x1',
+          head: {
+            finalized: {
+              number: 1,
+              hash: '0x1',
+            },
           },
         },
 
@@ -745,18 +749,18 @@ describe('Clickhouse state', () => {
                 format: 'JSONEachRow',
               })
             },
-            onRollback: async ({ type, store, cursor }) => {
+            onRollback: async ({ type, store, safeCursor }) => {
               if (rollbackCalls === 0) {
-                expect(cursor).toMatchObject({ number: 3, hash: '0x3' })
+                expect(safeCursor).toMatchObject({ number: 3, hash: '0x3' })
               } else {
-                expect(cursor).toMatchObject({ number: 1, hash: '0x1' })
+                expect(safeCursor).toMatchObject({ number: 1, hash: '0x1' })
               }
 
               rollbackCalls++
               await store.removeAllRows({
                 tables: 'test',
                 where: `block_number > {latest:UInt32}`,
-                params: { latest: cursor.number },
+                params: { latest: safeCursor.number },
               })
             },
           }),
