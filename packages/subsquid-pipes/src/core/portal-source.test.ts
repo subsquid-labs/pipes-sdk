@@ -39,6 +39,7 @@ describe('Portal abstract stream', () => {
       for await (const { ctx } of stream) {
         firstCtx = {
           head: ctx.head,
+          progress_state: ctx.state.progress?.state,
         }
       }
 
@@ -52,6 +53,60 @@ describe('Portal abstract stream', () => {
             "latest": {
               "number": 12,
             },
+          },
+          "progress_state": {
+            "current": 2,
+            "etaSeconds": 0,
+            "initial": 0,
+            "last": 2,
+            "percent": 100,
+          },
+        }
+      `)
+    })
+
+    it('should adjust latest block number from data over header', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 14, hash: '0x456' } }], // latest block is 14 in data
+          head: {
+            finalized: { number: 10, hash: '0xfinalized' },
+            latest: { number: 12 }, // but 12 in header
+          },
+        },
+      ])
+
+      const stream = evmPortalSource({
+        portal: mockPortal.url,
+        query: { from: 0, to: 2 },
+      }).pipe(blockTransformer())
+
+      let firstCtx
+      for await (const { ctx } of stream) {
+        firstCtx = {
+          head: ctx.head,
+          progress_state: ctx.state.progress?.state,
+        }
+      }
+
+      expect(firstCtx).toMatchInlineSnapshot(`
+        {
+          "head": {
+            "finalized": {
+              "hash": "0xfinalized",
+              "number": 10,
+            },
+            "latest": {
+              "number": 12,
+            },
+          },
+          "progress_state": {
+            "current": 14,
+            "etaSeconds": 0,
+            "initial": 0,
+            "last": 14,
+            "percent": 100,
           },
         }
       `)
