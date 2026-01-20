@@ -1,17 +1,19 @@
 import { cast } from '@subsquid/util-internal-validation'
+
 import {
-  createDefaultLogger,
-  createTransformer,
-  Logger,
   LogLevel,
+  Logger,
   PortalCache,
   PortalRange,
   PortalSource,
   Transformer,
+  createDefaultLogger,
+  createTransformer,
 } from '~/core/index.js'
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
-import { evm, getBlockSchema, PortalClient, PortalClientOptions } from '../portal-client/index.js'
+
+import { PortalClient, PortalClientOptions, evm, getBlockSchema } from '../portal-client/index.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
 
 export type EvmTransformer<In, Out> = Transformer<In, Out, EvmQueryBuilder>

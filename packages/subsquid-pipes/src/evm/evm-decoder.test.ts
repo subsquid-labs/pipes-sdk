@@ -884,6 +884,7 @@ describe('evmDecoder transform', () => {
   it('should decode the events when passed AbiEvent', async () => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
+      logger: false,
     })
       .pipe(
         evmDecoder({
@@ -964,6 +965,7 @@ describe('evmDecoder transform', () => {
   ])(`should filter events by specified contracts $contracts -> $expected`, async ({ contracts, expected }) => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
+      logger: false,
     })
       .pipe(
         evmDecoder({
@@ -984,6 +986,7 @@ describe('evmDecoder transform', () => {
   it('should decode the events when passed an EventWithArgs', async () => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
+      logger: false,
     })
       .pipe(
         evmDecoder({
@@ -1062,6 +1065,7 @@ describe('evmDecoder transform', () => {
   it('should decode the events when mixed EventWithArgs and AbiEvent', async () => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
+      logger: false,
     })
       .pipe(
         evmDecoder({

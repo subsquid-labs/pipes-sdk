@@ -111,6 +111,38 @@ describe('Portal abstract stream', () => {
         }
       `)
     })
+
+    it('should keep requesting data on head', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 204,
+        },
+        {
+          statusCode: 204,
+        },
+        {
+          statusCode: 204,
+        },
+        {
+          statusCode: 200,
+          data: [{ header: { number: 1, hash: '0x123' } }],
+        },
+      ])
+
+      const stream = evmPortalSource({
+        portal: mockPortal.url,
+        query: { from: 0, to: 1 },
+      }).pipe(blockTransformer())
+
+      expect(await readAll(stream)).toMatchInlineSnapshot(`
+        [
+          {
+            "hash": "0x123",
+            "number": 1,
+          },
+        ]
+      `)
+    })
   })
 
   describe('unfinalized', () => {

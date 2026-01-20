@@ -186,14 +186,9 @@ export class PortalClient {
       switch (res.status) {
         case 200:
         case 204:
-          const { finalized, latest } = getHeadFromHeaders(res.headers)
-
           return {
             status: res.status,
-            head: {
-              finalized,
-              latest,
-            },
+            head: getHeadFromHeaders(res.headers),
             stream: res.body && res.status === 200 ? splitLines(res.body) : undefined,
           }
         default:
@@ -263,16 +258,11 @@ function createPortalStream<Q extends Query>(
         },
       )
 
-      // We are on head
+      // We are on head, we need to wait a little bit until new dta arrives
       if (res.status === 204) {
         await buffer.put({
           blocks: [],
-          meta: {
-            bytes: 0,
-            requestedFromBlock: fromBlock,
-            lastBlockReceivedAt: new Date(),
-            requests,
-          },
+          meta: { bytes: 0, requestedFromBlock: fromBlock, lastBlockReceivedAt: new Date(), requests },
           head: res.head,
         })
         buffer.flush()
@@ -282,8 +272,8 @@ function createPortalStream<Q extends Query>(
         continue
       }
 
-      // No data left on this range
-      // FIXME is this needed?
+      // If data is missing for a particular range,
+      // portal responds with 200 status and empty body
       if (res.stream == null) break
 
       try {
