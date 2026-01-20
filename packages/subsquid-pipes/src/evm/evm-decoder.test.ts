@@ -955,6 +955,26 @@ describe('evmDecoder transform', () => {
     `)
   })
 
+  it('should filter events by specified contracts ', async () => {
+    const stream = evmPortalSource({
+      portal: mockPortal.url,
+    })
+      .pipe(
+        evmDecoder({
+          range: { from: 0, to: 1 },
+          contracts: [], // No contracts, should filter out all events
+          events: {
+            transfers: commonAbis.erc20.events.Transfer,
+          },
+        }),
+      )
+      .pipe((e) => e['transfers'])
+
+    const res = await readAll(stream)
+
+    expect(res).toMatchInlineSnapshot(`[]`)
+  })
+
   it('should decode the events when passed an EventWithArgs', async () => {
     const stream = evmPortalSource({
       portal: mockPortal.url,

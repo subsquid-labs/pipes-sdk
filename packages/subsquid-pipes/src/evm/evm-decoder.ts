@@ -479,6 +479,12 @@ export function evmDecoder<T extends Events, C extends Contracts>({
             if (!factoryEvent) {
               continue
             }
+          } else if (contracts) {
+            // We have a list of contracts to filter by - skip non-matching addresses
+            // this is needed because, when using the same topic hashes, portal may return logs from other contracts
+            if (!contracts.includes(log.address)) {
+              continue
+            }
           }
 
           for (const eventName in events) {
