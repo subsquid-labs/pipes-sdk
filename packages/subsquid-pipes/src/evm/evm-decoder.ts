@@ -322,6 +322,8 @@ export function evmDecoder<T extends Events, C extends Contracts>({
   const eventTopic0 = eventsWithoutParams.map((event) => event.event.topic)
   const eventWithParamsRequest = buildEventRequests(eventsWithParams, contracts)
   const decodedRange = parsePortalRange(range)
+  const normalizedContracts =
+    contracts && !Factory.isFactory(contracts) ? contracts.map((contract) => contract.toLowerCase()) : undefined
 
   return createTransformer({
     profiler: profiler || { id: 'EVM decoder' },
@@ -479,12 +481,13 @@ export function evmDecoder<T extends Events, C extends Contracts>({
             if (!factoryEvent) {
               continue
             }
-          } else if (contracts) {
+          } else if (
+            normalizedContracts &&
             // We have a list of contracts to filter by - skip non-matching addresses
             // this is needed because, when using the same topic hashes, portal may return logs from other contracts
-            if (!contracts.includes(log.address)) {
-              continue
-            }
+            (normalizedContracts.length === 0 || !normalizedContracts.includes(log.address))
+          ) {
+            continue
           }
 
           for (const eventName in events) {
