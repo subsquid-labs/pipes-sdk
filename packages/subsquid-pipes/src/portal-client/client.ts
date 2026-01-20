@@ -187,14 +187,14 @@ export class PortalClient {
         case 200:
         case 204:
           const { finalized, latest } = getHeadFromHeaders(res.headers)
-          const stream = res.body && res.status === 200 ? splitLines(res.body) : undefined
 
           return {
+            status: res.status,
             head: {
               finalized,
               latest,
             },
-            stream,
+            stream: res.body && res.status === 200 ? splitLines(res.body) : undefined,
           }
         default:
           throw unexpectedCase(res.status)
@@ -231,6 +231,7 @@ function createPortalStream<Q extends Query>(
     options?: RequestOptions,
   ) => Promise<{
     head: PortalHead
+    status: number
     stream?: AsyncIterable<string[]> | null | undefined
   }>,
 ): PortalStream<GetBlock<Q>> {
@@ -263,8 +264,7 @@ function createPortalStream<Q extends Query>(
       )
 
       // We are on head
-      // TODO should we check response status 204 instead?
-      if (!('stream' in res)) {
+      if (res.status === 204) {
         await buffer.put({
           blocks: [],
           meta: {
@@ -283,6 +283,7 @@ function createPortalStream<Q extends Query>(
       }
 
       // No data left on this range
+      // FIXME is this needed?
       if (res.stream == null) break
 
       try {
