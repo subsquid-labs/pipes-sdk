@@ -955,14 +955,18 @@ describe('evmDecoder transform', () => {
     `)
   })
 
-  it('should filter events by specified contracts ', async () => {
+  it.each([
+    //
+    { contracts: [], expected: [] },
+    { contracts: ['0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef'], expected: [] },
+  ])(`should filter events by specified contracts $contracts -> $expected`, async ({ contracts, expected }) => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
     })
       .pipe(
         evmDecoder({
           range: { from: 0, to: 1 },
-          contracts: [], // No contracts, should filter out all events
+          contracts, // No contracts, should filter out all events
           events: {
             transfers: commonAbis.erc20.events.Transfer,
           },
@@ -972,7 +976,7 @@ describe('evmDecoder transform', () => {
 
     const res = await readAll(stream)
 
-    expect(res).toMatchInlineSnapshot(`[]`)
+    expect(res).toEqual(expected)
   })
 
   it('should decode the events when passed an EventWithArgs', async () => {
