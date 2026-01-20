@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { evmTemplates } from '~/commands/init/templates/pipe-templates/evm/index.js'
 import { Config } from '~/types/init.js'
-import { InitHandler } from './handler.js'
+import { InitHandler } from './init.handler.js'
 
 async function exists(p: string) {
   try {

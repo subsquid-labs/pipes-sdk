@@ -19,7 +19,7 @@ import {
 } from '~/types/init.js'
 import { getTemplateDirname } from '~/utils/fs.js'
 import { EvmTemplateIds, SvmTemplateIds } from './config/templates.js'
-import { InvalidNetworkTypeError, TemplateNotFoundError } from './errors.js'
+import { InvalidNetworkTypeError, TemplateNotFoundError } from './init.errors.js'
 import { EvmTemplateBuilder } from './templates/pipe-components/evm-template-builder.js'
 import { renderSchemasTemplate } from './templates/pipe-components/schemas-template.js'
 import { SvmTemplateBuilder } from './templates/pipe-components/svm-template-builder.js'
