@@ -1,4 +1,5 @@
 import { evmDecoder, evmPortalSource, factory, factorySqliteDatabase } from '@subsquid/pipes/evm'
+
 import { events as factoryAbi } from './abi/uniswap.v3/factory'
 import { events as swapsAbi } from './abi/uniswap.v3/swaps'
 
@@ -14,14 +15,14 @@ import { events as swapsAbi } from './abi/uniswap.v3/swaps'
 - The EVM Portal Source will stream blocks from the specified portal
  */
 
+//FIXME STREAMS check if it still works
 async function cli() {
   const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     progress: {
       interval: 500,
     },
-  }).pipe(
-    evmDecoder({
+    streams: evmDecoder({
       range: { from: '12,369,621', to: '12,410,000' },
       contracts: factory({
         address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
@@ -34,8 +35,8 @@ async function cli() {
         swaps: swapsAbi.Swap,
       },
     }),
-  )
-  //
+  })
+
   for await (const { data } of stream) {
     // console.log('-------------------------------------')
     console.log(`parsed ${data.swaps.length} swaps`)

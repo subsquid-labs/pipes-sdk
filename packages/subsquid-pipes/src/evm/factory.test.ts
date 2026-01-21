@@ -206,8 +206,7 @@ describe('Factory', () => {
     const db = await factorySqliteDatabase({ path: ':memory:' })
     const stream = evmPortalSource({
       portal: mockPortal.url,
-    }).pipe(
-      evmDecoder({
+      streams: evmDecoder({
         range: { from: 1, to: 2 },
         contracts: factory({
           address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
@@ -219,7 +218,7 @@ describe('Factory', () => {
           swaps: poolAbi.Swap,
         },
       }).pipe((d) => d.swaps),
-    )
+    })
 
     const res = await readAll(stream)
     expect(res).toMatchInlineSnapshot(`
@@ -294,8 +293,7 @@ describe('Factory', () => {
     const db = await factorySqliteDatabase({ path: ':memory:' })
     const stream = evmPortalSource({
       portal: mockPortal.url,
-    }).pipe(
-      evmDecoder({
+      streams: evmDecoder({
         range: { from: 1, to: 2 },
         contracts: factory({
           address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
@@ -307,7 +305,7 @@ describe('Factory', () => {
           swaps: poolAbi.Swap,
         },
       }).pipe((d) => d.swaps),
-    )
+    })
 
     const res = await readAll(stream)
     expect(res).toMatchInlineSnapshot(`[]`)
@@ -322,31 +320,32 @@ describe('Factory', () => {
     const db = await factorySqliteDatabase({ path: ':memory:' })
     const stream = evmPortalSource({
       portal: mockPortal.url,
-    }).pipeComposite({
-      v1: evmDecoder({
-        range: { from: 1, to: 2 },
-        contracts: factory({
-          address: '0x00000000000000000000000000000000000000000',
-          event: factoryAbi.PoolCreated,
-          parameter: 'pool',
-          database: db,
+      streams: {
+        v1: evmDecoder({
+          range: { from: 1, to: 2 },
+          contracts: factory({
+            address: '0x00000000000000000000000000000000000000000',
+            event: factoryAbi.PoolCreated,
+            parameter: 'pool',
+            database: db,
+          }),
+          events: {
+            swaps: poolAbi.Swap,
+          },
         }),
-        events: {
-          swaps: poolAbi.Swap,
-        },
-      }),
-      v2: evmDecoder({
-        range: { from: 1, to: 2 },
-        contracts: factory({
-          address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
-          event: factoryAbi.PoolCreated,
-          parameter: 'pool',
-          database: db,
+        v2: evmDecoder({
+          range: { from: 1, to: 2 },
+          contracts: factory({
+            address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+            event: factoryAbi.PoolCreated,
+            parameter: 'pool',
+            database: db,
+          }),
+          events: {
+            swaps: poolAbi.Swap,
+          },
         }),
-        events: {
-          swaps: poolAbi.Swap,
-        },
-      }),
+      },
     })
 
     let v1: any[] = []
@@ -436,35 +435,32 @@ describe('Factory', () => {
       portal: {
         url: mockPortal.url,
       },
-    })
-      .pipe(
-        evmDecoder({
-          range: { from: 1, to: 3 },
-          contracts: factory({
-            address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
-            event: factoryAbi.PoolCreated,
-            parameter: 'pool',
-            database: db,
-          }),
-          events: {
-            swaps: poolAbi.Swap,
-          },
-        }).pipe((d) =>
-          d.swaps.map((s) => {
-            return {
-              ...s,
-              blockNumber: s.block.number,
-            }
-          }),
-        ),
-      )
-      .pipeTo(
-        createMemoryTarget({
-          onData: (data) => {
-            res.push(data)
-          },
+      streams: evmDecoder({
+        range: { from: 1, to: 3 },
+        contracts: factory({
+          address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+          event: factoryAbi.PoolCreated,
+          parameter: 'pool',
+          database: db,
         }),
-      )
+        events: {
+          swaps: poolAbi.Swap,
+        },
+      }).pipe((d) =>
+        d.swaps.map((s) => {
+          return {
+            ...s,
+            blockNumber: s.block.number,
+          }
+        }),
+      ),
+    }).pipeTo(
+      createMemoryTarget({
+        onData: (data) => {
+          res.push(data)
+        },
+      }),
+    )
 
     expect(res).toMatchInlineSnapshot(`[]`)
 
@@ -478,8 +474,7 @@ describe('Factory', () => {
     const db = await factorySqliteDatabase({ path: ':memory:' })
     const stream = evmPortalSource({
       portal: mockPortal.url,
-    }).pipe(
-      evmDecoder({
+      streams: evmDecoder({
         range: { from: 1, to: 2 },
         contracts: factory({
           address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
@@ -496,7 +491,7 @@ describe('Factory', () => {
           swaps: poolAbi.Swap,
         },
       }).pipe((d) => d.swaps),
-    )
+    })
 
     const res = await readAll(stream)
 
@@ -526,8 +521,7 @@ describe('Factory', () => {
 
       return evmPortalSource({
         portal: mockPortal.url,
-      }).pipe(
-        evmDecoder({
+        streams: evmDecoder({
           range: { from: 1, to: 2 },
           contracts: factory({
             address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
@@ -544,7 +538,7 @@ describe('Factory', () => {
             swaps: poolAbi.Swap,
           },
         }).pipe((d) => d.swaps),
-      )
+      })
     }
 
     const firstRun = await getPipeline(weth)
@@ -578,15 +572,14 @@ describe('Factory', () => {
 
     const stream = evmPortalSource({
       portal: mockPortal.url,
-    }).pipe(
-      evmDecoder({
+      streams: evmDecoder({
         range: { from: 1, to: 2 },
         contracts: contractsFactory,
         events: {
           swaps: poolAbi.Swap,
         },
       }).pipe((d) => d.swaps),
-    )
+    })
 
     await readAll(stream)
 

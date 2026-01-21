@@ -1,8 +1,10 @@
-import { BatchCtx, createTransformer, PortalRange, ProfilerOptions, parsePortalRange } from '~/core/index.js'
+import { BatchCtx, Decoder, PortalRange, ProfilerOptions, parsePortalRange } from '~/core/index.js'
 import { arrayify } from '~/internal/array.js'
 import { Instruction, TokenBalance, Transaction } from '~/portal-client/query/solana.js'
-import { createSolanaPortalSource, SolanaPortalData, SolanaTransformer } from '~/solana/solana-portal-source.js'
+import { SolanaPortalData } from '~/solana/solana-portal-source.js'
 import { getInstructionD1, getInstructionD2, getInstructionD4, getInstructionD8 } from '~/solana/types.js'
+
+import { SolanaQueryBuilder } from './solana-query-builder.js'
 
 const decodedEventFields = {
   block: {
@@ -72,6 +74,8 @@ const defaultError = (ctx: BatchCtx, error: any) => {
   throw error
 }
 
+class SolanaDecoder<In, Out> extends Decoder<In, Out, SolanaQueryBuilder> {}
+
 type DecodedEventPipeArgs<T extends Instructions> = {
   range: PortalRange
   programId: string | string[]
@@ -82,12 +86,12 @@ type DecodedEventPipeArgs<T extends Instructions> = {
 
 export function solanaInstructionDecoder<T extends Instructions>(
   opts: DecodedEventPipeArgs<T>,
-): SolanaTransformer<SolanaPortalData<typeof decodedEventFields>, EventResponse<T>> {
+): SolanaDecoder<SolanaPortalData<typeof decodedEventFields>, EventResponse<T>> {
   const range = parsePortalRange(opts.range)
   const programId = arrayify(opts.programId)
   const onError = opts.onError || defaultError
 
-  return createTransformer({
+  return new SolanaDecoder({
     profiler: opts.profiler || { id: 'instruction decoder' },
     query: async ({ queryBuilder }) => {
       queryBuilder.addFields(decodedEventFields)
@@ -190,7 +194,7 @@ export function solanaInstructionDecoder<T extends Instructions>(
         ;(result[insName as keyof T] as ReturnType<T[keyof T]['decode']>[]) = []
       }
 
-      for (const block of data.blocks) {
+      for (const block of data) {
         if (!block.instructions) continue
 
         for (const instruction of block.instructions) {
@@ -238,8 +242,3 @@ export function solanaInstructionDecoder<T extends Instructions>(
     },
   })
 }
-
-/**
- *  @deprecated Use `solanaInstructionDecoder`
- */
-export const createSolanaInstructionDecoder = solanaInstructionDecoder

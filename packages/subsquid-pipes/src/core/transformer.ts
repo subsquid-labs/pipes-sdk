@@ -1,5 +1,6 @@
 import { Metrics } from '~/core/metrics-server.js'
 import { PortalClient } from '~/portal-client/index.js'
+
 import { Logger } from './logger.js'
 import { BatchCtx } from './portal-source.js'
 import { ProfilerOptions } from './profiling.js'
@@ -12,37 +13,37 @@ export type StartCtx = {
 }
 
 export type StopCtx = { logger: Logger }
-export type QueryCtx<Query> = { queryBuilder: Query; portal: PortalClient; logger: Logger }
 
-export interface TransformerOptions<In, Out, Query = any> {
+export interface TransformerOptions<In, Out> {
   profiler?: ProfilerOptions
-  query?: (ctx: QueryCtx<Query>) => void | Promise<void>
   start?: (ctx: StartCtx) => Promise<void> | void
   transform: (data: In, ctx: BatchCtx) => Promise<Out> | Out
   fork?: (cursor: BlockCursor, ctx: Ctx) => Promise<void> | void
   stop?: (ctx: StopCtx) => Promise<void> | void
 }
 
-export class Transformer<In, Out, Query = any> {
-  constructor(public options: TransformerOptions<In, Out, Query>) {}
+export class Transformer<In, Out> {
+  constructor(public options: TransformerOptions<In, Out>) {}
 
   children: Transformer<any, any>[] = []
 
+  /**
+   * @internal
+   */
   id() {
     return this.options.profiler?.id || 'anonymous'
   }
 
+  /**
+   * @internal
+   */
   setId(profilerId: string) {
     this.options.profiler = { id: profilerId }
   }
 
-  async query(ctx: QueryCtx<Query>) {
-    await this.options.query?.(ctx)
-
-    if (this.children.length === 0) return
-    await Promise.all(this.children.map((t) => t.query(ctx)))
-  }
-
+  /**
+   * @internal
+   */
   async start(ctx: StartCtx) {
     await this.options.start?.(ctx)
 
@@ -50,6 +51,9 @@ export class Transformer<In, Out, Query = any> {
     await Promise.all(this.children.map((t) => t.start(ctx)))
   }
 
+  /**
+   * @internal
+   */
   async stop(ctx: { logger: Logger }) {
     await this.options.stop?.(ctx)
 
@@ -57,6 +61,9 @@ export class Transformer<In, Out, Query = any> {
     await Promise.all(this.children.map((t) => t.stop(ctx)))
   }
 
+  /**
+   * @internal
+   */
   async fork(cursor: BlockCursor, ctx: Ctx) {
     await this.options.fork?.(cursor, ctx)
 
@@ -64,6 +71,9 @@ export class Transformer<In, Out, Query = any> {
     await Promise.all(this.children.map((t) => t.fork(cursor, ctx)))
   }
 
+  /**
+   * @internal
+   */
   async transform(data: In, ctx: BatchCtx): Promise<Out> {
     const span = ctx.profiler.start(this.options.profiler?.id || 'anonymous')
     let res = await this.options.transform(data, { ...ctx, profiler: span })
@@ -112,11 +122,8 @@ export class Transformer<In, Out, Query = any> {
    * and downstream code would see only the immediate `Out` type.
    */
   pipe<Res>(
-    transformer:
-      | Transformer<Out, Res, Query>
-      | TransformerOptions<Out, Res, Query>
-      | TransformerOptions<Out, Res, Query>['transform'],
-  ): Transformer<In, Res, Query> {
+    transformer: Transformer<Out, Res> | TransformerOptions<Out, Res> | TransformerOptions<Out, Res>['transform'],
+  ): Transformer<In, Res> {
     this.children.push(
       transformer instanceof Transformer
         ? transformer
@@ -125,10 +132,10 @@ export class Transformer<In, Out, Query = any> {
           : createTransformer(transformer),
     )
 
-    return this as unknown as Transformer<In, Res, Query>
+    return this as unknown as Transformer<In, Res>
   }
 }
 
-export function createTransformer<In, Out, Query = any>(options: TransformerOptions<In, Out, Query>) {
-  return new Transformer<In, Out, Query>(options)
+export function createTransformer<In, Out>(options: TransformerOptions<In, Out>) {
+  return new Transformer<In, Out>(options)
 }

@@ -11,17 +11,16 @@ import { metricsServer } from '@subsquid/pipes/metrics/node'
 async function cli() {
   const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-    metrics: metricsServer({
-      port: 9090,
-    }),
-  }).pipe(
-    evmDecoder({
+    streams: evmDecoder({
       range: { from: 'latest' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,
       },
     }),
-  )
+    metrics: metricsServer({
+      port: 9090,
+    }),
+  })
 
   /*
    * Stream exposes Prometheus metrics by default

@@ -5,14 +5,7 @@ import { Pool, QueryResultRow } from 'pg'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { evmPortalSource } from '~/evm/index.js'
-import {
-  MockPortal,
-  MockResponse,
-  blockQuery,
-  blockTransformer,
-  closeMockPortal,
-  createMockPortal,
-} from '~/tests/index.js'
+import { MockPortal, MockResponse, blockDecoder, closeMockPortal, createMockPortal } from '~/tests/index.js'
 
 import { drizzleTarget } from './index.js'
 
@@ -76,18 +69,16 @@ describe('Drizzle target', () => {
       await expect(async () => {
         await evmPortalSource({
           portal: mockPortal.url,
-          query: blockQuery({ from: 0, to: 5 }),
-        })
-          .pipe(blockTransformer())
-          .pipeTo(
-            drizzleTarget({
-              db,
-              tables: [],
-              onData: async ({ tx }) => {
-                await tx.insert(testTable).values({ id: 1 })
-              },
-            }),
-          )
+          streams: blockDecoder({ from: 0, to: 5 }),
+        }).pipeTo(
+          drizzleTarget({
+            db,
+            tables: [],
+            onData: async ({ tx }) => {
+              await tx.insert(testTable).values({ id: 1 })
+            },
+          }),
+        )
       }).rejects.toThrow('Table "test" is not tracked for rollbacks')
     })
   })
@@ -117,17 +108,15 @@ describe('Drizzle target', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        query: blockQuery({ from: 0, to: 5 }),
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          drizzleTarget({
-            db,
-            tables: [],
-            settings: { state: { schema: 'test' } },
-            onData: async () => {},
-          }),
-        )
+        streams: blockDecoder({ from: 0, to: 5 }),
+      }).pipeTo(
+        drizzleTarget({
+          db,
+          tables: [],
+          settings: { state: { schema: 'test' } },
+          onData: async () => {},
+        }),
+      )
 
       const rows = await getAllFromSyncTable('test')
       expect(rows).toMatchInlineSnapshot(`
@@ -214,33 +203,29 @@ describe('Drizzle target', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        query: blockQuery({ from: 0, to: 1 }),
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          drizzleTarget({
-            db,
-            tables: [],
-            settings: {
-              state: { schema: 'test' },
-            },
-            onData: async () => {},
-          }),
-        )
+        streams: blockDecoder({ from: 0, to: 1 }),
+      }).pipeTo(
+        drizzleTarget({
+          db,
+          tables: [],
+          settings: {
+            state: { schema: 'test' },
+          },
+          onData: async () => {},
+        }),
+      )
 
       await evmPortalSource({
         portal: mockPortal.url,
-        query: blockQuery({ from: 1, to: 2 }),
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          drizzleTarget({
-            db,
-            tables: [],
-            settings: { state: { schema: 'test' } },
-            onData: async () => {},
-          }),
-        )
+        streams: blockDecoder({ from: 1, to: 2 }),
+      }).pipeTo(
+        drizzleTarget({
+          db,
+          tables: [],
+          settings: { state: { schema: 'test' } },
+          onData: async () => {},
+        }),
+      )
     })
   })
 
@@ -349,26 +334,24 @@ describe('Drizzle target', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        query: { from: 0, to: 7 },
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          drizzleTarget({
-            db,
-            tables: [testTable],
-            onBeforeRollback: () => {
-              // throw new Error('STOP')
-            },
-            onData: async ({ tx, data }) => {
-              await tx.insert(testTable).values(
-                data.map((b) => ({
-                  block_number: b.number,
-                  block_hash: b.hash,
-                })),
-              )
-            },
-          }),
-        )
+        streams: blockDecoder({ from: 0, to: 7 }),
+      }).pipeTo(
+        drizzleTarget({
+          db,
+          tables: [testTable],
+          onBeforeRollback: () => {
+            // throw new Error('STOP')
+          },
+          onData: async ({ tx, data }) => {
+            await tx.insert(testTable).values(
+              data.map((b) => ({
+                block_number: b.number,
+                block_hash: b.hash,
+              })),
+            )
+          },
+        }),
+      )
 
       const res = await db.select().from(testTable).orderBy(testTable.block_number)
       expect(res).toMatchInlineSnapshot(`
@@ -452,42 +435,40 @@ describe('Drizzle target', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        query: { from: 0, to: 5 },
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          drizzleTarget({
-            db,
-            tables: [testTable],
-            onData: async ({ tx, data }) => {
-              for (const item of data) {
-                await tx
-                  .insert(testTable)
-                  .values({
-                    block_number: -1,
-                    block_hash: 'test',
-                  })
-                  .onConflictDoUpdate({
-                    target: testTable.block_number,
-                    set: {
-                      data: JSON.stringify(item),
-                    },
-                  })
-              }
-            },
-            onBeforeRollback: () => {
-              // throw new Error('STOP')
-            },
-            onAfterRollback: async ({ tx, cursor }) => {
-              callCount++
-              const [row] = await tx.select().from(testTable).where(eq(testTable.block_number, -1))
+        streams: blockDecoder({ from: 0, to: 5 }),
+      }).pipeTo(
+        drizzleTarget({
+          db,
+          tables: [testTable],
+          onData: async ({ tx, data }) => {
+            for (const item of data) {
+              await tx
+                .insert(testTable)
+                .values({
+                  block_number: -1,
+                  block_hash: 'test',
+                })
+                .onConflictDoUpdate({
+                  target: testTable.block_number,
+                  set: {
+                    data: JSON.stringify(item),
+                  },
+                })
+            }
+          },
+          onBeforeRollback: () => {
+            // throw new Error('STOP')
+          },
+          onAfterRollback: async ({ tx, cursor }) => {
+            callCount++
+            const [row] = await tx.select().from(testTable).where(eq(testTable.block_number, -1))
 
-              expect(cursor.number).toEqual(3)
-              expect(cursor.hash).toEqual('0x3')
-              expect(row.data).toEqual(JSON.stringify(cursor))
-            },
-          }),
-        )
+            expect(cursor.number).toEqual(3)
+            expect(cursor.hash).toEqual('0x3')
+            expect(row.data).toEqual(JSON.stringify(cursor))
+          },
+        }),
+      )
 
       expect(callCount).toEqual(1)
 
@@ -542,47 +523,45 @@ describe('Drizzle target', () => {
       let callCount = 0
       await evmPortalSource({
         portal: mockPortal.url,
-        query: { from: 0, to: 5 },
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          drizzleTarget({
-            db,
-            tables: [testTable],
-            onData: async ({ tx, data }) => {
-              for (const item of data) {
-                // Rollback happens to block 3
-                if (item.number === 3) {
-                  await tx.delete(testTable).where(eq(testTable.block_number, -1))
-                } else {
-                  await tx
-                    .insert(testTable)
-                    .values({
-                      block_number: -1,
-                      block_hash: 'test',
-                    })
-                    .onConflictDoUpdate({
-                      target: testTable.block_number,
-                      set: {
-                        data: JSON.stringify(item),
-                      },
-                    })
-                }
+        streams: blockDecoder({ from: 0, to: 5 }),
+      }).pipeTo(
+        drizzleTarget({
+          db,
+          tables: [testTable],
+          onData: async ({ tx, data }) => {
+            for (const item of data) {
+              // Rollback happens to block 3
+              if (item.number === 3) {
+                await tx.delete(testTable).where(eq(testTable.block_number, -1))
+              } else {
+                await tx
+                  .insert(testTable)
+                  .values({
+                    block_number: -1,
+                    block_hash: 'test',
+                  })
+                  .onConflictDoUpdate({
+                    target: testTable.block_number,
+                    set: {
+                      data: JSON.stringify(item),
+                    },
+                  })
               }
-            },
-            onBeforeRollback: async () => {
-              // throw new Error(`STOP`)
-            },
-            onAfterRollback: async ({ tx, cursor }) => {
-              callCount++
-              const rows = await tx.select().from(testTable).where(eq(testTable.block_number, -1))
+            }
+          },
+          onBeforeRollback: async () => {
+            // throw new Error(`STOP`)
+          },
+          onAfterRollback: async ({ tx, cursor }) => {
+            callCount++
+            const rows = await tx.select().from(testTable).where(eq(testTable.block_number, -1))
 
-              expect(cursor.number).toEqual(3)
-              expect(cursor.hash).toEqual('0x3')
-              expect(rows).toHaveLength(0)
-            },
-          }),
-        )
+            expect(cursor.number).toEqual(3)
+            expect(cursor.hash).toEqual('0x3')
+            expect(rows).toHaveLength(0)
+          },
+        }),
+      )
 
       expect(callCount).toEqual(1)
 
@@ -668,41 +647,39 @@ describe('Drizzle target', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        query: { from: 0, to: 5 },
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          drizzleTarget({
-            db,
-            tables: [
-              /*
-               * We deliberately put child after parent to test FK constraints
-               */
-              parentTable,
-              childTable,
-            ],
-            onData: async ({ tx, data }) => {
-              for (const item of data) {
-                const [parent] = await tx
-                  .insert(parentTable)
-                  .values({
-                    id: item.number,
-                    text: item.hash,
-                  })
-                  .returning()
-
-                await tx.insert(childTable).values({
+        streams: blockDecoder({ from: 0, to: 5 }),
+      }).pipeTo(
+        drizzleTarget({
+          db,
+          tables: [
+            /*
+             * We deliberately put child after parent to test FK constraints
+             */
+            parentTable,
+            childTable,
+          ],
+          onData: async ({ tx, data }) => {
+            for (const item of data) {
+              const [parent] = await tx
+                .insert(parentTable)
+                .values({
                   id: item.number,
                   text: item.hash,
-                  parent_id: parent.id,
                 })
-              }
-            },
-            onAfterRollback: async () => {
-              callCount++
-            },
-          }),
-        )
+                .returning()
+
+              await tx.insert(childTable).values({
+                id: item.number,
+                text: item.hash,
+                parent_id: parent.id,
+              })
+            }
+          },
+          onAfterRollback: async () => {
+            callCount++
+          },
+        }),
+      )
 
       expect(callCount).toEqual(1)
 

@@ -1,20 +1,19 @@
 import { cast } from '@subsquid/util-internal-validation'
+
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
+
 import {
-  createDefaultLogger,
-  createTransformer,
-  Logger,
   LogLevel,
+  Logger,
   PortalCache,
   PortalRange,
   PortalSource,
-  Transformer,
+  createDefaultLogger,
+  createTransformer,
 } from '../core/index.js'
-import { getBlockSchema, hyperliquidFills, PortalClientOptions } from '../portal-client/index.js'
+import { PortalClientOptions, getBlockSchema, hyperliquidFills } from '../portal-client/index.js'
 import { HyperliquidFillsQueryBuilder } from './hyperliquid-fills-query-builder.js'
-
-export type HyperliquidFillsTransformer<In, Out> = Transformer<In, Out, HyperliquidFillsQueryBuilder>
 
 export type HyperliquidFillsPortalData<F extends hyperliquidFills.FieldSelection> = {
   blocks: hyperliquidFills.Block<F>[]
@@ -37,13 +36,14 @@ export function hyperliquidFillsPortalSource<F extends hyperliquidFills.FieldSel
 }) {
   logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ level: logger })
 
+  //FIXME STREAMS
   return new PortalSource<HyperliquidFillsQueryBuilder<F>, HyperliquidFillsPortalData<F>>({
     portal,
     query: !query
       ? new HyperliquidFillsQueryBuilder<F>()
       : query instanceof HyperliquidFillsQueryBuilder
         ? query
-        : new HyperliquidFillsQueryBuilder<F>().addRange(query),
+        : new HyperliquidFillsQueryBuilder<F>(),
     cache,
     logger,
     metrics,

@@ -13,8 +13,8 @@ import {
   IndexedParams,
   buildEventTopics,
   evmDecoder,
-  isEventWithArgs,
   getNormalizedEventParams,
+  isEventWithArgs,
 } from './evm-decoder.js'
 import { evmPortalSource } from './evm-portal-source.js'
 
@@ -205,46 +205,43 @@ export class Factory<T extends EventArgs> {
     await evmPortalSource({
       portal,
       logger,
-    })
-      .pipe(
-        evmDecoder({
-          profiler: { id: name },
-          contracts: this.factoryAddress(),
-          range,
-          events: {
-            factory: Object.keys(this.#params).length > 0 ? { event: this.#event, params: this.#params } : this.#event,
-          },
-        }),
-      )
-      .pipeTo(
-        createTarget({
-          write: async ({ read }) => {
-            for await (const { data } of read()) {
-              const res: InternalFactoryEvent<T>[] = []
+      streams: evmDecoder({
+        profiler: { id: name },
+        contracts: this.factoryAddress(),
+        range,
+        events: {
+          factory: Object.keys(this.#params).length > 0 ? { event: this.#event, params: this.#params } : this.#event,
+        },
+      }),
+    }).pipeTo(
+      createTarget({
+        write: async ({ read }) => {
+          for await (const { data } of read()) {
+            const res: InternalFactoryEvent<T>[] = []
 
-              for (const event of data.factory) {
-                const contract =
-                  typeof this.options.parameter === 'function'
-                    ? this.options.parameter(event.event)
-                    : String(event.event[this.options.parameter])
+            for (const event of data.factory) {
+              const contract =
+                typeof this.options.parameter === 'function'
+                  ? this.options.parameter(event.event)
+                  : String(event.event[this.options.parameter])
 
-                if (!contract) continue
+              if (!contract) continue
 
-                res.push({
-                  childAddress: contract,
-                  factoryAddress: event.contract,
-                  blockNumber: event.block.number,
-                  transactionIndex: event.rawEvent.transactionIndex,
-                  logIndex: event.rawEvent.logIndex,
-                  event: event.event,
-                })
-              }
-
-              await this.assertDb().save(res)
+              res.push({
+                childAddress: contract,
+                factoryAddress: event.contract,
+                blockNumber: event.block.number,
+                transactionIndex: event.rawEvent.transactionIndex,
+                logIndex: event.rawEvent.logIndex,
+                event: event.event,
+              })
             }
-          },
-        }),
-      )
+
+            await this.assertDb().save(res)
+          }
+        },
+      }),
+    )
 
     logger.info(`Finished ${name}`)
   }

@@ -1,5 +1,7 @@
-import { evmDecoder, evmPortalSource, factory, factorySqliteDatabase } from '@subsquid/pipes/evm'
 import assert from 'assert'
+
+import { evmDecoder, evmPortalSource, factory, factorySqliteDatabase } from '@subsquid/pipes/evm'
+
 import { events as factoryAbi } from './abi/uniswap.v3/factory'
 import { events as swapsAbi } from './abi/uniswap.v3/swaps'
 
@@ -14,8 +16,7 @@ async function cli() {
   const weth = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
   const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-  }).pipe(
-    evmDecoder({
+    streams: evmDecoder({
       range: { from: '12,369,621' },
       contracts: factory({
         address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
@@ -39,16 +40,14 @@ async function cli() {
         swaps: swapsAbi.Swap,
       },
     }),
-  )
+  })
 
-  for await (const {
-    data: { swaps },
-  } of stream) {
-    for (const swap of swaps) {
+  for await (const { data } of stream) {
+    for (const swap of data.swaps) {
       assert(swap.factory?.event.token0 === weth)
     }
 
-    console.log(`Parsed ${swaps.length} swaps from WETH pools`)
+    console.log(`Parsed ${data.swaps.length} swaps from WETH pools`)
   }
 }
 

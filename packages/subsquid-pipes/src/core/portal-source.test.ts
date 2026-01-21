@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { evmPortalSource } from '~/evm/index.js'
 import {
   MockPortal,
-  blockTransformer,
+  blockDecoder,
   closeMockPortal,
   createFinalizedMockPortal,
   createMockPortal,
@@ -32,8 +32,8 @@ describe('Portal abstract stream', () => {
 
       const stream = evmPortalSource({
         portal: mockPortal.url,
-        query: { from: 0, to: 2 },
-      }).pipe(blockTransformer())
+        streams: blockDecoder({ from: 0, to: 2 }),
+      })
 
       let firstCtx
       for await (const { ctx } of stream) {
@@ -79,8 +79,8 @@ describe('Portal abstract stream', () => {
 
       const stream = evmPortalSource({
         portal: mockPortal.url,
-        query: { from: 0, to: 2 },
-      }).pipe(blockTransformer())
+        streams: blockDecoder({ from: 0, to: 2 }),
+      })
 
       let firstCtx
       for await (const { ctx } of stream) {
@@ -156,8 +156,8 @@ describe('Portal abstract stream', () => {
 
       const stream = evmPortalSource({
         portal: mockPortal.url,
-        query: { from: 0, to: 2 },
-      }).pipe(blockTransformer())
+        streams: blockDecoder({ from: 0, to: 2 }),
+      })
 
       const res = await readAll(stream)
 
@@ -193,8 +193,8 @@ describe('Portal abstract stream', () => {
           url: mockPortal.url,
           http: { retrySchedule: [0] },
         },
-        query: { from: 0, to: 2 },
-      }).pipe(blockTransformer())
+        streams: blockDecoder({ from: 0, to: 2 }),
+      })
 
       const res = await readAll(stream)
 
@@ -229,8 +229,8 @@ describe('Portal abstract stream', () => {
             retrySchedule: [0],
           },
         },
-        query: { from: 0, to: 2 },
-      }).pipe(blockTransformer())
+        streams: blockDecoder({ from: 0, to: 2 }),
+      })
 
       await expect(readAll(stream)).rejects.toThrow(`Got 503 from ${mockPortal.url}`)
       await stream.stop()
@@ -278,8 +278,8 @@ describe('Portal abstract stream', () => {
           url: mockPortal.url,
           http: { retryAttempts: 0, retrySchedule: [0] },
         },
-        query: { from: 0, to: 100_000_001 },
-      }).pipe(blockTransformer())
+        streams: blockDecoder({ from: 0, to: 100_000_001 }),
+      })
 
       await expect(readAll(stream)).rejects.toThrow(
         [
@@ -309,8 +309,8 @@ describe('Portal abstract stream', () => {
           url: mockPortal.url,
           finalized: true,
         },
-        query: { from: 0, to: 2 },
-      }).pipe(blockTransformer())
+        streams: blockDecoder({ from: 0, to: 2 }),
+      })
 
       const res = await readAll(stream)
 

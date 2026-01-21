@@ -1,4 +1,4 @@
-import { CompositePipe, compositeTransformer } from '~/core/composite-transformer.js'
+import { Decoder } from '~/core/decoder.js'
 import {
   GetBlock,
   PortalClient,
@@ -71,13 +71,15 @@ export function cursorFromHeader(block: { header: { number: number; hash: string
   return { number: block.header.number, hash: block.header.hash, timestamp: block.header.timestamp }
 }
 
+type AnyTransformer = Decoder<any, any, any> | Transformer<any, any>
+
 export type PortalSourceOptions<Query> = {
   portal: string | PortalClientOptions | PortalClient
   query: Query
   logger: Logger
   profiler?: boolean
   cache?: PortalCache
-  transformers?: Transformer<any, any>[]
+  transformers?: AnyTransformer[]
   metrics?: MetricsServer
   progress?: {
     interval?: number
@@ -95,8 +97,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   readonly #logger: Logger
   readonly #portal: PortalClient
   readonly #metricServer: MetricsServer
-  readonly #transformers: Transformer<any, any>[]
-
+  readonly #transformers: AnyTransformer[]
   #started = false
 
   constructor({ portal, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
@@ -129,19 +130,10 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       profiler: typeof options.profiler === 'undefined' ? process.env.NODE_ENV !== 'production' : options.profiler,
     }
     this.#metricServer = options.metrics ?? noopMetricsServer()
-    this.#metricServer.setLogger?.(this.#logger)
-
     this.#transformers = options.transformers || []
   }
 
   private async *read(cursor?: BlockCursor): AsyncIterable<PortalBatch<T>> {
-    /*
-     Ensure that block hash and number are always included in the query for proper cursor management
-     */
-    this.#queryBuilder.addFields({
-      block: { hash: true, number: true },
-    })
-
     /*
      Calculates query ranges while excluding blocks that were previously fetched to avoid duplicate processing
      */
@@ -226,11 +218,11 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
             // Context for transformers
             profiler: batchSpan,
-            metrics: this.#metricServer.metrics,
+            metrics: this.#metricServer.metrics(),
             logger: this.#logger,
           }
 
-          const data = await this.applyTransformers(ctx, { blocks: batch.blocks } as T)
+          const data = await this.applyTransformers(ctx, batch.blocks as T)
 
           yield { data, ctx }
         }
@@ -248,17 +240,17 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
         Simplified usage - just the transform function that processes data
         .pipe((data) => data)
       */
-      | TransformerOptions<T, Out, Q>['transform']
+      | TransformerOptions<T, Out>['transform']
       /*
         Complete transformer configuration object with transform function and additional options
         .pipe({ profiler: { id: 'my transformer' }, transform: (data) => data })
        */
-      | TransformerOptions<T, Out, Q>
+      | TransformerOptions<T, Out>
       /*
         Pre-configured transformer instance with all required methods implemented
         .pipe(new MyCustomTransformer())
        */
-      | Transformer<T, Out, Q>,
+      | Transformer<T, Out>,
   ): PortalSource<Q, Out> {
     if (this.#started) throw new Error('Source is closed')
 
@@ -288,12 +280,6 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       metrics: this.#metricServer,
       transformers: [...this.#transformers, transformer],
     })
-  }
-
-  pipeComposite<Arg extends Record<string, Transformer<any, any>>>(
-    composite: Arg,
-  ): PortalSource<Q, CompositePipe<Arg>> {
-    return this.pipe(compositeTransformer(composite))
   }
 
   private async applyTransformers(ctx: BatchCtx, data: T) {
@@ -327,17 +313,17 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   }
 
   private async configure() {
-    const profiler = Span.root('configure', this.#options.profiler)
-    const span = profiler.start('transformers')
-    const ctx = this.context(span, {
-      queryBuilder: this.#queryBuilder,
-      portal: this.#portal,
-      logger: this.#logger,
-    })
-    await Promise.all(this.#transformers.map((t) => t.query(ctx)))
-    span.end()
-
-    profiler.end()
+    await Promise.all(
+      this.#transformers
+        .filter((t) => t instanceof Decoder)
+        .map((t) =>
+          t.query({
+            queryBuilder: this.#queryBuilder,
+            portal: this.#portal,
+            logger: this.#logger,
+          }),
+        ),
+    )
   }
 
   private async start(state: { initial: number; current?: BlockCursor }) {
@@ -352,7 +338,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     const span = profiler.start('transformers')
     const ctx = this.context(span, {
-      metrics: this.#metricServer.metrics,
+      metrics: this.#metricServer.metrics(),
       state,
     })
     await Promise.all(this.#transformers.map((t) => t.start(ctx)))

@@ -2,7 +2,7 @@ import { createClient } from '@clickhouse/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { evmPortalSource } from '~/evm/index.js'
-import { MockPortal, blockQuery, blockTransformer, closeMockPortal, createMockPortal } from '~/tests/index.js'
+import { MockPortal, blockDecoder, closeMockPortal, createMockPortal } from '~/tests/index.js'
 
 import { clickhouseTarget } from './clickouse-target.js'
 
@@ -55,20 +55,18 @@ describe('Clickhouse state', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        query: blockQuery({ from: 0, to: 5 }),
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          clickhouseTarget({
-            client,
-            settings: {
-              table: 'sync',
-            },
-            onData: ({ data }) => {
-              console.log(data)
-            },
-          }),
-        )
+        streams: blockDecoder({ from: 0, to: 5 }),
+      }).pipeTo(
+        clickhouseTarget({
+          client,
+          settings: {
+            table: 'sync',
+          },
+          onData: ({ data }) => {
+            console.log(data)
+          },
+        }),
+      )
 
       const data = await getAllFromSyncTable()
       expect(data).toMatchInlineSnapshot(`
@@ -125,18 +123,16 @@ describe('Clickhouse state', () => {
           // so, we set minBytes to 1 to avoid batching
           minBytes: 1,
         },
-        query: blockQuery({ from: 0, to: 3 }),
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          clickhouseTarget({
-            client,
-            settings: {
-              table: 'sync',
-            },
-            onData: () => {},
-          }),
-        )
+        streams: blockDecoder({ from: 0, to: 3 }),
+      }).pipeTo(
+        clickhouseTarget({
+          client,
+          settings: {
+            table: 'sync',
+          },
+          onData: () => {},
+        }),
+      )
 
       const data = await getAllFromSyncTable()
       expect(data).toMatchInlineSnapshot(`
@@ -175,19 +171,17 @@ describe('Clickhouse state', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        query: blockQuery({ from: 0, to: 3 }),
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          clickhouseTarget({
-            client,
-            settings: {
-              table: 'sync',
-              maxRows: 1,
-            },
-            onData: () => {},
-          }),
-        )
+        streams: blockDecoder({ from: 0, to: 3 }),
+      }).pipeTo(
+        clickhouseTarget({
+          client,
+          settings: {
+            table: 'sync',
+            maxRows: 1,
+          },
+          onData: () => {},
+        }),
+      )
 
       const data = await getAllFromSyncTable()
       expect(data).toMatchInlineSnapshot(`
@@ -213,16 +207,14 @@ describe('Clickhouse state', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        query: blockQuery({ from: 0, to: 1 }),
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          clickhouseTarget({
-            client,
-            settings: { table: 'sync' },
-            onData: () => {},
-          }),
-        )
+        streams: blockDecoder({ from: 0, to: 1 }),
+      }).pipeTo(
+        clickhouseTarget({
+          client,
+          settings: { table: 'sync' },
+          onData: () => {},
+        }),
+      )
 
       const data = await getAllFromSyncTable()
       expect(data).toMatchInlineSnapshot(`
@@ -260,27 +252,23 @@ describe('Clickhouse state', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        query: blockQuery({ from: 0, to: 1 }),
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          clickhouseTarget({
-            client,
-            onData: () => {},
-          }),
-        )
+        streams: blockDecoder({ from: 0, to: 1 }),
+      }).pipeTo(
+        clickhouseTarget({
+          client,
+          onData: () => {},
+        }),
+      )
 
       await evmPortalSource({
         portal: mockPortal.url,
-        query: blockQuery({ from: 1, to: 2 }),
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          clickhouseTarget({
-            client,
-            onData: () => {},
-          }),
-        )
+        streams: blockDecoder({ from: 1, to: 2 }),
+      }).pipeTo(
+        clickhouseTarget({
+          client,
+          onData: () => {},
+        }),
+      )
     })
   })
 
@@ -385,34 +373,32 @@ describe('Clickhouse state', () => {
       let rollbackCalls = 0
       await evmPortalSource({
         portal: mockPortal.url,
-        query: { from: 0, to: 7 },
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          clickhouseTarget({
-            client,
-            onData: async ({ store, data }) => {
-              await store.insert({
-                table: 'test',
-                values: data.map((b) => ({
-                  block_number: b.number,
-                  block_hash: b.hash,
-                  sign: 1,
-                })),
-                format: 'JSONEachRow',
-              })
-            },
-            onRollback: async ({ type, store, cursor }) => {
-              rollbackCalls++
-              expect(cursor).toMatchObject({ number: 3, hash: '0x3' })
-              await store.removeAllRows({
-                tables: 'test',
-                where: `block_number > {latest:UInt32}`,
-                params: { latest: cursor.number },
-              })
-            },
-          }),
-        )
+        streams: blockDecoder({ from: 0, to: 7 }),
+      }).pipeTo(
+        clickhouseTarget({
+          client,
+          onData: async ({ store, data }) => {
+            await store.insert({
+              table: 'test',
+              values: data.map((b) => ({
+                block_number: b.number,
+                block_hash: b.hash,
+                sign: 1,
+              })),
+              format: 'JSONEachRow',
+            })
+          },
+          onRollback: async ({ type, store, cursor }) => {
+            rollbackCalls++
+            expect(cursor).toMatchObject({ number: 3, hash: '0x3' })
+            await store.removeAllRows({
+              tables: 'test',
+              where: `block_number > {latest:UInt32}`,
+              params: { latest: cursor.number },
+            })
+          },
+        }),
+      )
 
       expect(rollbackCalls).toEqual(1)
 
@@ -523,27 +509,25 @@ describe('Clickhouse state', () => {
         try {
           await evmPortalSource({
             portal: mockPortal.url,
-            query: { from: 0, to: 7 },
-          })
-            .pipe(blockTransformer())
-            .pipeTo(
-              clickhouseTarget({
-                client,
-                onData: async ({ data }) => {
-                  if (data[0].hash === '0x4-1' && crashes === 0) {
-                    throw new Error('process failed')
-                  }
-                  finished = true
-                },
-                onRollback: async ({ store, cursor }) => {
-                  await store.removeAllRows({
-                    tables: 'test',
-                    where: `block_number > {latest:UInt32}`,
-                    params: { latest: cursor.number },
-                  })
-                },
-              }),
-            )
+            streams: blockDecoder({ from: 0, to: 7 }),
+          }).pipeTo(
+            clickhouseTarget({
+              client,
+              onData: async ({ data }) => {
+                if (data[0].hash === '0x4-1' && crashes === 0) {
+                  throw new Error('process failed')
+                }
+                finished = true
+              },
+              onRollback: async ({ store, cursor }) => {
+                await store.removeAllRows({
+                  tables: 'test',
+                  where: `block_number > {latest:UInt32}`,
+                  params: { latest: cursor.number },
+                })
+              },
+            }),
+          )
         } catch (error) {
           if (error instanceof Error && error.message === 'process failed') {
             crashes++
@@ -731,40 +715,38 @@ describe('Clickhouse state', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        query: blockQuery({ from: 0, to: 7 }),
-      })
-        .pipe(blockTransformer())
-        .pipeTo(
-          clickhouseTarget({
-            client,
-            onData: async ({ store, data }) => {
-              await store.insert({
-                table: 'test',
-                values: data.map((b) => ({
-                  block_number: b.number,
-                  timestamp: b.timestamp,
-                  block_hash: b.hash,
-                  sign: 1,
-                })),
-                format: 'JSONEachRow',
-              })
-            },
-            onRollback: async ({ type, store, safeCursor }) => {
-              if (rollbackCalls === 0) {
-                expect(safeCursor).toMatchObject({ number: 3, hash: '0x3' })
-              } else {
-                expect(safeCursor).toMatchObject({ number: 1, hash: '0x1' })
-              }
+        streams: blockDecoder({ from: 0, to: 7 }),
+      }).pipeTo(
+        clickhouseTarget({
+          client,
+          onData: async ({ store, data }) => {
+            await store.insert({
+              table: 'test',
+              values: data.map((b) => ({
+                block_number: b.number,
+                timestamp: b.timestamp,
+                block_hash: b.hash,
+                sign: 1,
+              })),
+              format: 'JSONEachRow',
+            })
+          },
+          onRollback: async ({ type, store, safeCursor }) => {
+            if (rollbackCalls === 0) {
+              expect(safeCursor).toMatchObject({ number: 3, hash: '0x3' })
+            } else {
+              expect(safeCursor).toMatchObject({ number: 1, hash: '0x1' })
+            }
 
-              rollbackCalls++
-              await store.removeAllRows({
-                tables: 'test',
-                where: `block_number > {latest:UInt32}`,
-                params: { latest: safeCursor.number },
-              })
-            },
-          }),
-        )
+            rollbackCalls++
+            await store.removeAllRows({
+              tables: 'test',
+              where: `block_number > {latest:UInt32}`,
+              params: { latest: safeCursor.number },
+            })
+          },
+        }),
+      )
 
       const res = await client.query({
         query: 'SELECT * FROM test FINAL ORDER BY block_number ASC',

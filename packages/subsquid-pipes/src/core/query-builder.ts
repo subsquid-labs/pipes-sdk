@@ -1,5 +1,6 @@
 import { PortalRange, parsePortalRange } from '~/core/portal-range.js'
 import { Query } from '~/portal-client/index.js'
+
 import { Heap } from '../internal/heap.js'
 
 /**

@@ -72,35 +72,31 @@ async function main() {
   await evmPortalSource({
     portal: {
       url: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-      // maxBytes: 1024 * 1024 * 1024 * 2,
     },
+    // Configure decoder to extract ERC20 Transfer events from raw blockchain data
+    streams: evmDecoder({
+      range: { from: '0' },
+      events: {
+        transfers: commonAbis.erc20.events.Transfer,
+      },
+    }),
     metrics: metricsServer(),
-  })
-    .pipe(
-      // Configure decoder to extract ERC20 Transfer events from raw blockchain data
-      evmDecoder({
-        range: { from: '0' },
-        events: {
-          transfers: commonAbis.erc20.events.Transfer,
-        },
-      }),
-    )
-    .pipeTo(
-      // Configure Drizzle ORM target to store events in PostgreSQL database
-      drizzleTarget({
-        db: drizzle(DB_URL),
-        /*
-         * List of tables that will be used to track snapshots for rollbacks.
-         * If you modify any table in onData() callback, you MUST specify it here,
-         * otherwise the indexer will throw an error.
-         */
-        tables: [transfersTable],
-        onStart: async ({ db }) => {
-          // WARNING: This direct table creation is only suitable for development/example purposes.
-          // For production environments, use Drizzle Kit migrations to manage database schema changes
-          // in a safe and consistent way.
-          // See: https://orm.drizzle.team/kit-docs/overview
-          await db.execute(`
+  }).pipeTo(
+    // Configure Drizzle ORM target to store events in PostgreSQL database
+    drizzleTarget({
+      db: drizzle(DB_URL),
+      /*
+       * List of tables that will be used to track snapshots for rollbacks.
+       * If you modify any table in onData() callback, you MUST specify it here,
+       * otherwise the indexer will throw an error.
+       */
+      tables: [transfersTable],
+      onStart: async ({ db }) => {
+        // WARNING: This direct table creation is only suitable for development/example purposes.
+        // For production environments, use Drizzle Kit migrations to manage database schema changes
+        // in a safe and consistent way.
+        // See: https://orm.drizzle.team/kit-docs/overview
+        await db.execute(`
               CREATE TABLE IF NOT EXISTS "transfers"
               (
                   "blockNumber"      integer NOT NULL,
@@ -113,32 +109,32 @@ async function main() {
                   CONSTRAINT "transfers_blockNumber_transactionIndex_logIndex_pk" PRIMARY KEY ("blockNumber", "transactionIndex", "logIndex")
               );
           `)
-        },
-        onData: async ({ tx, data, ctx }) => {
-          ctx.logger.debug(`Processing batch with ${data.transfers.length} transfer events...`)
+      },
+      onData: async ({ tx, data, ctx }) => {
+        ctx.logger.debug(`Processing batch with ${data.transfers.length} transfer events...`)
 
-          for (const values of chunk(data.transfers)) {
-            ctx.logger.debug(`Inserting ${values.length} transfer events...`)
+        for (const values of chunk(data.transfers)) {
+          ctx.logger.debug(`Inserting ${values.length} transfer events...`)
 
-            await tx.insert(transfersTable).values(
-              values.map(
-                (d): NewTransfer => ({
-                  // Compound ID
-                  blockNumber: d.block.number,
-                  logIndex: d.rawEvent.logIndex,
-                  transactionIndex: d.rawEvent.transactionIndex,
-                  // ----
-                  from: d.event.from,
-                  to: d.event.to,
-                  amount: d.event.value,
-                  createdAt: d.timestamp,
-                }),
-              ),
-            )
-          }
-        },
-      }),
-    )
+          await tx.insert(transfersTable).values(
+            values.map(
+              (d): NewTransfer => ({
+                // Compound ID
+                blockNumber: d.block.number,
+                logIndex: d.rawEvent.logIndex,
+                transactionIndex: d.rawEvent.transactionIndex,
+                // ----
+                from: d.event.from,
+                to: d.event.to,
+                amount: d.event.value,
+                createdAt: d.timestamp,
+              }),
+            ),
+          )
+        }
+      },
+    }),
+  )
 }
 
 async function api() {

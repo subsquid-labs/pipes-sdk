@@ -3,20 +3,21 @@ import { Codec, Sink } from '@subsquid/evm-codec'
 
 import {
   BatchCtx,
+  Decoder,
   PortalRange,
   ProfilerOptions,
   Transformer,
-  createTransformer,
+  createDecoder,
   formatBlock,
   formatNumber,
   formatWarning,
   parsePortalRange,
 } from '~/core/index.js'
+import { EvmQueryBuilder } from '~/evm/evm-query-builder.js'
 import { arrayify, findDuplicates } from '~/internal/array.js'
 import { Log, LogRequest } from '~/portal-client/query/evm.js'
 
 import { EvmPortalData } from './evm-portal-source.js'
-import { EvmQueryBuilder } from './evm-query-builder.js'
 import { DecodedAbiEvent, Factory } from './factory.js'
 
 export type FactoryEvent<T> = {
@@ -268,6 +269,8 @@ function getDuplicateEvents<T extends Events>(events: T, duplicates: string[]) {
   })
 }
 
+export class EvmDecoder<In, Out> extends Decoder<In, Out, EvmQueryBuilder> {}
+
 /**
  * Decodes EVM events from portal data and optionally filters them by indexed parameters.
  *
@@ -312,11 +315,7 @@ export function evmDecoder<T extends Events, C extends Contracts>({
   events,
   profiler,
   onError,
-}: DecodedEventPipeArgs<T, C>): Transformer<
-  EvmPortalData<typeof decodedEventFields>,
-  EventResponse<T, C>,
-  EvmQueryBuilder
-> {
+}: DecodedEventPipeArgs<T, C>): EvmDecoder<EvmPortalData<typeof decodedEventFields>, EventResponse<T, C>> {
   const normalizedEvents = getNormalizedEvents(events)
   const { eventsWithParams, eventsWithoutParams } = splitEvents(normalizedEvents)
   const eventTopic0 = eventsWithoutParams.map((event) => event.event.topic)
@@ -325,7 +324,7 @@ export function evmDecoder<T extends Events, C extends Contracts>({
   const normalizedContracts =
     contracts && !Factory.isFactory(contracts) ? contracts.map((contract) => contract.toLowerCase()) : undefined
 
-  return createTransformer({
+  return createDecoder({
     profiler: profiler || { id: 'EVM decoder' },
     query: async ({ queryBuilder, logger, portal }) => {
       const allEventTopics = normalizedEvents.map(({ event }) => event.topic)
@@ -459,7 +458,7 @@ export function evmDecoder<T extends Events, C extends Contracts>({
 
       if (Factory.isFactory(contracts)) {
         const span = ctx.profiler.start('factory event decode')
-        for (const block of data.blocks) {
+        for (const block of data) {
           if (!block.logs) continue
           for (const log of block.logs) {
             if (Factory.isFactory(contracts) && contracts.isFactoryEvent(log)) {
@@ -471,7 +470,7 @@ export function evmDecoder<T extends Events, C extends Contracts>({
       }
 
       const span = Factory.isFactory(contracts) ? ctx.profiler.start('child events decode') : undefined
-      for (const block of data.blocks) {
+      for (const block of data) {
         if (!block.logs) continue
 
         for (const log of block.logs) {
@@ -550,8 +549,3 @@ export function evmDecoder<T extends Events, C extends Contracts>({
     },
   })
 }
-
-/**
- *  @deprecated use `evmDecoder` instead
- */
-export const createEvmDecoder = evmDecoder

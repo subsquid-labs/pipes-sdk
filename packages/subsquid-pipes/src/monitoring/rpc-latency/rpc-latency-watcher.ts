@@ -1,4 +1,4 @@
-import { createTransformer } from '~/core/index.js'
+import { createDecoder } from '~/core/index.js'
 import { arrayify, last } from '~/internal/array.js'
 import { WebSocketListener } from '~/monitoring/rpc-latency/ws-client.js'
 
@@ -77,7 +77,7 @@ type Latency = {
 }
 
 export function rpcLatencyWatcher(watcher: RpcLatencyWatcher) {
-  return createTransformer<
+  return createDecoder<
     {
       blocks: {
         header: {
@@ -86,7 +86,8 @@ export function rpcLatencyWatcher(watcher: RpcLatencyWatcher) {
         }
       }[]
     },
-    Latency | null
+    Latency | null,
+    any
   >({
     profiler: { id: 'rpc latency' },
     query: ({ queryBuilder }) => {

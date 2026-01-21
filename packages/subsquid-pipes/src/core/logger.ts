@@ -13,7 +13,7 @@ export function createDefaultLogger({ level }: { level?: LogLevel } = {}): Logge
   const baseLevel = level !== false && level !== null ? level : 'silent'
 
   return pino({
-    base: null,
+    base: undefined,
     messageKey: 'message',
     level: baseLevel ?? (process.env['LOG_LEVEL'] || 'info'),
     formatters: {
