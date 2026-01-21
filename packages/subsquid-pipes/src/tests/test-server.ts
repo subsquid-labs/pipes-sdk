@@ -6,6 +6,10 @@ type ValidateRequest = (res: any) => unknown
 
 export type MockResponse =
   | {
+      statusCode: 204
+      validateRequest?: ValidateRequest
+    }
+  | {
       statusCode: 200
       data: {
         header: {

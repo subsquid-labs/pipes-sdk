@@ -884,6 +884,7 @@ describe('evmDecoder transform', () => {
   it('should decode the events when passed AbiEvent', async () => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
+      logger: false,
     })
       .pipe(
         evmDecoder({
@@ -955,9 +956,37 @@ describe('evmDecoder transform', () => {
     `)
   })
 
+  it.each([
+    //
+    { contracts: [], expected: 0 },
+    { contracts: ['0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef'], expected: 0 },
+    { contracts: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'], expected: 2 },
+    { contracts: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'.toUpperCase()], expected: 2 },
+  ])(`should filter events by specified contracts $contracts -> $expected`, async ({ contracts, expected }) => {
+    const stream = evmPortalSource({
+      portal: mockPortal.url,
+      logger: false,
+    })
+      .pipe(
+        evmDecoder({
+          range: { from: 0, to: 1 },
+          contracts, // No contracts should filter out all events
+          events: {
+            transfers: commonAbis.erc20.events.Transfer,
+          },
+        }),
+      )
+      .pipe((e) => e['transfers'])
+
+    const res = await readAll(stream)
+
+    expect(res).toHaveLength(expected)
+  })
+
   it('should decode the events when passed an EventWithArgs', async () => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
+      logger: false,
     })
       .pipe(
         evmDecoder({
@@ -1036,6 +1065,7 @@ describe('evmDecoder transform', () => {
   it('should decode the events when mixed EventWithArgs and AbiEvent', async () => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
+      logger: false,
     })
       .pipe(
         evmDecoder({
