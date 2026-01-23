@@ -132,7 +132,14 @@ export function mergeImports(imports: ParsedImport[]): ParsedImport[] {
     const existing = merged.get(key)
 
     if (!existing) {
-      merged.set(key, { ...imp })
+      const dedupNamedImports = Array.from(
+        imp.namedImports.reduce((acc, curr) => {
+          acc.add(curr)
+          return acc
+        }, new Set<string>()),
+      )
+
+      merged.set(key, { ...imp, namedImports: dedupNamedImports })
     } else {
       // Merge named imports
       const namedSet = new Set(existing.namedImports)

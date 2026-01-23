@@ -155,10 +155,7 @@ export class PortalClient {
     return res.body ?? undefined
   }
 
-  getStream<Q extends Query>(
-    query: Q,
-    options?: PortalStreamOptions,
-  ): PortalStream<GetBlock<Q>> {
+  getStream<Q extends Query>(query: Q, options?: PortalStreamOptions): PortalStream<GetBlock<Q>> {
     const settings = {
       request: {},
       ...this.#options,

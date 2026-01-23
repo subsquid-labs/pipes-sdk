@@ -1,4 +1,4 @@
-import Mustache from "mustache"
+import Mustache from 'mustache'
 
 export const dockerfileTemplate = `
 # Multi-stage Dockerfile for pipes-sdk-deploy-test
@@ -42,8 +42,12 @@ COPY --from=builder /app/dist ./dist
 COPY migrations ./migrations
 {{#isPostgres}}
 # Files needed for Postgres migrations
+COPY migrations ./migrations
 COPY drizzle.config.ts ./drizzle.config.ts
 COPY src/schemas.ts ./src/schemas.ts
+{{/isPostgres}}
+{{^isPostgres}}
+COPY migrations ./dist/migrations
 {{/isPostgres}}
 
 # Default command

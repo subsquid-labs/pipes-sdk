@@ -45,7 +45,7 @@ export interface CustomSchemaParams {
 }
 
 export const eventTableName = (contract: ContractMetadata, event: RawAbiItem) =>
-  toSnakeCase(`${contract.contractName}_${event.name}`)
+  `${contract.contractName}_${event.name}`
 
 export function renderCustomSchema({ contracts }: CustomSchemaParams) {
   const contracsWithDbTypes = getContractWithDbTypes(contracts)
@@ -58,18 +58,15 @@ export function renderCustomSchema({ contracts }: CustomSchemaParams) {
 
 export function getContractWithDbTypes(contracts: ContractMetadata[]) {
   return contracts.flatMap((c) =>
-    c.contractEvents.map((e) => {
-      const tableName = eventTableName(c, e)
-      return {
-        event: e.name,
-        schemaName: tableToSchemaName(tableName),
-        tableName,
-        inputs: e.inputs.map((i) => ({
-          ...i,
-          dbType: getPostgresType(i.type),
-        })),
-      }
-    }),
+    c.contractEvents.map((e) => ({
+      event: e.name,
+      schemaName: tableToSchemaName(`${c.contractName}_${e.name}`),
+      tableName: toSnakeCase(`${c.contractName}_${e.name}`),
+      inputs: e.inputs.map((i) => ({
+        ...i,
+        dbType: getPostgresType(i.type),
+      })),
+    })),
   )
 }
 

@@ -1,7 +1,6 @@
-import Mustache from 'mustache'
-import { Config, NetworkType } from '~/types/init.js'
+import { Config, NetworkType, WithContractMetadata } from '~/types/init.js'
 import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
-import { customContractTemplate } from '../pipe-templates/evm/custom/transformer.js'
+import { renderTransformerTemplate } from '../pipe-templates/evm/custom/transformer.js'
 import { evmTemplates } from '../pipe-templates/evm/index.js'
 import { svmTemplates } from '../pipe-templates/svm/index.js'
 import { getEnvTemplate } from './env.js'
@@ -27,14 +26,16 @@ export abstract class TemplateBuilder<N extends NetworkType> {
     svm: ['import { solanaPortalSource } from "@subsquid/pipes/solana"'],
   }
 
-  constructor(protected config: Config<N>) {}
+  constructor(protected config: WithContractMetadata<Config<N>>) {}
 
   abstract renderTemplate(templateValues: TemplateValues): string
 
-  build() {
-    const transformerTemplates = this.getTransformerTemplates()
+  async build() {
+    const transformerTemplates = await this.getTransformerTemplates()
     const sinkTemplates = this.getSinkTemplate()
     const envTemplate = getEnvTemplate(this.config.sink)
+
+    // TODO: rename this
     const componentsCode = [
       TemplateBuilder.BASE_IMPORTS,
       TemplateBuilder.NETWORK_IMPORTS[this.config.networkType],
@@ -42,14 +43,15 @@ export abstract class TemplateBuilder<N extends NetworkType> {
       sinkTemplates,
       transformerTemplates.map((t) => t.code),
     ].flat()
+
     const deduplicatedImports = this.deduplicateImports(componentsCode)
 
+    const sinkCode = splitImportsAndCode(sinkTemplates).code
+    const envCode = splitImportsAndCode(envTemplate).code
     const transformersCode = transformerTemplates.map((t) => ({
       templateId: t.templateId,
       code: splitImportsAndCode(t.code).code,
     }))
-    const sinkCode = splitImportsAndCode(this.getSinkTemplate()).code
-    const envCode = splitImportsAndCode(envTemplate).code
 
     return this.renderTemplate({
       network: this.config.network,
@@ -61,19 +63,26 @@ export abstract class TemplateBuilder<N extends NetworkType> {
   }
 
   private getTransformerTemplates() {
-    return this.config.templates.map((template) => {
-      if (template.templateId === 'custom') {
-        const [address] = this.config.contractAddresses
-        return { code: Mustache.render(customContractTemplate, { address }), templateId: 'custom' }
-      }
-      return { code: template.code, templateId: template.templateId }
-    })
+    return Promise.all(
+      this.config.templates.map(async (template) => {
+        if (template.templateId === 'custom') {
+          return {
+            code: renderTransformerTemplate(this.config),
+            templateId: 'custom',
+          }
+        }
+        return { code: template.code, templateId: template.templateId }
+      }),
+    )
   }
 
   private getSinkTemplate() {
+    const hasCustomContracts = this.config.contractAddresses.length > 0
     return renderSinkTemplate(this.config.sink, {
       templates: this.config.templates,
-      hasCustomContracts: this.config.contractAddresses.length > 0,
+      // TODO: remove hasCustomContracts. not used anymore
+      hasCustomContracts,
+      ...(hasCustomContracts ? { contracts: this.config.contracts } : {}),
     })
   }
 

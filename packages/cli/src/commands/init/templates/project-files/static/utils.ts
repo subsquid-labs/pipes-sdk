@@ -1,4 +1,4 @@
-export const clickhouseUtilsTemplate = `export type SnakeCase<S extends string> =
+export const snakeCaseUtilsTemplate = `export type SnakeCase<S extends string> =
   S extends \`\${infer H}\${infer T}\`
     ? \`\${H extends Lowercase<H> ? H : \`_\${Lowercase<H>}\`}\${SnakeCase<T>}\`
     : S
@@ -23,5 +23,37 @@ export function serializeJsonWithBigInt(obj: unknown): string {
   return JSON.stringify(obj, (_key, value) =>
     typeof value === 'bigint' ? value.toString() : value,
   )
+}
+`
+
+export const eventEnricherUtilsTemplate = `
+import { type EventResponse, Events } from '@subsquid/pipes/evm'
+
+export type ExtendEventResponse<ER extends EventResponse<Events, string[]>, Extra extends object> = {
+  [K in keyof ER]: ER[K] extends Array<infer E> ? Array<E & Extra> : never
+}
+
+export interface EnrichedEventMeta {
+  blockNumber: number
+  txHash: string
+  logIndex: number
+  timestamp: number // unix seconds
+}
+
+export function enrichEvents<T extends EventResponse<Events, string[]>>(obj: T): ExtendEventResponse<T, EnrichedEventMeta> {
+  const result = {} as ExtendEventResponse<T, EnrichedEventMeta>
+  
+  for (const key in obj) {
+    const value = obj[key]
+    result[key] = (value as any[]).map((v) => ({
+      ...v,
+      blockNumber: v.block.number,
+      txHash: v.rawEvent.transactionHash,
+      logIndex: v.rawEvent.logIndex,
+      timestamp: new Date(v.timestamp).getTime() / 1000,
+    })) as ExtendEventResponse<T, EnrichedEventMeta>[typeof key]
+  }
+
+  return result
 }
 `

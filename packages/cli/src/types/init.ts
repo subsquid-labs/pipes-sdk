@@ -1,4 +1,8 @@
-import { EvmTemplateIds, SvmTemplateIds } from "~/commands/init/config/templates.js"
+import { EvmNetworkConfig } from '~/commands/init/config/networks.js'
+import { EvmTemplateIds, SvmTemplateIds } from '~/commands/init/config/templates.js'
+import { ContractMetadata } from '~/services/sqd-abi.js'
+
+export type WithContractMetadata<T extends object> = T & { contracts: ContractMetadata[] }
 
 export interface Config<N extends NetworkType> {
   projectFolder: string
@@ -39,3 +43,22 @@ export interface TransformerTemplate<N extends NetworkType> {
   clickhouseTableTemplate?: string
   drizzleSchema?: string
 }
+
+export interface EvmTransformerTemplate {
+  network: EvmNetworkConfig
+  contractAddresses: string[]
+}
+
+export interface EnrichedEvmTemplate {
+  contracts: ContractMetadata[]
+}
+
+// - Project name
+// - Templates or custom
+// - If templates
+//    - template
+//    - network
+// - If custom
+//    - network
+//    - contract address
+//    - events

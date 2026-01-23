@@ -1,21 +1,68 @@
 import { describe, expect, it } from 'vitest'
-import { Config } from '~/types/init.js'
+import { ContractMetadata } from '~/services/sqd-abi.js'
+import { Config, WithContractMetadata } from '~/types/init.js'
 import { evmTemplates } from '../pipe-templates/evm/index.js'
 import { EvmTemplateBuilder } from './evm-template-builder.js'
 
+const wethMetadata: ContractMetadata[] = [
+  {
+    contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+    contractName: 'WETH9',
+    contractEvents: [
+      {
+        inputs: [
+          {
+            name: 'src',
+            type: 'address',
+          },
+          {
+            name: 'guy',
+            type: 'address',
+          },
+          {
+            name: 'wad',
+            type: 'uint256',
+          },
+        ],
+        name: 'Approval',
+        type: 'event',
+      },
+      {
+        inputs: [
+          {
+            name: 'src',
+            type: 'address',
+          },
+          {
+            name: 'dst',
+            type: 'address',
+          },
+          {
+            name: 'wad',
+            type: 'uint256',
+          },
+        ],
+        name: 'Transfer',
+        type: 'event',
+      },
+    ],
+  },
+]
+
 describe('EVM Template Builder', () => {
-  it('should build index.ts file using single pipe template', () => {
-    const config: Config<'evm'> = {
+  it('should build index.ts file using single pipe template', async () => {
+    const config: WithContractMetadata<Config<'evm'>> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
       network: 'ethereum-mainnet',
       templates: [evmTemplates['erc20Transfers']],
+      contracts: [],
       contractAddresses: [],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
 
-    const indexerContent = new EvmTemplateBuilder(config).build()
+    const indexerContent = await new EvmTemplateBuilder(config).build()
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
@@ -60,16 +107,6 @@ describe('EVM Template Builder', () => {
         .pipeComposite({
           erc20Transfers,
         })
-        /**
-         * You can further transform the data coming from the source
-         * \`\`\`ts
-         * .pipe(({ contract1 }) => {
-         *   return contract1.SomeEvent.map(e => {
-         *     // some transformation logic
-         *   })
-         * })
-         * \`\`\`
-         */
         .pipeTo(clickhouseTarget({
           client: createClient({
               username: env.CLICKHOUSE_USER,
@@ -114,18 +151,19 @@ describe('EVM Template Builder', () => {
     `)
   })
 
-  it('should build index.ts combining multiple pipe templates', () => {
-    const config: Config<'evm'> = {
+  it('should build index.ts combining multiple pipe templates', async () => {
+    const config: WithContractMetadata<Config<'evm'>> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
       network: 'ethereum-mainnet',
       templates: [evmTemplates['erc20Transfers'], evmTemplates['uniswapV3Swaps']],
+      contracts: [],
       contractAddresses: [],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
 
-    const indexerContent = new EvmTemplateBuilder(config).build()
+    const indexerContent = await new EvmTemplateBuilder(config).build()
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
@@ -199,16 +237,6 @@ describe('EVM Template Builder', () => {
           erc20Transfers,
           uniswapV3Swaps,
         })
-        /**
-         * You can further transform the data coming from the source
-         * \`\`\`ts
-         * .pipe(({ contract1 }) => {
-         *   return contract1.SomeEvent.map(e => {
-         *     // some transformation logic
-         *   })
-         * })
-         * \`\`\`
-         */
         .pipeTo(clickhouseTarget({
           client: createClient({
               username: env.CLICKHOUSE_USER,
@@ -259,18 +287,19 @@ describe('EVM Template Builder', () => {
     `)
   })
 
-  it('should build custom contract template', () => {
-    const config: Config<'evm'> = {
+  it('should build custom contract template', async () => {
+    const config: WithContractMetadata<Config<'evm'>> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
       network: 'ethereum-mainnet',
       templates: [evmTemplates['custom']],
+      contracts: wethMetadata,
       contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
       sink: 'postgresql',
       packageManager: 'pnpm',
     }
 
-    const indexerContent = new EvmTemplateBuilder(config).build()
+    const indexerContent = await new EvmTemplateBuilder(config).build()
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
@@ -278,8 +307,9 @@ describe('EVM Template Builder', () => {
       import { z } from "zod";
       import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres";
       import { drizzle } from "drizzle-orm/node-postgres";
-      import { customContractTable } from "./schemas.js";
-      import { events as myContractEvents } from "./contracts/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2.js";
+      import { weth9ApprovalTable, weth9TransferTable } from "./schemas.js";
+      import { events as weth9Events } from "./contracts/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2.js";
+      import { enrichEvents } from "./utils/index.js";
 
       const env = z.object({
         DB_CONNECTION_STR: z.string(),
@@ -287,17 +317,20 @@ describe('EVM Template Builder', () => {
 
       const custom = evmDecoder({
         range: { from: 'latest' },
-        contracts: ["0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"],
+        contracts: [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        ],
         /**
-         * Or optionally use only a subset of events by passing the events object directly:
+         * Or optionally use pass all events object directly to listen to all contract events
          * \`\`\`ts
-         * events: {
-         *   transfers: myContractEvents.events.SomeEvent,
-         * },
+         * events: myContractEvents,
          * \`\`\`
          */
-        events: myContractEvents,
-      })
+        events: {
+          Approval: weth9Events.Approval,
+          Transfer: weth9Events.Transfer,
+        },
+      }).pipe(enrichEvents)
 
       export async function main() {
         await evmPortalSource({
@@ -306,29 +339,19 @@ describe('EVM Template Builder', () => {
         .pipeComposite({
           custom,
         })
-        /**
-         * You can further transform the data coming from the source
-         * \`\`\`ts
-         * .pipe(({ contract1 }) => {
-         *   return contract1.SomeEvent.map(e => {
-         *     // some transformation logic
-         *   })
-         * })
-         * \`\`\`
-         */
         .pipeTo(drizzleTarget({
           db: drizzle(env.DB_CONNECTION_STR),
           tables: [
-            customContractTable,
+            weth9ApprovalTable,
+            weth9TransferTable,
           ],
           onData: async ({ tx, data }) => {
-            /**
-             * Once the data is transformed, you can insert it into the database.
-             *  
-             * for (const values of chunk(data.custom.MyContractEvent)) {
-             *   await tx.insert(customContract).values(values)
-             * }
-             */
+            for (const values of chunk(data.custom.Approval)) {
+              await tx.insert(weth9ApprovalTable).values(values)
+            }
+            for (const values of chunk(data.custom.Transfer)) {
+              await tx.insert(weth9TransferTable).values(values)
+            }
           },
         }))
       }

@@ -1,13 +1,12 @@
 import { exec } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
+import { copyFileSync, cpSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import chalk from 'chalk'
 import ora from 'ora'
 import { z } from 'zod'
 import { getEvmChainId } from '~/commands/init/config/networks.js'
-import { SqdAbiService } from '~/services/sqd-abi.js'
+import { type ContractMetadata, SqdAbiService } from '~/services/sqd-abi.js'
 import {
   type Config,
   type NetworkType,
@@ -16,20 +15,29 @@ import {
   packageManagerTypes,
   type Sink,
   sinkTypes,
+  type WithContractMetadata,
 } from '~/types/init.js'
 import { getTemplateDirname } from '~/utils/fs.js'
-import { EvmTemplateIds, SvmTemplateIds } from './config/templates.js'
-import { InvalidNetworkTypeError, TemplateNotFoundError } from './init.errors.js'
+import type { EvmTemplateIds, SvmTemplateIds } from './config/templates.js'
+import {
+  InvalidNetworkTypeError,
+  ProjectAlreadyExistError,
+  TemplateFileNotFoundError,
+  TemplateNotFoundError,
+  UnexpectedTemplateFileError,
+} from './init.errors.js'
 import { EvmTemplateBuilder } from './templates/pipe-components/evm-template-builder.js'
 import { renderSchemasTemplate } from './templates/pipe-components/schemas-template.js'
 import { SvmTemplateBuilder } from './templates/pipe-components/svm-template-builder.js'
+import { TemplateBuilder } from './templates/pipe-components/template-builder.js'
+import { renderCustomClickhouseTables } from './templates/pipe-templates/evm/custom/clickhouse-table.sql.js'
 import { evmTemplates } from './templates/pipe-templates/evm/index.js'
 import { svmTemplates } from './templates/pipe-templates/svm/index.js'
 import {
   agentsTemplate,
   biomeConfigTemplate,
-  clickhouseUtilsTemplate,
   drizzleConfigTemplate,
+  eventEnricherUtilsTemplate,
   gitignoreTemplate,
   pnpmWorkspaceTemplate,
   renderDependencies,
@@ -38,6 +46,7 @@ import {
   renderEnvTemplate,
   renderPackageJson,
   renderReadme,
+  snakeCaseUtilsTemplate,
   tsconfigConfigTemplate,
 } from './templates/project-files/index.js'
 
@@ -69,12 +78,12 @@ const configJsonSchema = z
 
 type ConfigJson = z.infer<typeof configJsonSchema>
 
-type ConfigWithName = Config<NetworkType> & { projectName: string }
+type ExtendedConfig = Config<NetworkType> & { projectName: string; projectAbsolutePath: string }
 
 const squidfix = (text: string) => chalk.gray(`[🦑 PIPES SDK] ${text} `)
 
 export class InitHandler {
-  private readonly config: ConfigWithName
+  private readonly config: ExtendedConfig
 
   constructor(config: Config<NetworkType>) {
     const pathParts = config.projectFolder.split('/')
@@ -82,87 +91,91 @@ export class InitHandler {
     this.config = {
       ...config,
       projectName: pathParts[pathParts.length - 1] ?? config.projectFolder,
+      projectAbsolutePath: path.resolve(config.projectFolder),
     }
   }
 
   async handle(): Promise<void> {
     const spinner = ora('\n\nSetting up new Pipes SDK project...').start()
     try {
-      spinner.text = squidfix('Creating project folder')
-      await this.createProjectFolder(this.config.projectFolder)
+      this.checkCurrentProjectPath()
 
-      const projectPath = path.resolve(this.config.projectFolder)
-
-      await mkdir(path.join(projectPath, 'src'), { recursive: true })
-
-      spinner.text = squidfix('Writing static files')
-      this.writeStaticFiles(projectPath)
-
-      spinner.text = squidfix('Writing template files')
-      this.writeTemplateFiles(projectPath)
-
-      if (this.config.sink === 'clickhouse') {
-        spinner.text = squidfix('Copying ClickHouse migrations')
-        await this.copyClickHouseMigrations(projectPath)
+      let contractsMetadata: ContractMetadata[] = []
+      if (this.config.contractAddresses.length) {
+        spinner.text = squidfix('Fetching contracts metadata')
+        contractsMetadata = await new SqdAbiService().getContractData(
+          this.config.contractAddresses,
+          getEvmChainId(this.config.network),
+        )
       }
 
+      const configWithContractMetadata: WithContractMetadata<Config<NetworkType>> = {
+        ...this.config,
+        contracts: contractsMetadata,
+      }
+
+      spinner.text = squidfix('Writing static files')
+      this.writeStaticFiles()
+
+      spinner.text = squidfix('Writing template files')
+      await this.writeTemplateFiles(configWithContractMetadata)
+
       spinner.text = squidfix('Copying template contracts')
-      await this.copyTemplateContracts(projectPath)
+      await this.copyTemplateContracts()
 
       spinner.text = squidfix('Installing dependencies')
-      await this.installDependencies(projectPath)
+      await this.installDependencies()
 
       spinner.text = squidfix('Linting project')
-      await this.lintProject(projectPath)
+      await this.lintProject()
 
       if (this.config.contractAddresses.length > 0) {
         spinner.text = squidfix('Generating contract types')
-        await this.generateContractTypes(projectPath)
+        await this.generateContractTypes()
       }
 
       if (this.config.sink === 'postgresql') {
         spinner.text = squidfix('Generating database migrations')
-        await this.generateDatabaseMigrations(projectPath)
+        await this.generateDatabaseMigrations()
       }
 
       spinner.succeed(`${squidfix(`${this.config.projectFolder} project initialized successfully`)}`)
 
-      this.nextSteps(projectPath)
+      this.nextSteps()
     } catch (error) {
       spinner.fail('Failed to initialize project')
       throw error
     }
   }
 
-  private async createProjectFolder(folder: string): Promise<void> {
-    if (folder === '.') {
-      return
+  private checkCurrentProjectPath() {
+    try {
+      const projectStat = statSync(this.config.projectAbsolutePath)
+
+      if (projectStat.isDirectory()) throw new ProjectAlreadyExistError(this.config.projectAbsolutePath)
+    } catch (e) {
+      if ((e as any).code === 'ENOENT') return
+      throw e
     }
-
-    const fullPath = path.resolve(folder)
-
-    if (existsSync(fullPath)) {
-      throw new Error(`Project folder ${fullPath} already exists`)
-    }
-
-    await mkdir(fullPath, { recursive: true })
   }
 
-  private writeStaticFiles(projectPath: string): void {
-    writeFileSync(path.join(projectPath, 'biome.json'), JSON.stringify(biomeConfigTemplate, null, 2))
-    writeFileSync(path.join(projectPath, 'tsconfig.json'), JSON.stringify(tsconfigConfigTemplate, null, 2))
-    writeFileSync(path.join(projectPath, '.gitignore'), gitignoreTemplate)
-    writeFileSync(path.join(projectPath, 'AGENTS.md'), agentsTemplate)
+  private writeStaticFiles(): void {
+    this.writeToProject('biome.json', biomeConfigTemplate)
+    this.writeToProject('tsconfig.json', tsconfigConfigTemplate)
+    this.writeToProject('.gitignore', gitignoreTemplate)
+    this.writeToProject('AGENTS.md', agentsTemplate)
 
     if (this.config.packageManager === 'pnpm') {
-      writeFileSync(path.join(projectPath, 'pnpm-workspace.yaml'), pnpmWorkspaceTemplate)
+      this.writeToProject('pnpm-workspace.yaml', pnpmWorkspaceTemplate)
     }
   }
 
-  private writeTemplateFiles(projectPath: string): void {
+  private async writeTemplateFiles(
+    configWithContractMetadata: WithContractMetadata<Config<NetworkType>>,
+  ): Promise<void> {
     const { dependencies, devDependencies } = renderDependencies(this.config.sink)
-    writeFileSync(
-      path.join(projectPath, 'package.json'),
+    this.writeToProject(
+      'package.json',
       renderPackageJson({
         projectName: this.config.projectName,
         dependencies,
@@ -171,30 +184,30 @@ export class InitHandler {
       }),
     )
 
-    writeFileSync(
-      path.join(projectPath, 'Dockerfile'),
+    this.writeToProject(
+      'Dockerfile',
       renderDockerfile({
         isPostgres: this.config.sink === 'postgresql',
       }),
     )
 
-    writeFileSync(
-      path.join(projectPath, 'docker-compose.yml'),
+    this.writeToProject(
+      'docker-compose.yml',
       renderDockerCompose({
         projectName: this.config.projectName,
         sink: this.config.sink,
       }),
     )
 
-    writeFileSync(
-      path.join(projectPath, '.env'),
+    this.writeToProject(
+      '.env',
       renderEnvTemplate({
         sink: this.config.sink,
       }),
     )
 
-    writeFileSync(
-      path.join(projectPath, 'README.md'),
+    this.writeToProject(
+      'README.md',
       renderReadme({
         packageManager: this.config.packageManager,
         projectName: this.config.projectName,
@@ -202,80 +215,70 @@ export class InitHandler {
       }),
     )
 
-    writeFileSync(path.join(projectPath, 'src/index.ts'), this.renderIndexerTs())
+    this.writeToProject('src/index.ts', await this.renderIndexerTs(configWithContractMetadata))
 
     if (this.config.sink === 'postgresql') {
-      writeFileSync(path.join(projectPath, 'drizzle.config.ts'), drizzleConfigTemplate)
-
-      const schemasTs = renderSchemasTemplate(this.config)
-      writeFileSync(path.join(projectPath, 'src/schemas.ts'), schemasTs)
+      const schemasTs = renderSchemasTemplate(configWithContractMetadata)
+      this.writeToProject('src/schemas.ts', schemasTs)
+      this.writeToProject('drizzle.config.ts', drizzleConfigTemplate)
+      this.writeToProject('src/utils/index.ts', eventEnricherUtilsTemplate)
     }
 
     if (this.config.sink === 'clickhouse') {
-      const utilsDir = path.join(projectPath, 'src/utils')
-      mkdirSync(utilsDir, { recursive: true })
-      writeFileSync(path.join(utilsDir, 'index.ts'), clickhouseUtilsTemplate)
+      await this.copyClickHouseMigrations(configWithContractMetadata)
+      const content = eventEnricherUtilsTemplate + '\n' + snakeCaseUtilsTemplate
+      this.writeToProject('src/utils/index.ts', content)
     }
   }
 
-  private renderIndexerTs(): string {
+  private renderIndexerTs(config: WithContractMetadata<Config<NetworkType>>): Promise<string> {
+    let builder: TemplateBuilder<NetworkType>
     if (this.config.networkType === 'evm') {
-      const builder = new EvmTemplateBuilder(this.config as Config<'evm'>)
-      return builder.build()
-    }
-    if (this.config.networkType === 'svm') {
-      const builder = new SvmTemplateBuilder(this.config as Config<'svm'>)
-      return builder.build()
+      builder = new EvmTemplateBuilder(config as WithContractMetadata<Config<'evm'>>)
+    } else if (this.config.networkType === 'svm') {
+      builder = new SvmTemplateBuilder(config as WithContractMetadata<Config<'svm'>>)
+    } else {
+      throw new InvalidNetworkTypeError(this.config.networkType)
     }
 
-    throw new InvalidNetworkTypeError(this.config.networkType)
+    return builder.build()
   }
 
-  private async installDependencies(projectPath: string): Promise<void> {
+  private async installDependencies(): Promise<void> {
     await execAsync(`${this.config.packageManager} install`, {
-      cwd: projectPath,
+      cwd: this.config.projectAbsolutePath,
     })
   }
 
-  private async lintProject(projectPath: string): Promise<void> {
+  private async lintProject(): Promise<void> {
     await execAsync(`${this.config.packageManager} run lint`, {
-      cwd: projectPath,
+      cwd: this.config.projectAbsolutePath,
     })
   }
 
-  private async generateDatabaseMigrations(projectPath: string): Promise<void> {
+  private async generateDatabaseMigrations(): Promise<void> {
     await execAsync(`${this.config.packageManager} run db:generate`, {
-      cwd: projectPath,
+      cwd: this.config.projectAbsolutePath,
     })
   }
 
-  private async copyClickHouseMigrations(projectPath: string): Promise<void> {
-    const defaultMigrationFileName = 'clickhouse-table.sql'
+  private async copyClickHouseMigrations(config: WithContractMetadata<Config<NetworkType>>): Promise<void> {
+    const migrationsDir = 'migrations'
+    const templateMigrationFile = 'clickhouse-table.sql'
     const templateBaseDir = getTemplateDirname(this.config.networkType)
-    const migrationsDir = path.join(projectPath, 'migrations')
-    await mkdir(migrationsDir, { recursive: true })
 
     for (const template of this.config.templates) {
-      const sourceFile = path.join(templateBaseDir, template.folderName, defaultMigrationFileName)
-
-      if (existsSync(sourceFile)) {
-        const targetFile = path.join(migrationsDir, `${template.folderName}-migration.sql`)
-        copyFileSync(sourceFile, targetFile)
-      }
-    }
-
-    // Handle custom contract template if present
-    if (this.config.contractAddresses.length > 0) {
-      const customContractSourceFile = path.join(templateBaseDir, 'custom', defaultMigrationFileName)
-
-      if (existsSync(customContractSourceFile)) {
-        const targetFile = path.join(migrationsDir, 'custom-contract-migration.sql')
-        copyFileSync(customContractSourceFile, targetFile)
+      if (template.templateId === 'custom') {
+        const fileContent = renderCustomClickhouseTables(config)
+        this.writeToProject(`${migrationsDir}/custom-contract-migration.sql`, fileContent)
+      } else {
+        const sourceFile = path.join(templateBaseDir, template.folderName, templateMigrationFile)
+        this.copyToProject(sourceFile, `${migrationsDir}/${template.folderName}-migration.sql`)
       }
     }
   }
 
-  private async copyTemplateContracts(projectPath: string): Promise<void> {
+  private async copyTemplateContracts(): Promise<void> {
     const templateBaseDir = getTemplateDirname(this.config.networkType)
     let hasContracts = false
 
@@ -292,52 +295,24 @@ export class InitHandler {
       return
     }
 
-    const projectContractsDir = path.join(projectPath, 'src/contracts')
-    await mkdir(projectContractsDir, { recursive: true })
-
     for (const template of this.config.templates) {
       const templateContractsDir = path.join(templateBaseDir, template.folderName, 'contracts')
-
-      if (existsSync(templateContractsDir)) {
-        this.copyDirectoryRecursive(templateContractsDir, projectContractsDir)
-      }
+      this.copyToProject(templateContractsDir, 'src/contracts')
     }
   }
 
-  private copyDirectoryRecursive(sourceDir: string, targetDir: string): void {
-    const entries = readdirSync(sourceDir)
-
-    for (const entry of entries) {
-      const sourcePath = path.join(sourceDir, entry)
-      const targetPath = path.join(targetDir, entry)
-      const stat = statSync(sourcePath)
-
-      if (stat.isDirectory()) {
-        mkdirSync(targetPath, { recursive: true })
-        this.copyDirectoryRecursive(sourcePath, targetPath)
-      } else {
-        copyFileSync(sourcePath, targetPath)
-      }
-    }
-  }
-
-  private async generateContractTypes(projectPath: string): Promise<void> {
-    await mkdir(path.join(projectPath, 'src/contracts'), { recursive: true })
-
+  private async generateContractTypes(): Promise<void> {
     const abiService = new SqdAbiService()
 
     if (this.config.networkType === 'evm') {
       const chainId = getEvmChainId(this.config.network)
-      if (!chainId) {
-        return
-      }
-      abiService.generateEvmTypes(projectPath, this.config.contractAddresses, chainId)
+      abiService.generateEvmTypes(this.config.projectAbsolutePath, this.config.contractAddresses, chainId)
     } else {
-      abiService.generateSolanaTypes(projectPath, this.config.contractAddresses)
+      abiService.generateSolanaTypes(this.config.projectAbsolutePath, this.config.contractAddresses)
     }
   }
 
-  private nextSteps(projectPath: string): void {
+  private nextSteps(): void {
     const sep = `${chalk.green('─'.repeat(64))}`
 
     const pgMessage = `3) Apply migrations
@@ -362,7 +337,7 @@ export class InitHandler {
   ${chalk.bold.yellow('⚡ QUICKSTART')}
 
   1) Enter the project folder
-    ${chalk.gray.italic(`cd ${projectPath}`)}
+    ${chalk.gray.italic(`cd ${this.config.projectFolder}`)}
 
   2) Start collecting data
     ${chalk.gray.italic('docker compose --profile with-pipeline up')}
@@ -371,7 +346,7 @@ export class InitHandler {
   ${chalk.bold.blue('💻 DEVELOPMENT')}
 
   1) Enter the project folder
-     ${chalk.gray.italic(`cd ${projectPath}`)}
+     ${chalk.gray.italic(`cd ${this.config.projectFolder}`)}
 
   2) Start your ${sinkTypes.find((s) => s.value === this.config.sink)?.name} database
      ${chalk.gray.italic('docker compose up -d')}
@@ -381,6 +356,29 @@ export class InitHandler {
   ${chalk.gray('Need help? Check our documentation at')} ${chalk.bold.gray.underline('https://beta.docs.sqd.dev/en/sdk/pipes-sdk')}`
 
     console.log(message)
+  }
+
+  private writeToProject(relativePath: string, content: string) {
+    const filePath = path.join(this.config.projectAbsolutePath, relativePath)
+    mkdirSync(path.dirname(filePath), { recursive: true })
+    writeFileSync(filePath, content)
+  }
+
+  private copyToProject(absoluteSourcePath: string, relativeTargetPath: string) {
+    const absoluteTargetFilePath = path.join(this.config.projectAbsolutePath, relativeTargetPath)
+
+    if (!existsSync(absoluteSourcePath)) throw new TemplateFileNotFoundError(absoluteSourcePath)
+
+    const sourceStat = statSync(absoluteSourcePath)
+
+    if (sourceStat.isDirectory()) {
+      cpSync(absoluteSourcePath, absoluteTargetFilePath, { recursive: true })
+    } else if (sourceStat.isFile()) {
+      mkdirSync(path.dirname(absoluteTargetFilePath), { recursive: true })
+      copyFileSync(absoluteSourcePath, absoluteTargetFilePath)
+    } else {
+      throw new UnexpectedTemplateFileError(absoluteTargetFilePath)
+    }
   }
 
   static fromJson(jsonString: string): InitHandler {

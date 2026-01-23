@@ -2,6 +2,9 @@ import { EvmTemplateIds } from '~/commands/init/config/templates.js'
 import { TransformerTemplate } from '~/types/init.js'
 import { getTemplateDirname } from '~/utils/fs.js'
 import { TemplateParser } from '../template-parser.js'
+import { customContractChTemplate } from './custom/clickhouse-table.sql.js'
+import { customContractPgTemplate } from './custom/pg-table.js'
+import { customContractTemplate } from './custom/transformer.js'
 
 const templateParser = new TemplateParser(getTemplateDirname('evm'))
 
@@ -10,7 +13,9 @@ export const evmTemplates: Record<EvmTemplateIds, TransformerTemplate<'evm'>> = 
     templateId: 'custom',
     folderName: 'custom',
     tableName: 'custom_contract',
-    ...templateParser.readTemplateFiles('custom'),
+    code: customContractTemplate,
+    drizzleSchema: customContractPgTemplate,
+    clickhouseTableTemplate: customContractChTemplate,
   }))(),
   erc20Transfers: (() => ({
     templateId: 'erc20Transfers',

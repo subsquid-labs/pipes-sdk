@@ -20,16 +20,6 @@ export async function main() {
     {{{templateId}}},
 {{/transformerTemplates}}
   })
-  /**
-   * You can further transform the data coming from the source
-   * \`\`\`ts
-   * .pipe(({ contract1 }) => {
-   *   return contract1.SomeEvent.map(e => {
-   *     // some transformation logic
-   *   })
-   * })
-   * \`\`\`
-   */
   .pipeTo({{{sinkTemplate}}})
 }
 

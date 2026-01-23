@@ -1,55 +1,75 @@
 import { toCamelCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
-import { Config, NetworkType } from '~/types/init.js'
+import { Config, NetworkType, WithContractMetadata } from '~/types/init.js'
 import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
+import { eventTableName, renderCustomSchema } from '../pipe-templates/evm/custom/pg-table.js'
 
 export const schemasTemplate = `{{#mergedImports}}
 {{{.}}}
 {{/mergedImports}}
 
 {{#schemas}}
-{{{schema}}}
+{{{schemaCode}}}
 
 {{/schemas}}
 export default {
 {{#schemas}}
-  {{{schemaName}}},
+  {{#schemaNames}}
+  {{.}},
+  {{/schemaNames}}
 {{/schemas}}
 }
 `
 
+interface SchemaTemplateParams {
+  schemaCode: string
+  schemaNames: string[]
+  fullSchema: string
+}
+
 export const tableToSchemaName = (tableName: string) => `${toCamelCase(tableName)}Table`
 
-export function renderSchemasTemplate(config: Config<NetworkType>): string {
-  // Extract imports from each schema file
-  const allImportStrings = config.templates.flatMap((template) => {
-    if (!template.drizzleSchema) return []
-    const { imports } = splitImportsAndCode(template.drizzleSchema)
-    return imports.map(generateImportStatement).filter((stmt) => stmt.length > 0)
-  })
-
-  // Merge all imports
-  const combinedImports = allImportStrings.join('\n')
-  const parsedImports = combinedImports ? splitImportsAndCode(combinedImports).imports : []
-  const mergedImports = mergeImports(parsedImports)
-  const mergedImportStatements = mergedImports.map(generateImportStatement).filter((stmt) => stmt.length > 0)
-
+export function renderSchemasTemplate(config: WithContractMetadata<Config<NetworkType>>): string {
   // Extract code (without imports) from each schema file
-  const schemas = config.templates
+  const customTemplateSchemas = config.templates
+    .filter((t) => t.templateId === 'custom')
+    .map(() => {
+      const code = renderCustomSchema(config)
+
+      return {
+        fullSchema: code,
+        schemaCode: splitImportsAndCode(code).code,
+        schemaNames: config.contracts.flatMap((c) =>
+          c.contractEvents.map((e) => tableToSchemaName(eventTableName(c, e))),
+        ),
+      }
+    })
+    .filter((t): t is SchemaTemplateParams => !!t)
+
+  const templateSchemas = config.templates
+    .filter((t) => t.templateId !== 'custom')
     .map((template) => {
       if (!template.drizzleSchema) return
 
       const { code } = splitImportsAndCode(template.drizzleSchema)
 
       return {
-        schema: code,
-        schemaName: tableToSchemaName(template.tableName),
+        fullSchema: template.drizzleSchema,
+        schemaCode: code,
+        schemaNames: [tableToSchemaName(template.tableName)],
       }
     })
-    .filter((t): t is { schema: string; schemaName: string } => !!t)
+    .filter((t): t is SchemaTemplateParams => !!t)
+
+  const templateImports = [...templateSchemas, ...customTemplateSchemas].flatMap(
+    (template) => splitImportsAndCode(template.fullSchema).imports,
+  )
+
+  const mergedImports = mergeImports(templateImports)
+  const mergedImportStatements = mergedImports.map(generateImportStatement).filter((stmt) => stmt.length > 0)
 
   return Mustache.render(schemasTemplate, {
     mergedImports: mergedImportStatements,
-    schemas,
+    schemas: [...templateSchemas, ...customTemplateSchemas],
   })
 }

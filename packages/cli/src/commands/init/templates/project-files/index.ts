@@ -10,4 +10,7 @@ export { drizzleConfigTemplate } from './static/drizzle-config.js'
 export { gitignoreTemplate } from './static/gitignore.js'
 export { pnpmWorkspaceTemplate } from './static/pnpm-workspace.js'
 export { tsconfigConfigTemplate } from './static/tsconfig.js'
-export { clickhouseUtilsTemplate } from './static/utils.js'
+export {
+  eventEnricherUtilsTemplate,
+  snakeCaseUtilsTemplate,
+} from './static/utils.js'

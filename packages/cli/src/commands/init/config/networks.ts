@@ -1,6 +1,27 @@
-import type { NetworkType } from "~/types/init.js"
+export interface EvmNetworkConfig {
+  name: string
+  type: 'mainnet' | 'testnet' | 'devnet'
+  tooltip: string | null
+  chainId: string
+  portal: boolean
+  realtime: boolean
+  traces: boolean
+  stateDiffs: boolean
+  slug: string
+  details: string
+}
 
-export const evmNetworks = [
+export interface SvmNetworkConfig {
+  name: string
+  type: 'mainnet' | 'testnet' | 'devnet'
+  tooltip: string | null
+  portal: boolean
+  realtime: boolean
+  slug: string
+  details: string
+}
+
+export const evmNetworks: EvmNetworkConfig[] = [
   {
     name: '0g Testnet',
     type: 'testnet',
@@ -1693,9 +1714,9 @@ export const evmNetworks = [
     slug: 'zora-sepolia',
     details: '/en/data/evm/zora-sepolia/overview',
   },
-] as const
+]
 
-export const solanaNetworks = [
+export const solanaNetworks: SvmNetworkConfig[] = [
   {
     name: 'Solana',
     type: 'mainnet',
@@ -1777,13 +1798,18 @@ export const solanaNetworks = [
     slug: 'svm-bnb-testnet',
     details: '/en/data/solana/svm-bnb-testnet/overview',
   },
-] as const
+]
 
-export const networks: Record<NetworkType, typeof evmNetworks | typeof solanaNetworks> = {
+export const networks = {
   evm: evmNetworks,
   svm: solanaNetworks,
-}
+} as const
 
-export function getEvmChainId(slug: string): string | undefined {
-  return evmNetworks.find((n) => n.slug === slug)?.chainId
+export function getEvmChainId(slug: string): string {
+  return (
+    evmNetworks.find((n) => n.slug === slug)?.chainId ||
+    (() => {
+      throw new Error(`Invalid network slug ${slug} for EVM chains`)
+    })()
+  )
 }

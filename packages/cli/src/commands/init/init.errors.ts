@@ -26,3 +26,31 @@ ${networkTypes.map((type) => `  - ${type.value}`).join('\n')}
     `
   }
 }
+
+export class TemplateFileNotFoundError extends Error {
+  constructor(path: string) {
+    super(
+      `File not found for template.
+File path: ${path}`,
+    )
+  }
+}
+
+export class UnexpectedTemplateFileError extends Error {
+  constructor(path: string) {
+    super(
+      `Unexpected file format for template.
+Expected a file or directory but got: ${path}`,
+    )
+  }
+}
+
+export class ProjectAlreadyExistError extends Error {
+  constructor(path: string) {
+    super(
+      `Project folder already exist. Please, select a new location
+Path: ${path}
+`,
+    )
+  }
+}

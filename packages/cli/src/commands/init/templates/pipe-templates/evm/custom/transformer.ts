@@ -1,21 +1,42 @@
-/**
- * For this case we are using a Mustache template since we don't have the
- * contract address yet, and it will only be generated after the template is built.
- */
+import { toCamelCase } from 'drizzle-orm/casing'
+import Mustache from 'mustache'
+import { ContractMetadata } from '~/services/sqd-abi.js'
+
 export const customContractTemplate = `import { evmDecoder } from '@subsquid/pipes/evm'
-import { events as myContractEvents } from "./contracts/{{{address}}}.js"
+{{#contracts}}
+import { events as {{{contractName}}}Events } from "./contracts/{{{contractAddress}}}.js"
+{{/contracts}}
+import { enrichEvents } from './utils/index.js'
 
 const custom = evmDecoder({
   range: { from: 'latest' },
-  contracts: ["{{{address}}}"],
+  contracts: [
+    {{#contracts}}
+    "{{{contractAddress}}}",
+    {{/contracts}}
+  ],
   /**
-   * Or optionally use only a subset of events by passing the events object directly:
+   * Or optionally use pass all events object directly to listen to all contract events
    * \`\`\`ts
-   * events: {
-   *   transfers: myContractEvents.events.SomeEvent,
-   * },
+   * events: myContractEvents,
    * \`\`\`
    */
-  events: myContractEvents,
-})
+  events: {
+    {{#contracts}}
+    {{#contractEvents}}
+    {{name}}: {{contractName}}Events.{{name}},
+    {{/contractEvents}}
+    {{/contracts}}
+  },
+}).pipe(enrichEvents)
 `
+
+interface TransformerTemplateParams {
+  contracts: ContractMetadata[]
+}
+
+export function renderTransformerTemplate({ contracts }: TransformerTemplateParams) {
+  return Mustache.render(customContractTemplate, {
+    contracts: contracts.map((c) => ({ ...c, contractName: toCamelCase(c.contractName) })),
+  })
+}

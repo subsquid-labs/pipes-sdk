@@ -96,7 +96,7 @@ describe('InitHandler', () => {
     )
   })
 
-  it('creates project specific folders and files for clickhouse sink', async () => {
+  it('creates project specific folders and files for pre-built template sink is clickhouse ', async () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
       networkType: 'evm',
@@ -153,6 +153,23 @@ describe('InitHandler', () => {
 
       "
     `)
+  })
+
+  it.only('creates migration folder and file for custom template when sink is clickhouse', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates['custom']],
+      contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    await expect(isDir(path.join(projectDir, 'migrations'))).resolves.toBeTruthy()
+    await expect(isDirEmpty(path.join(projectDir, 'migrations'))).resolves.toBeFalsy()
   })
 
   it('creates project specific folders and files for postgresql sink', async () => {

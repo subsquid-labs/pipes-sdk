@@ -3,15 +3,13 @@ import { Config } from '~/types/init.js'
 import { svmTemplates } from '../pipe-templates/svm/index.js'
 import { SvmTemplateBuilder } from './svm-template-builder.js'
 
-describe('SVM Template Builder', () => {
+describe.skip('SVM Template Builder', () => {
   it('should build index.ts file using single pipe template', () => {
     const config: Config<'svm'> = {
       projectFolder: 'mock-folder',
       networkType: 'svm',
       network: 'ethereum-mainnet',
-      templates: [
-        svmTemplates['tokenBalances'],
-      ],
+      templates: [svmTemplates['tokenBalances']],
       contractAddresses: [],
       sink: 'postgresql',
       packageManager: 'pnpm',

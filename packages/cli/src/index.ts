@@ -1,6 +1,6 @@
 import { program } from 'commander'
-import { InitHandler } from './commands/init/handler.js'
-import { InitPrompt } from './commands/init/prompt.js'
+import { InitHandler } from './commands/init/init.handler.js'
+import { InitPrompt } from './commands/init/init.prompt.js'
 
 function formatError(error: unknown): string {
   if (error instanceof Error) {
