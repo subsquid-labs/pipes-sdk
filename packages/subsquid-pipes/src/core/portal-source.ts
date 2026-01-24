@@ -1,3 +1,5 @@
+import { useRuntimeContext } from '$context'
+
 import { Decoder } from '~/core/decoder.js'
 import {
   GetBlock,
@@ -101,6 +103,8 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   #started = false
 
   constructor({ portal, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
+    const ctx = useRuntimeContext()
+
     this.#portal =
       portal instanceof PortalClient
         ? portal
@@ -129,7 +133,8 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       cache: options.cache,
       profiler: typeof options.profiler === 'undefined' ? process.env.NODE_ENV !== 'production' : options.profiler,
     }
-    this.#metricServer = options.metrics ?? noopMetricsServer()
+
+    this.#metricServer = options.metrics ?? ctx?.metrics ?? noopMetricsServer()
     this.#transformers = options.transformers || []
   }
 
@@ -420,7 +425,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
   private batchEnd(ctx: BatchCtx) {
     ctx.profiler.end()
-    this.#metricServer.addBatchContext(ctx)
+    this.#metricServer.batchProcessed(ctx)
   }
 
   async *[Symbol.asyncIterator](): AsyncIterator<PortalBatch<T>> {

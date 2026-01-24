@@ -64,7 +64,7 @@ export type Metrics = {
 export type MetricsServer = {
   start(): void
   stop(): Promise<void>
-  addBatchContext(ctx: BatchCtx): void
+  batchProcessed(ctx: BatchCtx): void
   metrics(): Metrics
 }
 
@@ -100,7 +100,7 @@ export function noopMetricsServer(): MetricsServer {
   return {
     start() {},
     async stop() {},
-    addBatchContext(_ctx: BatchCtx) {},
+    batchProcessed() {},
     metrics() {
       return metrics
     },

@@ -1,3 +1,5 @@
+import { useRuntimeContext } from '$context'
+
 import pino, { Logger as PinoLogger } from 'pino'
 
 export type Logger = PinoLogger
@@ -12,8 +14,15 @@ function isEnvFalse(name: string): boolean {
 export function createDefaultLogger({ level }: { level?: LogLevel } = {}): Logger {
   const baseLevel = level !== false && level !== null ? level : 'silent'
 
+  const ctx = useRuntimeContext()
+
+  // If runtime already has a logger, use it
+  if (ctx?.logger) return ctx.logger
+
+  const pretty = process.stdout?.isTTY && !isEnvFalse('LOG_PRETTY')
+
   return pino({
-    base: undefined,
+    base: ctx ? { pipe_id: ctx.id } : undefined,
     messageKey: 'message',
     level: baseLevel ?? (process.env['LOG_LEVEL'] || 'info'),
     formatters: {
@@ -25,16 +34,20 @@ export function createDefaultLogger({ level }: { level?: LogLevel } = {}): Logge
       error: pino.stdSerializers.errWithCause,
       err: pino.stdSerializers.errWithCause,
     },
-    transport:
-      process.stdout?.isTTY && !isEnvFalse('LOG_PRETTY')
-        ? {
-            target: 'pino-pretty',
-            options: {
-              colorize: true,
-              messageKey: 'message',
-            },
-          }
-        : undefined,
+    transport: pretty
+      ? {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            singleLine: true,
+            colorizeObjects: 'dim',
+            ignore: 'pipe_id',
+            messageKey: 'message',
+            messageFormat: '\x1B[0m\x1b[2m{pipe_id}\x1B[0m {message}',
+            quote: false,
+          },
+        }
+      : undefined,
   })
 }
 

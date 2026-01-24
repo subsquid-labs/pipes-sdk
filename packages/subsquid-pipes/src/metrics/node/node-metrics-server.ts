@@ -264,9 +264,9 @@ class MetricServer {
     if (this.#started) return
 
     this.#started = true
-    this.#server = this.#app.listen(this.#options.port)
-
-    this.#logger?.info(`🦑 Metrics server started at http://localhost:${this.#options.port}`)
+    this.#server = this.#app.listen(this.#options.port, () => {
+      this.#logger?.info(`🦑 Metrics server started at http://localhost:${this.#options.port}`)
+    })
   }
 
   async stop() {
@@ -280,9 +280,10 @@ class MetricServer {
     })
   }
 
-  addBatchContext(ctx: BatchCtx) {
+  batchProcessed(ctx: BatchCtx) {
     const data = this.#data
 
+    // console.log('Adding batch context to metrics server', ctx.head)
     data.lastBatch = ctx
     data.transformationExemplar = transformExemplar(ctx.profiler)
 

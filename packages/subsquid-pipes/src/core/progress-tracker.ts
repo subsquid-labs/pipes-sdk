@@ -1,4 +1,5 @@
 import { Gauge } from '~/core/index.js'
+
 import { displayEstimatedTime, formatBlock, formatNumber, humanBytes } from './formatters.js'
 import { Logger } from './logger.js'
 import { createTransformer } from './transformer.js'
@@ -239,8 +240,17 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
       }
 
       if (interval.requests.total.count > 0) {
-        msg['requests'] =
-          `${formatNumber(interval.requests.successful.percent)}% successful, ${formatNumber(interval.requests.rateLimited.percent)}% rate limited, ${formatNumber(interval.requests.failed.percent)}% failed out of ${formatNumber(interval.requests.total.count)} requests`
+        msg['requests'] = [
+          interval.requests.successful.percent > 0
+            ? `${formatNumber(interval.requests.successful.percent)}% successful`
+            : false,
+          interval.requests.rateLimited.percent
+            ? `${formatNumber(interval.requests.rateLimited.percent)}% rate limited`
+            : false,
+          interval.requests.failed.percent > 0 ? `${formatNumber(interval.requests.failed.percent)}% failed` : false,
+        ]
+          .filter(Boolean)
+          .join(', ')
       }
 
       logger.info(msg)
