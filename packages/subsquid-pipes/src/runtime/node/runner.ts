@@ -1,3 +1,5 @@
+import * as path from 'node:path'
+
 import { Logger, createDefaultLogger } from '~/core/logger.js'
 import { MetricsServer, noopMetricsServer } from '~/core/metrics-server.js'
 import { MetricsServerOptions, metricsServer } from '~/metrics/node/index.js'
@@ -11,7 +13,12 @@ type Config = {
 
 type SerializableObject = Record<string, string | number | Date | boolean>
 
-export type RunConfig<T extends SerializableObject> = { id: string; params: T; metrics: MetricsServer }
+export type RunConfig<T extends SerializableObject> = {
+  id: string
+  params: T
+  metrics: MetricsServer
+  logger: Logger
+}
 
 type StreamConfig<T extends SerializableObject> = {
   id: string
@@ -59,10 +66,26 @@ class Runner<T extends SerializableObject = any> {
                   id: pipe.id,
                   params: pipe.params,
                   metrics,
+                  logger,
                 })
               })
             } else {
-              throw new Error('not implemented')
+              const worker = new Worker(new URL('worker.ts', import.meta.url).href, {
+                env: {
+                  ...process.env,
+                  PORT: '3333',
+                },
+              })
+
+              await new Promise<void>((resolve, reject) =>
+                worker.addEventListener('close', (event) => {
+                  if (event.code !== 0) {
+                    reject(new Error(`Worker stopped with exit code ${event.code}`))
+                  }
+
+                  resolve()
+                }),
+              )
             }
 
             return

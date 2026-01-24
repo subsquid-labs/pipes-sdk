@@ -15,9 +15,7 @@ import {
 import { PortalClientOptions, getBlockSchema, hyperliquidFills } from '../portal-client/index.js'
 import { HyperliquidFillsQueryBuilder } from './hyperliquid-fills-query-builder.js'
 
-export type HyperliquidFillsPortalData<F extends hyperliquidFills.FieldSelection> = {
-  blocks: hyperliquidFills.Block<F>[]
-}
+export type HyperliquidFillsPortalData<F extends hyperliquidFills.FieldSelection> = hyperliquidFills.Block<F>[]
 
 export function hyperliquidFillsPortalSource<F extends hyperliquidFills.FieldSelection = any>({
   portal,
@@ -59,9 +57,7 @@ export function hyperliquidFillsPortalSource<F extends hyperliquidFills.FieldSel
         transform: (data, ctx) => {
           const schema = getBlockSchema<hyperliquidFills.Block<F>>(ctx.query.raw)
 
-          data.blocks = data.blocks.map((b) => cast(schema, b))
-
-          return data
+          return data.map((b) => cast(schema, b))
         },
       }),
     ],

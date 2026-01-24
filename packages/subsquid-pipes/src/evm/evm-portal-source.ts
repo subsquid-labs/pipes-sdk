@@ -14,28 +14,29 @@ import {
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
 
-import { PortalClient, PortalClientOptions, evm, getBlockSchema } from '../portal-client/index.js'
+import { PortalClient, PortalClientOptions, evm as api, getBlockSchema } from '../portal-client/index.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
 
-export type EvmFieldSelection = evm.FieldSelection
+export type EvmFieldSelection = api.FieldSelection
 
-export type EvmPortalData<F extends EvmFieldSelection> = evm.Block<F>[]
+export type EvmPortalData<F extends api.FieldSelection> = api.Block<F>[]
 
-export type EvmStreams = Streams<EvmFieldSelection, EvmQueryBuilder>
+export type EvmStreams = Streams<api.FieldSelection, EvmQueryBuilder>
 
-type EvmPortalStream<T extends EvmStreams> = T extends EvmQueryBuilder<infer Q>
-  ? EvmPortalData<Q>
-  : T extends Decoder<any, infer O, any>
-    ? O
-    : T extends Record<string, Decoder<any, any, any> | EvmQueryBuilder<any>>
-      ? {
-          [K in keyof T]: T[K] extends Decoder<any, infer O, any>
-            ? O
-            : T[K] extends EvmQueryBuilder<infer Q>
-              ? EvmPortalData<Q>
-              : never
-        }
-      : never
+type EvmPortalStream<T extends EvmStreams> =
+  T extends EvmQueryBuilder<infer Q>
+    ? EvmPortalData<Q>
+    : T extends Decoder<any, infer O, any>
+      ? O
+      : T extends Record<string, Decoder<any, any, any> | EvmQueryBuilder<any>>
+        ? {
+            [K in keyof T]: T[K] extends Decoder<any, infer O, any>
+              ? O
+              : T[K] extends EvmQueryBuilder<infer Q>
+                ? EvmPortalData<Q>
+                : never
+          }
+        : never
 
 export function evmPortalSource<S extends EvmStreams>({
   portal,
@@ -75,7 +76,7 @@ export function evmPortalSource<S extends EvmStreams>({
       createTransformer<EvmPortalData<F>, EvmPortalData<F>>({
         profiler: { id: 'normalize data' },
         transform: (data, ctx) => {
-          const schema = getBlockSchema<evm.Block<F>>(ctx.query.raw)
+          const schema = getBlockSchema<api.Block<F>>(ctx.query.raw)
 
           return data.map((b) => cast(schema, b))
         },

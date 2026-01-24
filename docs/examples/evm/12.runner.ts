@@ -3,9 +3,11 @@ import { RunConfig, createRunner } from '@subsquid/pipes/runtime/node'
 
 export type Params = { dataset: string }
 
-async function transfers({ params }: RunConfig<Params>) {
+async function transfers({ id, params, metrics, logger }: RunConfig<Params>) {
   const stream = evmPortalSource({
     portal: `https://portal.sqd.dev/datasets/${params.dataset}`,
+    metrics,
+    logger,
     streams: evmDecoder({
       range: { from: 'latest' },
       events: {
@@ -25,11 +27,7 @@ async function main() {
       { id: 'arb', params: { dataset: 'arbitrum-one' }, stream: transfers },
       { id: 'ethereum', params: { dataset: 'ethereum-mainnet' }, stream: transfers },
     ],
-    {
-      metrics: {
-        port: 3000,
-      },
-    },
+    { metrics: { port: 3000 } },
   )
 
   await run.start()

@@ -1,8 +1,10 @@
-import { parsePortalRange } from '~/core/index.js'
+import { Subset, parsePortalRange } from '~/core/index.js'
 import { mergeDeep } from '~/internal/object/merge-deep.js'
+import * as evm from '~/portal-client/query/evm.js'
 
 import { QueryBuilder, RequestOptions, concatQueryLists } from '../core/query-builder.js'
-import { evm } from '../portal-client/index.js'
+
+export type { Subset } from '~/core/index.js'
 
 // biome-ignore lint/complexity/noBannedTypes: <it is a default generic constraint>
 export class EvmQueryBuilder<F extends evm.FieldSelection = {}> extends QueryBuilder<F, evm.DataRequest> {
@@ -10,8 +12,8 @@ export class EvmQueryBuilder<F extends evm.FieldSelection = {}> extends QueryBui
     return 'evm'
   }
 
-  addFields<T extends evm.FieldSelection>(fields: T): EvmQueryBuilder<F & T> {
-    this.fields = mergeDeep(this.fields, fields)
+  addFields<T extends evm.FieldSelection>(fields: Subset<T, evm.FieldSelection>): EvmQueryBuilder<F & T> {
+    this.fields = mergeDeep(this.fields, fields as object)
 
     return this as unknown as EvmQueryBuilder<F & T>
   }

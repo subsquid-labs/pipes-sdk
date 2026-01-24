@@ -24,7 +24,7 @@ describe('Portal abstract stream', () => {
       },
     ])
 
-    const fields: solana.FieldSelection = {
+    const fields = {
       log: { programId: true, message: true },
       block: { number: true, hash: true, timestamp: true },
       transaction: { version: true },
@@ -32,7 +32,7 @@ describe('Portal abstract stream', () => {
       tokenBalance: { account: true },
       balance: { account: true },
       reward: { lamports: true },
-    } as const
+    } satisfies solana.FieldSelection
 
     const stream = solanaPortalSource({
       portal: mockPortal.url,

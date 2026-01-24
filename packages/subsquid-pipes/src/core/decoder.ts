@@ -28,7 +28,7 @@ export class Decoder<In, Out, Query> extends Transformer<In, Out> {
   }
 
   /**
-   * We need to override return type
+   * We need to override the return type
    */
   override pipe<Res>(
     transformer: Transformer<Out, Res> | TransformerOptions<Out, Res> | TransformerOptions<Out, Res>['transform'],

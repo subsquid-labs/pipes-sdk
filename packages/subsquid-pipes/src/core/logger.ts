@@ -22,7 +22,7 @@ export function createDefaultLogger({ level }: { level?: LogLevel } = {}): Logge
   const pretty = process.stdout?.isTTY && !isEnvFalse('LOG_PRETTY')
 
   return pino({
-    base: ctx ? { pipe_id: ctx.id } : undefined,
+    base: ctx ? { id: ctx.id } : undefined,
     messageKey: 'message',
     level: baseLevel ?? (process.env['LOG_LEVEL'] || 'info'),
     formatters: {
@@ -41,9 +41,9 @@ export function createDefaultLogger({ level }: { level?: LogLevel } = {}): Logge
             colorize: true,
             singleLine: true,
             colorizeObjects: 'dim',
-            ignore: 'pipe_id',
+            ignore: 'id',
             messageKey: 'message',
-            messageFormat: '\x1B[0m\x1b[2m{pipe_id}\x1B[0m {message}',
+            messageFormat: '\x1B[0m\x1b[2m{id}\x1B[0m {message}',
             quote: false,
           },
         }

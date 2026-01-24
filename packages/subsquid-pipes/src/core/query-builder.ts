@@ -23,10 +23,6 @@ export type RequestOptions<R> = {
   request: R
 }
 
-export type Subset<T, U> = {
-  [K in keyof T]: K extends keyof U ? T[K] : never
-}
-
 export abstract class QueryBuilder<F extends {}, R = any> {
   protected fields: F = {} as F
   protected requests: RangeRequest<R, NaturalRange>[] = []

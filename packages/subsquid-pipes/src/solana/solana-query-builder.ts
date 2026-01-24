@@ -1,6 +1,7 @@
-import { parsePortalRange } from '~/core/index.js'
+import { Subset, parsePortalRange } from '~/core/index.js'
 import { mergeDeep } from '~/internal/object/merge-deep.js'
-import { concatQueryLists, QueryBuilder, Range, RequestOptions, Subset } from '../core/query-builder.js'
+
+import { QueryBuilder, Range, RequestOptions, concatQueryLists } from '../core/query-builder.js'
 import { solana } from '../portal-client/index.js'
 
 // biome-ignore lint/complexity/noBannedTypes: <it is a default generic constraint>
@@ -9,7 +10,7 @@ export class SolanaQueryBuilder<F extends solana.FieldSelection = {}> extends Qu
     return 'solana'
   }
 
-  addFields<T extends Subset<T, solana.FieldSelection>>(fields: T): SolanaQueryBuilder<F & T> {
+  addFields<T extends solana.FieldSelection>(fields: Subset<T, solana.FieldSelection>): SolanaQueryBuilder<F & T> {
     this.fields = mergeDeep(this.fields, fields)
 
     return this as unknown as SolanaQueryBuilder<F & T>

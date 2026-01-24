@@ -1,4 +1,4 @@
-import { useRuntimeContext } from '$context'
+import { RuntimeContext, useRuntimeContext } from '$context'
 
 import { Decoder } from '~/core/decoder.js'
 import {
@@ -35,6 +35,7 @@ export interface PortalCache {
 }
 
 export type BatchCtx = {
+  id: string
   head: {
     finalized?: BlockCursor
     latest?: BlockCursor
@@ -97,14 +98,14 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   }
   readonly #queryBuilder: Q
   readonly #logger: Logger
+  readonly #runtime?: RuntimeContext
   readonly #portal: PortalClient
   readonly #metricServer: MetricsServer
   readonly #transformers: AnyTransformer[]
   #started = false
 
   constructor({ portal, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
-    const ctx = useRuntimeContext()
-
+    this.#runtime = useRuntimeContext()
     this.#portal =
       portal instanceof PortalClient
         ? portal
@@ -134,7 +135,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       profiler: typeof options.profiler === 'undefined' ? process.env.NODE_ENV !== 'production' : options.profiler,
     }
 
-    this.#metricServer = options.metrics ?? ctx?.metrics ?? noopMetricsServer()
+    this.#metricServer = options.metrics ?? this.#runtime?.metrics ?? noopMetricsServer()
     this.#transformers = options.transformers || []
   }
 
@@ -196,6 +197,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
           const ctx: BatchCtx = {
             // Batch metadata
+            id: this.#runtime?.id || metadata.dataset,
             meta: {
               bytesSize: batch.meta.bytes,
               requests: batch.meta.requests,

@@ -1,6 +1,7 @@
-import { parsePortalRange } from '~/core/index.js'
+import { Subset, parsePortalRange } from '~/core/index.js'
 import { mergeDeep } from '~/internal/object/merge-deep.js'
-import { concatQueryLists, QueryBuilder, Range, RequestOptions, Subset } from '../core/query-builder.js'
+
+import { QueryBuilder, Range, RequestOptions, concatQueryLists } from '../core/query-builder.js'
 import { hyperliquidFills } from '../portal-client/index.js'
 
 // biome-ignore lint/complexity/noBannedTypes: <it is a default generic constraint>
@@ -12,7 +13,9 @@ export class HyperliquidFillsQueryBuilder<F extends hyperliquidFills.FieldSelect
     return 'hyperliquidFills'
   }
 
-  addFields<T extends Subset<T, hyperliquidFills.FieldSelection>>(fields: T): HyperliquidFillsQueryBuilder<F & T> {
+  addFields<T extends hyperliquidFills.FieldSelection>(
+    fields: Subset<T, hyperliquidFills.FieldSelection>,
+  ): HyperliquidFillsQueryBuilder<F & T> {
     this.fields = mergeDeep(this.fields, fields)
 
     return this as unknown as HyperliquidFillsQueryBuilder<F & T>
