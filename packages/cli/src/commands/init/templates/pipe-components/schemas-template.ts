@@ -2,7 +2,8 @@ import { toCamelCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 import { Config, NetworkType, WithContractMetadata } from '~/types/init.js'
 import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
-import { eventTableName, renderCustomSchema } from '../pipe-templates/evm/custom/pg-table.js'
+import { eventTableName, renderEvmCustomSchema } from '../pipe-templates/evm/custom/pg-table.js'
+import { renderSvmCustomSchema } from '../pipe-templates/svm/custom/pg-table.js'
 
 export const schemasTemplate = `{{#mergedImports}}
 {{{.}}}
@@ -34,7 +35,7 @@ export function renderSchemasTemplate(config: WithContractMetadata<Config<Networ
   const customTemplateSchemas = config.templates
     .filter((t) => t.templateId === 'custom')
     .map(() => {
-      const code = renderCustomSchema(config)
+      const code = getCustomSchemaCode(config)
 
       return {
         fullSchema: code,
@@ -72,4 +73,13 @@ export function renderSchemasTemplate(config: WithContractMetadata<Config<Networ
     mergedImports: mergedImportStatements,
     schemas: [...templateSchemas, ...customTemplateSchemas],
   })
+}
+
+function getCustomSchemaCode(config: WithContractMetadata<Config<NetworkType>>) {
+  switch (config.networkType) {
+    case 'evm':
+      return renderEvmCustomSchema(config)
+    case 'svm':
+      return renderSvmCustomSchema(config)
+  }
 }

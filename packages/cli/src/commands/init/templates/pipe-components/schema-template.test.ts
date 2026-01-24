@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ContractMetadata } from '~/services/sqd-abi.js'
 import { Config, WithContractMetadata } from '~/types/init.js'
 import { renderSchemasTemplate } from './schemas-template.js'
-import { templates } from './template-builder.js'
+import { templates } from './template-builder/index.js'
 
 const wethMetadata: ContractMetadata[] = [
   {
@@ -179,7 +179,6 @@ describe('Schema template builder', () => {
           txHash: char({ length: 66 }).notNull(),
           logIndex: integer().notNull(),
           timestamp: bigint({ mode: 'number' }).notNull(),
-          // Add here the columns for the custom contract events
 
           src: char({ length: 42 }),
           guy: char({ length: 42 }),
@@ -199,7 +198,6 @@ describe('Schema template builder', () => {
           txHash: char({ length: 66 }).notNull(),
           logIndex: integer().notNull(),
           timestamp: bigint({ mode: 'number' }).notNull(),
-          // Add here the columns for the custom contract events
 
           src: char({ length: 42 }),
           dst: char({ length: 42 }),

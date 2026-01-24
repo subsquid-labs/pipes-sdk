@@ -4,13 +4,10 @@ export { renderDockerfile } from './dynamic/docker-file.js'
 export { renderEnvTemplate } from './dynamic/env.js'
 export { renderPackageJson } from './dynamic/package-json.js'
 export { renderReadme } from './dynamic/readme.js'
+export { renderUtilsTemplate } from './dynamic/utils.js'
 export { agentsTemplate } from './static/agents.js'
 export { biomeConfigTemplate } from './static/biome.js'
 export { drizzleConfigTemplate } from './static/drizzle-config.js'
 export { gitignoreTemplate } from './static/gitignore.js'
 export { pnpmWorkspaceTemplate } from './static/pnpm-workspace.js'
 export { tsconfigConfigTemplate } from './static/tsconfig.js'
-export {
-  eventEnricherUtilsTemplate,
-  snakeCaseUtilsTemplate,
-} from './static/utils.js'

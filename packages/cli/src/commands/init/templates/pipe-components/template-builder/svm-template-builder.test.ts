@@ -1,21 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { Config } from '~/types/init.js'
-import { svmTemplates } from '../pipe-templates/svm/index.js'
-import { SvmTemplateBuilder } from './svm-template-builder.js'
+import { Config, WithContractMetadata } from '~/types/init.js'
+import { svmTemplates } from '../../pipe-templates/svm/index.js'
+import { TemplateBuilder } from './index.js'
 
-describe.skip('SVM Template Builder', () => {
-  it('should build index.ts file using single pipe template', () => {
-    const config: Config<'svm'> = {
+describe('SVM Template Builder', () => {
+  it('should build index.ts file using single pipe template', async () => {
+    const config: WithContractMetadata<Config<'svm'>> = {
       projectFolder: 'mock-folder',
       networkType: 'svm',
       network: 'ethereum-mainnet',
       templates: [svmTemplates['tokenBalances']],
       contractAddresses: [],
+      contracts: [],
       sink: 'postgresql',
       packageManager: 'pnpm',
     }
 
-    const indexerContent = new SvmTemplateBuilder(config).build()
+    const indexerContent = await new TemplateBuilder(config).build()
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";

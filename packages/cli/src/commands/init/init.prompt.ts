@@ -7,7 +7,7 @@ import { networks } from './config/networks.js'
 import { sinks } from './config/sinks.js'
 import { templateOptions } from './config/templates.js'
 import { InitHandler } from './init.handler.js'
-import { templates } from './templates/pipe-components/template-builder.js'
+import { templates } from './templates/pipe-components/template-builder/index.js'
 import { evmTemplates } from './templates/pipe-templates/evm/index.js'
 import { svmTemplates } from './templates/pipe-templates/svm/index.js'
 

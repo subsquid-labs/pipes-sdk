@@ -21,7 +21,7 @@ describe('SQD Typegen Service', () => {
   it('should fetch the contract data', async () => {
     const contracts = ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2']
     const s = new SqdAbiService()
-    const wethData = await s.getContractData(contracts, '1')
+    const wethData = await s.getContractData('evm', 'ethereum-mainnet', contracts)
 
     expect(wethData).toEqual([
       {

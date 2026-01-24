@@ -1,4 +1,4 @@
-import { Sink } from "~/types/init.js"
+import { Sink } from '~/types/init.js'
 
 export const clickhouseEnvTemplate = `
 import { z } from 'zod'
@@ -7,6 +7,7 @@ const env = z.object({
   CLICKHOUSE_USER: z.string(),
   CLICKHOUSE_PASSWORD: z.string(),
   CLICKHOUSE_URL: z.string(),
+  CLICKHOUSE_DATABASE: z.string(),
 }).parse(process.env)
 `
 

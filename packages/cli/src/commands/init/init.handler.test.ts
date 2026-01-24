@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -96,6 +97,86 @@ describe('InitHandler', () => {
     )
   })
 
+  it('ensures build pass for erc20Transfers + clickhouse template', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates['erc20Transfers']],
+      contractAddresses: [],
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
+  })
+
+  it('ensures build pass for erc20Transfers + postgres template', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates['erc20Transfers']],
+      contractAddresses: [],
+      sink: 'postgresql',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
+  })
+
+  it('ensures build pass for custom contract + clickhouse template', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates['custom']],
+      contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
+  })
+
+  it('ensures build pass for custom contract + postgresql template', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates['custom']],
+      contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+      sink: 'postgresql',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
+  })
+
+  it('ensures build pass for multiple templates + postgresql template', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates['custom'], evmTemplates['erc20Transfers']],
+      contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+      sink: 'postgresql',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
+  })
+
   it('creates project specific folders and files for pre-built template sink is clickhouse ', async () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
@@ -155,7 +236,7 @@ describe('InitHandler', () => {
     `)
   })
 
-  it.only('creates migration folder and file for custom template when sink is clickhouse', async () => {
+  it('creates migration folder and file for custom template when sink is clickhouse', async () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
       networkType: 'evm',

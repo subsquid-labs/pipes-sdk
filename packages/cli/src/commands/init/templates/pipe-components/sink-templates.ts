@@ -15,6 +15,7 @@ clickhouseTarget({
         username: env.CLICKHOUSE_USER,
         password: env.CLICKHOUSE_PASSWORD,
         url: env.CLICKHOUSE_URL,
+        database: env.CLICKHOUSE_DATABASE,
         json: {
             stringify: serializeJsonWithBigInt,
         },

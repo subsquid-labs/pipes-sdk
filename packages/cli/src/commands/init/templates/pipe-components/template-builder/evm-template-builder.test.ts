@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { ContractMetadata } from '~/services/sqd-abi.js'
 import { Config, WithContractMetadata } from '~/types/init.js'
-import { evmTemplates } from '../pipe-templates/evm/index.js'
-import { EvmTemplateBuilder } from './evm-template-builder.js'
+import { evmTemplates } from '../../pipe-templates/evm/index.js'
+import { TemplateBuilder } from './index.js'
 
 const wethMetadata: ContractMetadata[] = [
   {
@@ -62,7 +62,7 @@ describe('EVM Template Builder', () => {
       packageManager: 'pnpm',
     }
 
-    const indexerContent = await new EvmTemplateBuilder(config).build()
+    const indexerContent = await new TemplateBuilder(config).build()
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
@@ -163,7 +163,7 @@ describe('EVM Template Builder', () => {
       packageManager: 'pnpm',
     }
 
-    const indexerContent = await new EvmTemplateBuilder(config).build()
+    const indexerContent = await new TemplateBuilder(config).build()
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
@@ -299,7 +299,7 @@ describe('EVM Template Builder', () => {
       packageManager: 'pnpm',
     }
 
-    const indexerContent = await new EvmTemplateBuilder(config).build()
+    const indexerContent = await new TemplateBuilder(config).build()
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";

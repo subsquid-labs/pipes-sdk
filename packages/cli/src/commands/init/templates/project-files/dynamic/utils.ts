@@ -1,3 +1,5 @@
+import { NetworkType, Sink } from '~/types/init.js'
+
 export const snakeCaseUtilsTemplate = `export type SnakeCase<S extends string> =
   S extends \`\${infer H}\${infer T}\`
     ? \`\${H extends Lowercase<H> ? H : \`_\${Lowercase<H>}\`}\${SnakeCase<T>}\`
@@ -26,7 +28,7 @@ export function serializeJsonWithBigInt(obj: unknown): string {
 }
 `
 
-export const eventEnricherUtilsTemplate = `
+export const evmEventEnricherUtilsTemplate = `
 import { type EventResponse, Events } from '@subsquid/pipes/evm'
 
 export type ExtendEventResponse<ER extends EventResponse<Events, string[]>, Extra extends object> = {
@@ -46,7 +48,7 @@ export function enrichEvents<T extends EventResponse<Events, string[]>>(obj: T):
   for (const key in obj) {
     const value = obj[key]
     result[key] = (value as any[]).map((v) => ({
-      ...v,
+      ...v.event,
       blockNumber: v.block.number,
       txHash: v.rawEvent.transactionHash,
       logIndex: v.rawEvent.logIndex,
@@ -57,3 +59,53 @@ export function enrichEvents<T extends EventResponse<Events, string[]>>(obj: T):
   return result
 }
 `
+
+export const svmEventEnricherUtilsTemplate = `
+import type { DecodedInstruction, EventResponse, Instructions } from '@subsquid/pipes/solana'
+
+export type ExtendEventResponse<ER extends EventResponse<Instructions>, Extra extends object> = {
+  [K in keyof ER]: ER[K] extends Array<infer E> ? Array<E & Extra> : never
+}
+
+export interface EnrichedSvmEventMeta {
+  blockNumber: number
+  transactionIndex: number
+  instructionAddress: string
+  programId: string
+  timestamp: number // unix seconds
+}
+
+export function enrichEvents<T extends EventResponse<Instructions>>(
+  obj: T,
+): ExtendEventResponse<T, EnrichedSvmEventMeta> {
+  const result = {} as ExtendEventResponse<T, EnrichedSvmEventMeta>
+
+  for (const key in obj) {
+    const value = obj[key]
+    result[key] = (value as DecodedInstruction<{ data: object; accounts: object }>[]).map((v) => ({
+      ...v.instruction.data,
+      ...v.instruction.accounts,
+      blockNumber: v.blockNumber,
+      programId: v.rawInstruction.programId,
+      transactionIndex: v.transaction.transactionIndex,
+      instructionAddress: v.rawInstruction.instructionAddress.join('.'),
+      timestamp: new Date(v.timestamp).getTime() / 1000,
+    })) as any
+  }
+
+  return result
+}
+`
+
+export function renderUtilsTemplate({ networkType, sink }: { networkType: NetworkType; sink: Sink }) {
+  const baseTemplate = (() => {
+    switch (networkType) {
+      case 'evm':
+        return evmEventEnricherUtilsTemplate
+      case 'svm':
+        return svmEventEnricherUtilsTemplate
+    }
+  })()
+
+  return sink === 'clickhouse' ? snakeCaseUtilsTemplate + '\n' + baseTemplate : baseTemplate
+}

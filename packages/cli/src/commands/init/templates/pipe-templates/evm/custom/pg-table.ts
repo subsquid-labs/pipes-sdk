@@ -1,7 +1,7 @@
 import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 import { ContractMetadata, RawAbiItem } from '~/services/sqd-abi.js'
-import { getPostgresType } from '~/utils/db-type-map.js'
+import { evmToPostgresType } from '~/utils/db-type-map.js'
 import { tableToSchemaName } from '../../../pipe-components/schemas-template.js'
 
 export const customContractPgTemplate = `
@@ -24,10 +24,9 @@ export const {{schemaName}} = pgTable(
     txHash: char({ length: 66 }).notNull(),
     logIndex: integer().notNull(),
     timestamp: bigint({ mode: 'number' }).notNull(),
-    // Add here the columns for the custom contract events
 
     {{#inputs}}
-    {{name}}: {{dbType}},
+    {{name}}: {{{dbType}}},
     {{/inputs}}
   },
   (table) => [
@@ -47,7 +46,7 @@ export interface CustomSchemaParams {
 export const eventTableName = (contract: ContractMetadata, event: RawAbiItem) =>
   toSnakeCase(`${contract.contractName}_${event.name}`)
 
-export function renderCustomSchema({ contracts }: CustomSchemaParams) {
+export function renderEvmCustomSchema({ contracts }: CustomSchemaParams) {
   const contracsWithDbTypes = getContractWithDbTypes(contracts)
 
   return Mustache.render(customContractPgTemplate, {
@@ -66,7 +65,7 @@ export function getContractWithDbTypes(contracts: ContractMetadata[]) {
         tableName,
         inputs: e.inputs.map((i) => ({
           ...i,
-          dbType: getPostgresType(i.type),
+          dbType: evmToPostgresType(i.type),
         })),
       }
     }),

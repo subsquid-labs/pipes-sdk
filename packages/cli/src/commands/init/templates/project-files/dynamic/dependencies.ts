@@ -1,9 +1,11 @@
-import type { Sink } from "~/types/init.js"
+import type { Sink } from '~/types/init.js'
 
+// TODO: use only network specific dependencies
 const baseDependencies: Record<string, string> = {
   '@subsquid/pipes': '^0.1.0-beta.10',
   '@subsquid/evm-codec': '0.3.0',
   '@subsquid/evm-abi': '0.3.1',
+  '@subsquid/borsh': '^0.3.0',
   dotenv: '^16.4.5',
   'better-sqlite3': '^12.5.0',
   zod: '^4.3.4',

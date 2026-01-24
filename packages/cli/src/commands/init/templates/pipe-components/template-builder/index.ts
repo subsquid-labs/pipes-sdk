@@ -1,44 +1,37 @@
 import { Config, NetworkType, WithContractMetadata } from '~/types/init.js'
 import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
-import { renderTransformerTemplate } from '../pipe-templates/evm/custom/transformer.js'
-import { evmTemplates } from '../pipe-templates/evm/index.js'
-import { svmTemplates } from '../pipe-templates/svm/index.js'
-import { getEnvTemplate } from './env.js'
-import { renderSinkTemplate } from './sink-templates.js'
+import { evmTemplates } from '../../pipe-templates/evm/index.js'
+import { svmTemplates } from '../../pipe-templates/svm/index.js'
+import { getEnvTemplate } from '../env.js'
+import { renderSinkTemplate } from '../sink-templates.js'
+import { BaseTemplateBuilder } from './base-template-builder.js'
+import { EvmTemplateBuilder } from './evm-template-builder.js'
+import { SvmTemplateBuilder } from './svm-template-builder.js'
 
-export interface BuiltTransformerTemplate {
-  templateId: string
-  code: string
-}
-
-export interface TemplateValues {
-  network: string
-  deduplicatedImports: string[]
-  transformerTemplates: BuiltTransformerTemplate[]
-  sinkTemplate: string
-  envTemplate: string
-}
-
-export abstract class TemplateBuilder<N extends NetworkType> {
+export class TemplateBuilder {
   protected static readonly BASE_IMPORTS = ['import "dotenv/config"']
-  protected static readonly NETWORK_IMPORTS: Record<NetworkType, string[]> = {
-    evm: ['import { evmPortalSource } from "@subsquid/pipes/evm"'],
-    svm: ['import { solanaPortalSource } from "@subsquid/pipes/solana"'],
+  private networkTemplateBuilder: BaseTemplateBuilder
+
+  constructor(protected config: WithContractMetadata<Config<NetworkType>>) {
+    switch (config.networkType) {
+      case 'evm':
+        this.networkTemplateBuilder = new EvmTemplateBuilder(config)
+        break
+      case 'svm':
+        this.networkTemplateBuilder = new SvmTemplateBuilder(config)
+        break
+    }
   }
 
-  constructor(protected config: WithContractMetadata<Config<N>>) {}
-
-  abstract renderTemplate(templateValues: TemplateValues): string
-
   async build() {
-    const transformerTemplates = await this.getTransformerTemplates()
+    const transformerTemplates = await this.networkTemplateBuilder.getTransformerTemplates()
     const sinkTemplates = this.getSinkTemplate()
     const envTemplate = getEnvTemplate(this.config.sink)
 
     // TODO: rename this
     const componentsCode = [
       TemplateBuilder.BASE_IMPORTS,
-      TemplateBuilder.NETWORK_IMPORTS[this.config.networkType],
+      this.networkTemplateBuilder.getNetworkImports(),
       envTemplate,
       sinkTemplates,
       transformerTemplates.map((t) => t.code),
@@ -46,34 +39,20 @@ export abstract class TemplateBuilder<N extends NetworkType> {
 
     const deduplicatedImports = this.deduplicateImports(componentsCode)
 
-    const sinkCode = splitImportsAndCode(sinkTemplates).code
-    const envCode = splitImportsAndCode(envTemplate).code
+    const { code: sinkCode } = splitImportsAndCode(sinkTemplates)
+    const { code: envCode } = splitImportsAndCode(envTemplate)
     const transformersCode = transformerTemplates.map((t) => ({
       templateId: t.templateId,
       code: splitImportsAndCode(t.code).code,
     }))
 
-    return this.renderTemplate({
+    return this.networkTemplateBuilder.renderTemplate({
       network: this.config.network,
       deduplicatedImports,
       envTemplate: envCode,
       transformerTemplates: transformersCode,
       sinkTemplate: sinkCode,
     })
-  }
-
-  private getTransformerTemplates() {
-    return Promise.all(
-      this.config.templates.map(async (template) => {
-        if (template.templateId === 'custom') {
-          return {
-            code: renderTransformerTemplate(this.config),
-            templateId: 'custom',
-          }
-        }
-        return { code: template.code, templateId: template.templateId }
-      }),
-    )
   }
 
   private getSinkTemplate() {

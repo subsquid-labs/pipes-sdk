@@ -1,5 +1,6 @@
 import Mustache from 'mustache'
-import { TemplateBuilder, TemplateValues } from './template-builder.js'
+import { renderTransformerTemplate } from '../../pipe-templates/svm/custom/transformer.js'
+import { BaseTemplateBuilder, TemplateValues } from './base-template-builder.js'
 
 export const template = `{{#deduplicatedImports}}
 {{{.}}}
@@ -36,8 +37,26 @@ export async function main() {
 void main()
 `
 
-export class SvmTemplateBuilder extends TemplateBuilder<'svm'> {
+export class SvmTemplateBuilder extends BaseTemplateBuilder {
   renderTemplate(templateValues: TemplateValues): string {
     return Mustache.render(template, templateValues)
+  }
+
+  getNetworkImports(): string[] {
+    return ['import { solanaPortalSource } from "@subsquid/pipes/solana"']
+  }
+
+  getTransformerTemplates() {
+    return Promise.all(
+      this.config.templates.map(async (template) => {
+        if (template.templateId === 'custom') {
+          return {
+            code: renderTransformerTemplate(this.config),
+            templateId: 'custom',
+          }
+        }
+        return { code: template.code, templateId: template.templateId }
+      }),
+    )
   }
 }

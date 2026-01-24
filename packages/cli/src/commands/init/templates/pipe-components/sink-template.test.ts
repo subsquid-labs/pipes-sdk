@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ContractMetadata } from '~/services/sqd-abi.js'
 import { renderSinkTemplate, SinkTemplateParams } from './sink-templates.js'
-import { templates } from './template-builder.js'
+import { templates } from './template-builder/index.js'
 
 const wethMetadata: ContractMetadata[] = [
   {
@@ -68,6 +68,7 @@ describe('clickhouse sink template builder', () => {
               username: env.CLICKHOUSE_USER,
               password: env.CLICKHOUSE_PASSWORD,
               url: env.CLICKHOUSE_URL,
+              database: env.CLICKHOUSE_DATABASE,
               json: {
                   stringify: serializeJsonWithBigInt,
               },

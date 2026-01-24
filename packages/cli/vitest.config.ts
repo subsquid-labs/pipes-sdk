@@ -4,9 +4,9 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     watch: false,
-    maxConcurrency: 2,
+    maxWorkers: 4,
     fileParallelism: true,
-    testTimeout: 20_000,
+    testTimeout: 30_000,
     teardownTimeout: 1_000,
     slowTestThreshold: 10_000,
     hideSkippedTests: false,

@@ -1,7 +1,7 @@
 import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 import { ContractMetadata } from '~/services/sqd-abi.js'
-import { evmToClickhouseType } from '~/utils/db-type-map.js'
+import { svmToClickhouseType } from '~/utils/db-type-map.js'
 
 export const customContractChTemplate = `
 {{#contracts}}
@@ -11,14 +11,15 @@ CREATE TABLE IF NOT EXISTS {{tableName}} (
   {{name}} {{dbType}},
   {{/inputs}}
   -- Event metadata
-  block_number UInt32,
-  tx_hash String,
-  log_index UInt16,
+  block_number UInt64,
+  transaction_index UInt32,
+  instruction_address String,
+  program_id String,
   timestamp DateTime CODEC (DoubleDelta, ZSTD),
   sign Int8  DEFAULT toInt8(1)
 )
 ENGINE = CollapsingMergeTree(sign) PARTITION BY toYYYYMM(timestamp) -- Data will be split by month
-ORDER BY (block_number, tx_hash, log_index);
+ORDER BY (block_number, transaction_index, instruction_address);
 
 {{/contracts}}
 `
@@ -27,7 +28,7 @@ export interface CustomSchemaParams {
   contracts: ContractMetadata[]
 }
 
-export function renderCustomEvmClickhouseTables({ contracts }: CustomSchemaParams) {
+export function renderCustomSvmClickhouseTables({ contracts }: CustomSchemaParams) {
   const contracsWithDbTypes = getContractWithDbTypes(contracts)
 
   return Mustache.render(customContractChTemplate, {
@@ -41,8 +42,8 @@ function getContractWithDbTypes(contracts: ContractMetadata[]) {
       event: e.name,
       tableName: toSnakeCase(`${c.contractName}_${e.name}`),
       inputs: e.inputs.map((i) => ({
-        ...i,
-        dbType: evmToClickhouseType(i.type),
+        name: toSnakeCase(i.name),
+        dbType: svmToClickhouseType(i.type),
       })),
     })),
   )

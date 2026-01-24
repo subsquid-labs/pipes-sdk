@@ -5,7 +5,6 @@ import { promisify } from 'node:util'
 import chalk from 'chalk'
 import ora from 'ora'
 import { z } from 'zod'
-import { getEvmChainId } from '~/commands/init/config/networks.js'
 import { type ContractMetadata, SqdAbiService } from '~/services/sqd-abi.js'
 import {
   type Config,
@@ -26,18 +25,16 @@ import {
   TemplateNotFoundError,
   UnexpectedTemplateFileError,
 } from './init.errors.js'
-import { EvmTemplateBuilder } from './templates/pipe-components/evm-template-builder.js'
 import { renderSchemasTemplate } from './templates/pipe-components/schemas-template.js'
-import { SvmTemplateBuilder } from './templates/pipe-components/svm-template-builder.js'
-import { TemplateBuilder } from './templates/pipe-components/template-builder.js'
-import { renderCustomClickhouseTables } from './templates/pipe-templates/evm/custom/clickhouse-table.sql.js'
+import { TemplateBuilder } from './templates/pipe-components/template-builder/index.js'
+import { renderCustomEvmClickhouseTables } from './templates/pipe-templates/evm/custom/clickhouse-table.sql.js'
 import { evmTemplates } from './templates/pipe-templates/evm/index.js'
+import { renderCustomSvmClickhouseTables } from './templates/pipe-templates/svm/custom/clickhouse-table.sql.js'
 import { svmTemplates } from './templates/pipe-templates/svm/index.js'
 import {
   agentsTemplate,
   biomeConfigTemplate,
   drizzleConfigTemplate,
-  eventEnricherUtilsTemplate,
   gitignoreTemplate,
   pnpmWorkspaceTemplate,
   renderDependencies,
@@ -46,7 +43,7 @@ import {
   renderEnvTemplate,
   renderPackageJson,
   renderReadme,
-  snakeCaseUtilsTemplate,
+  renderUtilsTemplate,
   tsconfigConfigTemplate,
 } from './templates/project-files/index.js'
 
@@ -54,6 +51,7 @@ const execAsync = promisify(exec)
 
 const configJsonSchema = z
   .object({
+    // TODO: add regex validation for path
     projectFolder: z.string().min(1),
     networkType: z.enum(
       networkTypes.map((n) => n.value),
@@ -100,19 +98,8 @@ export class InitHandler {
     try {
       this.checkCurrentProjectPath()
 
-      let contractsMetadata: ContractMetadata[] = []
-      if (this.config.contractAddresses.length) {
-        spinner.text = squidfix('Fetching contracts metadata')
-        contractsMetadata = await new SqdAbiService().getContractData(
-          this.config.contractAddresses,
-          getEvmChainId(this.config.network),
-        )
-      }
-
-      const configWithContractMetadata: WithContractMetadata<Config<NetworkType>> = {
-        ...this.config,
-        contracts: contractsMetadata,
-      }
+      spinner.text = squidfix('Fetching contracts metadata')
+      const configWithContractMetadata = await this.getConfigContractWithMetadata()
 
       spinner.text = squidfix('Writing static files')
       this.writeStaticFiles()
@@ -148,6 +135,25 @@ export class InitHandler {
     }
   }
 
+  // TODO: move this to init.prompt.ts and pass directly to the constructor
+  private async getConfigContractWithMetadata() {
+    let contractsMetadata: ContractMetadata[] = []
+    if (this.config.contractAddresses.length) {
+      contractsMetadata = await new SqdAbiService().getContractData(
+        this.config.networkType,
+        this.config.network,
+        this.config.contractAddresses,
+      )
+    }
+
+    const configWithContractMetadata: WithContractMetadata<Config<NetworkType>> = {
+      ...this.config,
+      contracts: contractsMetadata,
+    }
+
+    return configWithContractMetadata
+  }
+
   private checkCurrentProjectPath() {
     try {
       const projectStat = statSync(this.config.projectAbsolutePath)
@@ -160,16 +166,23 @@ export class InitHandler {
   }
 
   private writeStaticFiles(): void {
-    this.writeToProject('biome.json', biomeConfigTemplate)
-    this.writeToProject('tsconfig.json', tsconfigConfigTemplate)
-    this.writeToProject('.gitignore', gitignoreTemplate)
-    this.writeToProject('AGENTS.md', agentsTemplate)
+    const staticFiles: { name: string; template: string }[] = [
+      { name: 'biome.json', template: biomeConfigTemplate },
+      { name: 'tsconfig.json', template: tsconfigConfigTemplate },
+      { name: '.gitignore', template: gitignoreTemplate },
+      { name: 'AGENTS.md', template: agentsTemplate },
+    ]
+
+    for (const { name, template } of staticFiles) {
+      this.writeToProject(name, template)
+    }
 
     if (this.config.packageManager === 'pnpm') {
       this.writeToProject('pnpm-workspace.yaml', pnpmWorkspaceTemplate)
     }
   }
 
+  // TODO: create single interface for all render methods
   private async writeTemplateFiles(
     configWithContractMetadata: WithContractMetadata<Config<NetworkType>>,
   ): Promise<void> {
@@ -216,35 +229,26 @@ export class InitHandler {
     )
 
     this.writeToProject('src/index.ts', await this.renderIndexerTs(configWithContractMetadata))
+    this.writeToProject('src/utils/index.ts', renderUtilsTemplate(this.config))
 
     if (this.config.sink === 'postgresql') {
       const schemasTs = renderSchemasTemplate(configWithContractMetadata)
       this.writeToProject('src/schemas.ts', schemasTs)
       this.writeToProject('drizzle.config.ts', drizzleConfigTemplate)
-      this.writeToProject('src/utils/index.ts', eventEnricherUtilsTemplate)
     }
 
     if (this.config.sink === 'clickhouse') {
       await this.copyClickHouseMigrations(configWithContractMetadata)
-      const content = eventEnricherUtilsTemplate + '\n' + snakeCaseUtilsTemplate
-      this.writeToProject('src/utils/index.ts', content)
     }
   }
 
   private renderIndexerTs(config: WithContractMetadata<Config<NetworkType>>): Promise<string> {
-    let builder: TemplateBuilder<NetworkType>
-    if (this.config.networkType === 'evm') {
-      builder = new EvmTemplateBuilder(config as WithContractMetadata<Config<'evm'>>)
-    } else if (this.config.networkType === 'svm') {
-      builder = new SvmTemplateBuilder(config as WithContractMetadata<Config<'svm'>>)
-    } else {
-      throw new InvalidNetworkTypeError(this.config.networkType)
-    }
-
+    const builder = new TemplateBuilder(config)
     return builder.build()
   }
 
   private async installDependencies(): Promise<void> {
+    // TODO: create execInProject function and reuse it in every function below
     await execAsync(`${this.config.packageManager} install`, {
       cwd: this.config.projectAbsolutePath,
     })
@@ -269,7 +273,16 @@ export class InitHandler {
 
     for (const template of this.config.templates) {
       if (template.templateId === 'custom') {
-        const fileContent = renderCustomClickhouseTables(config)
+        let fileContent: string
+        switch (config.networkType) {
+          case 'evm':
+            fileContent = renderCustomEvmClickhouseTables(config)
+            break
+          case 'svm':
+            fileContent = renderCustomSvmClickhouseTables(config)
+            break
+        }
+
         this.writeToProject(`${migrationsDir}/custom-contract-migration.sql`, fileContent)
       } else {
         const sourceFile = path.join(templateBaseDir, template.folderName, templateMigrationFile)
@@ -301,15 +314,37 @@ export class InitHandler {
     }
   }
 
+  private writeToProject(relativePath: string, content: string) {
+    const filePath = path.join(this.config.projectAbsolutePath, relativePath)
+    mkdirSync(path.dirname(filePath), { recursive: true })
+    writeFileSync(filePath, content)
+  }
+
+  private copyToProject(absoluteSourcePath: string, relativeTargetPath: string) {
+    const absoluteTargetFilePath = path.join(this.config.projectAbsolutePath, relativeTargetPath)
+
+    if (!existsSync(absoluteSourcePath)) throw new TemplateFileNotFoundError(absoluteSourcePath)
+
+    const sourceStat = statSync(absoluteSourcePath)
+
+    if (sourceStat.isDirectory()) {
+      cpSync(absoluteSourcePath, absoluteTargetFilePath, { recursive: true })
+    } else if (sourceStat.isFile()) {
+      mkdirSync(path.dirname(absoluteTargetFilePath), { recursive: true })
+      copyFileSync(absoluteSourcePath, absoluteTargetFilePath)
+    } else {
+      throw new UnexpectedTemplateFileError(absoluteTargetFilePath)
+    }
+  }
+
   private async generateContractTypes(): Promise<void> {
     const abiService = new SqdAbiService()
-
-    if (this.config.networkType === 'evm') {
-      const chainId = getEvmChainId(this.config.network)
-      abiService.generateEvmTypes(this.config.projectAbsolutePath, this.config.contractAddresses, chainId)
-    } else {
-      abiService.generateSolanaTypes(this.config.projectAbsolutePath, this.config.contractAddresses)
-    }
+    abiService.generateTypes(
+      this.config.networkType,
+      this.config.network,
+      this.config.projectAbsolutePath,
+      this.config.contractAddresses,
+    )
   }
 
   private nextSteps(): void {
@@ -356,29 +391,6 @@ export class InitHandler {
   ${chalk.gray('Need help? Check our documentation at')} ${chalk.bold.gray.underline('https://beta.docs.sqd.dev/en/sdk/pipes-sdk')}`
 
     console.log(message)
-  }
-
-  private writeToProject(relativePath: string, content: string) {
-    const filePath = path.join(this.config.projectAbsolutePath, relativePath)
-    mkdirSync(path.dirname(filePath), { recursive: true })
-    writeFileSync(filePath, content)
-  }
-
-  private copyToProject(absoluteSourcePath: string, relativeTargetPath: string) {
-    const absoluteTargetFilePath = path.join(this.config.projectAbsolutePath, relativeTargetPath)
-
-    if (!existsSync(absoluteSourcePath)) throw new TemplateFileNotFoundError(absoluteSourcePath)
-
-    const sourceStat = statSync(absoluteSourcePath)
-
-    if (sourceStat.isDirectory()) {
-      cpSync(absoluteSourcePath, absoluteTargetFilePath, { recursive: true })
-    } else if (sourceStat.isFile()) {
-      mkdirSync(path.dirname(absoluteTargetFilePath), { recursive: true })
-      copyFileSync(absoluteSourcePath, absoluteTargetFilePath)
-    } else {
-      throw new UnexpectedTemplateFileError(absoluteTargetFilePath)
-    }
   }
 
   static fromJson(jsonString: string): InitHandler {

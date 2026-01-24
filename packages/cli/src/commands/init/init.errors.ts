@@ -1,5 +1,5 @@
 import { NetworkType, networkTypes } from '~/types/init.js'
-import { templates } from './templates/pipe-components/template-builder.js'
+import { templates } from './templates/pipe-components/template-builder/index.js'
 
 export class TemplateNotFoundError extends Error {
   constructor(templateId: unknown, network: NetworkType) {
