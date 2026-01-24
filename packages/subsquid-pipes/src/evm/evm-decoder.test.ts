@@ -1,8 +1,8 @@
 import { event, indexed } from '@subsquid/evm-abi'
 import * as p from '@subsquid/evm-codec'
-import { afterAll, afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
-import { Decoder, PortalRange, Transformer } from '~/core/index.js'
+import { Decoder, PortalRange } from '~/core/index.js'
 import { createTestLogger } from '~/tests/test-logger.js'
 import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/tests/test-server.js'
 
@@ -992,8 +992,7 @@ describe('evmDecoder transform', () => {
           },
         },
       }),
-    })
-      .pipe((e) => e['transfers'])
+    }).pipe((e) => e['transfers'])
 
     const res = await readAll(stream)
     expect(res).toMatchInlineSnapshot(`

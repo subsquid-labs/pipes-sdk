@@ -131,8 +131,8 @@ describe('Portal abstract stream', () => {
 
       const stream = evmPortalSource({
         portal: mockPortal.url,
-        query: { from: 0, to: 1 },
-      }).pipe(blockTransformer())
+        streams: blockDecoder({ from: 0, to: 1 }),
+      })
 
       expect(await readAll(stream)).toMatchInlineSnapshot(`
         [
