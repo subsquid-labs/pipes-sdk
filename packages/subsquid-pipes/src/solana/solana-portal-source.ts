@@ -2,51 +2,53 @@ import { cast } from '@subsquid/util-internal-validation'
 
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
+import { PortalClientOptions, getBlockSchema } from '~/portal-client/index.js'
+import * as solana from '~/portal-client/query/solana.js'
 
 import {
   LogLevel,
   Logger,
+  Outputs,
   PortalCache,
   PortalSource,
-  Streams,
   Transformer,
   createDefaultLogger,
   createTransformer,
-  mergeStreams,
+  mergeOutputs,
 } from '../core/index.js'
-import { PortalClientOptions, getBlockSchema, solana } from '../portal-client/index.js'
 import { SolanaQueryBuilder } from './solana-query-builder.js'
 
 export type SolanaFieldSelection = solana.FieldSelection
 
 export type SolanaPortalData<F extends solana.FieldSelection> = solana.Block<F>[]
 
-type SolanaStreams = Streams<solana.FieldSelection, SolanaQueryBuilder>
+type SolanaOutputs = Outputs<solana.FieldSelection, SolanaQueryBuilder<any>>
 
-type SolanaPortalStream<T extends SolanaStreams> = T extends SolanaQueryBuilder<infer Q>
-  ? SolanaPortalData<Q>
-  : T extends Transformer<any, infer O>
-    ? O
-    : T extends Record<string, Transformer<any, any> | SolanaQueryBuilder<any>>
-      ? {
-          [K in keyof T]: T[K] extends Transformer<any, infer O>
-            ? O
-            : T[K] extends SolanaQueryBuilder<infer Q>
-              ? SolanaPortalData<Q>
-              : never
-        }
-      : never
+type SolanaPortalStream<T extends SolanaOutputs> =
+  T extends SolanaQueryBuilder<infer Q>
+    ? SolanaPortalData<Q>
+    : T extends Transformer<any, infer O>
+      ? O
+      : T extends Record<string, Transformer<any, any> | SolanaQueryBuilder<any>>
+        ? {
+            [K in keyof T]: T[K] extends Transformer<any, infer O>
+              ? O
+              : T[K] extends SolanaQueryBuilder<infer Q>
+                ? SolanaPortalData<Q>
+                : never
+          }
+        : never
 
-export function solanaPortalSource<S extends SolanaStreams>({
+export function solanaPortalSource<Out extends SolanaOutputs>({
   portal,
-  streams,
+  outputs,
   cache,
   logger,
   metrics,
   progress,
 }: {
   portal: string | PortalClientOptions
-  streams: S
+  outputs: Out
   cache?: PortalCache
   metrics?: MetricsServer
   logger?: Logger | LogLevel
@@ -59,7 +61,7 @@ export function solanaPortalSource<S extends SolanaStreams>({
     block: { hash: true, number: true },
   })
 
-  return new PortalSource<SolanaQueryBuilder<F>, SolanaPortalStream<S>>({
+  return new PortalSource<SolanaQueryBuilder<F>, SolanaPortalStream<Out>>({
     portal,
     query,
     cache,
@@ -80,7 +82,7 @@ export function solanaPortalSource<S extends SolanaStreams>({
           return data.map((b) => cast(schema, b))
         },
       }),
-      mergeStreams(streams),
+      mergeOutputs(outputs),
     ],
   })
 }

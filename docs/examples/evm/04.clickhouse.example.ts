@@ -18,7 +18,7 @@ async function cli() {
 
   await evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/base-mainnet',
-    streams: evmDecoder({
+    outputs: evmDecoder({
       range: { from: 'latest' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,

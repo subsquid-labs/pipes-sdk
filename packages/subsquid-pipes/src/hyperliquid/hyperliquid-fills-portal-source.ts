@@ -2,6 +2,7 @@ import { cast } from '@subsquid/util-internal-validation'
 
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
+import * as hl from '~/portal-client/query/hyperliquid-fills.js'
 
 import {
   LogLevel,
@@ -12,12 +13,12 @@ import {
   createDefaultLogger,
   createTransformer,
 } from '../core/index.js'
-import { PortalClientOptions, getBlockSchema, hyperliquidFills } from '../portal-client/index.js'
+import { PortalClientOptions, getBlockSchema } from '../portal-client/index.js'
 import { HyperliquidFillsQueryBuilder } from './hyperliquid-fills-query-builder.js'
 
-export type HyperliquidFillsPortalData<F extends hyperliquidFills.FieldSelection> = hyperliquidFills.Block<F>[]
+export type HyperliquidFillsPortalData<F extends hl.FieldSelection> = hl.Block<F>[]
 
-export function hyperliquidFillsPortalSource<F extends hyperliquidFills.FieldSelection = any>({
+export function hyperliquidFillsPortalSource<F extends hl.FieldSelection = any>({
   portal,
   query,
   cache,
@@ -55,7 +56,7 @@ export function hyperliquidFillsPortalSource<F extends hyperliquidFills.FieldSel
       createTransformer<HyperliquidFillsPortalData<F>, HyperliquidFillsPortalData<F>>({
         profiler: { id: 'normalize data' },
         transform: (data, ctx) => {
-          const schema = getBlockSchema<hyperliquidFills.Block<F>>(ctx.query.raw)
+          const schema = getBlockSchema<hl.Block<F>>(ctx.query.raw)
 
           return data.map((b) => cast(schema, b))
         },

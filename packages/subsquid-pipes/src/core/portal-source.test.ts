@@ -32,7 +32,7 @@ describe('Portal abstract stream', () => {
 
       const stream = evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 2 }),
+        outputs: blockDecoder({ from: 0, to: 2 }),
       })
 
       let firstCtx
@@ -79,7 +79,7 @@ describe('Portal abstract stream', () => {
 
       const stream = evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 2 }),
+        outputs: blockDecoder({ from: 0, to: 2 }),
       })
 
       let firstCtx
@@ -131,7 +131,7 @@ describe('Portal abstract stream', () => {
 
       const stream = evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 1 }),
+        outputs: blockDecoder({ from: 0, to: 1 }),
       })
 
       expect(await readAll(stream)).toMatchInlineSnapshot(`
@@ -156,7 +156,7 @@ describe('Portal abstract stream', () => {
 
       const stream = evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 2 }),
+        outputs: blockDecoder({ from: 0, to: 2 }),
       })
 
       const res = await readAll(stream)
@@ -193,7 +193,7 @@ describe('Portal abstract stream', () => {
           url: mockPortal.url,
           http: { retrySchedule: [0] },
         },
-        streams: blockDecoder({ from: 0, to: 2 }),
+        outputs: blockDecoder({ from: 0, to: 2 }),
       })
 
       const res = await readAll(stream)
@@ -229,7 +229,7 @@ describe('Portal abstract stream', () => {
             retrySchedule: [0],
           },
         },
-        streams: blockDecoder({ from: 0, to: 2 }),
+        outputs: blockDecoder({ from: 0, to: 2 }),
       })
 
       await expect(readAll(stream)).rejects.toThrow(`Got 503 from ${mockPortal.url}`)
@@ -278,7 +278,7 @@ describe('Portal abstract stream', () => {
           url: mockPortal.url,
           http: { retryAttempts: 0, retrySchedule: [0] },
         },
-        streams: blockDecoder({ from: 0, to: 100_000_001 }),
+        outputs: blockDecoder({ from: 0, to: 100_000_001 }),
       })
 
       await expect(readAll(stream)).rejects.toThrow(
@@ -309,7 +309,7 @@ describe('Portal abstract stream', () => {
           url: mockPortal.url,
           finalized: true,
         },
-        streams: blockDecoder({ from: 0, to: 2 }),
+        outputs: blockDecoder({ from: 0, to: 2 }),
       })
 
       const res = await readAll(stream)

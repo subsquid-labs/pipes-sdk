@@ -16,7 +16,7 @@ async function cli() {
   const weth = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
   const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-    streams: evmDecoder({
+    outputs: evmDecoder({
       range: { from: '12,369,621' },
       contracts: factory({
         address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',

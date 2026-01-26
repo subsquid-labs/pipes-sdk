@@ -27,7 +27,7 @@ async function cli() {
   const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     logger: pino(transport),
-    streams: erc20Transfers(),
+    outputs: erc20Transfers(),
   })
 
   for await (const { data } of stream) {

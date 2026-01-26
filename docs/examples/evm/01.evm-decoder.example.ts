@@ -12,7 +12,7 @@ async function cli() {
   const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     // logger: 'debug',
-    streams: evmDecoder({
+    outputs: evmDecoder({
       range: { from: 'latest' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,

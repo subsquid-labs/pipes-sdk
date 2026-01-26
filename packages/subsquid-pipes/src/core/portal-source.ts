@@ -1,6 +1,5 @@
 import { RuntimeContext, useRuntimeContext } from '$context'
 
-import { Decoder } from '~/core/decoder.js'
 import {
   GetBlock,
   PortalClient,
@@ -17,7 +16,7 @@ import { Profiler, Span } from './profiling.js'
 import { ProgressState, StartState } from './progress-tracker.js'
 import { QueryBuilder, hashQuery } from './query-builder.js'
 import { Target } from './target.js'
-import { Transformer, TransformerOptions } from './transformer.js'
+import { QueryAwareTransformer, Transformer, TransformerArgs } from './transformer.js'
 import { BlockCursor, Ctx } from './types.js'
 
 const NOT_REAL_TIME_WARNING = (name: string) => {
@@ -74,15 +73,13 @@ export function cursorFromHeader(block: { header: { number: number; hash: string
   return { number: block.header.number, hash: block.header.hash, timestamp: block.header.timestamp }
 }
 
-type AnyTransformer = Decoder<any, any, any> | Transformer<any, any>
-
 export type PortalSourceOptions<Query> = {
   portal: string | PortalClientOptions | PortalClient
   query: Query
   logger: Logger
   profiler?: boolean
   cache?: PortalCache
-  transformers?: AnyTransformer[]
+  transformers?: Transformer<any, any>[]
   metrics?: MetricsServer
   progress?: {
     interval?: number
@@ -101,7 +98,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   readonly #runtime?: RuntimeContext
   readonly #portal: PortalClient
   readonly #metricServer: MetricsServer
-  readonly #transformers: AnyTransformer[]
+  readonly #transformers: Transformer<any, any>[] = []
   #started = false
 
   constructor({ portal, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
@@ -242,31 +239,10 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     await this.stop()
   }
 
-  pipe<Out>(
-    transformerOrOptions: /*
-        Simplified usage - just the transform function that processes data
-        .pipe((data) => data)
-      */
-      | TransformerOptions<T, Out>['transform']
-      /*
-        Complete transformer configuration object with transform function and additional options
-        .pipe({ profiler: { id: 'my transformer' }, transform: (data) => data })
-       */
-      | TransformerOptions<T, Out>
-      /*
-        Pre-configured transformer instance with all required methods implemented
-        .pipe(new MyCustomTransformer())
-       */
-      | Transformer<T, Out>,
-  ): PortalSource<Q, Out> {
+  pipe<Out>(options: TransformerArgs<T, Out> | Transformer<T, Out>): PortalSource<Q, Out> {
     if (this.#started) throw new Error('Source is closed')
 
-    const transformer =
-      transformerOrOptions instanceof Transformer
-        ? transformerOrOptions
-        : typeof transformerOrOptions === 'function'
-          ? new Transformer({ transform: transformerOrOptions })
-          : new Transformer(transformerOrOptions)
+    const transformer = options instanceof Transformer ? options : new Transformer(options)
 
     const id = transformer.id()
 
@@ -322,11 +298,10 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   private async configure() {
     await Promise.all(
       this.#transformers
-        .filter((t) => t instanceof Decoder)
+        .filter((t) => t instanceof QueryAwareTransformer)
         .map((t) =>
-          t.query({
-            queryBuilder: this.#queryBuilder,
-            portal: this.#portal,
+          t.setupQuery({
+            query: this.#queryBuilder,
             logger: this.#logger,
           }),
         ),

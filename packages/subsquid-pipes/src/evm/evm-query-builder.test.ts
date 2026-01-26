@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { EvmQueryBuilder } from '~/evm/evm-query-builder.js'
 
-describe('EvmQueryBuilder', () => {
+import { EvmQueryBuilder } from './evm-query-builder.js'
+
+describe('EvmQuery', () => {
   describe('calculateRanges', () => {
     it('should add default range', async () => {
       const qb = new EvmQueryBuilder()

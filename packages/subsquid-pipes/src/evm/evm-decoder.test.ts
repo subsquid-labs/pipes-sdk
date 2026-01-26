@@ -2,7 +2,7 @@ import { event, indexed } from '@subsquid/evm-abi'
 import * as p from '@subsquid/evm-codec'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
-import { Decoder, PortalRange } from '~/core/index.js'
+import { PortalRange, QueryAwareTransformer } from '~/core/index.js'
 import { createTestLogger } from '~/tests/test-logger.js'
 import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/tests/test-server.js'
 
@@ -22,14 +22,17 @@ import { EvmQueryBuilder } from './evm-query-builder.js'
 import { factory } from './factory.js'
 import { factorySqliteDatabase } from './factory-adapters/sqlite.js'
 
-async function captureQueryBuilder(decoder: Decoder<any, any, EvmQueryBuilder>) {
-  const mockQueryBuilder = new EvmQueryBuilder()
-  await decoder.query({
-    queryBuilder: mockQueryBuilder,
-    logger: createTestLogger(),
-    portal: {} as any,
+async function captureQueryBuilder(
+  decoder: QueryAwareTransformer<any, any, EvmQueryBuilder<any>>,
+  logger = createTestLogger(),
+) {
+  const query = new EvmQueryBuilder()
+  await decoder.setupQuery({
+    query,
+    logger,
+    // portal: {} as any,
   })
-  return mockQueryBuilder
+  return query
 }
 
 const factoryAbi = {
@@ -676,12 +679,7 @@ describe('evmDecoder queries', () => {
           transfers2: duplicateEvent,
         },
       })
-
-      await decoder.query({
-        queryBuilder: new EvmQueryBuilder(),
-        logger,
-        portal: {} as any,
-      })
+      await captureQueryBuilder(decoder, logger)
 
       expect(errorSpy).toHaveBeenCalledTimes(1)
 
@@ -713,11 +711,7 @@ describe('evmDecoder queries', () => {
         },
       })
 
-      await decoder.query({
-        queryBuilder: new EvmQueryBuilder(),
-        logger,
-        portal: {} as any,
-      })
+      await captureQueryBuilder(decoder, logger)
 
       expect(errorSpy).toHaveBeenCalledTimes(1)
 
@@ -743,11 +737,7 @@ describe('evmDecoder queries', () => {
         },
       })
 
-      await decoder.query({
-        queryBuilder: new EvmQueryBuilder(),
-        logger,
-        portal: {} as any,
-      })
+      await captureQueryBuilder(decoder, logger)
 
       expect(errorSpy).not.toHaveBeenCalled()
 
@@ -887,13 +877,13 @@ describe('evmDecoder transform', () => {
   it('should decode the events when passed AbiEvent', async () => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
-      streams: evmDecoder({
+      outputs: evmDecoder({
         range: { from: 0, to: 1 },
         events: {
           transfers: commonAbis.erc20.events.Transfer,
         },
       }),
-    }).pipe((e) => e['transfers'])
+    }).pipe((e) => e.transfers)
 
     const res = await readAll(stream)
 
@@ -964,13 +954,13 @@ describe('evmDecoder transform', () => {
   ])(`should filter events by specified contracts $contracts -> $expected`, async ({ contracts, expected }) => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
-      streams: evmDecoder({
+      outputs: evmDecoder({
         range: { from: 0, to: 1 },
         contracts, // No contracts should filter out all events
         events: {
           transfers: commonAbis.erc20.events.Transfer,
         },
-      }).pipe((e) => e['transfers']),
+      }).pipe((e) => e.transfers),
     })
 
     const res = await readAll(stream)
@@ -981,7 +971,7 @@ describe('evmDecoder transform', () => {
   it('should decode the events when passed an EventWithArgs', async () => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
-      streams: evmDecoder({
+      outputs: evmDecoder({
         range: { from: 0, to: 1 },
         events: {
           transfers: {
@@ -992,7 +982,7 @@ describe('evmDecoder transform', () => {
           },
         },
       }),
-    }).pipe((e) => e['transfers'])
+    }).pipe((e) => e.transfers)
 
     const res = await readAll(stream)
     expect(res).toMatchInlineSnapshot(`
@@ -1056,7 +1046,7 @@ describe('evmDecoder transform', () => {
   it('should decode the events when mixed EventWithArgs and AbiEvent', async () => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
-      streams: evmDecoder({
+      outputs: evmDecoder({
         range: { from: 0, to: 1 },
         events: {
           approvals: commonAbis.erc20.events.Approval,

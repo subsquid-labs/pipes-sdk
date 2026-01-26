@@ -8,7 +8,7 @@ async function transfers({ id, params, metrics, logger }: RunConfig<Params>) {
     portal: `https://portal.sqd.dev/datasets/${params.dataset}`,
     metrics,
     logger,
-    streams: evmDecoder({
+    outputs: evmDecoder({
       range: { from: 'latest' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,

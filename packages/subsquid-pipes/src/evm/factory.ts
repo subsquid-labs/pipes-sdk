@@ -1,9 +1,9 @@
 import { AbiEvent } from '@subsquid/evm-abi'
 import type { Codec } from '@subsquid/evm-codec'
 
-import { BlockCursor, Logger, PortalRange, createTarget, parsePortalRange } from '~/core/index.js'
+import { BlockCursor, Logger, PortalRange, createDefaultLogger, createTarget, parsePortalRange } from '~/core/index.js'
 import { arrayify } from '~/internal/array.js'
-import { PortalClient } from '~/portal-client/client.js'
+import { PortalClient, PortalClientOptions } from '~/portal-client/client.js'
 import { Log, LogRequest } from '~/portal-client/query/evm.js'
 
 import {
@@ -46,7 +46,6 @@ export type DecodedAbiEvent<T extends EventArgs> = ReturnType<AbiEvent<T>['decod
 export type FactoryOptions<T extends EventArgs> = {
   address: string | string[]
   event: AbiEvent<T> | EventWithArgsInput<AbiEvent<T>>
-  _experimental_preindex?: { from: number | string; to: number | string }
   parameter: keyof T | ((data: DecodedAbiEvent<T>) => string | null)
   database:
     | FactoryPersistentAdapter<InternalFactoryEvent<T>>
@@ -59,6 +58,8 @@ export class Factory<T extends EventArgs> {
   readonly #addresses: Set<string>
   readonly #event: AbiEvent<T>
   readonly #params: IndexedParams<AbiEvent<T>>
+
+  #preIndexRange?: { from: number; to: number }
 
   constructor(private options: FactoryOptions<T>) {
     this.#addresses = new Set(arrayify(this.options.address).map((a) => a.toLowerCase()))
@@ -183,30 +184,34 @@ export class Factory<T extends EventArgs> {
     return true
   }
 
-  preIndexRange() {
-    return this.options._experimental_preindex
-      ? (parsePortalRange(this.options._experimental_preindex) as { from: number; to: number })
-      : undefined
+  isPreIndexed() {
+    return this.#preIndexRange !== undefined
   }
 
-  async startPreIndex({
+  async preindex({
     name,
     logger,
     portal,
     range,
   }: {
-    name: string
-    range: PortalRange
-    logger: Logger
-    portal: PortalClient
+    name?: string
+    range: { from: string; to: string }
+    logger?: Logger
+    portal: PortalClient | PortalClientOptions | string
   }) {
+    name = name || `factory preindexing ${this.factoryAddress().join(', ')}`
+
+    this.#preIndexRange = parsePortalRange(range) as { from: number; to: number }
+
+    logger = logger || createDefaultLogger()
+
     logger.info(`Starting ${name}`)
 
     await evmPortalSource({
       portal,
       logger,
-      streams: evmDecoder({
-        profiler: { id: name },
+      outputs: evmDecoder({
+        profiler: { id: name || `preindex` },
         contracts: this.factoryAddress(),
         range,
         events: {

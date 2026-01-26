@@ -1,36 +1,35 @@
 import { cast } from '@subsquid/util-internal-validation'
 
 import {
-  Decoder,
   LogLevel,
   Logger,
+  Outputs,
   PortalCache,
   PortalSource,
-  Streams,
+  Transformer,
   createDefaultLogger,
   createTransformer,
-  mergeStreams,
+  mergeOutputs,
 } from '~/core/index.js'
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
 
-import { PortalClient, PortalClientOptions, evm as api, getBlockSchema } from '../portal-client/index.js'
-import { EvmQueryBuilder } from './evm-query-builder.js'
+import { PortalClient, PortalClientOptions, getBlockSchema } from '../portal-client/index.js'
+import * as evm from '../portal-client/query/evm.js'
+import { EvmPortalData, EvmQueryBuilder } from './evm-query-builder.js'
 
-export type EvmFieldSelection = api.FieldSelection
+export type EvmFieldSelection = evm.FieldSelection
 
-export type EvmPortalData<F extends api.FieldSelection> = api.Block<F>[]
+export type EvmOutputs = Outputs<evm.FieldSelection, EvmQueryBuilder<any>>
 
-export type EvmStreams = Streams<api.FieldSelection, EvmQueryBuilder>
-
-type EvmPortalStream<T extends EvmStreams> =
+type EvmPortalStream<T extends EvmOutputs> =
   T extends EvmQueryBuilder<infer Q>
     ? EvmPortalData<Q>
-    : T extends Decoder<any, infer O, any>
+    : T extends Transformer<any, infer O>
       ? O
-      : T extends Record<string, Decoder<any, any, any> | EvmQueryBuilder<any>>
+      : T extends Record<string, Transformer<any, any> | EvmQueryBuilder<any>>
         ? {
-            [K in keyof T]: T[K] extends Decoder<any, infer O, any>
+            [K in keyof T]: T[K] extends Transformer<any, infer O>
               ? O
               : T[K] extends EvmQueryBuilder<infer Q>
                 ? EvmPortalData<Q>
@@ -38,16 +37,16 @@ type EvmPortalStream<T extends EvmStreams> =
           }
         : never
 
-export function evmPortalSource<S extends EvmStreams>({
+export function evmPortalSource<Out extends EvmOutputs>({
   portal,
-  streams,
+  outputs,
   cache,
   logger,
   metrics,
   progress,
 }: {
   portal: string | PortalClientOptions | PortalClient
-  streams: S
+  outputs: Out
   cache?: PortalCache
   metrics?: MetricsServer
   logger?: Logger | LogLevel
@@ -60,7 +59,7 @@ export function evmPortalSource<S extends EvmStreams>({
     block: { hash: true, number: true },
   })
 
-  return new PortalSource<EvmQueryBuilder<F>, EvmPortalStream<S>>({
+  return new PortalSource<EvmQueryBuilder<F>, EvmPortalStream<Out>>({
     portal,
     query,
     cache,
@@ -76,12 +75,12 @@ export function evmPortalSource<S extends EvmStreams>({
       createTransformer<EvmPortalData<F>, EvmPortalData<F>>({
         profiler: { id: 'normalize data' },
         transform: (data, ctx) => {
-          const schema = getBlockSchema<api.Block<F>>(ctx.query.raw)
+          const schema = getBlockSchema<evm.Block<F>>(ctx.query.raw)
 
           return data.map((b) => cast(schema, b))
         },
       }),
-      mergeStreams(streams),
+      mergeOutputs(outputs),
     ],
   })
 }

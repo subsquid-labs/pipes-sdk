@@ -1,23 +1,11 @@
 import type { AbiEvent, EventParams } from '@subsquid/evm-abi'
 import { Codec, Sink } from '@subsquid/evm-codec'
 
-import {
-  BatchCtx,
-  Decoder,
-  PortalRange,
-  ProfilerOptions,
-  Transformer,
-  createDecoder,
-  formatBlock,
-  formatNumber,
-  formatWarning,
-  parsePortalRange,
-} from '~/core/index.js'
-import { EvmQueryBuilder } from '~/evm/evm-query-builder.js'
+import { BatchCtx, PortalRange, ProfilerOptions, Transformer, formatWarning, parsePortalRange } from '~/core/index.js'
 import { arrayify, findDuplicates } from '~/internal/array.js'
 import { Log, LogRequest } from '~/portal-client/query/evm.js'
 
-import { EvmPortalData } from './evm-portal-source.js'
+import { evmQuery } from './evm-query-builder.js'
 import { DecodedAbiEvent, Factory } from './factory.js'
 
 export type FactoryEvent<T> = {
@@ -269,8 +257,6 @@ function getDuplicateEvents<T extends Events>(events: T, duplicates: string[]) {
   })
 }
 
-export class EvmDecoder<In, Out> extends Decoder<In, Out, EvmQueryBuilder> {}
-
 /**
  * Decodes EVM events from portal data and optionally filters them by indexed parameters.
  *
@@ -315,138 +301,49 @@ export function evmDecoder<T extends Events, C extends Contracts>({
   events,
   profiler,
   onError,
-}: DecodedEventPipeArgs<T, C>): EvmDecoder<EvmPortalData<typeof decodedEventFields>, EventResponse<T, C>> {
+}: DecodedEventPipeArgs<T, C>) {
+  const decodedRange = parsePortalRange(range)
   const normalizedEvents = getNormalizedEvents(events)
   const { eventsWithParams, eventsWithoutParams } = splitEvents(normalizedEvents)
   const eventTopic0 = eventsWithoutParams.map((event) => event.event.topic)
-  const eventWithParamsRequest = buildEventRequests(eventsWithParams, contracts)
-  const decodedRange = parsePortalRange(range)
   const normalizedContracts =
     contracts && !Factory.isFactory(contracts) ? contracts.map((contract) => contract.toLowerCase()) : undefined
 
-  return createDecoder({
-    profiler: profiler || { id: 'EVM decoder' },
-    query: async ({ queryBuilder, logger, portal }) => {
+  const query = evmQuery().addFields(decodedEventFields)
+
+  if (Factory.isFactory(contracts)) {
+    query.addLog({ range: decodedRange, request: contracts.buildFactoryEventRequest() })
+  }
+
+  if (eventsWithoutParams.length > 0) {
+    query.addLog({
+      range: decodedRange,
+      request: {
+        address: !Factory.isFactory(contracts) ? contracts : undefined,
+        topic0: eventTopic0,
+        transaction: true,
+      },
+    })
+  }
+
+  for (const request of buildEventRequests(eventsWithParams, contracts)) {
+    query.addLog({ range: decodedRange, request })
+  }
+
+  return query.build({
+    profiler: profiler ?? { id: 'EVM decoder' },
+    setupQuery: (config) => {
       const allEventTopics = normalizedEvents.map(({ event }) => event.topic)
       const duplicates = findDuplicates(allEventTopics)
       if (duplicates.length) {
-        logger.error(DUPLICATED_EVENTS(getDuplicateEvents(events, duplicates)))
+        config.logger.error(DUPLICATED_EVENTS(getDuplicateEvents(events, duplicates)))
       }
 
-      if (!Factory.isFactory(contracts)) {
-        queryBuilder.addFields(decodedEventFields)
-
-        if (eventsWithoutParams.length > 0)
-          queryBuilder.addLog({
-            range: decodedRange,
-            request: {
-              address: contracts,
-              topic0: eventTopic0,
-              transaction: true,
-            },
-          })
-
-        for (const request of eventWithParamsRequest) {
-          queryBuilder.addLog({
-            range: decodedRange,
-            request,
-          })
-        }
-
-        return
-      }
-
-      const preIndexRange = contracts.preIndexRange()
-      if (preIndexRange) {
-        await contracts.migrate()
-        await contracts.startPreIndex({
-          name: 'EVM decoder factory pre-index',
-          range: preIndexRange,
-          portal,
-          logger,
-        })
-
-        const children = await contracts.getAllContracts()
-        const firstRange = { from: decodedRange?.from || 0, to: preIndexRange.to }
-        const secondRange = { from: preIndexRange.to + 1, to: decodedRange?.to }
-
-        logger.info(
-          [
-            `Configuring pre-indexed range ${formatBlock(firstRange.from)} to ${formatNumber(firstRange.to)} using server-side filter with ${children.length} contracts`,
-            `And range ${formatNumber(secondRange.from)}${secondRange.to ? ' to ' + formatNumber(secondRange.to || 0) : ''} using client-side filter`,
-          ].join('\n'),
-        )
-
-        queryBuilder.addFields(decodedEventFields)
-
-        if (eventsWithoutParams.length > 0) {
-          queryBuilder
-            .addLog({
-              // pre-indexed stage
-              range: firstRange,
-              request: {
-                address: children.map((c) => c.childAddress), // fill addresses from factory events
-                topic0: eventTopic0,
-                transaction: true,
-              },
-            })
-            .addLog({
-              range: secondRange,
-              request: {
-                topic0: eventTopic0,
-                transaction: true,
-              },
-            })
-        }
-
-        for (const request of eventWithParamsRequest) {
-          queryBuilder
-            .addLog({
-              range: firstRange,
-              request: {
-                address: children.map((c) => c.childAddress), // fill addresses from factory events
-                ...request,
-              },
-            })
-            .addLog({
-              range: secondRange,
-              request,
-            })
-        }
-
-        return
-      }
-
-      queryBuilder.addLog({
-        range: decodedRange,
-        request: contracts.buildFactoryEventRequest(),
-      })
-
-      queryBuilder.addFields(decodedEventFields)
-
-      if (eventsWithoutParams.length > 0) {
-        queryBuilder.addLog({
-          range: decodedRange,
-          request: {
-            topic0: eventTopic0,
-            transaction: true,
-          },
-        })
-      }
-
-      for (const request of eventWithParamsRequest) {
-        queryBuilder.addLog({
-          range: decodedRange,
-          request,
-        })
-      }
+      config.query.merge(query)
     },
     start: async ({ logger }) => {
       if (Factory.isFactory(contracts)) {
-        logger.debug('Running factory migrations')
         await contracts.migrate()
-
-        logger.debug('Finished factory migrations')
       }
     },
     transform: async (data, ctx) => {

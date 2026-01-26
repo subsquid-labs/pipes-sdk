@@ -92,7 +92,7 @@ describe('Portal cache', () => {
 
       const stream = evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 5 }),
+        outputs: blockDecoder({ from: 0, to: 5 }),
         cache,
       })
 
@@ -225,7 +225,7 @@ describe('Portal cache', () => {
 
       const stream = evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 6, to: 10 }),
+        outputs: blockDecoder({ from: 6, to: 10 }),
         cache,
       })
 
@@ -234,7 +234,7 @@ describe('Portal cache', () => {
       // now request from 0 to 5, should not reuse data from 6 to 10
       const stream2 = evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 5 }),
+        outputs: blockDecoder({ from: 0, to: 5 }),
         cache,
       })
 
@@ -357,7 +357,7 @@ describe('Portal cache', () => {
 
       const stream = evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 5 }),
+        outputs: blockDecoder({ from: 0, to: 5 }),
         cache,
       })
 

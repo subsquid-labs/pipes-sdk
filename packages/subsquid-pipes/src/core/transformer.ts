@@ -1,9 +1,9 @@
 import { Metrics } from '~/core/metrics-server.js'
-import { PortalClient } from '~/portal-client/index.js'
 
 import { Logger } from './logger.js'
 import { BatchCtx } from './portal-source.js'
 import { ProfilerOptions } from './profiling.js'
+import { QueryBuilder } from './query-builder.js'
 import { BlockCursor, Ctx } from './types.js'
 
 export type StartCtx = {
@@ -14,16 +14,28 @@ export type StartCtx = {
 
 export type StopCtx = { logger: Logger }
 
-export interface TransformerOptions<In, Out> {
+export type TransformerFn<In, Out> = (data: In, ctx: BatchCtx) => Promise<Out> | Out
+
+export type TransformerOptions<In, Out> = {
   profiler?: ProfilerOptions
   start?: (ctx: StartCtx) => Promise<void> | void
-  transform: (data: In, ctx: BatchCtx) => Promise<Out> | Out
+  transform: TransformerFn<In, Out>
   fork?: (cursor: BlockCursor, ctx: Ctx) => Promise<void> | void
   stop?: (ctx: StopCtx) => Promise<void> | void
 }
 
+export type TransformerArgs<In, Out> = TransformerOptions<In, Out> | TransformerFn<In, Out>
+
 export class Transformer<In, Out> {
-  constructor(public options: TransformerOptions<In, Out>) {}
+  options: TransformerOptions<In, Out>
+
+  constructor(options: TransformerArgs<In, Out>) {
+    if (typeof options === 'function') {
+      this.options = { transform: options }
+    } else {
+      this.options = options
+    }
+  }
 
   children: Transformer<any, any>[] = []
 
@@ -121,16 +133,8 @@ export class Transformer<In, Out> {
    * Otherwise, type information about the very first input would be lost,
    * and downstream code would see only the immediate `Out` type.
    */
-  pipe<Res>(
-    transformer: Transformer<Out, Res> | TransformerOptions<Out, Res> | TransformerOptions<Out, Res>['transform'],
-  ): Transformer<In, Res> {
-    this.children.push(
-      transformer instanceof Transformer
-        ? transformer
-        : typeof transformer === 'function'
-          ? createTransformer({ transform: transformer })
-          : createTransformer(transformer),
-    )
+  pipe<Res>(transformer: Transformer<Out, Res> | TransformerArgs<Out, Res>): Transformer<In, Res> {
+    this.children.push(transformer instanceof Transformer ? transformer : new Transformer(transformer))
 
     return this as unknown as Transformer<In, Res>
   }
@@ -138,4 +142,33 @@ export class Transformer<In, Out> {
 
 export function createTransformer<In, Out>(options: TransformerOptions<In, Out>) {
   return new Transformer<In, Out>(options)
+}
+
+export type SetupQueryFn<Query> = (ctx: { query: Query; logger: Logger }) => void | any | Promise<void | any>
+
+// FIXME STREAMS write docs
+export class QueryAwareTransformer<
+  In = any,
+  Out = any,
+  Query extends QueryBuilder<any> = QueryBuilder<any>,
+> extends Transformer<In, Out> {
+  /**
+   * @internal
+   */
+  setupQuery: SetupQueryFn<Query>
+
+  constructor(setupQuery: SetupQueryFn<Query>, options: TransformerArgs<In, Out>) {
+    super(options)
+
+    this.setupQuery = setupQuery
+  }
+
+  /**
+   * We need to override the return type
+   */
+  override pipe<Res>(
+    transformer: Transformer<Out, Res> | TransformerArgs<Out, Res>,
+  ): QueryAwareTransformer<In, Res, Query> {
+    return super.pipe(transformer) as unknown as QueryAwareTransformer<In, Res, Query>
+  }
 }

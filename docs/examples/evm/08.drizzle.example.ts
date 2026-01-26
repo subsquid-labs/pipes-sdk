@@ -74,7 +74,7 @@ async function main() {
       url: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     },
     // Configure decoder to extract ERC20 Transfer events from raw blockchain data
-    streams: evmDecoder({
+    outputs: evmDecoder({
       range: { from: '0' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,

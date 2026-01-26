@@ -17,20 +17,25 @@ import { events as swapsAbi } from './abi/uniswap.v3/swaps'
 
 //FIXME STREAMS check if it still works
 async function cli() {
+  const portal = 'https://portal.sqd.dev/datasets/ethereum-mainnet'
+
+  const poolsFactory = factory({
+    address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+    event: factoryAbi.PoolCreated,
+    parameter: 'pool',
+    database: factorySqliteDatabase({ path: './uniswap3-eth-pools.sqlite' }),
+  })
+
+  await poolsFactory.preindex({
+    portal,
+    range: { from: '12,369,621', to: '12,400,000' },
+  })
+
   const stream = evmPortalSource({
-    portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-    progress: {
-      interval: 500,
-    },
-    streams: evmDecoder({
+    portal,
+    outputs: evmDecoder({
       range: { from: '12,369,621', to: '12,410,000' },
-      contracts: factory({
-        address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
-        event: factoryAbi.PoolCreated,
-        _experimental_preindex: { from: '12,369,621', to: '12,400,000' },
-        parameter: 'pool',
-        database: factorySqliteDatabase({ path: './uniswap3-eth-pools.sqlite' }),
-      }),
+      contracts: poolsFactory,
       events: {
         swaps: swapsAbi.Swap,
       },

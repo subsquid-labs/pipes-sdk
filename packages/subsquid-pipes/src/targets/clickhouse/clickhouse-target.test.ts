@@ -55,7 +55,7 @@ describe('Clickhouse state', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 5 }),
+        outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(
         clickhouseTarget({
           client,
@@ -123,7 +123,7 @@ describe('Clickhouse state', () => {
           // so, we set minBytes to 1 to avoid batching
           minBytes: 1,
         },
-        streams: blockDecoder({ from: 0, to: 3 }),
+        outputs: blockDecoder({ from: 0, to: 3 }),
       }).pipeTo(
         clickhouseTarget({
           client,
@@ -171,7 +171,7 @@ describe('Clickhouse state', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 3 }),
+        outputs: blockDecoder({ from: 0, to: 3 }),
       }).pipeTo(
         clickhouseTarget({
           client,
@@ -207,7 +207,7 @@ describe('Clickhouse state', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 1 }),
+        outputs: blockDecoder({ from: 0, to: 1 }),
       }).pipeTo(
         clickhouseTarget({
           client,
@@ -252,7 +252,7 @@ describe('Clickhouse state', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 1 }),
+        outputs: blockDecoder({ from: 0, to: 1 }),
       }).pipeTo(
         clickhouseTarget({
           client,
@@ -262,7 +262,7 @@ describe('Clickhouse state', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 1, to: 2 }),
+        outputs: blockDecoder({ from: 1, to: 2 }),
       }).pipeTo(
         clickhouseTarget({
           client,
@@ -373,7 +373,7 @@ describe('Clickhouse state', () => {
       let rollbackCalls = 0
       await evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 7 }),
+        outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(
         clickhouseTarget({
           client,
@@ -509,7 +509,7 @@ describe('Clickhouse state', () => {
         try {
           await evmPortalSource({
             portal: mockPortal.url,
-            streams: blockDecoder({ from: 0, to: 7 }),
+            outputs: blockDecoder({ from: 0, to: 7 }),
           }).pipeTo(
             clickhouseTarget({
               client,
@@ -715,7 +715,7 @@ describe('Clickhouse state', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 7 }),
+        outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(
         clickhouseTarget({
           client,

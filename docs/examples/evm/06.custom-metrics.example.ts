@@ -11,7 +11,7 @@ import { metricsServer } from '@subsquid/pipes/metrics/node'
 async function cli() {
   const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-    streams: evmDecoder({
+    outputs: evmDecoder({
       range: { from: 'latest' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,

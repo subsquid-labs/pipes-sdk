@@ -69,7 +69,7 @@ describe('Drizzle target', () => {
       await expect(async () => {
         await evmPortalSource({
           portal: mockPortal.url,
-          streams: blockDecoder({ from: 0, to: 5 }),
+          outputs: blockDecoder({ from: 0, to: 5 }),
         }).pipeTo(
           drizzleTarget({
             db,
@@ -108,7 +108,7 @@ describe('Drizzle target', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 5 }),
+        outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(
         drizzleTarget({
           db,
@@ -203,7 +203,7 @@ describe('Drizzle target', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 1 }),
+        outputs: blockDecoder({ from: 0, to: 1 }),
       }).pipeTo(
         drizzleTarget({
           db,
@@ -217,7 +217,7 @@ describe('Drizzle target', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 1, to: 2 }),
+        outputs: blockDecoder({ from: 1, to: 2 }),
       }).pipeTo(
         drizzleTarget({
           db,
@@ -334,7 +334,7 @@ describe('Drizzle target', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 7 }),
+        outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(
         drizzleTarget({
           db,
@@ -435,7 +435,7 @@ describe('Drizzle target', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 5 }),
+        outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(
         drizzleTarget({
           db,
@@ -523,7 +523,7 @@ describe('Drizzle target', () => {
       let callCount = 0
       await evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 5 }),
+        outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(
         drizzleTarget({
           db,
@@ -647,7 +647,7 @@ describe('Drizzle target', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        streams: blockDecoder({ from: 0, to: 5 }),
+        outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(
         drizzleTarget({
           db,
