@@ -308,7 +308,7 @@ export class InitHandler {
       return
     }
 
-    for (const template of this.config.templates) {
+    for (const template of this.config.templates.filter((t) => t.templateId !== 'custom')) {
       const templateContractsDir = path.join(templateBaseDir, template.folderName, 'contracts')
       this.copyToProject(templateContractsDir, 'src/contracts')
     }
