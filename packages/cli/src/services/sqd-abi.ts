@@ -3,7 +3,7 @@ import { Address, address as toSvmAddress } from '@solana/addresses'
 import { RpcClient } from '@subsquid/rpc-client'
 import { fetchIdl } from '@subsquid/solana-typegen/lib/util/fetch.js'
 import { toCamelCase } from 'drizzle-orm/casing'
-import { getEvmChainId } from '~/commands/init/config/networks.js'
+import { getEvmChainId, getNetworkFromChainId } from '~/commands/init/config/networks.js'
 import { NetworkType } from '~/types/init.js'
 
 export interface ContractMetadata {
@@ -110,6 +110,10 @@ class EvmAbiService extends AbiService {
       const res = await fetch(url)
       const data = (await res.json()) as BaseProxyRes<{ ContractName: string; ABI: string }[]>
       const [contractData] = data.result
+
+      if (!this.isContractVerified(contractData.ABI))
+        throw new ContractCodeNotVerifiedError(address, chainid)
+
       return {
         contractAddress: address,
         contractName: contractData.ContractName,
@@ -119,6 +123,10 @@ class EvmAbiService extends AbiService {
       throw e
       // TODO: handle error
     }
+  }
+
+  private isContractVerified(abiRes: string) {
+    return !abiRes.includes('Contract source code not verified')
   }
 
   private parseEvents(abi: RawAbi): RawAbiEvent[] {
@@ -180,5 +188,12 @@ class SvmAbiService extends AbiService {
   private async fetchContractIdl(address: Address): Promise<any> {
     const client = new RpcClient({ url: SvmAbiService.SERVICE_URL })
     return await fetchIdl(client, address)
+  }
+}
+
+export class ContractCodeNotVerifiedError extends Error {
+  constructor(contractAddress: string, chainId: string) {
+    const network = getNetworkFromChainId(chainId)
+    super(`The contract code for ${contractAddress} is not verified on ${network.name}. Does this contract exist on ${network.name}?`)
   }
 }

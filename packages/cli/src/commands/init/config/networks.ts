@@ -1825,3 +1825,12 @@ export function getEvmChainId(slug: string): string {
     })()
   )
 }
+
+export function getNetworkFromChainId(chainId: string) {
+  return (
+    evmNetworks.find((n) => n.chainId === chainId) ||
+    (() => {
+      throw new Error(`Invalid chainId ${chainId} for EVM chains`)
+    })()
+  )
+}
