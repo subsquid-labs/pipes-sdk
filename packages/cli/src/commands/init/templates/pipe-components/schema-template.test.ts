@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { ContractMetadata } from '~/services/sqd-abi.js'
-import { Config, WithContractMetadata } from '~/types/init.js'
+import { Config } from '~/types/init.js'
+import { evmTemplates } from '../pipe-templates/evm/index.js'
 import { renderSchemasTemplate } from './schemas-template.js'
-import { templates } from './template-builder/index.js'
 
 const wethMetadata: ContractMetadata[] = [
   {
@@ -51,13 +51,14 @@ const wethMetadata: ContractMetadata[] = [
 
 describe('Schema template builder', () => {
   it('should build schema file for single pipe template', () => {
-    const config: WithContractMetadata<Config<'evm'>> = {
+    const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
-      network: 'ethereum-mainnet',
-      templates: [templates.evm['erc20Transfers']],
-      contractAddresses: [],
-      contracts: [],
+      templates: [
+        evmTemplates.erc20Transfers.templateFn('ethereum-mainnet', 'postgresql', {
+          contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+        }),
+      ],
       sink: 'postgresql',
       packageManager: 'pnpm',
     }
@@ -94,13 +95,17 @@ describe('Schema template builder', () => {
   })
 
   it('should build schema file for multiple pipe templates', () => {
-    const config: WithContractMetadata<Config<'evm'>> = {
+    const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
-      network: 'ethereum-mainnet',
-      templates: [templates.evm['erc20Transfers'], templates.evm['uniswapV3Swaps']],
-      contractAddresses: [],
-      contracts: [],
+      templates: [
+        evmTemplates.erc20Transfers.templateFn('ethereum-mainnet', 'postgresql', {
+          contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+        }),
+        evmTemplates.uniswapV3Swaps.templateFn('ethereum-mainnet', 'postgresql', {
+          factoryAddress: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+        }),
+      ],
       sink: 'postgresql',
       packageManager: 'pnpm',
     }
@@ -157,13 +162,10 @@ describe('Schema template builder', () => {
   })
 
   it('should build schema for custom contract', () => {
-    const config: WithContractMetadata<Config<'evm'>> = {
+    const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
-      network: 'ethereum-mainnet',
-      templates: [templates.evm['custom']],
-      contractAddresses: [],
-      contracts: wethMetadata,
+      templates: [evmTemplates.custom.templateFn('ethereum-mainnet', 'postgresql', wethMetadata)],
       sink: 'postgresql',
       packageManager: 'pnpm',
     }

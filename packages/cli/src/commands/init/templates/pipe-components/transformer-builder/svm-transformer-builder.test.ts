@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Config, WithContractMetadata } from '~/types/init.js'
 import { svmTemplates } from '../../pipe-templates/svm/index.js'
-import { TemplateBuilder } from './index.js'
+import { TransformerBuilder } from './index.js'
 
 describe('SVM Template Builder', () => {
   it('should build index.ts file using single pipe template', async () => {
@@ -16,7 +16,7 @@ describe('SVM Template Builder', () => {
       packageManager: 'pnpm',
     }
 
-    const indexerContent = await new TemplateBuilder(config).build()
+    const indexerContent = await new TransformerBuilder(config).build()
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";

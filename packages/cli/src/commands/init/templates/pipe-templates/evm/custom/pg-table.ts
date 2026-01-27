@@ -3,6 +3,7 @@ import Mustache from 'mustache'
 import { ContractMetadata, RawAbiItem } from '~/services/sqd-abi.js'
 import { evmToPostgresType } from '~/utils/db-type-map.js'
 import { tableToSchemaName } from '../../../pipe-components/schemas-template.js'
+import { CustomTemplateParams } from './template.config.js'
 
 export const customContractPgTemplate = `
 import {
@@ -39,15 +40,11 @@ export const {{schemaName}} = pgTable(
 {{/contracts}}
 `
 
-export interface CustomSchemaParams {
-  contracts: ContractMetadata[]
-}
-
 export const eventTableName = (contract: ContractMetadata, event: RawAbiItem) =>
   toSnakeCase(`${contract.contractName}_${event.name}`)
 
-export function renderEvmCustomSchema({ contracts }: CustomSchemaParams) {
-  const contracsWithDbTypes = getContractWithDbTypes(contracts)
+export function renderSchema({ params }: CustomTemplateParams) {
+  const contracsWithDbTypes = getContractWithDbTypes(params)
 
   return Mustache.render(customContractPgTemplate, {
     typeImports: generateDrizzleImports(contracsWithDbTypes),

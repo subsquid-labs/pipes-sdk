@@ -1,48 +1,20 @@
-import type { NetworkType } from "~/types/init.js"
+import type { NetworkType } from '~/types/init.js'
+import { TemplateId, templates } from '../templates/pipe-components/transformer-builder/index.js'
 
-interface TemplateOption {
-  name: string
-  id: string
-  disabled?: boolean
+export function getTemplatePrompts<N extends NetworkType>(networkType: N): { name: string; value: TemplateId<N> }[] {
+  const choices: { name: string; value: TemplateId<N>; disabled?: boolean }[] = Object.entries(
+    templates[networkType],
+  ).map(([id, option]) => ({
+    name: option.templateName,
+    value: option.templateId as TemplateId<N>,
+    disabled: option.disabled,
+  }))
+
+  choices.sort((a, b) => {
+    if (a.disabled && !b.disabled) return 1
+    if (!a.disabled && b.disabled) return -1
+    return 0
+  })
+
+  return choices
 }
-
-export const evmTemplateOptions = [
-  {
-    name: 'Erc20 Transfers',
-    id: 'erc20Transfers',
-  },
-  {
-    name: 'Uniswap V3 Swaps',
-    id: 'uniswapV3Swaps',
-  },
-  {
-    name: 'Morpho Blue',
-    id: 'morphoBlueSwaps',
-    disabled: true,
-  },
-  {
-    name: 'Uniswap V4',
-    id: 'uniswapV4Swaps',
-    disabled: true,
-  },
-  {
-    name: 'Polymarket',
-    id: 'polymarket',
-    disabled: true,
-  },
-] satisfies readonly TemplateOption[]
-
-export const svmTemplateOptions = [
-  {
-    name: 'Token balances',
-    id: 'tokenBalances',
-  },
-] satisfies readonly TemplateOption[]
-
-export type EvmTemplateIds = (typeof evmTemplateOptions)[number]['id'] | 'custom'
-export type SvmTemplateIds = (typeof svmTemplateOptions)[number]['id'] | 'custom'
-
-export const templateOptions = {
-  evm: evmTemplateOptions,
-  svm: svmTemplateOptions,
-} as const satisfies Record<NetworkType, typeof evmTemplateOptions | typeof svmTemplateOptions>

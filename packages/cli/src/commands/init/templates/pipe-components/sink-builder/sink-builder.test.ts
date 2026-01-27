@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { ContractMetadata } from '~/services/sqd-abi.js'
-import { renderSinkTemplate, SinkTemplateParams } from './sink-templates.js'
-import { templates } from './template-builder/index.js'
+import { Config } from '~/types/init.js'
+import { evmTemplates } from '../../pipe-templates/evm/index.js'
+import { SinkBuilder } from './index.js'
 
 const wethMetadata: ContractMetadata[] = [
   {
@@ -50,13 +51,20 @@ const wethMetadata: ContractMetadata[] = [
 
 describe('clickhouse sink template builder', () => {
   it('should render sink for pre-defined template', () => {
-    const params: SinkTemplateParams = {
-      hasCustomContracts: true,
-      templates: [templates.evm['erc20Transfers']],
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      templates: [
+        evmTemplates.erc20Transfers.templateFn('ethereum-mainnet', 'postgresql', {
+          contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+        }),
+      ],
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
     }
-    const template = renderSinkTemplate('clickhouse', params)
+    const sinkBuilder = new SinkBuilder(config)
 
-    expect(template).toMatchInlineSnapshot(`
+    expect(sinkBuilder.render()).toMatchInlineSnapshot(`
       "
       import path from 'node:path'
       import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
@@ -105,15 +113,17 @@ describe('clickhouse sink template builder', () => {
   })
 
   it('should render the sink for custom template', () => {
-    const params: SinkTemplateParams = {
-      hasCustomContracts: true,
-      templates: [templates.evm['custom']],
-      contracts: wethMetadata,
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      templates: [evmTemplates.custom.templateFn('ethereum-mainnet', 'postgresql', wethMetadata)],
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
     }
 
-    const template = renderSinkTemplate('clickhouse', params)
+    const sinkBuilder = new SinkBuilder(config)
 
-    expect(template).toMatchInlineSnapshot(`
+    expect(sinkBuilder.render()).toMatchInlineSnapshot(`
       "
       import path from 'node:path'
       import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
@@ -125,6 +135,7 @@ describe('clickhouse sink template builder', () => {
               username: env.CLICKHOUSE_USER,
               password: env.CLICKHOUSE_PASSWORD,
               url: env.CLICKHOUSE_URL,
+              database: env.CLICKHOUSE_DATABASE,
               json: {
                   stringify: serializeJsonWithBigInt,
               },
@@ -169,13 +180,20 @@ describe('clickhouse sink template builder', () => {
 
 describe('postgres sink template builder', () => {
   it('should render sink for pre-defined template', () => {
-    const params: SinkTemplateParams = {
-      hasCustomContracts: true,
-      templates: [templates.evm['erc20Transfers']],
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      templates: [
+        evmTemplates.erc20Transfers.templateFn('ethereum-mainnet', 'postgresql', {
+          contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+        }),
+      ],
+      sink: 'postgresql',
+      packageManager: 'pnpm',
     }
-    const template = renderSinkTemplate('postgresql', params)
+    const sinkBuilder = new SinkBuilder(config)
 
-    expect(template).toMatchInlineSnapshot(`
+    expect(sinkBuilder.render()).toMatchInlineSnapshot(`
       "
       import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
       import { drizzle } from 'drizzle-orm/node-postgres',
@@ -198,13 +216,23 @@ describe('postgres sink template builder', () => {
   })
 
   it('should render sink for multiple pre-defined templates', () => {
-    const params: SinkTemplateParams = {
-      hasCustomContracts: true,
-      templates: [templates.evm['erc20Transfers'], templates.evm['uniswapV3Swaps']],
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      templates: [
+        evmTemplates.erc20Transfers.templateFn('ethereum-mainnet', 'postgresql', {
+          contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+        }),
+        evmTemplates.uniswapV3Swaps.templateFn('ethereum-mainnet', 'postgresql', {
+          factoryAddress: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+        }),
+      ],
+      sink: 'postgresql',
+      packageManager: 'pnpm',
     }
-    const template = renderSinkTemplate('postgresql', params)
+    const sinkBuilder = new SinkBuilder(config)
 
-    expect(template).toMatchInlineSnapshot(`
+    expect(sinkBuilder.render()).toMatchInlineSnapshot(`
       "
       import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
       import { drizzle } from 'drizzle-orm/node-postgres',
@@ -232,15 +260,17 @@ describe('postgres sink template builder', () => {
   })
 
   it('should render the sink for custom template', () => {
-    const params: SinkTemplateParams = {
-      hasCustomContracts: true,
-      templates: [templates.evm['custom']],
-      contracts: wethMetadata,
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      templates: [evmTemplates.custom.templateFn('ethereum-mainnet', 'postgresql', wethMetadata)],
+      sink: 'postgresql',
+      packageManager: 'pnpm',
     }
 
-    const template = renderSinkTemplate('postgresql', params)
+    const sinkBuilder = new SinkBuilder(config)
 
-    expect(template).toMatchInlineSnapshot(`
+    expect(sinkBuilder.render()).toMatchInlineSnapshot(`
       "
       import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
       import { drizzle } from 'drizzle-orm/node-postgres',
@@ -268,15 +298,22 @@ describe('postgres sink template builder', () => {
   })
 
   it('should render the sink for custom and pre-defined templates', () => {
-    const params: SinkTemplateParams = {
-      hasCustomContracts: true,
-      templates: [templates.evm['custom'], templates.evm['erc20Transfers']],
-      contracts: wethMetadata,
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      templates: [
+        evmTemplates.erc20Transfers.templateFn('ethereum-mainnet', 'postgresql', {
+          contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+        }),
+        evmTemplates.custom.templateFn('ethereum-mainnet', 'postgresql', wethMetadata),
+      ],
+      sink: 'postgresql',
+      packageManager: 'pnpm',
     }
 
-    const template = renderSinkTemplate('postgresql', params)
+    const sinkBuilder = new SinkBuilder(config)
 
-    expect(template).toMatchInlineSnapshot(`
+    expect(sinkBuilder.render()).toMatchInlineSnapshot(`
       "
       import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
       import { drizzle } from 'drizzle-orm/node-postgres',

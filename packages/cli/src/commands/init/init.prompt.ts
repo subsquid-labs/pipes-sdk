@@ -1,15 +1,15 @@
 import path from 'node:path'
-import { checkbox, input, select } from '@inquirer/prompts'
+import { input, select } from '@inquirer/prompts'
 import chalk from 'chalk'
-import type { Config, PackageManager } from '~/types/init.js'
-import { type NetworkType, networkTypes, packageManagerTypes, TransformerTemplate } from "~/types/init.js"
+import { z } from 'zod'
+import type { Config, PackageManager, PipeTemplate, PipeTemplateMeta } from '~/types/init.js'
+import { type NetworkType, networkTypes, packageManagerTypes } from '~/types/init.js'
+import { getDefaults } from '~/utils/zod.js'
 import { networks } from './config/networks.js'
 import { sinks } from './config/sinks.js'
-import { templateOptions } from './config/templates.js'
+import { getTemplatePrompts } from './config/templates.js'
 import { InitHandler } from './init.handler.js'
-import { templates } from './templates/pipe-components/template-builder/index.js'
-import { evmTemplates } from './templates/pipe-templates/evm/index.js'
-import { svmTemplates } from './templates/pipe-templates/svm/index.js'
+import { getTemplate } from './templates/pipe-components/transformer-builder/index.js'
 
 export class InitPrompt {
   async run() {
@@ -83,27 +83,7 @@ export class InitPrompt {
       })),
     })
 
-    const pipelineType = await select({
-      message: `How would you like to build your pipeline? ${chalk.dim('Start from one of our templates or provide your own contract addresses')}`,
-      choices: [
-        { name: 'Use templates', value: 'templates' },
-        { name: 'Custom contract', value: 'custom' },
-      ],
-    })
-
-    let selectedTemplates: TransformerTemplate<NetworkType>[] = []
-    let contractAddresses: string[] = []
-
-    if (pipelineType === 'templates') {
-      selectedTemplates = await this.promptTemplates(networkType)
-    } else {
-      selectedTemplates = [templates[networkType]['custom']]
-
-      const contractAddress = await input({
-        message: 'Contract address:',
-      })
-      contractAddresses = contractAddress.trim() ? [contractAddress.trim()] : []
-    }
+    const selectedTemplates = await this.templatePromptLoop(networkType, network)
 
     const sink = await select({
       message: 'Where would you like to store your data?',
@@ -112,43 +92,95 @@ export class InitPrompt {
 
     return {
       projectFolder,
-      networkType: networkType,
-      network,
+      networkType,
       templates: selectedTemplates,
-      contractAddresses,
       sink,
       packageManager,
     }
   }
 
-  private promptTemplates(chainType: 'evm'): Promise<TransformerTemplate<NetworkType>[]>
-  private promptTemplates(chainType: 'svm'): Promise<TransformerTemplate<NetworkType>[]>
-  private promptTemplates(chainType: NetworkType): Promise<TransformerTemplate<NetworkType>[]>
-  private async promptTemplates(chainType: NetworkType): Promise<TransformerTemplate<NetworkType>[]> {
-    if (chainType === 'evm') {
-      const selected = await checkbox({
-        message: 'Templates:',
-        choices: templateOptions.evm.map((t) => ({
-          name: t.name,
-          value: t.id,
-          disabled: t.disabled ? '(Coming soon)' : false,
-        })),
+  private async templatePromptLoop<N extends NetworkType>(
+    networkType: N,
+    network: string,
+  ): Promise<PipeTemplate<N, z.ZodObject>[]> {
+    const choices = getTemplatePrompts(networkType)
+    const selectedTemplates: PipeTemplate<N, z.ZodObject>[] = []
+    let addMore = true
+
+    while (addMore) {
+      const templateId = await select({
+        message: 'Pick your starter template. You can select multiple:',
+        choices,
+        theme: {
+          indexMode: 'number',
+          style: {
+            disabled: (text: string) => chalk.dim(`  ${text.replace('disabled', 'Coming soon')}`),
+          },
+        },
       })
-      return selected.reduce<TransformerTemplate<'evm'>[]>((acc, id) => {
-        acc.push(evmTemplates[id])
-        return acc
-      }, [])
+
+      const template = getTemplate(networkType, templateId)
+      const params = template.prompt ? await template.prompt(network) : await this.promptTemplateParams(template)
+      const pipeTemplate = template.templateFn(network, 'postgresql', params)
+      selectedTemplates.push(pipeTemplate)
+
+      addMore = await this.addMoreTemplates()
     }
-    const selected = await checkbox({
-      message: 'Templates:',
-      choices: templateOptions.svm.map((t) => ({
-        name: t.name,
-        value: t.id,
-      })),
+    return selectedTemplates
+  }
+
+
+  private async addMoreTemplates() {
+    const addMore = await select({
+      message: 'Would you like to add more templates?',
+      choices: [
+        { name: 'Yes. Add more templates', value: 'yes' },
+        { name: 'No. Continue to next step', value: 'no' },
+      ],
     })
-    return selected.reduce<TransformerTemplate<'svm'>[]>((acc, id) => {
-      acc.push(svmTemplates[id])
-      return acc
-    }, [])
+
+    return addMore === 'yes'
+  }
+
+
+  private async promptTemplateParams<N extends NetworkType>(
+    template: PipeTemplateMeta<N, z.ZodObject>,
+  ): Promise<z.infer<typeof template.paramsSchema>> {
+    const params = template.paramsSchema
+
+    if (!params) {
+      throw new Error('A template has to either define a params schema or a prompt function. Please check the template configuration.')
+    }
+
+    const entries = Object.keys(params.shape)
+    const values: Record<string, string | string[]> = {}
+    const defaultValues = getDefaults(params)
+
+    for (const key of entries) {
+      const description = params.shape[key].meta()?.description
+      const type = params.shape[key].type === 'default' ? params.shape[key].unwrap().type : params.shape[key].type
+      const defaultValue = defaultValues[key]
+
+      let formattedDefault: string | undefined
+      if (defaultValue) {
+        if (typeof defaultValue === 'string') {
+          formattedDefault = defaultValue
+        } else if (Array.isArray(defaultValue)) {
+          formattedDefault = defaultValue.join(',')
+        }
+      }
+
+      const value = await input({
+        default: formattedDefault,
+        message: `${description} ${type === 'array' ? chalk.dim(`. Comma separated`) : ''}`,
+        validate: (value: string) => {
+          return value.trim().length > 0 ? true : 'Value cannot be empty'
+        },
+      })
+
+      values[key] = type === 'array' ? [...value.trim().split(',')].flat() : value
+    }
+
+    return params.parse(values)
   }
 }

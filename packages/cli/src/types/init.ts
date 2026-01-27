@@ -1,18 +1,7 @@
-import { EvmNetworkConfig } from '~/commands/init/config/networks.js'
-import { EvmTemplateIds, SvmTemplateIds } from '~/commands/init/config/templates.js'
+import { z } from 'zod'
 import { ContractMetadata } from '~/services/sqd-abi.js'
 
 export type WithContractMetadata<T extends object> = T & { contracts: ContractMetadata[] }
-
-export interface Config<N extends NetworkType> {
-  projectFolder: string
-  networkType: N
-  network: string // slug from networks
-  templates: TransformerTemplate<N>[]
-  contractAddresses: string[]
-  sink: Sink
-  packageManager: PackageManager
-}
 
 export const packageManagerTypes = [
   { name: 'pnpm', value: 'pnpm' },
@@ -35,30 +24,41 @@ export const sinkTypes = [
 ] as const
 export type Sink = (typeof sinkTypes)[number]['value']
 
-export interface TransformerTemplate<N extends NetworkType> {
-  templateId: N extends 'evm' ? EvmTemplateIds : SvmTemplateIds
-  folderName: string
-  code: string
-  tableName: string
-  clickhouseTableTemplate?: string
-  drizzleSchema?: string
+export interface Config<N extends NetworkType> {
+  projectFolder: string
+  networkType: N
+  templates: PipeTemplate<N, any>[]
+  sink: Sink
+  packageManager: PackageManager
 }
 
-export interface EvmTransformerTemplate {
-  network: EvmNetworkConfig
-  contractAddresses: string[]
+type InferredParams<Params> = Params extends z.ZodObject ? z.infer<Params> : Params
+
+export interface PipeTemplate<N extends NetworkType, Params> {
+  templateId: string
+  networkType: N
+  network: string
+  params: Params
+  sink: Sink
+  renderFns: {
+    transformers: RenderFn<N, Params>
+    postgresSchemas: RenderFn<N, Params>
+    clickhouseTables: RenderFn<N, Params>
+  }
+}
+
+type RenderFn<N extends NetworkType, Params> = (templateConfig?: PipeTemplate<N, InferredParams<Params>>) => string
+
+export interface PipeTemplateMeta<N extends NetworkType, Params> {
+  templateId: string
+  templateName: string
+  networkType: N
+  paramsSchema?: Params extends z.ZodObject ? Params : never
+  disabled?: boolean
+  prompt?: (network: string) => Promise<InferredParams<Params>>
+  templateFn: (network: string, sink: Sink, params: InferredParams<Params>) => PipeTemplate<N, InferredParams<Params>>
 }
 
 export interface EnrichedEvmTemplate {
   contracts: ContractMetadata[]
 }
-
-// - Project name
-// - Templates or custom
-// - If templates
-//    - template
-//    - network
-// - If custom
-//    - network
-//    - contract address
-//    - events

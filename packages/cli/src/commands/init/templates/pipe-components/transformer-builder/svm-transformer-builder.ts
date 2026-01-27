@@ -1,6 +1,5 @@
 import Mustache from 'mustache'
-import { renderTransformerTemplate } from '../../pipe-templates/svm/custom/transformer.js'
-import { BaseTemplateBuilder, TemplateValues } from './base-template-builder.js'
+import { BaseTransformerBuilder, TemplateValues } from './base-transformer-builder.js'
 
 export const template = `{{#deduplicatedImports}}
 {{{.}}}
@@ -37,9 +36,9 @@ export async function main() {
 void main()
 `
 
-export class SvmTemplateBuilder extends BaseTemplateBuilder {
-  renderTemplate(templateValues: TemplateValues): string {
-    return Mustache.render(template, templateValues)
+export class SvmTransformerBuilder extends BaseTransformerBuilder<'svm'> {
+  getTemplate(): string {
+    return template
   }
 
   getNetworkImports(): string[] {
@@ -49,14 +48,9 @@ export class SvmTemplateBuilder extends BaseTemplateBuilder {
   getTransformerTemplates() {
     return Promise.all(
       this.config.templates.map(async (template) => {
-        if (template.templateId === 'custom') {
-          return {
-            code: renderTransformerTemplate(this.config),
-            templateId: 'custom',
-          }
-        }
-        return { code: template.code, templateId: template.templateId }
+        return { code: template.renderFns.transformers(), templateId: template.templateId }
       }),
     )
   }
+
 }

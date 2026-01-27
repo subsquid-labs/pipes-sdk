@@ -2,6 +2,7 @@ import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 import { ContractMetadata } from '~/services/sqd-abi.js'
 import { evmToClickhouseType } from '~/utils/db-type-map.js'
+import { CustomTemplateParams } from './template.config.js'
 
 export const customContractChTemplate = `
 {{#contracts}}
@@ -23,12 +24,8 @@ ORDER BY (block_number, tx_hash, log_index);
 {{/contracts}}
 `
 
-export interface CustomSchemaParams {
-  contracts: ContractMetadata[]
-}
-
-export function renderCustomEvmClickhouseTables({ contracts }: CustomSchemaParams) {
-  const contracsWithDbTypes = getContractWithDbTypes(contracts)
+export function renderClickhouse({ params }: CustomTemplateParams) {
+  const contracsWithDbTypes = getContractWithDbTypes(params)
 
   return Mustache.render(customContractChTemplate, {
     contracts: contracsWithDbTypes,

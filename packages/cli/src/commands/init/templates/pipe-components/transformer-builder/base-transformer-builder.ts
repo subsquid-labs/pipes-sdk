@@ -1,4 +1,4 @@
-import { Config, NetworkType, WithContractMetadata } from "~/types/init.js";
+import { Config, NetworkType } from '~/types/init.js'
 
 export interface BuiltTransformerTemplate {
   templateId: string
@@ -18,11 +18,15 @@ export interface TransformerTemplateBuilder {
   code: string
 }
 
-export abstract class BaseTemplateBuilder {
-  constructor(protected config: WithContractMetadata<Config<NetworkType>>) {}
+export abstract class BaseTransformerBuilder<N extends NetworkType> {
+  protected indexPath = 'src/index.ts'
+
+  constructor(protected config: Config<N>) {}
 
   // TODO: move deduplication logic to this function
-  abstract renderTemplate(templateValues: TemplateValues): string
+  // abstract renderTemplate(templateValues: TemplateValues): string
+
+  abstract getTemplate(): string
 
   abstract getTransformerTemplates(): Promise<TransformerTemplateBuilder[]>
 

@@ -1,7 +1,7 @@
 import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 import { ContractMetadata } from '~/services/sqd-abi.js'
-import { NetworkType, Sink, TransformerTemplate } from '~/types/init.js'
+import { NetworkType, PipeTemplate, Sink } from '~/types/init.js'
 import { tableToSchemaName } from './schemas-template.js'
 
 export const clickhouseSinkTemplate = `
@@ -67,58 +67,8 @@ clickhouseTarget({
     },
   })`
 
-export const postgresSinkTemplate = `
-import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
-import { drizzle } from 'drizzle-orm/node-postgres',
-import {
-  {{#templates}}
-  {{#schemaNames}}
-  {{.}},
-  {{/schemaNames}}
-  {{/templates}}
-  {{#customTemplates}}
-  {{#schemaNames}}
-  {{schemaName}},
-  {{/schemaNames}}
-  {{/customTemplates}}
-} from './schemas.js'
-
-drizzleTarget({
-    db: drizzle(env.DB_CONNECTION_STR),
-    tables: [
-      {{#templates}}
-      {{#schemaNames}}
-      {{.}},
-      {{/schemaNames}}
-      {{/templates}}
-      {{#customTemplates}}
-      {{#schemaNames}}
-      {{schemaName}},
-      {{/schemaNames}}
-      {{/customTemplates}}
-    ],
-    onData: async ({ tx, data }) => {
-    {{#templates}}
-      for (const values of chunk(data.{{{templateId}}})) {
-        {{#schemaNames}} 
-        await tx.insert({{.}}).values(values)
-        {{/schemaNames}}
-      }
-    {{/templates}}
-    {{#customTemplates}}
-      {{#schemaNames}} 
-      for (const values of chunk(data.{{templateId}}.{{event}})) {
-        await tx.insert({{schemaName}}).values(values)
-      }
-      {{/schemaNames}} 
-    {{/customTemplates}}
-    },
-  })`
-
 export interface SinkTemplateParams {
-  hasCustomContracts: boolean
-  templates: TransformerTemplate<NetworkType>[]
-  contracts?: ContractMetadata[]
+  templates: PipeTemplate<NetworkType, any>[]
 }
 
 export function renderSinkTemplate(sink: Sink, params: SinkTemplateParams): string {
@@ -128,15 +78,15 @@ export function renderSinkTemplate(sink: Sink, params: SinkTemplateParams): stri
     .filter((t) => t.templateId !== 'custom')
     .map((t) => ({
       ...t,
-      schemaNames: [tableToSchemaName(t.tableName)],
+      schemaNames: [tableToSchemaName(t.templateId)],
     }))
 
   // TODO: add this to the TransformerTemplate
   const customTemplatesWithSchema = params.templates
-    .filter((t) => t.templateId === 'custom')
+    .filter((t): t is PipeTemplate<NetworkType, ContractMetadata[]> => t.templateId === 'custom')
     .map((t) => ({
       ...t,
-      schemaNames: params.contracts?.flatMap((c) =>
+      schemaNames: t.params.flatMap((c) =>
         c.contractEvents.map((e) => ({
           event: e.name,
           schemaName: tableToSchemaName(`${c.contractName}_${e.name}`),

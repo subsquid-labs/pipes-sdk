@@ -1,6 +1,5 @@
 import Mustache from 'mustache'
-import { renderTransformerTemplate } from '../../pipe-templates/evm/custom/transformer.js'
-import { BaseTemplateBuilder, TemplateValues } from './base-template-builder.js'
+import { BaseTransformerBuilder, TemplateValues } from './base-transformer-builder.js'
 
 export const template = `{{#deduplicatedImports}}
 {{{.}}}
@@ -27,10 +26,10 @@ export async function main() {
 void main()
 `
 
-export class EvmTemplateBuilder extends BaseTemplateBuilder {
+export class EvmTransformerBuilder extends BaseTransformerBuilder<'evm'> {
   // TODO: move deduplication logic to this function
-  renderTemplate(templateValues: TemplateValues) {
-    return Mustache.render(template, templateValues)
+  getTemplate(): string {
+    return template
   }
 
   getNetworkImports() {
@@ -39,15 +38,10 @@ export class EvmTemplateBuilder extends BaseTemplateBuilder {
 
   getTransformerTemplates() {
     return Promise.all(
-      this.config.templates.map(async (template) => {
-        if (template.templateId === 'custom') {
-          return {
-            code: renderTransformerTemplate(this.config),
-            templateId: 'custom',
-          }
-        }
-        return { code: template.code, templateId: template.templateId }
+      this.config.templates.map(async (t) => {
+        return { code: t.renderFns.transformers(), templateId: t.templateId }
       }),
     )
   }
+
 }

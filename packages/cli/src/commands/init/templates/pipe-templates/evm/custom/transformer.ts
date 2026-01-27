@@ -1,6 +1,6 @@
 import { toCamelCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
-import { ContractMetadata } from '~/services/sqd-abi.js'
+import { CustomTemplateParams } from './template.config.js'
 
 export const customContractTemplate = `import { evmDecoder } from '@subsquid/pipes/evm'
 {{#contracts}}
@@ -31,12 +31,13 @@ const custom = evmDecoder({
 }).pipe(enrichEvents)
 `
 
-interface TransformerTemplateParams {
-  contracts: ContractMetadata[]
-}
-
-export function renderTransformerTemplate({ contracts }: TransformerTemplateParams) {
+export function renderTransformer({ params }: CustomTemplateParams) {
   return Mustache.render(customContractTemplate, {
-    contracts: contracts.map((c) => ({ ...c, contractName: toCamelCase(c.contractName) })),
+    contracts: params.map((c) => ({ ...c, contractName: toCamelCase(c.contractName) })),
   })
 }
+
+// if (this.config.contractAddresses.length > 0) {
+//   spinner.text = squidfix('Generating contract types')
+//   await this.generateContractTypes()
+// }

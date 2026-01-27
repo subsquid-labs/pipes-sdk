@@ -1,11 +1,16 @@
-import { evmDecoder, factory, factorySqliteDatabase } from '@subsquid/pipes/evm'
+import Mustache from 'mustache'
+import { UniswapV3SwapsParams } from './template.config.js'
+
+const template = `import { evmDecoder, factory, factorySqliteDatabase } from '@subsquid/pipes/evm'
 import { events as factoryEvents } from './contracts/factory.js'
 import { events as poolEvents } from './contracts/pool.js'
 
 const uniswapV3Swaps = evmDecoder({
   range: { from: '12,369,621' }, // Uniswap V3 Factory deployment block
   contracts: factory({
-    address: ['0x1f98431c8ad98523631ae4a59f267346ea31f984'], // Uniswap V3 Factory address on Ethereum mainnet. Replace with the factory address for the network you are using.
+    address: [
+      '{{factoryAddress}}'
+    ],
     event: factoryEvents.PoolCreated,
     parameter: 'pool',
     database: await factorySqliteDatabase({
@@ -27,3 +32,8 @@ const uniswapV3Swaps = evmDecoder({
     ...s.event,
   })),
 )
+`
+
+export function renderTemplate({ params }: UniswapV3SwapsParams) {
+  return Mustache.render(template, params)
+}
