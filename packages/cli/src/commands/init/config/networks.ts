@@ -9,6 +9,7 @@ export interface EvmNetworkConfig {
   stateDiffs: boolean
   slug: string
   details: string
+  priority?: 1 | 5 | 10
 }
 
 export interface SvmNetworkConfig {
@@ -19,6 +20,7 @@ export interface SvmNetworkConfig {
   realtime: boolean
   slug: string
   details: string
+  priority?: 1 | 5 | 10
 }
 
 export const evmNetworks: EvmNetworkConfig[] = [
@@ -45,6 +47,7 @@ export const evmNetworks: EvmNetworkConfig[] = [
     stateDiffs: false,
     slug: 'abstract-mainnet',
     details: '/en/data/evm/abstract-mainnet/overview',
+    priority: 5,
   },
   {
     name: 'Abstract Testnet',
@@ -117,6 +120,7 @@ export const evmNetworks: EvmNetworkConfig[] = [
     stateDiffs: false,
     slug: 'arbitrum-one',
     details: '/en/data/evm/arbitrum-one/overview',
+    priority: 10,
   },
   {
     name: 'Arbitrum Sepolia',
@@ -189,6 +193,7 @@ export const evmNetworks: EvmNetworkConfig[] = [
     stateDiffs: true,
     slug: 'avalanche-mainnet',
     details: '/en/data/evm/avalanche-mainnet/overview',
+    priority: 5,
   },
   {
     name: 'Avalanche Testnet',
@@ -237,6 +242,7 @@ export const evmNetworks: EvmNetworkConfig[] = [
     stateDiffs: true,
     slug: 'base-mainnet',
     details: '/en/data/evm/base-mainnet/overview',
+    priority: 10,
   },
   {
     name: 'Base Sepolia',
@@ -297,6 +303,7 @@ export const evmNetworks: EvmNetworkConfig[] = [
     stateDiffs: true,
     slug: 'binance-mainnet',
     details: '/en/data/evm/binance-mainnet/overview',
+    priority: 10,
   },
   {
     name: 'BSC Testnet',
@@ -645,6 +652,7 @@ export const evmNetworks: EvmNetworkConfig[] = [
     stateDiffs: true,
     slug: 'ethereum-mainnet',
     details: '/en/data/evm/ethereum-mainnet/overview',
+    priority: 10,
   },
   {
     name: 'Ethereum Holesky',
@@ -837,6 +845,7 @@ export const evmNetworks: EvmNetworkConfig[] = [
     stateDiffs: true,
     slug: 'hyperliquid-mainnet',
     details: '/en/data/evm/hyperevm-mainnet/overview',
+    priority: 5,
   },
   {
     name: 'HyperEVM Testnet',
@@ -1077,6 +1086,7 @@ export const evmNetworks: EvmNetworkConfig[] = [
     stateDiffs: false,
     slug: 'monad-mainnet',
     details: '/en/data/evm/monad-mainnet/overview',
+    priority: 5,
   },
   {
     name: 'Monad Testnet',
@@ -1221,6 +1231,7 @@ export const evmNetworks: EvmNetworkConfig[] = [
     stateDiffs: true,
     slug: 'optimism-mainnet',
     details: '/en/data/evm/optimism-mainnet/overview',
+    priority: 10,
   },
   {
     name: 'Optimism Sepolia',
@@ -1341,6 +1352,7 @@ export const evmNetworks: EvmNetworkConfig[] = [
     stateDiffs: true,
     slug: 'polygon-mainnet',
     details: '/en/data/evm/polygon-mainnet/overview',
+    priority: 10,
   },
   {
     name: 'Polygon Amoy Testnet',

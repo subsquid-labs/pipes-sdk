@@ -74,12 +74,22 @@ export class InitPrompt {
       choices: networkTypes,
     })
 
+    const networksChoices = networks[networkType].map((n) => ({
+      name: n.name,
+      value: n.slug,
+      priority: n.priority
+    }))
+    networksChoices.sort((a, b) => {
+      if (a.priority && b.priority) return b.priority - a.priority
+      if (a.priority) return -1
+      if (b.priority) return 1
+      return a.name.localeCompare(b.name)
+    })
+
     const network = await select({
       message: `Now, let's select the network you'd like to use. ${chalk.dim('(Tip: you can type to search)')}`,
-      choices: networks[networkType].map((n) => ({
-        name: n.name,
-        value: n.slug,
-      })),
+      choices: networksChoices,
+      pageSize: 15,
     })
 
     const selectedTemplates = await this.templatePromptLoop(networkType, network)

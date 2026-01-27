@@ -46,6 +46,7 @@ class CustomTemplate extends PipeTemplateMeta<'evm', typeof CustomTemplateParams
       const events = await checkbox({
         message: `Pick the events to track for ${contract.contractName}:`,
         choices,
+        pageSize: 15,
       })
       contracts.push({
         contractAddress: contract.contractAddress,
