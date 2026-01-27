@@ -40,7 +40,6 @@ export function svmToPostgresType(type: string) {
   if (type in svmToPostgresTypes) {
     return svmToPostgresTypes[type as keyof typeof svmToPostgresTypes]
   }
-  console.log(type)
   throw new DbMappingError('svm', 'postgresql', type)
 }
 

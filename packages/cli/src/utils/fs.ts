@@ -4,7 +4,7 @@ import { findPackageRoot } from '~/utils/package-root.js'
 
 /**
  * Get __dirname that works in both ESM and CJS.
- * Returns the directory containing template files (pipe-templates/evm or pipe-templates/svm).
+ * Returns the directory containing template files (pipes/evm or pipes/svm).
  * Always uses findPackageRoot to ensure correct path resolution.
  *
  * @param folder - The folder name to get the directory for (evm or svm)
@@ -12,8 +12,8 @@ import { findPackageRoot } from '~/utils/package-root.js'
 export function getTemplateDirname(folder: 'evm' | 'svm'): string {
   const packageRoot = findPackageRoot()
 
-  const distTemplatePath = join(packageRoot, 'dist', 'commands', 'init', 'templates', 'pipe-templates', folder)
-  const srcTemplatePath = join(packageRoot, 'src', 'commands', 'init', 'templates', 'pipe-templates', folder)
+  const distTemplatePath = join(packageRoot, 'dist', 'commands', 'init', 'templates', 'pipes', folder)
+  const srcTemplatePath = join(packageRoot, 'src', 'commands', 'init', 'templates', 'pipes', folder)
 
   if (existsSync(distTemplatePath)) {
     return distTemplatePath

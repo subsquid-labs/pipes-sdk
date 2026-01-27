@@ -3,9 +3,10 @@ import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { evmTemplates } from '~/commands/init/templates/pipe-templates/evm/index.js'
+import { evmTemplates } from '~/commands/init/templates/pipes/evm/index.js'
 import { Config } from '~/types/init.js'
 import { InitHandler } from './init.handler.js'
+import { ContractMetadata } from '~/services/sqd-abi.js'
 
 async function exists(p: string) {
   try {
@@ -39,6 +40,50 @@ describe('InitHandler', () => {
   const PROJECT_NAME = 'my-project'
   let tmpRoot: string
   let projectDir: string
+  const wethMetadata: ContractMetadata[] = [
+    {
+      contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+      contractName: 'WETH9',
+      contractEvents: [
+        {
+          inputs: [
+            {
+              name: 'src',
+              type: 'address',
+            },
+            {
+              name: 'guy',
+              type: 'address',
+            },
+            {
+              name: 'wad',
+              type: 'uint256',
+            },
+          ],
+          name: 'Approval',
+          type: 'event',
+        },
+        {
+          inputs: [
+            {
+              name: 'src',
+              type: 'address',
+            },
+            {
+              name: 'dst',
+              type: 'address',
+            },
+            {
+              name: 'wad',
+              type: 'uint256',
+            },
+          ],
+          name: 'Transfer',
+          type: 'event',
+        },
+      ],
+    },
+  ]
 
   beforeEach(async () => {
     tmpRoot = await mkdtemp(path.join(tmpdir(), 'my-cli-'))
@@ -54,8 +99,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates['erc20Transfers']],
-      contractAddresses: [],
+      templates: [evmTemplates.erc20Transfers],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -73,8 +117,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates['erc20Transfers']],
-      contractAddresses: [],
+      templates: [evmTemplates.erc20Transfers],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -102,8 +145,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates['erc20Transfers']],
-      contractAddresses: [],
+      templates: [evmTemplates.erc20Transfers],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -118,8 +160,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates['erc20Transfers']],
-      contractAddresses: [],
+      templates: [evmTemplates.erc20Transfers],
       sink: 'postgresql',
       packageManager: 'pnpm',
     }
@@ -134,8 +175,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates['custom']],
-      contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -150,8 +190,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates['custom']],
-      contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
       sink: 'postgresql',
       packageManager: 'pnpm',
     }
@@ -166,8 +205,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates['custom'], evmTemplates['erc20Transfers']],
-      contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata }), evmTemplates.erc20Transfers],
       sink: 'postgresql',
       packageManager: 'pnpm',
     }
@@ -182,8 +220,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates['erc20Transfers']],
-      contractAddresses: [],
+      templates: [evmTemplates.erc20Transfers],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -241,8 +278,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates['custom']],
-      contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -259,8 +295,7 @@ describe('InitHandler', () => {
       networkType: 'evm',
       network: 'ethereum-mainnet',
 
-      templates: [evmTemplates['erc20Transfers']],
-      contractAddresses: [],
+      templates: [evmTemplates.erc20Transfers],
       sink: 'postgresql',
       packageManager: 'pnpm',
     }
@@ -315,8 +350,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates['uniswapV3Swaps']],
-      contractAddresses: [],
+      templates: [evmTemplates.uniswapV3Swaps],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -335,8 +369,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates['erc20Transfers']],
-      contractAddresses: [],
+      templates: [evmTemplates.erc20Transfers],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -351,8 +384,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates['erc20Transfers']],
-      contractAddresses: [],
+      templates: [evmTemplates.erc20Transfers],
       sink: 'clickhouse',
       packageManager: 'yarn',
     }
@@ -367,8 +399,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates['erc20Transfers']],
-      contractAddresses: [],
+      templates: [evmTemplates.erc20Transfers],
       sink: 'clickhouse',
       packageManager: 'bun',
     }

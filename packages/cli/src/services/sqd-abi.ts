@@ -82,13 +82,11 @@ class EvmAbiService extends AbiService {
 
   override generateTypes(projectPath: string, contractAddresses: string[], chainId?: string): void {
     const outputDir = `${projectPath}/src/contracts/`
-    // This is a burner key, it's okay to leak. Once the proxy server is ready, we won't need a key
-    const etherscanKey = 'N1NYFQMYX8MKUDHXUQ93TTI9MS496KNC5F'
 
     for (const address of contractAddresses) {
-      const cmd = `npx @subsquid/evm-typegen@latest ${outputDir} ${address} ${etherscanKey ? ` --etherscan-api-key ${etherscanKey}` : ''} ${chainId ? ` --etherscan-chain-id ${chainId}` : ''}`
+      const cmd = `npx --yes @subsquid/evm-typegen@latest ${outputDir} ${address} ${chainId ? `--chain-id ${chainId}` : ''}`
 
-      execSync(cmd, { stdio: 'inherit' })
+      execSync(cmd, { stdio: 'ignore' })
     }
   }
 
@@ -137,12 +135,14 @@ class EvmAbiService extends AbiService {
 }
 
 class SvmAbiService extends AbiService {
+  private static SERVICE_URL = 'https://api.mainnet-beta.solana.com'
+
   override generateTypes(projectPath: string, contractAddresses: string[]): void {
     const outputDir = `${projectPath}/src/contracts/`
 
     for (const address of contractAddresses) {
-      execSync(`npx @subsquid/solana-typegen ${outputDir} ${address}`, {
-        stdio: 'inherit',
+      execSync(`npx --yes @subsquid/solana-typegen@latest ${outputDir} ${address}`, {
+        stdio: 'ignore',
       })
     }
   }
@@ -151,40 +151,35 @@ class SvmAbiService extends AbiService {
     return Promise.all(contractAddresses.map(async (address) => this.fetchSvmContractData(address)))
   }
 
-  private async fetchSvmContractData(address: string, url?: string) {
+  private async fetchSvmContractData(address: string) {
     const checksumAddress = toSvmAddress(address)
-    const idl = await this.fetchContractIdl(checksumAddress, url)
+    const idl = await this.fetchContractIdl(checksumAddress)
 
     return {
       contractName: toCamelCase(idl?.name || idl.metadata?.name || `contract_${idl.address}`),
       contractAddress: checksumAddress,
-      contractEvents: idl.instructions.map((i: SvmInstruction) => {
-        if (i.args.length) console.log(JSON.stringify(i.args, null, 2))
 
-        return {
-          name: toCamelCase(i.name),
-          type: 'event',
-          inputs: [
-            ...i.args
-              .map<RawAbiItem>(({ name, type }) => ({
-                name: toCamelCase(name),
-                type,
-              }))
-              .filter((a) => typeof a.type !== 'object'),
-            ...i.accounts.map<RawAbiItem>(({ name }) => ({
+      contractEvents: idl.instructions.map((i: SvmInstruction) => ({
+        name: toCamelCase(i.name),
+        type: 'event',
+        inputs: [
+          ...i.args
+            .map<RawAbiItem>(({ name, type }) => ({
               name: toCamelCase(name),
-              type: 'publicKey',
-            })),
-          ],
-        }
-      }),
+              type,
+            }))
+            .filter((a) => typeof a.type !== 'object'),
+          ...i.accounts.map<RawAbiItem>(({ name }) => ({
+            name: toCamelCase(name),
+            type: 'publicKey',
+          })),
+        ],
+      })),
     }
   }
 
-  private async fetchContractIdl(address: Address, url?: string): Promise<any> {
-    url = url || 'https://api.mainnet-beta.solana.com'
-
-    const client = new RpcClient({ url })
+  private async fetchContractIdl(address: Address): Promise<any> {
+    const client = new RpcClient({ url: SvmAbiService.SERVICE_URL })
     return await fetchIdl(client, address)
   }
 }

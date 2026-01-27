@@ -1,5 +1,8 @@
+import { input } from '@inquirer/prompts'
+import chalk from 'chalk'
 import { z } from 'zod'
 import { ContractMetadata } from '~/services/sqd-abi.js'
+import { getDefaults } from '~/utils/zod.js'
 
 export type WithContractMetadata<T extends object> = T & { contracts: ContractMetadata[] }
 
@@ -27,38 +30,117 @@ export type Sink = (typeof sinkTypes)[number]['value']
 export interface Config<N extends NetworkType> {
   projectFolder: string
   networkType: N
-  templates: PipeTemplate<N, any>[]
+  network: string
+  templates: PipeTemplateMeta<N, any>[]
   sink: Sink
   packageManager: PackageManager
 }
 
-type InferredParams<Params> = Params extends z.ZodObject ? z.infer<Params> : Params
+type InferredParams<Params extends z.ZodObject | undefined> = Params extends z.ZodObject ? z.infer<Params> : undefined
 
-export interface PipeTemplate<N extends NetworkType, Params> {
-  templateId: string
-  networkType: N
-  network: string
-  params: Params
-  sink: Sink
-  renderFns: {
-    transformers: RenderFn<N, Params>
-    postgresSchemas: RenderFn<N, Params>
-    clickhouseTables: RenderFn<N, Params>
+export abstract class PipeTemplateMeta<N extends NetworkType, Params extends z.ZodObject | undefined = undefined> {
+  abstract templateId: string
+  abstract templateName: string
+  abstract networkType: N
+
+  abstract renderTransformers(): string
+  abstract renderPostgresSchemas(): string
+  abstract renderClickhouseTables(): string
+
+  paramsSchema?: Params extends z.ZodObject ? Params : undefined
+  params?: InferredParams<Params>
+  defaultParams?: InferredParams<Params>
+  disabled?: boolean
+
+  /**
+   * Implement this method if the the template requires a post setup process.
+   * One example is contract typegen for EVM and SVM custom templates.
+   */
+  postSetup?(network: string, projectPath: string): Promise<void> | void
+
+  /**
+   * Implement this method if the the template requires a complex params collection process.
+   * One example is contract and event selection for EVM and SVM custom templates.
+   */
+  collectParamsCustom?(network: string): Promise<void>
+
+  public setParams(params: InferredParams<Params>) {
+    if (this.paramsSchema) {
+      this.paramsSchema.parse(params)
+      this.params = params
+      return this
+    }
+
+    throw new NoParamsTemplateError()
+  }
+
+  public getParams() {
+    if (this.params) return this.params
+    if (this.defaultParams) return this.defaultParams
+    throw new ParamsNotCollectedError()
+  }
+
+  public async promptParams(network: string) {
+    if (!this.paramsSchema) return
+
+    if (this.collectParamsCustom) await this.collectParamsCustom(network)
+    else await this.collectParamsDefault()
+  }
+
+  public async collectParamsDefault() {
+    const schema = this.paramsSchema
+
+    if (!schema) throw new SchemaAndCustomPromptUndefinedError()
+
+    const entries = Object.keys(schema.shape)
+    const values: Record<string, string | string[]> = {}
+    const defaultValues = getDefaults(schema)
+
+    for (const key of entries) {
+      const description = schema.shape[key].meta()?.description
+      const type = schema.shape[key].type === 'default' ? schema.shape[key].unwrap().type : schema.shape[key].type
+      const defaultValue = defaultValues[key]
+
+      let formattedDefault: string | undefined
+      if (defaultValue) {
+        if (typeof defaultValue === 'string') {
+          formattedDefault = defaultValue
+        } else if (Array.isArray(defaultValue)) {
+          formattedDefault = defaultValue.join(',')
+        }
+      }
+
+      const value = await input({
+        default: formattedDefault,
+        message: `${description} ${type === 'array' ? chalk.dim(`. Comma separated`) : ''}`,
+        validate: (value: string) => {
+          return value.trim().length > 0 ? true : 'Value cannot be empty'
+        },
+      })
+
+      values[key] = type === 'array' ? [...value.trim().split(',')].flat() : value
+    }
+
+    this.setParams(schema.parse(values) as InferredParams<Params>)
   }
 }
 
-type RenderFn<N extends NetworkType, Params> = (templateConfig?: PipeTemplate<N, InferredParams<Params>>) => string
-
-export interface PipeTemplateMeta<N extends NetworkType, Params> {
-  templateId: string
-  templateName: string
-  networkType: N
-  paramsSchema?: Params extends z.ZodObject ? Params : never
-  disabled?: boolean
-  prompt?: (network: string) => Promise<InferredParams<Params>>
-  templateFn: (network: string, sink: Sink, params: InferredParams<Params>) => PipeTemplate<N, InferredParams<Params>>
+export class ParamsNotCollectedError extends Error {
+  constructor() {
+    super('Params are not collected. Please call promptParams() first.')
+  }
 }
 
-export interface EnrichedEvmTemplate {
-  contracts: ContractMetadata[]
+export class NoParamsTemplateError extends Error {
+  constructor() {
+    super('This template does not accept any parameters. Please check the template configuration.')
+  }
+}
+
+export class SchemaAndCustomPromptUndefinedError extends Error {
+  constructor() {
+    super(
+      'A template has to either define a params schema or a prompt function. Please check the template configuration.',
+    )
+  }
 }

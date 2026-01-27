@@ -1,5 +1,5 @@
 import type { NetworkType } from '~/types/init.js'
-import { TemplateId, templates } from '../templates/pipe-components/transformer-builder/index.js'
+import { TemplateId, templates } from '../builders/transformer-builder/index.js'
 
 export function getTemplatePrompts<N extends NetworkType>(networkType: N): { name: string; value: TemplateId<N> }[] {
   const choices: { name: string; value: TemplateId<N>; disabled?: boolean }[] = Object.entries(

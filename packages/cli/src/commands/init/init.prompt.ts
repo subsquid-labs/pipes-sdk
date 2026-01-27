@@ -2,14 +2,13 @@ import path from 'node:path'
 import { input, select } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { z } from 'zod'
-import type { Config, PackageManager, PipeTemplate, PipeTemplateMeta } from '~/types/init.js'
+import type { Config, PackageManager, PipeTemplateMeta } from '~/types/init.js'
 import { type NetworkType, networkTypes, packageManagerTypes } from '~/types/init.js'
-import { getDefaults } from '~/utils/zod.js'
 import { networks } from './config/networks.js'
 import { sinks } from './config/sinks.js'
 import { getTemplatePrompts } from './config/templates.js'
 import { InitHandler } from './init.handler.js'
-import { getTemplate } from './templates/pipe-components/transformer-builder/index.js'
+import { getTemplate } from './builders/transformer-builder/index.js'
 
 export class InitPrompt {
   async run() {
@@ -93,6 +92,7 @@ export class InitPrompt {
     return {
       projectFolder,
       networkType,
+      network,
       templates: selectedTemplates,
       sink,
       packageManager,
@@ -102,9 +102,9 @@ export class InitPrompt {
   private async templatePromptLoop<N extends NetworkType>(
     networkType: N,
     network: string,
-  ): Promise<PipeTemplate<N, z.ZodObject>[]> {
+  ): Promise<PipeTemplateMeta<N, z.ZodObject>[]> {
     const choices = getTemplatePrompts(networkType)
-    const selectedTemplates: PipeTemplate<N, z.ZodObject>[] = []
+    const selectedTemplates: PipeTemplateMeta<N, z.ZodObject>[] = []
     let addMore = true
 
     while (addMore) {
@@ -120,9 +120,8 @@ export class InitPrompt {
       })
 
       const template = getTemplate(networkType, templateId)
-      const params = template.prompt ? await template.prompt(network) : await this.promptTemplateParams(template)
-      const pipeTemplate = template.templateFn(network, 'postgresql', params)
-      selectedTemplates.push(pipeTemplate)
+      await template.promptParams(network)
+      selectedTemplates.push(template)
 
       addMore = await this.addMoreTemplates()
     }
@@ -134,53 +133,11 @@ export class InitPrompt {
     const addMore = await select({
       message: 'Would you like to add more templates?',
       choices: [
-        { name: 'Yes. Add more templates', value: 'yes' },
-        { name: 'No. Continue to next step', value: 'no' },
+        { name: 'Add more templates', value: 'yes' },
+        { name: 'Continue to next step', value: 'no' },
       ],
     })
 
     return addMore === 'yes'
-  }
-
-
-  private async promptTemplateParams<N extends NetworkType>(
-    template: PipeTemplateMeta<N, z.ZodObject>,
-  ): Promise<z.infer<typeof template.paramsSchema>> {
-    const params = template.paramsSchema
-
-    if (!params) {
-      throw new Error('A template has to either define a params schema or a prompt function. Please check the template configuration.')
-    }
-
-    const entries = Object.keys(params.shape)
-    const values: Record<string, string | string[]> = {}
-    const defaultValues = getDefaults(params)
-
-    for (const key of entries) {
-      const description = params.shape[key].meta()?.description
-      const type = params.shape[key].type === 'default' ? params.shape[key].unwrap().type : params.shape[key].type
-      const defaultValue = defaultValues[key]
-
-      let formattedDefault: string | undefined
-      if (defaultValue) {
-        if (typeof defaultValue === 'string') {
-          formattedDefault = defaultValue
-        } else if (Array.isArray(defaultValue)) {
-          formattedDefault = defaultValue.join(',')
-        }
-      }
-
-      const value = await input({
-        default: formattedDefault,
-        message: `${description} ${type === 'array' ? chalk.dim(`. Comma separated`) : ''}`,
-        validate: (value: string) => {
-          return value.trim().length > 0 ? true : 'Value cannot be empty'
-        },
-      })
-
-      values[key] = type === 'array' ? [...value.trim().split(',')].flat() : value
-    }
-
-    return params.parse(values)
   }
 }
