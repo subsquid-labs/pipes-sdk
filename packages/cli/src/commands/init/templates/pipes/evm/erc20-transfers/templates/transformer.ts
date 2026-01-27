@@ -8,7 +8,7 @@ const erc20Transfers = evmDecoder({
   range: { from: '12,369,621' },
   contracts: [
     {{#contractAddresses}}
-    '{{.}}'
+    '{{.}}',
     {{/contractAddresses}}
   ],
   events: {

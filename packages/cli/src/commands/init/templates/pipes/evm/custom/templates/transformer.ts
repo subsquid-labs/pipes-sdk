@@ -12,7 +12,7 @@ const custom = evmDecoder({
   range: { from: 'latest' },
   contracts: [
     {{#contracts}}
-    "{{{contractAddress}}}",
+    '{{{contractAddress}}}',
     {{/contracts}}
   ],
   /**

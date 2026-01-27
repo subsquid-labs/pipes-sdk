@@ -77,13 +77,15 @@ describe('EVM Template Builder', () => {
         CLICKHOUSE_USER: z.string(),
         CLICKHOUSE_PASSWORD: z.string(),
         CLICKHOUSE_URL: z.string(),
+        CLICKHOUSE_DATABASE: z.string(),
       }).parse(process.env)
 
       const erc20Transfers = evmDecoder({
         profiler: { id: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
         range: { from: '12,369,621' },
-        // Uncomment the line below to filter by contract addresses
-        // contracts: ["0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"], // WETH on Ethereum mainnet
+        contracts: [
+          '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+        ],
         events: {
           transfers: commonAbis.erc20.events.Transfer,
         },
@@ -112,6 +114,7 @@ describe('EVM Template Builder', () => {
               username: env.CLICKHOUSE_USER,
               password: env.CLICKHOUSE_PASSWORD,
               url: env.CLICKHOUSE_URL,
+              database: env.CLICKHOUSE_DATABASE,
               json: {
                   stringify: serializeJsonWithBigInt,
               },
@@ -178,13 +181,15 @@ describe('EVM Template Builder', () => {
         CLICKHOUSE_USER: z.string(),
         CLICKHOUSE_PASSWORD: z.string(),
         CLICKHOUSE_URL: z.string(),
+        CLICKHOUSE_DATABASE: z.string(),
       }).parse(process.env)
 
       const erc20Transfers = evmDecoder({
         profiler: { id: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
         range: { from: '12,369,621' },
-        // Uncomment the line below to filter by contract addresses
-        // contracts: ["0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"], // WETH on Ethereum mainnet
+        contracts: [
+          '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+        ],
         events: {
           transfers: commonAbis.erc20.events.Transfer,
         },
@@ -204,7 +209,9 @@ describe('EVM Template Builder', () => {
       const uniswapV3Swaps = evmDecoder({
         range: { from: '12,369,621' }, // Uniswap V3 Factory deployment block
         contracts: factory({
-          address: ['0x1f98431c8ad98523631ae4a59f267346ea31f984'], // Uniswap V3 Factory address on Ethereum mainnet. Replace with the factory address for the network you are using.
+          address: [
+            '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+          ],
           event: factoryEvents.PoolCreated,
           parameter: 'pool',
           database: await factorySqliteDatabase({
@@ -240,6 +247,7 @@ describe('EVM Template Builder', () => {
               username: env.CLICKHOUSE_USER,
               password: env.CLICKHOUSE_PASSWORD,
               url: env.CLICKHOUSE_URL,
+              database: env.CLICKHOUSE_DATABASE,
               json: {
                   stringify: serializeJsonWithBigInt,
               },
@@ -314,7 +322,7 @@ describe('EVM Template Builder', () => {
       const custom = evmDecoder({
         range: { from: 'latest' },
         contracts: [
-          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
         ],
         /**
          * Or optionally use pass all events object directly to listen to all contract events

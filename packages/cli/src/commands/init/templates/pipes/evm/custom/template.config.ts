@@ -12,12 +12,13 @@ const RawInputSchema = z.object({ name: z.string(), type: z.string() })
 const RawAbiEventSchema = z.object({ name: z.string(), type: z.string(), inputs: z.array(RawInputSchema) })
 
 export const CustomTemplateParamsSchema = z.object({
-  contracts: z
-    .array(z.object({
+  contracts: z.array(
+    z.object({
       contractAddress: z.string(),
       contractName: z.string(),
       contractEvents: z.array(RawAbiEventSchema),
-    }))
+    }),
+  ),
 })
 
 export type CustomTemplateParams = z.infer<typeof CustomTemplateParamsSchema>

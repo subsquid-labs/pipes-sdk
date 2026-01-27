@@ -118,7 +118,7 @@ describe('clickhouse sink template builder', () => {
       networkType: 'evm',
       templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
       network: 'ethereum-mainnet',
-      sink: 'postgresql',
+      sink: 'clickhouse',
       packageManager: 'pnpm',
     }
 
@@ -136,6 +136,7 @@ describe('clickhouse sink template builder', () => {
               username: env.CLICKHOUSE_USER,
               password: env.CLICKHOUSE_PASSWORD,
               url: env.CLICKHOUSE_URL,
+              database: env.CLICKHOUSE_DATABASE,
               json: {
                   stringify: serializeJsonWithBigInt,
               },

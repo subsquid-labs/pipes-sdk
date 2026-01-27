@@ -155,7 +155,7 @@ describe('Schema template builder', () => {
     `)
   })
 
-  it.only('should build schema for custom contract', () => {
+  it('should build schema for custom contract', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',

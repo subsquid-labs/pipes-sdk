@@ -9,7 +9,7 @@ const uniswapV3Swaps = evmDecoder({
   range: { from: '12,369,621' }, // Uniswap V3 Factory deployment block
   contracts: factory({
     address: [
-      '{{factoryAddress}}'
+      '{{factoryAddress}}',
     ],
     event: factoryEvents.PoolCreated,
     parameter: 'pool',
