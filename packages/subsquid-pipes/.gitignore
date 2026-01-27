@@ -17,3 +17,6 @@ dist.new
 dist-dts
 node_modules
 coverage
+
+# Ignore SQLite DB created during tests
+*.db

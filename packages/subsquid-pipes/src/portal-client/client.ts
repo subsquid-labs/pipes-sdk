@@ -1,5 +1,7 @@
-import { createFuture, Future, unexpectedCase, wait, withErrorContext } from '@subsquid/util-internal'
 import { Readable } from 'stream'
+
+import { Future, createFuture, unexpectedCase, wait, withErrorContext } from '@subsquid/util-internal'
+
 import {
   HttpBody,
   HttpClient,
@@ -10,6 +12,7 @@ import {
 } from '~/http-client/index.js'
 import { partition } from '~/internal/array.js'
 import { npmVersion } from '~/version.js'
+
 import { ForkException } from './fork-exception.js'
 import { GetBlock, PortalQuery, Query } from './query/index.js'
 
@@ -77,9 +80,14 @@ export interface PortalStreamOptions {
   finalized?: boolean
 }
 
+type PortalHead = {
+  finalized?: BlockRef
+  latest?: { number: number }
+}
+
 export type PortalStreamData<B> = {
   blocks: B[]
-  finalizedHead?: BlockRef
+  head: PortalHead
   meta: {
     bytes: number
     requestedFromBlock: number
@@ -177,16 +185,11 @@ export class PortalClient {
 
       switch (res.status) {
         case 200:
-          let finalizedHead = getFinalizedHeadHeader(res.headers)
-          let stream = res.body ? splitLines(res.body) : undefined
-
-          return {
-            finalizedHead,
-            stream,
-          }
         case 204:
           return {
-            finalizedHead: getFinalizedHeadHeader(res.headers),
+            status: res.status,
+            head: getHeadFromHeaders(res.headers),
+            stream: res.body && res.status === 200 ? splitLines(res.body) : undefined,
           }
         default:
           throw unexpectedCase(res.status)
@@ -222,7 +225,8 @@ function createPortalStream<Q extends Query>(
     query: Q,
     options?: RequestOptions,
   ) => Promise<{
-    finalizedHead?: BlockRef
+    head: PortalHead
+    status: number
     stream?: AsyncIterable<string[]> | null | undefined
   }>,
 ): PortalStream<GetBlock<Q>> {
@@ -254,20 +258,12 @@ function createPortalStream<Q extends Query>(
         },
       )
 
-      const finalizedHead = res.finalizedHead
-
-      // We are on head
-      // TODO should we check response status 204 instead?
-      if (!('stream' in res)) {
+      // We are on head, we need to wait a little bit until new dta arrives
+      if (res.status === 204) {
         await buffer.put({
           blocks: [],
-          meta: {
-            bytes: 0,
-            requestedFromBlock: fromBlock,
-            lastBlockReceivedAt: new Date(),
-            requests,
-          },
-          finalizedHead,
+          meta: { bytes: 0, requestedFromBlock: fromBlock, lastBlockReceivedAt: new Date(), requests },
+          head: res.head,
         })
         buffer.flush()
         if (headPollInterval > 0) {
@@ -276,7 +272,8 @@ function createPortalStream<Q extends Query>(
         continue
       }
 
-      // No data left on this range
+      // If data is missing for a particular range,
+      // portal responds with 200 status and empty body
       if (res.stream == null) break
 
       try {
@@ -305,15 +302,17 @@ function createPortalStream<Q extends Query>(
             }
           }
 
+          const finalizedHead = res.head.finalized?.number
+
           // Split blocks into finalized and unfinalized
-          const [finalizedBlocks, unfinalizedBlocks] = finalizedHead?.number
-            ? partition(blocks, ({ block }) => block.header?.number <= finalizedHead.number)
+          const [finalizedBlocks, unfinalizedBlocks] = finalizedHead
+            ? partition(blocks, ({ block }) => block.header?.number <= finalizedHead)
             : [blocks, []]
 
           // Push finalized blocks as a batch
           await buffer.put({
             blocks: finalizedBlocks.map((b) => b.block),
-            finalizedHead,
+            head: res.head,
             meta: {
               bytes: finalizedBlocks.reduce((a, b) => a + b.bytes, 0),
               requestedFromBlock,
@@ -326,7 +325,7 @@ function createPortalStream<Q extends Query>(
             await buffer.put(
               {
                 blocks: [block],
-                finalizedHead,
+                head: res.head,
                 meta: {
                   bytes,
                   requestedFromBlock,
@@ -440,6 +439,7 @@ class PortalStreamBuffer<B> {
     if (this.buffer == null) {
       this.buffer = {
         blocks: [],
+        head: {},
         meta: {
           bytes: 0,
           lastBlockReceivedAt: new Date(),
@@ -450,7 +450,7 @@ class PortalStreamBuffer<B> {
     }
 
     this.buffer.blocks.push(...data.blocks)
-    this.buffer.finalizedHead = data.finalizedHead
+    this.buffer.head = data.head
     this.buffer.meta.bytes += data.meta.bytes
     this.buffer.meta.requests = mergeRequests(this.buffer.meta.requests, data.meta.requests)
     this.buffer.meta.requestedFromBlock = Math.min(this.buffer.meta.requestedFromBlock, data.meta.requestedFromBlock)
@@ -595,16 +595,25 @@ class LineSplitter {
   }
 }
 
-function getFinalizedHeadHeader(headers: HttpResponse['headers']) {
-  let finalizedHeadHash = headers.get('X-Sqd-Finalized-Head-Hash')
-  let finalizedHeadNumber = headers.get('X-Sqd-Finalized-Head-Number')
+function getHeadFromHeaders(headers: HttpResponse['headers']) {
+  const finalizedHeadHash = headers.get('X-Sqd-Finalized-Head-Hash')
+  const finalizedHeadNumber = headers.get('X-Sqd-Finalized-Head-Number')
+  const headNumber = headers.get('X-Sqd-Head-Number')
 
-  return finalizedHeadHash != null && finalizedHeadNumber != null
-    ? {
-        hash: finalizedHeadHash,
-        number: parseInt(finalizedHeadNumber),
-      }
-    : undefined
+  return {
+    finalized:
+      finalizedHeadHash && finalizedHeadNumber
+        ? {
+            hash: finalizedHeadHash,
+            number: parseInt(finalizedHeadNumber, 10),
+          }
+        : undefined,
+    latest: headNumber
+      ? {
+          number: parseInt(headNumber, 10),
+        }
+      : undefined,
+  }
 }
 
 function isStreamAbortedError(err: unknown) {

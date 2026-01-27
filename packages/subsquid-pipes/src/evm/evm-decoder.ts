@@ -1,17 +1,20 @@
-import type { AbiEvent } from '@subsquid/evm-abi'
+import type { AbiEvent, EventParams } from '@subsquid/evm-abi'
+import { Codec, Sink } from '@subsquid/evm-codec'
+
 import {
   BatchCtx,
+  PortalRange,
+  ProfilerOptions,
+  Transformer,
   createTransformer,
   formatBlock,
   formatNumber,
   formatWarning,
-  PortalRange,
-  ProfilerOptions,
   parsePortalRange,
-  Transformer,
 } from '~/core/index.js'
-import { findDuplicates } from '~/internal/array.js'
-import { Log } from '../portal-client/query/evm.js'
+import { arrayify, findDuplicates } from '~/internal/array.js'
+import { Log, LogRequest } from '~/portal-client/query/evm.js'
+
 import { EvmPortalData } from './evm-portal-source.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
 import { DecodedAbiEvent, Factory } from './factory.js'
@@ -41,17 +44,68 @@ export type DecodedEvent<D = object, F = unknown> = {
   }>
 }
 
-export type Events = Record<string, AbiEvent<any>>
-type EventsMap<T extends Events> = {
-  readonly [K in keyof T]: T[K] extends AbiEvent<any> ? T[K] : never
+export type Events = Record<string, AbiEvent<any> | EventWithArgsInput<AbiEvent<any>>>
+
+export type DecodeEventsFunctions<T extends Events> = ReturnType<ExtractEventType<EventsMap<T>[keyof T]>['decode']>
+
+export type IndexedKeys<T> = {
+  [K in keyof T]: T[K] extends { indexed: true } ? K : never
+}[keyof T]
+
+type CodecValueType<T extends AbiEvent<any>, K extends keyof T['params']> = T['params'][K] extends Codec<
+  any,
+  infer TOut
+>
+  ? TOut
+  : never
+
+export type IndexedParamsInput<T extends AbiEvent<any>> = Partial<{
+  [K in IndexedKeys<T['params']>]: CodecValueType<T, K> | CodecValueType<T, K>[]
+}>
+
+export type IndexedParams<T extends AbiEvent<any>> = Partial<{
+  [K in IndexedKeys<T['params']>]: CodecValueType<T, K>[]
+}>
+
+export type EventWithArgsInput<T extends AbiEvent<any>> = {
+  event: T
+  params: IndexedParamsInput<T>
+}
+
+export type EventWithArgs<T extends AbiEvent<any>> = {
+  event: T
+  params: IndexedParams<T>
+}
+
+export type EventEntryFor<V> =
+  // If the entry is an AbiEvent, allow either the raw AbiEvent or the `{ event, params }` form
+  V extends AbiEvent<any>
+    ? V
+    : V extends {
+          event: infer E extends AbiEvent<any>
+          params: infer P extends Record<PropertyKey, unknown>
+        }
+      ? // Reject params that include non-indexed keys
+        Exclude<keyof P, keyof Partial<IndexedParamsInput<E>>> extends never
+        ? {
+            event: E
+            params: IndexedParamsInput<E>
+          }
+        : never
+      : never
+
+export type EventsMap<T> = {
+  readonly [K in keyof T]: EventEntryFor<T[K]>
 }
 
 export type AbiDecodeEvent<T extends AbiEvent<any>> = ReturnType<T['decode']>
 
+type ExtractEventType<V> = V extends AbiEvent<any> ? V : V extends { event: infer E extends AbiEvent<any> } ? E : never
+
 export type EventResponse<T extends Events, F> = {
   [K in keyof T]: DecodedEvent<
-    // child event
-    AbiDecodeEvent<T[K]>,
+    // child event - extract from EventsMap normalized type
+    AbiDecodeEvent<ExtractEventType<EventsMap<T>[K]>>,
     // factory event
     F extends Factory<infer R> ? DecodedAbiEvent<R> : never
   >[]
@@ -59,7 +113,7 @@ export type EventResponse<T extends Events, F> = {
 
 type Contracts = Factory<any> | string[]
 
-type DecodedEventPipeArgs<T extends Events, C extends Contracts> = {
+export type DecodedEventPipeArgs<T extends Events, C extends Contracts> = {
   range: PortalRange
   contracts?: C
   events: EventsMap<T>
@@ -111,6 +165,147 @@ ${d.props.slice(1).join(', ')} property will miss events due to the duplicate si
   })
 }
 
+export function isEventWithArgs<T extends AbiEvent<any>>(
+  value: unknown,
+): value is EventWithArgs<T> | EventWithArgsInput<T> {
+  return typeof value === 'object' && value !== null && 'event' in value && 'params' in value
+}
+
+type LogParamTopics = Pick<LogRequest, 'topic0' | 'topic1' | 'topic2' | 'topic3'>
+
+export function buildEventTopics<T extends AbiEvent<any>>(event: T, indexedParams: IndexedParams<T>): LogParamTopics {
+  const params = event.params as EventParams<T>
+
+  // Filter by indexed parameters to ensure correct topic assignment order
+  const indexedParamKeys = Object.keys(params).filter((k) => {
+    const param = params[k] as { indexed?: boolean }
+    return param?.indexed === true
+  })
+
+  const paramsByTopicOrder: (string[] | undefined)[] = indexedParamKeys.map((k) => {
+    const indexedParam = indexedParams[k as keyof typeof indexedParams]
+    if (!indexedParam) return
+
+    const topicParams: string[] = []
+    for (const param of indexedParam) {
+      const eventParams = params[k] as Codec<any, any>
+      const sink = new Sink(1)
+      eventParams['encode'](sink, param)
+      topicParams.push(sink.toString())
+    }
+
+    return topicParams
+  })
+
+  return {
+    topic0: [event.topic],
+    topic1: paramsByTopicOrder[0],
+    topic2: paramsByTopicOrder[1],
+    topic3: paramsByTopicOrder[2],
+  }
+}
+
+export function getNormalizedEventParams<T extends AbiEvent<any>>(params: IndexedParamsInput<T>): IndexedParams<T> {
+  const entries = Object.entries(params)
+    .map(([key, value]) => [key, arrayify(value).map((v) => (typeof v === 'string' ? v.toLowerCase() : v))])
+    .filter(([_, value]) => value.length > 0)
+  return Object.fromEntries(entries) as IndexedParams<T>
+}
+
+function getNormalizedEvents<T extends Events>(events: T): EventWithArgs<AbiEvent<any>>[] {
+  const normalizedEvents: EventWithArgs<AbiEvent<any>>[] = []
+
+  for (const eventName in events) {
+    const event = events[eventName]
+
+    if (isEventWithArgs(event)) {
+      normalizedEvents.push({
+        event: event.event,
+        params: getNormalizedEventParams(event.params),
+      } as EventWithArgs<AbiEvent<any>>)
+    } else {
+      normalizedEvents.push({
+        event,
+        params: {},
+      } as EventWithArgs<AbiEvent<any>>)
+    }
+  }
+
+  return normalizedEvents
+}
+
+function splitEvents<T extends AbiEvent<any>>(normalizedEvents: EventWithArgs<T>[]) {
+  return {
+    eventsWithoutParams: normalizedEvents.filter((event) => Object.keys(event.params).length === 0),
+    eventsWithParams: normalizedEvents.filter((event) => Object.keys(event.params).length > 0),
+  }
+}
+
+function buildEventRequests<T extends AbiEvent<any>, C extends Contracts>(
+  eventWithArgs: EventWithArgs<T>[],
+  contracts?: C,
+) {
+  return eventWithArgs
+    .map<LogRequest | undefined>((event) => {
+      const topics = buildEventTopics(event.event, event.params)
+      return {
+        ...topics,
+        address: Factory.isFactory(contracts) ? undefined : contracts,
+        transaction: true,
+      }
+    })
+    .filter((logRequest): logRequest is LogRequest => !!logRequest)
+}
+
+function getDuplicateEvents<T extends Events>(events: T, duplicates: string[]) {
+  return duplicates.map((duplicate) => {
+    const props = Object.keys(events).filter((name) => {
+      const eventValue = events[name]
+      const eventAbi = isEventWithArgs(eventValue) ? eventValue.event : eventValue
+      return eventAbi.topic === duplicate
+    })
+    return { props, event: duplicate }
+  })
+}
+
+/**
+ * Decodes EVM events from portal data and optionally filters them by indexed parameters.
+ *
+ * This transformer extracts and decodes EVM events from blockchain data. You can either
+ * capture all instances of an event or filter by indexed parameters to reduce data transfer
+ * and processing overhead.
+ *
+ * @param args - Configuration object for the decoder
+ * @param args.range - Block range to query. See {@link PortalRange} for format details.
+ * @param args.contracts - Optional contract addresses to filter events from. Can be a {@link Factory} instance or an array of addresses
+ * @param args.events - Map of event names to event definitions. Each entry can be:
+ *   - An {@link AbiEvent} instance to capture all instances of that event
+ *   - An {@link EventWithArgs} object with `event` and `params` to filter by indexed parameters
+ * @param args.profiler - Optional {@link ProfilerOptions} configuration for performance monitoring
+ * @param args.onError - Optional error handler callback that receives {@link BatchCtx} and error
+ * @returns A {@link Transformer} that processes EVM portal data and returns {@link EventResponse} with decoded events
+ *
+ * @example
+ * ```ts
+ * evmDecoder({
+ *   range: { from: 'latest' },
+ *   events: {
+ *     // Use the AbiEvent instance directly for convenience if you need all the emitted events
+ *     approvals: commonAbis.erc20.events.Approval,
+ *     // Or filter by any of the indexed parameters defined in the contract
+ *     transfers: {
+ *       event: commonAbis.erc20.events.Transfer,
+ *       params: {
+ *         // For every event param you can use an array to match multiple values
+ *         from: ['0x87482e84503639466fad82d1dce97f800a410945'],
+ *         // Or pass a single value directly
+ *         to: '0x10b32a54eeb05d2c9cd1423b4ad90c3671a2ed5f',
+ *       },
+ *     },
+ *   },
+ * })
+ * ```
+ */
 export function evmDecoder<T extends Events, C extends Contracts>({
   range,
   contracts,
@@ -122,35 +317,43 @@ export function evmDecoder<T extends Events, C extends Contracts>({
   EventResponse<T, C>,
   EvmQueryBuilder
 > {
-  const eventTopics = Object.values(events).map((event) => event.topic)
-
+  const normalizedEvents = getNormalizedEvents(events)
+  const { eventsWithParams, eventsWithoutParams } = splitEvents(normalizedEvents)
+  const eventTopic0 = eventsWithoutParams.map((event) => event.event.topic)
+  const eventWithParamsRequest = buildEventRequests(eventsWithParams, contracts)
   const decodedRange = parsePortalRange(range)
+  const normalizedContracts =
+    contracts && !Factory.isFactory(contracts) ? contracts.map((contract) => contract.toLowerCase()) : undefined
 
   return createTransformer({
     profiler: profiler || { id: 'EVM decoder' },
     query: async ({ queryBuilder, logger, portal }) => {
-      const duplicates = findDuplicates(eventTopics)
+      const allEventTopics = normalizedEvents.map(({ event }) => event.topic)
+      const duplicates = findDuplicates(allEventTopics)
       if (duplicates.length) {
-        const entries = Object.entries(events)
-        logger.error(
-          DUPLICATED_EVENTS(
-            duplicates.map((duplicate) => {
-              const props = entries.filter(([, event]) => event.topic === duplicate).map(([name]) => name)
-              return { props, event: duplicate }
-            }),
-          ),
-        )
+        logger.error(DUPLICATED_EVENTS(getDuplicateEvents(events, duplicates)))
       }
 
       if (!Factory.isFactory(contracts)) {
-        queryBuilder.addFields(decodedEventFields).addLog({
-          range: decodedRange,
-          request: {
-            address: contracts,
-            topic0: eventTopics,
-            transaction: true,
-          },
-        })
+        queryBuilder.addFields(decodedEventFields)
+
+        if (eventsWithoutParams.length > 0)
+          queryBuilder.addLog({
+            range: decodedRange,
+            request: {
+              address: contracts,
+              topic0: eventTopic0,
+              transaction: true,
+            },
+          })
+
+        for (const request of eventWithParamsRequest) {
+          queryBuilder.addLog({
+            range: decodedRange,
+            request,
+          })
+        }
+
         return
       }
 
@@ -175,43 +378,69 @@ export function evmDecoder<T extends Events, C extends Contracts>({
           ].join('\n'),
         )
 
-        queryBuilder
-          .addFields(decodedEventFields)
-          .addLog({
-            // pre-indexed stage
-            range: firstRange,
-            request: {
-              address: children.map((c) => c.childAddress), // fill addresses from factory events
-              topic0: eventTopics,
-              transaction: true,
-            },
-          })
-          .addLog({
-            range: secondRange,
-            request: {
-              topic0: eventTopics,
-              transaction: true,
-            },
-          })
+        queryBuilder.addFields(decodedEventFields)
+
+        if (eventsWithoutParams.length > 0) {
+          queryBuilder
+            .addLog({
+              // pre-indexed stage
+              range: firstRange,
+              request: {
+                address: children.map((c) => c.childAddress), // fill addresses from factory events
+                topic0: eventTopic0,
+                transaction: true,
+              },
+            })
+            .addLog({
+              range: secondRange,
+              request: {
+                topic0: eventTopic0,
+                transaction: true,
+              },
+            })
+        }
+
+        for (const request of eventWithParamsRequest) {
+          queryBuilder
+            .addLog({
+              range: firstRange,
+              request: {
+                address: children.map((c) => c.childAddress), // fill addresses from factory events
+                ...request,
+              },
+            })
+            .addLog({
+              range: secondRange,
+              request,
+            })
+        }
 
         return
       }
 
       queryBuilder.addLog({
         range: decodedRange,
-        request: {
-          address: contracts.factoryAddress(),
-          topic0: [contracts.factoryTopic()],
-        },
+        request: contracts.buildFactoryEventRequest(),
       })
 
-      queryBuilder.addFields(decodedEventFields).addLog({
-        range: decodedRange,
-        request: {
-          topic0: eventTopics,
-          transaction: true,
-        },
-      })
+      queryBuilder.addFields(decodedEventFields)
+
+      if (eventsWithoutParams.length > 0) {
+        queryBuilder.addLog({
+          range: decodedRange,
+          request: {
+            topic0: eventTopic0,
+            transaction: true,
+          },
+        })
+      }
+
+      for (const request of eventWithParamsRequest) {
+        queryBuilder.addLog({
+          range: decodedRange,
+          request,
+        })
+      }
     },
     start: async ({ logger }) => {
       if (Factory.isFactory(contracts)) {
@@ -223,8 +452,9 @@ export function evmDecoder<T extends Events, C extends Contracts>({
     },
     transform: async (data, ctx) => {
       const result = {} as EventResponse<T, C>
+      // TODO: should use normalizedEvents instead of events here
       for (const eventName in events) {
-        ;(result[eventName as keyof T] as ReturnType<T[keyof T]['decode']>[]) = []
+        ;(result[eventName as keyof T] as DecodeEventsFunctions<T>[]) = []
       }
 
       if (Factory.isFactory(contracts)) {
@@ -251,12 +481,26 @@ export function evmDecoder<T extends Events, C extends Contracts>({
             if (!factoryEvent) {
               continue
             }
+          } else if (
+            normalizedContracts &&
+            // We have a list of contracts to filter by - skip non-matching addresses
+            // this is needed because, when using the same topic hashes, portal may return logs from other contracts
+            (normalizedContracts.length === 0 || !normalizedContracts.includes(log.address))
+          ) {
+            continue
           }
 
           for (const eventName in events) {
-            const eventAbi = events[eventName]
-            const topic0 = log.topics[0]
+            const eventValue = events[eventName]
+            let eventAbi: AbiEvent<any>
 
+            if (isEventWithArgs(eventValue)) {
+              eventAbi = eventValue.event
+            } else {
+              eventAbi = eventValue
+            }
+
+            const topic0 = log.topics[0]
             if (topic0 !== eventAbi.topic) {
               continue
             } else if (!eventAbi.is(log)) {

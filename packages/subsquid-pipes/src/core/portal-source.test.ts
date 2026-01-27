@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
+
 import { evmPortalSource } from '~/evm/index.js'
 import {
+  MockPortal,
   blockTransformer,
   closeMockPortal,
   createFinalizedMockPortal,
   createMockPortal,
-  MockPortal,
   readAll,
 } from '~/tests/index.js'
 
@@ -14,6 +15,134 @@ describe('Portal abstract stream', () => {
 
   afterEach(async () => {
     await closeMockPortal(mockPortal)
+  })
+
+  describe('common', () => {
+    it('should expose finalization headers', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 2, hash: '0x456' } }],
+          head: {
+            finalized: { number: 10, hash: '0xfinalized' },
+            latest: { number: 12 },
+          },
+        },
+      ])
+
+      const stream = evmPortalSource({
+        portal: mockPortal.url,
+        query: { from: 0, to: 2 },
+      }).pipe(blockTransformer())
+
+      let firstCtx
+      for await (const { ctx } of stream) {
+        firstCtx = {
+          head: ctx.head,
+          progress_state: ctx.state.progress?.state,
+        }
+      }
+
+      expect(firstCtx).toMatchInlineSnapshot(`
+        {
+          "head": {
+            "finalized": {
+              "hash": "0xfinalized",
+              "number": 10,
+            },
+            "latest": {
+              "number": 12,
+            },
+          },
+          "progress_state": {
+            "current": 2,
+            "etaSeconds": 0,
+            "initial": 0,
+            "last": 2,
+            "percent": 100,
+          },
+        }
+      `)
+    })
+
+    it('should adjust latest block number from data over header', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 14, hash: '0x456' } }], // latest block is 14 in data
+          head: {
+            finalized: { number: 10, hash: '0xfinalized' },
+            latest: { number: 12 }, // but 12 in header
+          },
+        },
+      ])
+
+      const stream = evmPortalSource({
+        portal: mockPortal.url,
+        query: { from: 0, to: 2 },
+      }).pipe(blockTransformer())
+
+      let firstCtx
+      for await (const { ctx } of stream) {
+        firstCtx = {
+          head: ctx.head,
+          progress_state: ctx.state.progress?.state,
+        }
+      }
+
+      expect(firstCtx).toMatchInlineSnapshot(`
+        {
+          "head": {
+            "finalized": {
+              "hash": "0xfinalized",
+              "number": 10,
+            },
+            "latest": {
+              "number": 12,
+            },
+          },
+          "progress_state": {
+            "current": 14,
+            "etaSeconds": 0,
+            "initial": 0,
+            "last": 14,
+            "percent": 100,
+          },
+        }
+      `)
+    })
+
+    it('should keep requesting data on head', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 204,
+        },
+        {
+          statusCode: 204,
+        },
+        {
+          statusCode: 204,
+        },
+        {
+          statusCode: 200,
+          data: [{ header: { number: 1, hash: '0x123' } }],
+        },
+      ])
+
+      const stream = evmPortalSource({
+        portal: mockPortal.url,
+        query: { from: 0, to: 1 },
+      }).pipe(blockTransformer())
+
+      expect(await readAll(stream)).toMatchInlineSnapshot(`
+        [
+          {
+            "hash": "0x123",
+            "number": 1,
+          },
+        ]
+      `)
+    })
   })
 
   describe('unfinalized', () => {
