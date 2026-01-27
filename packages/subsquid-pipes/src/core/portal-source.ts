@@ -10,10 +10,10 @@ import {
 } from '~/portal-client/index.js'
 
 import { last } from '../internal/array.js'
-import { Logger, formatWarning } from './logger.js'
+import { LogLevel, Logger, createDefaultLogger, formatWarning } from './logger.js'
 import { Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
 import { Profiler, Span } from './profiling.js'
-import { ProgressState, StartState } from './progress-tracker.js'
+import { ProgressEvent, StartEvent } from './progress-tracker.js'
 import { QueryBuilder, hashQuery } from './query-builder.js'
 import { Target } from './target.js'
 import { QueryAwareTransformer, Transformer, TransformerArgs } from './transformer.js'
@@ -54,7 +54,7 @@ export type BatchCtx = {
      * the completion percentage, processed blocks count, and other metrics
      * that help track the indexing progress.
      */
-    progress?: ProgressState
+    progress?: ProgressEvent['progress']
   }
   meta: {
     bytesSize: number
@@ -76,15 +76,15 @@ export function cursorFromHeader(block: { header: { number: number; hash: string
 export type PortalSourceOptions<Query> = {
   portal: string | PortalClientOptions | PortalClient
   query: Query
-  logger: Logger
+  logger?: Logger | LogLevel
   profiler?: boolean
   cache?: PortalCache
   transformers?: Transformer<any, any>[]
   metrics?: MetricsServer
   progress?: {
     interval?: number
-    onStart?: (data: StartState) => void
-    onProgress?: (progress: ProgressState) => void
+    onStart?: (data: StartEvent) => void
+    onProgress?: (progress: ProgressEvent) => void
   }
 }
 
@@ -103,6 +103,8 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
   constructor({ portal, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
     this.#runtime = useRuntimeContext()
+    this.#logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ level: logger })
+
     this.#portal =
       portal instanceof PortalClient
         ? portal
@@ -111,14 +113,14 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
               ? {
                   url: portal,
                   http: {
-                    logger,
+                    logger: this.#logger,
                     retryAttempts: Number.MAX_SAFE_INTEGER,
                   },
                 }
               : {
                   ...portal,
                   http: {
-                    logger,
+                    logger: this.#logger,
                     retryAttempts: Number.MAX_SAFE_INTEGER,
                     ...portal.http,
                   },
@@ -126,7 +128,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
           )
 
     this.#queryBuilder = query
-    this.#logger = logger
+
     this.#options = {
       cache: options.cache,
       profiler: typeof options.profiler === 'undefined' ? process.env.NODE_ENV !== 'production' : options.profiler,

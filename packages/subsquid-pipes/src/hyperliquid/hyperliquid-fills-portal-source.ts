@@ -33,8 +33,6 @@ export function hyperliquidFillsPortalSource<F extends hl.FieldSelection = any>(
   logger?: Logger | LogLevel
   progress?: ProgressTrackerOptions
 }) {
-  logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ level: logger })
-
   //FIXME STREAMS
   return new PortalSource<HyperliquidFillsQueryBuilder<F>, HyperliquidFillsPortalData<F>>({
     portal,
@@ -48,7 +46,6 @@ export function hyperliquidFillsPortalSource<F extends hl.FieldSelection = any>(
     metrics,
     transformers: [
       progressTracker({
-        logger,
         interval: progress?.interval,
         onStart: progress?.onStart,
         onProgress: progress?.onProgress,

@@ -52,8 +52,6 @@ export function evmPortalSource<Out extends EvmOutputs>({
   logger?: Logger | LogLevel
   progress?: ProgressTrackerOptions
 }) {
-  logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ level: logger })
-
   type F = { block: { hash: true; number: true } }
   const query = new EvmQueryBuilder<F>().addFields({
     block: { hash: true, number: true },
@@ -67,7 +65,6 @@ export function evmPortalSource<Out extends EvmOutputs>({
     metrics,
     transformers: [
       progressTracker({
-        logger,
         interval: progress?.interval,
         onStart: progress?.onStart,
         onProgress: progress?.onProgress,

@@ -54,8 +54,6 @@ export function solanaPortalSource<Out extends SolanaOutputs>({
   logger?: Logger | LogLevel
   progress?: ProgressTrackerOptions
 }) {
-  logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ level: logger })
-
   type F = { block: { hash: true; number: true } }
   const query = new SolanaQueryBuilder<F>().addFields({
     block: { hash: true, number: true },
@@ -69,7 +67,6 @@ export function solanaPortalSource<Out extends SolanaOutputs>({
     metrics,
     transformers: [
       progressTracker({
-        logger,
         interval: progress?.interval,
         onStart: progress?.onStart,
         onProgress: progress?.onProgress,
