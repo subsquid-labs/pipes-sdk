@@ -77,8 +77,7 @@ export class SqdAbiService {
 }
 
 class EvmAbiService extends AbiService {
-  // private static SERVICE_URL = 'https://cloud.sqd.dev/chains/api/v1/evm/abi'
-  private static SERVICE_URL = 'http://127.0.0.1:3004/evm/abi'
+  private static SERVICE_URL = 'https://cloud.sqd.dev/chains/api/v1/evm/abi'
 
   override generateTypes(projectPath: string, contractAddresses: string[], chainId?: string): void {
     const outputDir = `${projectPath}/src/contracts/`

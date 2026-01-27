@@ -63,7 +63,7 @@ const configJsonSchema = z
     }
   })
 
-const squidfix = (text: string) => chalk.gray(`[🦑 PIPES SDK] ${text} `)
+export const squidfix = (text: string) => chalk.gray(`[🦑 PIPES SDK] ${text} `)
 
 export class InitHandler {
   private readonly projectName: string
