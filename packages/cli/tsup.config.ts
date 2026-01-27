@@ -63,6 +63,7 @@ export default defineConfig([
       'config/networks': 'src/commands/init/config/networks.ts',
       'config/templates': 'src/commands/init/config/templates.ts',
       'config/sinks': 'src/commands/init/config/sinks.ts',
+      'services/sqd-abi': 'src/services/sqd-abi.ts',
     },
     outDir: 'dist',
     format: ['esm', 'cjs'],

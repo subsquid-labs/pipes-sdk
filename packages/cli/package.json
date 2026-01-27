@@ -32,6 +32,11 @@
       "types": "./dist/config/sinks.d.ts",
       "import": "./dist/config/sinks.js",
       "require": "./dist/config/sinks.cjs"
+    },
+    "./services/sqd-abi": {
+      "types": "./dist/services/sqd-abi.d.ts",
+      "import": "./dist/services/sqd-abi.js",
+      "require": "./dist/services/sqd-abi.cjs"
     }
   },
   "scripts": {
