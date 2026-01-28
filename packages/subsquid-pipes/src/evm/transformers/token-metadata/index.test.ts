@@ -239,8 +239,6 @@ describe('TokenInfo transfomer types', () => {
       )
     const secondPipe = firstPipe.pipe(tokens.enrich('contract'))
 
-    // .pipe(s => s.map(x => x.))
-
     expectTypeOf<typeof firstPipe>().toEqualTypeOf<
       PortalResult<{
         from: string
@@ -251,8 +249,8 @@ describe('TokenInfo transfomer types', () => {
     >()
 
     /**
-     * The enrich function returns a type that doesn't include any of the
-     * previous values of the interface, only contract and contractMetadata
+     * Previously the enrich function returned a type that didn't include any of the
+     * previous values of the interface, only `key` and `${key}Metadata`
      */
     expectTypeOf<typeof secondPipe>().toEqualTypeOf<
       PortalResult<
