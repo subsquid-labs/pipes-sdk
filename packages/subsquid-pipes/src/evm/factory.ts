@@ -47,9 +47,13 @@ export type FactoryOptions<T extends EventArgs> = {
   address: string | string[]
   event: AbiEvent<T> | EventWithArgsInput<AbiEvent<T>>
   parameter: keyof T | ((data: DecodedAbiEvent<T>) => string | null)
+  /** 
+   * It is safe to use `any` here because the FactoryPersistentAdapter generic argument
+   * will be inferred in the constructor of `Factory`
+   */
   database:
-    | FactoryPersistentAdapter<InternalFactoryEvent<T>>
-    | Promise<FactoryPersistentAdapter<InternalFactoryEvent<T>>>
+    | FactoryPersistentAdapter<InternalFactoryEvent<any>>
+    | Promise<FactoryPersistentAdapter<InternalFactoryEvent<any>>>
 }
 
 export class Factory<T extends EventArgs> {
