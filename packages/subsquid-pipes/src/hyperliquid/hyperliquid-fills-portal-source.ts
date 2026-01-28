@@ -1,26 +1,24 @@
 import { cast } from '@subsquid/util-internal-validation'
+
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
+import * as hl from '~/portal-client/query/hyperliquid-fills.js'
+
 import {
-  createDefaultLogger,
-  createTransformer,
-  Logger,
   LogLevel,
+  Logger,
   PortalCache,
   PortalRange,
   PortalSource,
-  Transformer,
+  createDefaultLogger,
+  createTransformer,
 } from '../core/index.js'
-import { getBlockSchema, hyperliquidFills, PortalClientOptions } from '../portal-client/index.js'
+import { PortalClientOptions, getBlockSchema } from '../portal-client/index.js'
 import { HyperliquidFillsQueryBuilder } from './hyperliquid-fills-query-builder.js'
 
-export type HyperliquidFillsTransformer<In, Out> = Transformer<In, Out, HyperliquidFillsQueryBuilder>
+export type HyperliquidFillsPortalData<F extends hl.FieldSelection> = hl.Block<F>[]
 
-export type HyperliquidFillsPortalData<F extends hyperliquidFills.FieldSelection> = {
-  blocks: hyperliquidFills.Block<F>[]
-}
-
-export function hyperliquidFillsPortalSource<F extends hyperliquidFills.FieldSelection = any>({
+export function hyperliquidFillsPortalSource<F extends hl.FieldSelection = any>({
   portal,
   query,
   cache,
@@ -35,21 +33,19 @@ export function hyperliquidFillsPortalSource<F extends hyperliquidFills.FieldSel
   logger?: Logger | LogLevel
   progress?: ProgressTrackerOptions
 }) {
-  logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ level: logger })
-
+  //FIXME STREAMS
   return new PortalSource<HyperliquidFillsQueryBuilder<F>, HyperliquidFillsPortalData<F>>({
     portal,
     query: !query
       ? new HyperliquidFillsQueryBuilder<F>()
       : query instanceof HyperliquidFillsQueryBuilder
         ? query
-        : new HyperliquidFillsQueryBuilder<F>().addRange(query),
+        : new HyperliquidFillsQueryBuilder<F>(),
     cache,
     logger,
     metrics,
     transformers: [
       progressTracker({
-        logger,
         interval: progress?.interval,
         onStart: progress?.onStart,
         onProgress: progress?.onProgress,
@@ -57,11 +53,9 @@ export function hyperliquidFillsPortalSource<F extends hyperliquidFills.FieldSel
       createTransformer<HyperliquidFillsPortalData<F>, HyperliquidFillsPortalData<F>>({
         profiler: { id: 'normalize data' },
         transform: (data, ctx) => {
-          const schema = getBlockSchema<hyperliquidFills.Block<F>>(ctx.query.raw)
+          const schema = getBlockSchema<hl.Block<F>>(ctx.query.raw)
 
-          data.blocks = data.blocks.map((b) => cast(schema, b))
-
-          return data
+          return data.map((b) => cast(schema, b))
         },
       }),
     ],

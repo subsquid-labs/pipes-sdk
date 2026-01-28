@@ -1,5 +1,5 @@
-import { RpcLatencyWatcher, rpcLatencyWatcher } from '~/monitoring/index.js'
-import { WebSocketListener } from '~/monitoring/rpc-latency/ws-client.js'
+import { evmQuery } from '~/evm/evm-query-builder.js'
+import { RpcLatencyWatcher, WebSocketListener, rpcLatencyWatcher } from '~/monitoring/index.js'
 
 class EvmRpcLatencyWatcher extends RpcLatencyWatcher {
   watch(url: string) {
@@ -28,5 +28,12 @@ class EvmRpcLatencyWatcher extends RpcLatencyWatcher {
 }
 
 export function evmRpcLatencyWatcher({ rpcUrl }: { rpcUrl: string[] }) {
-  return rpcLatencyWatcher(new EvmRpcLatencyWatcher(rpcUrl))
+  return evmQuery()
+    .addFields({
+      block: {
+        number: true,
+        timestamp: true,
+      },
+    })
+    .build(rpcLatencyWatcher(new EvmRpcLatencyWatcher(rpcUrl)))
 }

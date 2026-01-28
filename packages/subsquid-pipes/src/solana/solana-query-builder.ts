@@ -1,7 +1,21 @@
-import { parsePortalRange } from '~/core/index.js'
+import { QueryAwareTransformer, Subset, parsePortalRange } from '~/core/index.js'
 import { mergeDeep } from '~/internal/object/merge-deep.js'
-import { concatQueryLists, QueryBuilder, Range, RequestOptions, Subset } from '../core/query-builder.js'
-import { solana } from '../portal-client/index.js'
+
+import { QueryBuilder, QueryTransformerOpts, Range, RequestOptions, concatQueryLists } from '../core/query-builder.js'
+import * as solana from '../portal-client/query/solana.js'
+import { SolanaPortalData } from './solana-portal-source.js'
+
+type SolanaTransformerOpts<F extends solana.FieldSelection, Out> = QueryTransformerOpts<
+  SolanaPortalData<F>,
+  Out,
+  SolanaQueryBuilder<F>
+>
+
+type SolanaTransformerOut<F extends solana.FieldSelection, Out> = QueryAwareTransformer<
+  SolanaPortalData<F>,
+  Out,
+  SolanaQueryBuilder<F>
+>
 
 // biome-ignore lint/complexity/noBannedTypes: <it is a default generic constraint>
 export class SolanaQueryBuilder<F extends solana.FieldSelection = {}> extends QueryBuilder<F, solana.DataRequest> {
@@ -9,7 +23,7 @@ export class SolanaQueryBuilder<F extends solana.FieldSelection = {}> extends Qu
     return 'solana'
   }
 
-  addFields<T extends Subset<T, solana.FieldSelection>>(fields: T): SolanaQueryBuilder<F & T> {
+  addFields<T extends solana.FieldSelection>(fields: Subset<T, solana.FieldSelection>): SolanaQueryBuilder<F & T> {
     this.fields = mergeDeep(this.fields, fields)
 
     return this as unknown as SolanaQueryBuilder<F & T>
@@ -69,4 +83,14 @@ export class SolanaQueryBuilder<F extends solana.FieldSelection = {}> extends Qu
     }
     return res
   }
+
+  override build<Out>({ setupQuery, ...options }: SolanaTransformerOpts<F, Out>): SolanaTransformerOut<F, Out> {
+    setupQuery = setupQuery ? setupQuery : ({ query }) => query.merge(this)
+
+    return new QueryAwareTransformer(setupQuery, options as any)
+  }
+}
+
+export function solanaQuery() {
+  return new SolanaQueryBuilder()
 }

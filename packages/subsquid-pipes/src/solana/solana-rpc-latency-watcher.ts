@@ -1,5 +1,5 @@
-import { RpcLatencyWatcher, rpcLatencyWatcher } from '~/monitoring/index.js'
-import { WebSocketListener } from '~/monitoring/rpc-latency/ws-client.js'
+import { RpcLatencyWatcher, WebSocketListener, rpcLatencyWatcher } from '~/monitoring/index.js'
+import { solanaQuery } from '~/solana/solana-query-builder.js'
 
 type Notification = {
   params?: {
@@ -68,5 +68,12 @@ class SolanaRpcLatencyWatcher extends RpcLatencyWatcher {
 }
 
 export function solanaRpcLatencyWatcher({ rpcUrl }: { rpcUrl: string[] }) {
-  return rpcLatencyWatcher(new SolanaRpcLatencyWatcher(rpcUrl))
+  return solanaQuery()
+    .addFields({
+      block: {
+        number: true,
+        timestamp: true,
+      },
+    })
+    .build(rpcLatencyWatcher(new SolanaRpcLatencyWatcher(rpcUrl)))
 }

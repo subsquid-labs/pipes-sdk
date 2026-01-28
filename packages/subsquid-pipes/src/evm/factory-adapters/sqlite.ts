@@ -4,7 +4,7 @@ import { SqliteOptions, SqliteSync, loadSqlite } from '~/drivers/sqlite/sqlite.j
 import { jsonParse, jsonStringify } from '~/internal/json.js'
 
 import { IndexedParams } from '../evm-decoder.js'
-import { FactoryPersistentAdapter, InternalFactoryEvent } from '../factory.js'
+import { EventArgs, FactoryPersistentAdapter, InternalFactoryEvent } from '../factory.js'
 
 type Row = {
   factory: string
@@ -17,7 +17,7 @@ type Row = {
 
 const VERSION = '1.0.0'
 
-class SqliteFactoryAdapter implements FactoryPersistentAdapter<InternalFactoryEvent<any>> {
+class SqliteFactoryAdapter<T extends EventArgs> implements FactoryPersistentAdapter<InternalFactoryEvent<T>> {
   #db: SqliteSync
   #lookupCache: Record<string, InternalFactoryEvent<any> | null> = {}
 
@@ -157,11 +157,6 @@ class SqliteFactoryAdapter implements FactoryPersistentAdapter<InternalFactoryEv
   }
 }
 
-export async function factorySqliteDatabase(options: SqliteOptions) {
-  return new SqliteFactoryAdapter(await loadSqlite(options), options)
+export async function factorySqliteDatabase<T extends EventArgs>(options: SqliteOptions) {
+  return new SqliteFactoryAdapter<T>(await loadSqlite(options), options)
 }
-
-/**
- *  @deprecated use `factorySqliteDatabase` instead
- */
-export const sqliteFactoryDatabase = factorySqliteDatabase

@@ -1,6 +1,7 @@
 import { Logger } from '~/core/logger.js'
+
 import { PortalBatch } from './portal-source.js'
-import { BlockCursor, Ctx } from './types.js'
+import { BlockCursor } from './types.js'
 
 export type Target<In> = {
   write: (writer: {

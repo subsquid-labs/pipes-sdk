@@ -3,53 +3,71 @@ import { cast } from '@subsquid/util-internal-validation'
 import {
   LogLevel,
   Logger,
+  Outputs,
   PortalCache,
-  PortalRange,
   PortalSource,
   Transformer,
   createDefaultLogger,
   createTransformer,
+  mergeOutputs,
 } from '~/core/index.js'
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
 
-import { PortalClient, PortalClientOptions, evm, getBlockSchema } from '../portal-client/index.js'
-import { EvmQueryBuilder } from './evm-query-builder.js'
+import { PortalClient, PortalClientOptions, getBlockSchema } from '../portal-client/index.js'
+import * as evm from '../portal-client/query/evm.js'
+import { EvmPortalData, EvmQueryBuilder } from './evm-query-builder.js'
 
-export type EvmTransformer<In, Out> = Transformer<In, Out, EvmQueryBuilder>
+export type EvmFieldSelection = evm.FieldSelection
 
-export type EvmPortalData<F extends evm.FieldSelection> = { blocks: evm.Block<F>[] }
+export type EvmOutputs = Outputs<evm.FieldSelection, EvmQueryBuilder<any>>
 
-export function evmPortalSource<F extends evm.FieldSelection = any>({
+type EvmPortalStream<T extends EvmOutputs> =
+  T extends EvmQueryBuilder<infer Q>
+    ? EvmPortalData<Q>
+    : T extends Transformer<any, infer O>
+      ? O
+      : T extends Record<string, Transformer<any, any> | EvmQueryBuilder<any>>
+        ? {
+            [K in keyof T]: T[K] extends Transformer<any, infer O>
+              ? O
+              : T[K] extends EvmQueryBuilder<infer Q>
+                ? EvmPortalData<Q>
+                : never
+          }
+        : never
+
+export function evmPortalSource<Out extends EvmOutputs>({
+  id,
   portal,
-  query,
+  outputs,
   cache,
   logger,
   metrics,
   progress,
 }: {
+  id?: string
   portal: string | PortalClientOptions | PortalClient
-  query?: PortalRange | EvmQueryBuilder<F>
+  outputs: Out
   cache?: PortalCache
   metrics?: MetricsServer
   logger?: Logger | LogLevel
   progress?: ProgressTrackerOptions
 }) {
-  logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ level: logger })
+  type F = { block: { hash: true; number: true } }
+  const query = new EvmQueryBuilder<F>().addFields({
+    block: { hash: true, number: true },
+  })
 
-  return new PortalSource<EvmQueryBuilder<F>, EvmPortalData<F>>({
+  return new PortalSource<EvmQueryBuilder<F>, EvmPortalStream<Out>>({
+    id,
     portal,
-    query: !query
-      ? new EvmQueryBuilder<F>()
-      : query instanceof EvmQueryBuilder
-        ? query
-        : new EvmQueryBuilder<F>().addRange(query),
+    query,
     cache,
     logger,
     metrics,
     transformers: [
       progressTracker({
-        logger,
         interval: progress?.interval,
         onStart: progress?.onStart,
         onProgress: progress?.onProgress,
@@ -59,16 +77,10 @@ export function evmPortalSource<F extends evm.FieldSelection = any>({
         transform: (data, ctx) => {
           const schema = getBlockSchema<evm.Block<F>>(ctx.query.raw)
 
-          data.blocks = data.blocks.map((b) => cast(schema, b))
-
-          return data
+          return data.map((b) => cast(schema, b))
         },
       }),
+      mergeOutputs(outputs),
     ],
   })
 }
-
-/**
- *  @deprecated use `evmPortalSource` instead
- */
-export const createEvmPortalSource = evmPortalSource

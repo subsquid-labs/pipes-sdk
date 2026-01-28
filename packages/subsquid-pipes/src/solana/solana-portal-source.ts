@@ -1,53 +1,72 @@
 import { cast } from '@subsquid/util-internal-validation'
+
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
+import { PortalClientOptions, getBlockSchema } from '~/portal-client/index.js'
+import * as solana from '~/portal-client/query/solana.js'
+
 import {
-  createDefaultLogger,
-  createTransformer,
-  Logger,
   LogLevel,
+  Logger,
+  Outputs,
   PortalCache,
-  PortalRange,
   PortalSource,
   Transformer,
+  createDefaultLogger,
+  createTransformer,
+  mergeOutputs,
 } from '../core/index.js'
-import { getBlockSchema, PortalClientOptions, solana } from '../portal-client/index.js'
 import { SolanaQueryBuilder } from './solana-query-builder.js'
 
-export type SolanaTransformer<In, Out> = Transformer<In, Out, SolanaQueryBuilder>
+export type SolanaFieldSelection = solana.FieldSelection
 
-export type SolanaPortalData<F extends solana.FieldSelection> = { blocks: solana.Block<F>[] }
+export type SolanaPortalData<F extends solana.FieldSelection> = solana.Block<F>[]
 
-export function solanaPortalSource<F extends solana.FieldSelection = any>({
+type SolanaOutputs = Outputs<solana.FieldSelection, SolanaQueryBuilder<any>>
+
+type SolanaPortalStream<T extends SolanaOutputs> =
+  T extends SolanaQueryBuilder<infer Q>
+    ? SolanaPortalData<Q>
+    : T extends Transformer<any, infer O>
+      ? O
+      : T extends Record<string, Transformer<any, any> | SolanaQueryBuilder<any>>
+        ? {
+            [K in keyof T]: T[K] extends Transformer<any, infer O>
+              ? O
+              : T[K] extends SolanaQueryBuilder<infer Q>
+                ? SolanaPortalData<Q>
+                : never
+          }
+        : never
+
+export function solanaPortalSource<Out extends SolanaOutputs>({
   portal,
-  query,
+  outputs,
   cache,
   logger,
   metrics,
   progress,
 }: {
   portal: string | PortalClientOptions
-  query?: PortalRange | SolanaQueryBuilder<F>
+  outputs: Out
   cache?: PortalCache
   metrics?: MetricsServer
   logger?: Logger | LogLevel
   progress?: ProgressTrackerOptions
 }) {
-  logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ level: logger })
+  type F = { block: { hash: true; number: true } }
+  const query = new SolanaQueryBuilder<F>().addFields({
+    block: { hash: true, number: true },
+  })
 
-  return new PortalSource<SolanaQueryBuilder<F>, SolanaPortalData<F>>({
+  return new PortalSource<SolanaQueryBuilder<F>, SolanaPortalStream<Out>>({
     portal,
-    query: !query
-      ? new SolanaQueryBuilder<F>()
-      : query instanceof SolanaQueryBuilder
-        ? query
-        : new SolanaQueryBuilder<F>().addRange(query),
+    query,
     cache,
     logger,
     metrics,
     transformers: [
       progressTracker({
-        logger,
         interval: progress?.interval,
         onStart: progress?.onStart,
         onProgress: progress?.onProgress,
@@ -57,16 +76,10 @@ export function solanaPortalSource<F extends solana.FieldSelection = any>({
         transform: (data, ctx) => {
           const schema = getBlockSchema<solana.Block<F>>(ctx.query.raw)
 
-          data.blocks = data.blocks.map((b) => cast(schema, b))
-
-          return data
+          return data.map((b) => cast(schema, b))
         },
       }),
+      mergeOutputs(outputs),
     ],
   })
 }
-
-/**
- *  @deprecated use `solanaPortalSource` instead
- */
-export const createSolanaPortalSource = solanaPortalSource

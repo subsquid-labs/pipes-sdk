@@ -114,6 +114,18 @@
       "types": "./dist/metrics/node/index.d.ts",
       "import": "./dist/metrics/node/index.js",
       "require": "./dist/metrics/node/index.cjs"
+    },
+    "./runtime/node": {
+      "browser": "./dist/runtime/node/browser.js",
+      "types": "./dist/runtime/node/index.d.ts",
+      "import": "./dist/runtime/node/index.js",
+      "require": "./dist/runtime/node/index.cjs"
+    },
+    "./runtime/node/context": {
+      "browser": "./dist/runtime/node/browser_context.js",
+      "types": "./dist/runtime/node/context.d.ts",
+      "import": "./dist/runtime/node/context.js",
+      "require": "./dist/runtime/node/context.cjs"
     }
   },
   "typesVersions": {
@@ -144,6 +156,9 @@
       ],
       "metrics/node": [
         "./dist/metrics/node/index.d.ts"
+      ],
+      "runtime/node": [
+        "./dist/runtime/node/index.d.ts"
       ]
     }
   }
