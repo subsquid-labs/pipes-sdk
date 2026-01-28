@@ -563,7 +563,7 @@ describe('Factory', () => {
         event: factoryAbi.PoolCreated,
         params: {
           // Parameter in different case than emitted event
-          token0: '0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8'.toUpperCase(),
+          token0: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'.toUpperCase(),
           token1: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'.toUpperCase(),
         },
       },
@@ -674,7 +674,7 @@ describe('Factory types', () => {
       database: factorySqliteDatabase({ path: ':memory:' }),
     })
 
-    type Result = Awaited<ReturnType<typeof poolFactory['getContract']>>
+    type Result = Awaited<ReturnType<(typeof poolFactory)['getContract']>>
     type Expected = FactoryEvent<{
       readonly token0: string
       readonly token1: string
