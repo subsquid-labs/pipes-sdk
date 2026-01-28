@@ -1,5 +1,6 @@
 import { toCamelCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
+
 import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
 
 export const schemasTemplate = `{{#mergedImports}}

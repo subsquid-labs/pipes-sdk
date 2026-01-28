@@ -1,9 +1,11 @@
 import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
+
 import { NetworkType, PipeTemplateMeta } from '~/types/init.js'
-import { BaseSinkBuilder } from './base-sink-builder.js'
+
 import { clickhouseDefaults } from '../../templates/config-files/dynamic/docker-compose.js'
 import { CustomTemplateParamsSchema } from '../../templates/pipes/evm/custom/template.config.js'
+import { BaseSinkBuilder } from './base-sink-builder.js'
 
 const sinkTemplate = `
 import path from 'node:path'
@@ -100,18 +102,20 @@ export class ClickhouseSinkBuilder extends BaseSinkBuilder {
   }
 
   async createMigrations(): Promise<void> {
-    this.config.templates
-      .forEach((t) => {
-        this.projectWriter.createFile(`migrations/${t.templateId}-migration.sql`, t.renderClickhouseTables())
-      })
+    this.config.templates.forEach((t) => {
+      this.projectWriter.createFile(`migrations/${t.templateId}-migration.sql`, t.renderClickhouseTables())
+    })
   }
 
   async createEnvFile(): Promise<void> {
-    this.projectWriter.createFile('.env', `CLICKHOUSE_URL=http://localhost:${clickhouseDefaults.port}
+    this.projectWriter.createFile(
+      '.env',
+      `CLICKHOUSE_URL=http://localhost:${clickhouseDefaults.port}
 CLICKHOUSE_DATABASE=${clickhouseDefaults.db}
 CLICKHOUSE_USER=${clickhouseDefaults.user}
 CLICKHOUSE_PASSWORD=${clickhouseDefaults.password}
-    `)
+    `,
+    )
   }
 
   getEnvSchema(): string {

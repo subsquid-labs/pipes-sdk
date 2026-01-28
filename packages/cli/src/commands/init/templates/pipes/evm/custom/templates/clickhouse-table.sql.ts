@@ -39,6 +39,7 @@ function getContractWithDbTypes(contracts: ContractMetadata[]) {
       tableName: toSnakeCase(`${c.contractName}_${e.name}`),
       inputs: e.inputs.map((i) => ({
         ...i,
+        name: toSnakeCase(i.name),
         dbType: evmToClickhouseType(i.type),
       })),
     })),
