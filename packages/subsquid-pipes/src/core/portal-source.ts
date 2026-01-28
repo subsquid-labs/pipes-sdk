@@ -1,5 +1,3 @@
-import { RuntimeContext, useRuntimeContext } from '$context'
-
 import {
   GetBlock,
   PortalClient,
@@ -74,6 +72,7 @@ export function cursorFromHeader(block: { header: { number: number; hash: string
 }
 
 export type PortalSourceOptions<Query> = {
+  id?: string
   portal: string | PortalClientOptions | PortalClient
   query: Query
   logger?: Logger | LogLevel
@@ -89,21 +88,21 @@ export type PortalSourceOptions<Query> = {
 }
 
 export class PortalSource<Q extends QueryBuilder<any>, T = any> {
+  readonly #id: string
   readonly #options: {
     profiler: boolean
     cache?: PortalCache
   }
   readonly #queryBuilder: Q
   readonly #logger: Logger
-  readonly #runtime?: RuntimeContext
   readonly #portal: PortalClient
   readonly #metricServer: MetricsServer
   readonly #transformers: Transformer<any, any>[] = []
   #started = false
 
-  constructor({ portal, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
-    this.#runtime = useRuntimeContext()
-    this.#logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ level: logger })
+  constructor({ portal, id, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
+    this.#id = id || 'stream'
+    this.#logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ id: this.#id, level: logger })
 
     this.#portal =
       portal instanceof PortalClient
@@ -134,7 +133,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       profiler: typeof options.profiler === 'undefined' ? process.env.NODE_ENV !== 'production' : options.profiler,
     }
 
-    this.#metricServer = options.metrics ?? this.#runtime?.metrics ?? noopMetricsServer()
+    this.#metricServer = options.metrics ?? noopMetricsServer()
     this.#transformers = options.transformers || []
   }
 
@@ -196,7 +195,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
           const ctx: BatchCtx = {
             // Batch metadata
-            id: this.#runtime?.id || metadata.dataset,
+            id: this.#id,
             meta: {
               bytesSize: batch.meta.bytes,
               requests: batch.meta.requests,

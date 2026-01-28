@@ -38,6 +38,7 @@ type EvmPortalStream<T extends EvmOutputs> =
         : never
 
 export function evmPortalSource<Out extends EvmOutputs>({
+  id,
   portal,
   outputs,
   cache,
@@ -45,6 +46,7 @@ export function evmPortalSource<Out extends EvmOutputs>({
   metrics,
   progress,
 }: {
+  id?: string
   portal: string | PortalClientOptions | PortalClient
   outputs: Out
   cache?: PortalCache
@@ -58,6 +60,7 @@ export function evmPortalSource<Out extends EvmOutputs>({
   })
 
   return new PortalSource<EvmQueryBuilder<F>, EvmPortalStream<Out>>({
+    id,
     portal,
     query,
     cache,

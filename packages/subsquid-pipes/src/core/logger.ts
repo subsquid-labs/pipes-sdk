@@ -1,5 +1,3 @@
-import { useRuntimeContext } from '$context'
-
 import pino, { Logger as PinoLogger } from 'pino'
 
 export type Logger = PinoLogger
@@ -11,18 +9,13 @@ function isEnvFalse(name: string): boolean {
   return val === 'false' || val === '0'
 }
 
-export function createDefaultLogger({ level }: { level?: LogLevel } = {}): Logger {
+export function createDefaultLogger({ id, level }: { level?: LogLevel; id?: string } = {}): Logger {
   const baseLevel = level !== false && level !== null ? level : 'silent'
-
-  const ctx = useRuntimeContext()
-
-  // If runtime already has a logger, use it
-  if (ctx?.logger) return ctx.logger
 
   const pretty = process.stdout?.isTTY && !isEnvFalse('LOG_PRETTY')
 
   return pino({
-    base: ctx ? { id: ctx.id } : undefined,
+    base: id ? { id } : undefined,
     messageKey: 'message',
     level: baseLevel ?? (process.env['LOG_LEVEL'] || 'info'),
     formatters: {

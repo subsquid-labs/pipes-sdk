@@ -6,7 +6,7 @@ import { arrayify, findDuplicates } from '~/internal/array.js'
 import { Log, LogRequest } from '~/portal-client/query/evm.js'
 
 import { evmQuery } from './evm-query-builder.js'
-import { DecodedAbiEvent, Factory } from './factory.js'
+import { Factory } from './factory.js'
 
 export type FactoryEvent<T> = {
   contract: string
@@ -96,7 +96,7 @@ export type EventResponse<T extends Events, F> = {
     // child event - extract from EventsMap normalized type
     AbiDecodeEvent<ExtractEventType<EventsMap<T>[K]>>,
     // factory event
-    F extends Factory<infer R> ? DecodedAbiEvent<R> : never
+    F extends Factory<infer R> ? AbiDecodeEvent<AbiEvent<R>> : never
   >[]
 }
 
@@ -346,7 +346,7 @@ export function evmDecoder<T extends Events, C extends Contracts>({
         await contracts.migrate()
       }
     },
-    transform: async (data, ctx) => {
+    transform: async (data, ctx): Promise<EventResponse<T, C>> => {
       const result = {} as EventResponse<T, C>
       // TODO: should use normalizedEvents instead of events here
       for (const eventName in events) {

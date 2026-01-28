@@ -471,7 +471,7 @@ describe('Factory', () => {
   it('should filter factory events by indexed parameters', async () => {
     mockPortal = await createMockPortal(FILTERED_FACTORY)
 
-    const db = await factorySqliteDatabase({ path: ':memory:' })
+    // const db = factorySqliteDatabase({ path: ':memory:' })
     const stream = evmPortalSource({
       portal: mockPortal.url,
       outputs: evmDecoder({
@@ -485,7 +485,7 @@ describe('Factory', () => {
             },
           },
           parameter: 'pool',
-          database: db,
+          database: factorySqliteDatabase({ path: ':memory:' }),
         }),
         events: {
           swaps: poolAbi.Swap,
@@ -498,8 +498,7 @@ describe('Factory', () => {
     // Should only decode swap from the pool created with WETH (first event)
     expect(res).toHaveLength(1)
     expect(res[0].contract).toBe('0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8')
-    // FIXME STREAMS
-    // expect(res[0].factory?.event.token0).toBe('0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
+    expect(res[0].factory?.event.token0).toBe('0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
   })
 
   /**
@@ -546,15 +545,13 @@ describe('Factory', () => {
     const firstRunRes = await readAll(firstRun)
     expect(firstRunRes).toHaveLength(1)
     expect(firstRunRes[0].contract).toBe('0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8')
-    // FIXME STREAMS
-    // expect(firstRunRes[0].factory?.event.token0).toBe(weth)
+    expect(firstRunRes[0].factory?.event.token0).toBe(weth)
 
     const secondRun = await getPipeline(usdt)
     const secondRunRes = await readAll(secondRun)
     expect(secondRunRes).toHaveLength(1)
     expect(secondRunRes[0].contract).toBe('0x9db9e0e53058c89e5b94e29621a205198648425b')
-    // FIXME STREAMS
-    // expect(secondRunRes[0].factory?.event.token0).toBe(usdt)
+    expect(secondRunRes[0].factory?.event.token0).toBe(usdt)
   })
 
   it('normalizes params when reading all contracts from database', async () => {
