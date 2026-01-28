@@ -1,11 +1,12 @@
 import { event, indexed } from '@subsquid/evm-abi'
 import * as p from '@subsquid/evm-codec'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, expectTypeOf, it } from 'vitest'
 
-import { closeMockPortal, createMockPortal, MockPortal, MockResponse, readAll } from '~/tests/index.js'
-import { evmDecoder, evmPortalSource } from '~/evm/index.js'
+import { PortalSource } from '~/core/portal-source.js'
+import { EvmQueryBuilder, evmDecoder, evmPortalSource } from '~/evm/index.js'
+import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/tests/index.js'
 
-import { tokenInfo, unknownToken, SqliteTokenStore } from './index.js'
+import { SqliteTokenStore, tokenInfo, unknownToken, WithMetadata } from './index.js'
 
 const erc20Transfer = event(
   '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
@@ -42,7 +43,7 @@ const TRANSFER_MOCK_RESPONSE: MockResponse[] = [
   },
 ]
 
-describe('tokenInfo', () => {
+describe('TokenInfo transformer', () => {
   let mockPortal: MockPortal
 
   afterEach(async () => {
@@ -213,5 +214,58 @@ describe('unknownToken', () => {
       name: 'Unknown Token',
       decimals: 18,
     })
+  })
+})
+
+describe('TokenInfo transfomer types', () => {
+  const tokens = tokenInfo({ rpc: 'http://localhost:8545' })
+
+  it('should preserve initial type when used in as input of a transformer', async () => {
+    type PortalResult<Out> = PortalSource<EvmQueryBuilder<any>, Out[]>
+
+    const mockPortal = await createMockPortal(TRANSFER_MOCK_RESPONSE)
+    const firstPipe = evmPortalSource({ portal: mockPortal.url })
+      .pipe(
+        evmDecoder({
+          range: { from: 0, to: 1 },
+          events: { transfers: erc20Transfer },
+        }),
+      )
+      .pipe((decoded) =>
+        decoded.transfers.map((t) => ({
+          ...t.event,
+          contract: t.contract,
+        })),
+      )
+    const secondPipe = firstPipe.pipe(tokens.enrich('contract'))
+
+    // .pipe(s => s.map(x => x.))
+
+    expectTypeOf<typeof firstPipe>().toEqualTypeOf<
+      PortalResult<{
+        from: string
+        to: string
+        value: bigint
+        contract: string
+      }>
+    >()
+
+    /**
+     * The enrich function returns a type that doesn't include any of the
+     * previous values of the interface, only contract and contractMetadata
+     */
+    expectTypeOf<typeof secondPipe>().toEqualTypeOf<
+      PortalResult<
+        WithMetadata<
+          {
+            from: string
+            to: string
+            value: bigint
+            contract: string
+          },
+          'contract'
+        >
+      >
+    >()
   })
 })

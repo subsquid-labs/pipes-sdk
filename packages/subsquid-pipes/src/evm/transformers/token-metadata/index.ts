@@ -1,19 +1,12 @@
 import pThrottle, { ThrottledFunction } from 'p-throttle'
 import { inspect } from 'util'
-import {
-  type Address,
-  BaseError,
-  createPublicClient,
-  erc20Abi,
-  http,
-  PublicClient,
-  RawContractError,
-} from 'viem'
+import { type Address, BaseError, createPublicClient, erc20Abi, http, PublicClient, RawContractError } from 'viem'
 import { createDefaultLogger, type LogLevel, type Logger } from '~/core/logger.js'
 import { EvmMulticallAddress } from '~/evm/transformers/token-metadata/constants.js'
 import { LFUCache } from './lfu-cache.js'
 import { Token } from './types.js'
 import { TokenStore } from './stores/types.js'
+import { createTransformer } from '~/core/transformer.js'
 
 const TOKEN_BATCH_SIZE = 100
 const MAX_CACHE_SIZE = 2_000_000
@@ -37,6 +30,17 @@ export function unknownToken(address: string): Token {
 
 /** ERC20 token info (name, symbol, decimals) */
 export type { Token } from './types.js'
+
+export type StringValuedKeys<T extends object> = Extract<
+  {
+    [K in keyof T]-?: T[K] extends string ? K : never
+  }[keyof T],
+  string
+>
+
+export type WithMetadata<T extends object, K extends StringValuedKeys<T>> = T & {
+  [P in K as `${P}Metadata`]: Token | undefined
+}
 
 /**
  * Configuration options for the token info service.
@@ -125,10 +129,7 @@ export class TokenInfo {
   private readonly retryDelayMs: number
 
   constructor(private readonly options: TokenInfoOptions) {
-    this.logger =
-      options.logger && typeof options.logger !== 'string'
-        ? options.logger
-        : createDefaultLogger()
+    this.logger = options.logger && typeof options.logger !== 'string' ? options.logger : createDefaultLogger()
 
     this.maxRetries = options.maxRetries ?? 3
     this.retryDelayMs = options.retryDelayMs ?? 200
@@ -229,39 +230,37 @@ export class TokenInfo {
    * // Adds both token0Metadata and token1Metadata
    * ```
    */
-  enrich<K extends string>(
-    key: K | K[],
-  ): <T extends Record<K, string>>(items: T[]) => Promise<(T & { [P in K as `${P}Metadata`]: Token | undefined })[]> {
-    const keys = Array.isArray(key) ? key : [key]
+  enrich<T extends object, K extends StringValuedKeys<T>>(key: K | K[]) {
+    const keys = typeof key === 'string' ? [key] : key
 
-    return async <T extends Record<K, string>>(items: T[]) => {
-      // Collect all addresses
-      const addresses = keys.flatMap((k) =>
-        items.map((item) => {
-          const value = item[k]
-          if (typeof value !== 'string') {
-            throw new TypeError(
-              `Expected '${k}' to be a string address, got ${typeof value}`,
-            )
+    return createTransformer<T[], WithMetadata<T, K>[]>({
+      transform: async (items) => {
+        // Collect all addresses
+        const addresses = keys.flatMap((k) =>
+          items.map((item) => {
+            const value = item[k]
+            if (typeof value !== 'string') {
+              throw new TypeError(`Expected '${k}' to be a string address, got ${typeof value}`)
+            }
+            return value
+          }),
+        )
+
+        const metadata = await this.get(addresses)
+
+        return items.map((item) => {
+          const enriched = { ...item } as WithMetadata<T, K>
+
+          for (const k of keys) {
+            const address = (item[k] as string).toLowerCase()
+            const metadataKey = `${k}Metadata`
+            ;(enriched as Record<string, unknown>)[metadataKey] = metadata.get(address)
           }
-          return value
-        }),
-      )
 
-      const metadata = await this.get(addresses)
-
-      return items.map((item) => {
-        const enriched = { ...item } as T & { [P in K as `${P}Metadata`]: Token | undefined }
-
-        for (const k of keys) {
-          const address = item[k].toLowerCase()
-          const metadataKey = `${k}Metadata`
-          ;(enriched as Record<string, unknown>)[metadataKey] = metadata.get(address)
-        }
-
-        return enriched
-      })
-    }
+          return enriched
+        })
+      },
+    })
   }
 
   // ==========================================================================
@@ -274,8 +273,7 @@ export class TokenInfo {
     if (!this.initPromise) {
       this.initPromise = (async () => {
         if (this.options.store) {
-          this.store =
-            this.options.store instanceof Promise ? await this.options.store : this.options.store
+          this.store = this.options.store instanceof Promise ? await this.options.store : this.options.store
           await this.store.migrate()
         }
         this.initialized = true
@@ -306,9 +304,7 @@ export class TokenInfo {
       } catch (err) {
         lastError = err
         if (attempt < this.maxRetries) {
-          this.logger.warn(
-            `Token info operation failed (attempt ${attempt}/${this.maxRetries}), retrying...`,
-          )
+          this.logger.warn(`Token info operation failed (attempt ${attempt}/${this.maxRetries}), retrying...`)
           if (this.retryDelayMs > 0) {
             await new Promise((r) => setTimeout(r, this.retryDelayMs))
           }
@@ -396,15 +392,16 @@ export class TokenInfo {
   private async executeMulticall(
     addresses: string[],
   ): Promise<Record<string, { decimals: number; symbol: string; name: string }>> {
-    const calls = addresses.flatMap((address) => [
-      { address: address as Address, abi: erc20Abi, functionName: 'decimals' },
-      { address: address as Address, abi: erc20Abi, functionName: 'symbol' },
-      { address: address as Address, abi: erc20Abi, functionName: 'name' },
-    ] as const)
+    const calls = addresses.flatMap(
+      (address) =>
+        [
+          { address: address as Address, abi: erc20Abi, functionName: 'decimals' },
+          { address: address as Address, abi: erc20Abi, functionName: 'symbol' },
+          { address: address as Address, abi: erc20Abi, functionName: 'name' },
+        ] as const,
+    )
 
-    type MulticallResult =
-      | { status: 'success'; result: unknown }
-      | { status: 'failure'; error: Error }
+    type MulticallResult = { status: 'success'; result: unknown } | { status: 'failure'; error: Error }
 
     const results = (await this.multicall({
       contracts: calls,
@@ -511,7 +508,7 @@ export class TokenInfo {
         'shortMessage' in err &&
         typeof (err as { shortMessage: unknown }).shortMessage === 'string'
       ) {
-        const msg = ((err as { shortMessage: string }).shortMessage).toLowerCase()
+        const msg = (err as { shortMessage: string }).shortMessage.toLowerCase()
         if (msg.includes('execution reverted') || msg.includes('no data')) {
           isMissing = true
         }
