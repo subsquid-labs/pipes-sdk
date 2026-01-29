@@ -1,8 +1,10 @@
 import { execSync } from 'node:child_process'
+
 import { Address, address as toSvmAddress } from '@solana/addresses'
 import { RpcClient } from '@subsquid/rpc-client'
 import { fetchIdl } from '@subsquid/solana-typegen/lib/util/fetch.js'
 import { toCamelCase } from 'drizzle-orm/casing'
+
 import { getEvmChainId, getNetworkFromChainId } from '~/commands/init/config/networks.js'
 import { NetworkType } from '~/types/init.js'
 
@@ -111,8 +113,7 @@ class EvmAbiService extends AbiService {
       const data = (await res.json()) as BaseProxyRes<{ ContractName: string; ABI: string }[]>
       const [contractData] = data.result
 
-      if (!this.isContractVerified(contractData.ABI))
-        throw new ContractCodeNotVerifiedError(address, chainid)
+      if (!this.isContractVerified(contractData.ABI)) throw new ContractCodeNotVerifiedError(address, chainid)
 
       return {
         contractAddress: address,
@@ -194,6 +195,8 @@ class SvmAbiService extends AbiService {
 export class ContractCodeNotVerifiedError extends Error {
   constructor(contractAddress: string, chainId: string) {
     const network = getNetworkFromChainId(chainId)
-    super(`The contract code for ${contractAddress} is not verified on ${network.name}. Does this contract exist on ${network.name}?`)
+    super(
+      `The contract code for ${contractAddress} is not verified on ${network.name}. Does this contract exist on ${network.name}?`,
+    )
   }
 }
