@@ -74,6 +74,11 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./runner": {
+      "types": "./dist/runner/index.d.ts",
+      "import": "./dist/runner/index.js",
+      "require": "./dist/runner/index.cjs"
+    },
     "./evm": {
       "browser": "./dist/evm/browser.js",
       "types": "./dist/evm/index.d.ts",

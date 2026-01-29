@@ -107,6 +107,7 @@ export function metricsServer({ port = 9090, enabled = true, logger }: MetricsSe
   const registry = new client.Registry()
   const app = express()
   let server: Server | undefined = undefined
+  let isRunning = false
 
   client.collectDefaultMetrics({
     register: registry,
@@ -202,12 +203,15 @@ export function metricsServer({ port = 9090, enabled = true, logger }: MetricsSe
     },
 
     start: async () => {
+      if (isRunning) return
       if (!enabled) return
 
       server = app.listen(port)
+      isRunning = true
 
       logger?.info(`🦑 Metrics server started at http://localhost:${port}`)
     },
+
     stop: async () => {
       client.register.clear()
 
@@ -215,7 +219,12 @@ export function metricsServer({ port = 9090, enabled = true, logger }: MetricsSe
         if (!server) return done()
 
         server.close((_) => done())
+        isRunning = false
       })
+    },
+
+    isRunning: async () => {
+      return isRunning
     },
 
     addBatchContext(ctx: BatchCtx) {

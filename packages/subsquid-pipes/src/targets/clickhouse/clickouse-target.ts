@@ -1,6 +1,7 @@
 import type { ClickHouseClient } from '@clickhouse/client'
 
-import { BlockCursor, Ctx, createTarget, Logger } from '~/core/index.js'
+import { BlockCursor, Ctx, Logger, createTarget } from '~/core/index.js'
+
 import { ClickhouseState } from './clickhouse-state.js'
 import { ClickhouseStore } from './clickhouse-store.js'
 
@@ -59,8 +60,11 @@ export function clickhouseTarget<T>({
   const state = new ClickhouseState(store, settings)
 
   return createTarget<T>({
-    write: async ({ read, logger }) => {
+    write: async ({ read, logger, runnerCtx }) => {
+      if (runnerCtx) state.setId(runnerCtx.id)
+
       await onStart?.({ store, logger })
+
       const cursor = await state.getCursor()
 
       if (cursor) {
