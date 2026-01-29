@@ -15,6 +15,7 @@ import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker
 
 import { PortalClient, PortalClientOptions, evm, getBlockSchema } from '../portal-client/index.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
+import { RunnerCtx } from '~/runner/runner.js'
 
 export type EvmTransformer<In, Out> = Transformer<In, Out, EvmQueryBuilder>
 
@@ -27,6 +28,7 @@ export function evmPortalSource<F extends evm.FieldSelection = any>({
   logger,
   metrics,
   progress,
+  runnerCtx,
 }: {
   portal: string | PortalClientOptions | PortalClient
   query?: PortalRange | EvmQueryBuilder<F>
@@ -34,6 +36,7 @@ export function evmPortalSource<F extends evm.FieldSelection = any>({
   metrics?: MetricsServer
   logger?: Logger | LogLevel
   progress?: ProgressTrackerOptions
+  runnerCtx?: RunnerCtx
 }) {
   logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ level: logger })
 
@@ -47,6 +50,7 @@ export function evmPortalSource<F extends evm.FieldSelection = any>({
     cache,
     logger,
     metrics,
+    runnerCtx,
     transformers: [
       progressTracker({
         logger,

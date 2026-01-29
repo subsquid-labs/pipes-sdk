@@ -17,6 +17,7 @@ import { QueryBuilder, hashQuery } from './query-builder.js'
 import { Target } from './target.js'
 import { Transformer, TransformerOptions } from './transformer.js'
 import { BlockCursor, Ctx } from './types.js'
+import { RunnerCtx } from '~/runner/runner.js'
 
 const NOT_REAL_TIME_WARNING = (name: string) => {
   return formatWarning({
@@ -79,6 +80,7 @@ export type PortalSourceOptions<Query> = {
   cache?: PortalCache
   transformers?: Transformer<any, any>[]
   metrics?: MetricsServer
+  runnerCtx?: RunnerCtx
   progress?: {
     interval?: number
     onStart?: (data: StartState) => void
@@ -96,10 +98,11 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   readonly #portal: PortalClient
   readonly #metricServer: MetricsServer
   readonly #transformers: Transformer<any, any>[]
+  readonly #runnerCtx?: RunnerCtx
 
   #started = false
 
-  constructor({ portal, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
+  constructor({ portal, query, logger, progress, runnerCtx, ...options }: PortalSourceOptions<Q>) {
     this.#portal =
       portal instanceof PortalClient
         ? portal
@@ -130,6 +133,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     }
     this.#metricServer = options.metrics ?? noopMetricsServer()
     this.#metricServer.setLogger?.(this.#logger)
+    this.#runnerCtx = runnerCtx
 
     this.#transformers = options.transformers || []
   }
@@ -286,6 +290,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       profiler: this.#options.profiler,
       cache: this.#options.cache,
       metrics: this.#metricServer,
+      runnerCtx: this.#runnerCtx,
       transformers: [...this.#transformers, transformer],
     })
   }
@@ -386,6 +391,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     const self = this
 
     return target.write({
+      runnerCtx: this.#runnerCtx,
       logger: this.#logger,
       read: async function* (cursor?: BlockCursor) {
         await self.configure()
