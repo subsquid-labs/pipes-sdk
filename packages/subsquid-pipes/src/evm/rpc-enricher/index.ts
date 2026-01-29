@@ -1,4 +1,4 @@
-export { LFUCache } from './lfu-cache.js'
+export { LFUCache } from '~/internal/lfu-cache.js'
 export {
   MULTICALL3_ADDRESS,
   type MulticallRequest,

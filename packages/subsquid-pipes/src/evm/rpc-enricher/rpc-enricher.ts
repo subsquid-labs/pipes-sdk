@@ -4,8 +4,8 @@ import type { Codec, Struct } from '@subsquid/evm-codec'
 import type { Logger } from '~/core/logger.js'
 import type { BatchCtx } from '~/core/portal-source.js'
 import { type Transformer, createTransformer } from '~/core/transformer.js'
+import { LFUCache } from '~/internal/lfu-cache.js'
 
-import { LFUCache } from './lfu-cache.js'
 import { MULTICALL3_ADDRESS, type MulticallRequest } from './multicall.js'
 import { RpcClient } from './rpc-client.js'
 
@@ -20,12 +20,12 @@ type ExtractFunctionName<S extends string> = S extends `${infer Name}(${string})
  * Build a typed object from an array of AbiFunction definitions,
  * where keys are function names and values are their return types.
  */
-type RpcDataResult<Methods extends readonly AnyAbiFunction[]> = {
+type ContractStateResult<Methods extends readonly AnyAbiFunction[]> = {
   [F in Methods[number] as ExtractFunctionName<F['signature']>]?: FunctionReturn<F>
 }
 
 export type EnrichedItem<T, Methods extends readonly AnyAbiFunction[]> = T & {
-  rpcData: RpcDataResult<Methods>
+  contractState: ContractStateResult<Methods>
 }
 
 /** Default cache capacity - stores up to 10,000 unique contract addresses */
@@ -174,8 +174,8 @@ function validateZeroArgMethod(func: AnyAbiFunction): void {
  * symbol, decimals) using Multicall3 for batching. Results are cached using an LFU cache.
  *
  * **Failure handling:**
- * - If an RPC endpoint is unreachable, items are returned with empty `rpcData`
- * - If a contract doesn't implement a method, that method is omitted from `rpcData`
+ * - If an RPC endpoint is unreachable, items are returned with empty `contractState`
+ * - If a contract doesn't implement a method, that method is omitted from `contractState`
  * - Rate limiting triggers automatic retries with exponential backoff
  *
  * **Fork handling:**
@@ -204,7 +204,7 @@ function validateZeroArgMethod(func: AnyAbiFunction): void {
  *
  * for await (const { data } of stream) {
  *   for (const transfer of data.transfers) {
- *     console.log(transfer.rpcData) // { name: 'USD Coin', symbol: 'USDC', decimals: 6 }
+ *     console.log(transfer.contractState) // { name: 'USD Coin', symbol: 'USDC', decimals: 6 }
  *   }
  * }
  * ```
@@ -230,29 +230,27 @@ export function rpcEnricher<
   } = options
 
   // Validate methods at construction time
+  if (methods.length === 0) {
+    throw new Error('rpcEnricher requires at least one method')
+  }
+
   for (const method of methods) {
     validateZeroArgMethod(method)
   }
 
   const urls = Array.isArray(rpcUrls) ? rpcUrls : [rpcUrls]
-  const hasNoMethods = methods.length === 0
 
   // Create a short hash of method signatures for cache key
   // This ensures cache keys are unique per method set
   const methodsKey = methods.map((m) => m.sighash).sort().join('')
 
-  let cache: LFUCache<RpcDataResult<readonly AnyAbiFunction[]>> | undefined
+  let cache: LFUCache<ContractStateResult<readonly AnyAbiFunction[]>> | undefined
   let rpcClient: RpcClient | undefined
 
   return createTransformer({
     profiler: { id: profilerId },
 
     start: async ({ logger }) => {
-      if (hasNoMethods) {
-        logger.debug('RPC enricher initialized with no methods - will return empty rpcData')
-        return
-      }
-
       cache = new LFUCache(cacheCapacity)
       rpcClient = new RpcClient({
         urls,
@@ -277,18 +275,9 @@ export function rpcEnricher<
         result[key] = [] as unknown as EnrichedItem<T[typeof key][number], Methods>[]
       }
 
-      // If no methods configured, return items with existing rpcData preserved
-      if (hasNoMethods || !cache || !rpcClient) {
-        for (const key of Object.keys(data) as (keyof T)[]) {
-          for (const item of data[key]) {
-            const existingRpcData = (item as { rpcData?: object }).rpcData || {}
-            result[key].push({
-              ...item,
-              rpcData: existingRpcData as RpcDataResult<Methods>,
-            } as EnrichedItem<T[typeof key][number], Methods>)
-          }
-        }
-        return result
+      // Ensure cache and rpcClient are available (should be set by start())
+      if (!cache || !rpcClient) {
+        throw new Error('rpcEnricher: cache or rpcClient not initialized. Was start() called?')
       }
 
       // Collect all items with their original positions to preserve order
@@ -413,23 +402,23 @@ export function rpcEnricher<
       for (const [key, items] of itemsByKey) {
         // Items are already in order since we iterated in order
         for (const { item, cacheKey } of items) {
-          // Start with existing rpcData from previous enrichers
-          const existingRpcData = (item as { rpcData?: object }).rpcData || {}
-          let newRpcData: RpcDataResult<Methods> = {} as RpcDataResult<Methods>
+          // Start with existing contractState from previous enrichers
+          const existingContractState = (item as { contractState?: object }).contractState || {}
+          let newContractState: ContractStateResult<Methods> = {} as ContractStateResult<Methods>
 
           if (cacheKey) {
             // Try to get cached data even if there was a fetch error
             // This preserves data for entries that were cached before the error
             const cached = cache.get(cacheKey)
             if (cached !== undefined) {
-              newRpcData = cached as RpcDataResult<Methods>
+              newContractState = cached as ContractStateResult<Methods>
             }
           }
 
           result[key].push({
             ...item,
-            // Merge existing rpcData with new data
-            rpcData: { ...existingRpcData, ...newRpcData } as RpcDataResult<Methods>,
+            // Merge existing contractState with new data
+            contractState: { ...existingContractState, ...newContractState } as ContractStateResult<Methods>,
           } as EnrichedItem<T[typeof key][number], Methods>)
         }
       }
@@ -444,7 +433,7 @@ async function fetchAndCacheWithKey(
   multicallAddress: string,
   addresses: string[],
   methods: readonly AnyAbiFunction[],
-  cache: LFUCache<RpcDataResult<readonly AnyAbiFunction[]>>,
+  cache: LFUCache<ContractStateResult<readonly AnyAbiFunction[]>>,
   batchSize: number,
   blockTag: string,
   maxParallelBatches: number,
@@ -486,7 +475,7 @@ async function processBatch(
   multicallAddress: string,
   batchAddresses: string[],
   methods: readonly AnyAbiFunction[],
-  cache: LFUCache<RpcDataResult<readonly AnyAbiFunction[]>>,
+  cache: LFUCache<ContractStateResult<readonly AnyAbiFunction[]>>,
   blockTag: string,
   logger: Logger,
   getCacheKey: (address: string) => string,
@@ -510,7 +499,7 @@ async function processBatch(
   // Parse results and update cache
   let resultIdx = 0
   for (const address of batchAddresses) {
-    const rpcData: Record<string, unknown> = {}
+    const contractState: Record<string, unknown> = {}
 
     for (const method of methods) {
       const result = results[resultIdx++]
@@ -519,15 +508,15 @@ async function processBatch(
       if (result?.success && result.returnData && result.returnData !== '0x') {
         try {
           const decoded = method.decodeResult(result.returnData)
-          rpcData[methodName] = decoded
+          contractState[methodName] = decoded
         } catch (error) {
-          logger.debug(`Failed to decode ${methodName} result for ${address}: ${error}`)
+          logger.warn(`Failed to decode ${methodName} result for ${address}: ${error}`)
         }
       } else if (result && !result.success) {
-        logger.debug(`RPC call failed for ${methodName} on ${address}`)
+        logger.warn(`RPC call failed for ${methodName} on ${address}`)
       }
     }
 
-    cache.set(getCacheKey(address), rpcData as RpcDataResult<readonly AnyAbiFunction[]>)
+    cache.set(getCacheKey(address), contractState as ContractStateResult<readonly AnyAbiFunction[]>)
   }
 }

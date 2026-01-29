@@ -69,9 +69,9 @@ async function cli() {
 
   for await (const { data } of stream) {
     for (const swap of data.swaps) {
-      const token0 = swap.rpcData['token0']
-      const token1 = swap.rpcData['token1']
-      const reserves = swap.rpcData['getReserves']
+      const token0 = swap.contractState['token0']
+      const token1 = swap.contractState['token1']
+      const reserves = swap.contractState['getReserves']
 
       if (token0 && token1 && reserves) {
         console.log({
@@ -109,7 +109,7 @@ async function cli() {
  * .pipe(
  *   rpcEnricher({
  *     rpcUrls: ['https://eth.llamarpc.com'],
- *     addressField: 'rpcData.token0',  // Use the token address we just fetched
+ *     addressField: 'contractState.token0',  // Use the token address we just fetched
  *     methods: [
  *       erc20.functions.name,
  *       erc20.functions.symbol,
