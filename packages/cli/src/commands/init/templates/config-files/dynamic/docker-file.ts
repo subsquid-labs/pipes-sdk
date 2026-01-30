@@ -50,6 +50,8 @@ COPY src/schemas.ts ./src/schemas.ts
 COPY migrations ./dist/migrations
 {{/isPostgres}}
 
+EXPOSE 9090
+
 # Default command
 CMD ["sh", "-lc", "{{#isPostgres}}pnpm db:generate && pnpm db:migrate && {{/isPostgres}}node dist/index.js"]
 `

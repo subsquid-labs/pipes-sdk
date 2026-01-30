@@ -1,7 +1,7 @@
 {
-  "name": "@iankressin/pipes-cli",
+  "name": "@iankressin/pipes-cli-test",
   "type": "module",
-  "version": "0.1.0-beta.18",
+  "version": "0.1.0-beta.3",
   "author": "Subsquid Team",
   "files": [
     "dist",
@@ -40,7 +40,7 @@
     }
   },
   "scripts": {
-    "dev": "tsx src/index.ts init",
+    "dev": "tsx src/index.ts",
     "build": "tsup",
     "lint": "biome check . --write",
     "test": "vitest run",

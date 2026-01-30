@@ -1,13 +1,13 @@
 import { program } from 'commander'
 
 import { DeployHandler } from './commands/deploy/deploy.handler.js'
+import { DeployOptionsSchema } from './commands/deploy/deploy.schema.js'
 import { InitHandler } from './commands/init/init.handler.js'
 import { InitPrompt } from './commands/init/init.prompt.js'
 import { ConfigService } from './services/config.service.js'
-import { DeployOptions } from './types/deploy.js'
 import { withErrorHandling } from './utils/error-handling.js'
 
-program.name('pipes').description('Subsquid Pipes CLI').version('0.1.0')
+program.name('pipes').description('Subsquid Pipes CLI').version('111.1.0')
 
 program
   .command('init')
@@ -32,10 +32,11 @@ program
 program
   .command('deploy')
   .description('Deploy a pipe project to one of the supported providers')
-  .option('--provider <provider>', 'Provider to deploy to', ['railway', 'aws'])
+  .option('--provider <provider>', 'Provider to deploy to', 'railway')
   .action(
     withErrorHandling(async (options) => {
-      const deployHandler = new DeployHandler(options as DeployOptions)
+      const deployOptions = DeployOptionsSchema.parse(options)
+      const deployHandler = new DeployHandler(deployOptions)
       await deployHandler.handle()
     }),
   )

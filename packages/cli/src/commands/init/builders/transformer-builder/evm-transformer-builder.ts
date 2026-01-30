@@ -1,5 +1,4 @@
-import Mustache from 'mustache'
-import { BaseTransformerBuilder, TemplateValues } from './base-transformer-builder.js'
+import { BaseTransformerBuilder } from './base-transformer-builder.js'
 
 export const template = `{{#deduplicatedImports}}
 {{{.}}}
@@ -14,6 +13,7 @@ export const template = `{{#deduplicatedImports}}
 export async function main() {
   await evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/{{network}}',
+    metrics: metricsServer(),
   })
   .pipeComposite({
 {{#transformerTemplates}}
@@ -33,12 +33,10 @@ export class EvmTransformerBuilder extends BaseTransformerBuilder<'evm'> {
   }
 
   getNetworkImports() {
-    return ['import { evmPortalSource } from "@subsquid/pipes/evm"']
-  }
-
-  runPostSetups() {
-    this.config.templates.map(async (t) => {
-    })
+    return [
+      'import { evmPortalSource } from "@subsquid/pipes/evm"',
+      'import { metricsServer } from "@subsquid/pipes/metrics/node"',
+    ]
   }
 
   getTransformerTemplates() {

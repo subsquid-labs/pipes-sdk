@@ -1,3 +1,3 @@
-export interface DeployOptions {
-  provider: 'railway' | 'aws'
-}
+export const providers = ['railway'] as const
+
+export type Provider = (typeof providers)[number]

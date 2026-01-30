@@ -13,6 +13,7 @@ export const template = `{{#deduplicatedImports}}
 export async function main() {
   await solanaPortalSource({
     portal: 'https://portal.sqd.dev/datasets/{{network}}',
+    metrics: metricsServer(),
   })
   .pipeComposite({
 {{#transformerTemplates}}
@@ -41,7 +42,10 @@ export class SvmTransformerBuilder extends BaseTransformerBuilder<'svm'> {
   }
 
   getNetworkImports(): string[] {
-    return ['import { solanaPortalSource } from "@subsquid/pipes/solana"']
+    return [
+      'import { solanaPortalSource } from "@subsquid/pipes/solana"',
+      'import { metricsServer } from "@subsquid/pipes/metrics/node"',
+    ]
   }
 
   getTransformerTemplates() {

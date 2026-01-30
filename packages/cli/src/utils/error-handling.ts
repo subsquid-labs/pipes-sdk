@@ -1,13 +1,26 @@
 import chalk from 'chalk'
+import { ZodError } from 'zod'
 
 function formatError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message
+  let message: string | undefined = undefined
+
+  if (error instanceof ZodError) {
+    message = error.issues
+      .map((i) =>
+        i.code === 'invalid_value'
+          ? `${chalk.bold('Invalid value for')} ${chalk.cyan(`\`${i.path.join('.')}\``)}. Expected one of: ${chalk.yellow(i.values.join(', '))}`
+          : i.message,
+      )
+      .join('\n')
+  } else if (error instanceof Error) {
+    message = error.message
+  } else if (typeof error === 'string') {
+    message = error
   }
-  if (typeof error === 'string') {
-    return error
-  }
-  return 'An unexpected error occurred'
+
+  return message
+    ? `${chalk.gray('[🦑 PIPES SDK]')} ${chalk.red('✗ Error:')} ${message}`
+    : 'An unexpected error occurred'
 }
 
 export function withErrorHandling(fn: (options: any) => Promise<void>) {
@@ -15,7 +28,9 @@ export function withErrorHandling(fn: (options: any) => Promise<void>) {
     try {
       await fn(options)
     } catch (error) {
-      console.log(chalk.red('✗'), `Error: ${formatError(error)}`)
+      console.log('')
+      console.log(formatError(error))
+      console.log('')
       process.exit(1)
     }
   }
