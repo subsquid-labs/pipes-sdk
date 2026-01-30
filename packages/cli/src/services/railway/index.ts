@@ -77,6 +77,10 @@ export class RailwayService {
     }
   }
 
+  private async login() {
+    await execAsync('railway login')
+  }
+
   public async initProject(projectName: string): Promise<void> {
     await execAsync(`railway init --name "${projectName}"`)
   }
