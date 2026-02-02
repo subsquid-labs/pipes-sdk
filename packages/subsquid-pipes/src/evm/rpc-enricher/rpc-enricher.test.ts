@@ -163,12 +163,12 @@ describe('rpcEnricher', () => {
       expect(transformer).toBeDefined()
     })
 
-    it('should use custom profilerId when provided', () => {
+    it('should use custom profiler when provided', () => {
       const transformer = rpcEnricher({
         rpcUrls: 'http://localhost:8545',
         addressField: 'contract',
         methods: [nameFunc],
-        profilerId: 'Token metadata enricher',
+        profiler: { id: 'Token metadata enricher' },
       })
 
       expect(transformer.options.profiler?.id).toBe('Token metadata enricher')

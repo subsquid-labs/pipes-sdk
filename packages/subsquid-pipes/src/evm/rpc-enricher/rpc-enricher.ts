@@ -3,6 +3,7 @@ import type { Codec, Struct } from '@subsquid/evm-codec'
 
 import type { Logger } from '~/core/logger.js'
 import type { BatchCtx } from '~/core/portal-source.js'
+import type { ProfilerOptions } from '~/core/profiling.js'
 import { type Transformer, createTransformer } from '~/core/transformer.js'
 import { LFUCache } from '~/internal/lfu-cache.js'
 
@@ -118,10 +119,10 @@ export interface RpcEnricherOptions<T, Methods extends readonly AnyAbiFunction[]
   maxParallelBatches?: number
 
   /**
-   * Custom profiler ID for distinguishing multiple rpcEnricher instances.
-   * Defaults to 'RPC enricher'.
+   * Profiler configuration for performance monitoring.
+   * Defaults to `{ id: 'RPC enricher' }`.
    */
-  profilerId?: string
+  profiler?: ProfilerOptions
 }
 
 /**
@@ -226,7 +227,7 @@ export function rpcEnricher<
     retryAttempts = DEFAULT_RETRY_ATTEMPTS,
     callOnEventBlock = false,
     maxParallelBatches = DEFAULT_MAX_PARALLEL_BATCHES,
-    profilerId = 'RPC enricher',
+    profiler = { id: 'RPC enricher' },
   } = options
 
   // Validate methods at construction time
@@ -248,7 +249,7 @@ export function rpcEnricher<
   let rpcClient: RpcClient | undefined
 
   return createTransformer({
-    profiler: { id: profilerId },
+    profiler,
 
     start: async ({ logger }) => {
       cache = new LFUCache(cacheCapacity)
@@ -312,6 +313,10 @@ export function rpcEnricher<
                 blockNum = rawBlock
                 cacheKey = `${normalizedAddress}:${blockNum}:${methodsKey}`
               } else {
+                ctx.logger.warn(
+                  `callOnEventBlock is enabled but block.number is undefined for address ${normalizedAddress}. ` +
+                    `Falling back to 'latest' block for this item.`,
+                )
                 cacheKey = `${normalizedAddress}:${methodsKey}`
               }
             } else {
@@ -324,6 +329,15 @@ export function rpcEnricher<
             allItems.push({ key, index, item, address: null, blockNum: null, cacheKey: null })
           }
         }
+      }
+
+      // Warn if some items don't have addresses
+      const itemsWithoutAddress = allItems.filter((i) => i.address === null).length
+      if (itemsWithoutAddress > 0) {
+        ctx.logger.warn(
+          `${itemsWithoutAddress} item(s) have no address at field '${String(addressField)}'. ` +
+            `These items will have empty contractState.`,
+        )
       }
 
       // Filter out cached entries
