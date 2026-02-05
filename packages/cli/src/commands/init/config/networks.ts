@@ -1,3 +1,5 @@
+import { NetworkType } from '~/types/init.js'
+
 export interface EvmNetworkConfig {
   name: string
   type: 'mainnet' | 'testnet' | 'devnet'
@@ -23,7 +25,7 @@ export interface SvmNetworkConfig {
   priority?: 1 | 5 | 10
 }
 
-export const evmNetworks: EvmNetworkConfig[] = [
+export const evmNetworks = [
   {
     name: '0g Testnet',
     type: 'testnet',
@@ -1726,9 +1728,9 @@ export const evmNetworks: EvmNetworkConfig[] = [
     slug: 'zora-sepolia',
     details: '/en/data/evm/zora-sepolia/overview',
   },
-]
+] as const satisfies EvmNetworkConfig[]
 
-export const solanaNetworks: SvmNetworkConfig[] = [
+export const solanaNetworks = [
   {
     name: 'Solana',
     type: 'mainnet',
@@ -1810,7 +1812,7 @@ export const solanaNetworks: SvmNetworkConfig[] = [
     slug: 'svm-bnb-testnet',
     details: '/en/data/solana/svm-bnb-testnet/overview',
   },
-]
+] as const satisfies SvmNetworkConfig[]
 
 export const networks = {
   evm: evmNetworks,
@@ -1833,4 +1835,10 @@ export function getNetworkFromChainId(chainId: string) {
       throw new Error(`Invalid chainId ${chainId} for EVM chains`)
     })()
   )
+}
+
+type PortalNetworkSlug<N extends NetworkType> = (typeof networks)[N][number]['slug']
+
+export function getPortalNetworkSlugs<N extends NetworkType>(networkType: N): PortalNetworkSlug<N>[] {
+  return networks[networkType].map((n) => n.slug)
 }

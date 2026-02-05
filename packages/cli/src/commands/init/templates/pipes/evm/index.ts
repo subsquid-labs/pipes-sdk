@@ -1,4 +1,5 @@
 import { PipeTemplateMeta } from '~/types/init.js'
+
 import { custom } from './custom/template.config.js'
 import { erc20Transfers } from './erc20-transfers/template.config.js'
 import { uniswapV3Swaps } from './uniswap-v3-swaps/template.config.js'

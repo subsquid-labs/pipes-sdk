@@ -1,4 +1,5 @@
 import type { NetworkType } from '~/types/init.js'
+
 import { TemplateId, templates } from '../builders/transformer-builder/index.js'
 
 export function getTemplatePrompts<N extends NetworkType>(networkType: N): { name: string; value: TemplateId<N> }[] {

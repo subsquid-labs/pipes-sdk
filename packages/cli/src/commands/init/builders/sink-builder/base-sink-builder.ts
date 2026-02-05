@@ -1,8 +1,11 @@
-import { ProjectWriter } from '~/utils/project-writer.js'
 import { Config, NetworkType } from '~/types/init.js'
+import { ProjectWriter } from '~/utils/project-writer.js'
 
 export abstract class BaseSinkBuilder {
-  constructor(protected config: Config<NetworkType>,  protected projectWriter: ProjectWriter) {}
+  constructor(
+    protected config: Config<NetworkType>,
+    protected projectWriter: ProjectWriter,
+  ) {}
 
   abstract render(): string
 
@@ -11,6 +14,4 @@ export abstract class BaseSinkBuilder {
   abstract createEnvFile(): void
 
   abstract getEnvSchema(): string
-
-  // abstract getEnvFile(): string
 }

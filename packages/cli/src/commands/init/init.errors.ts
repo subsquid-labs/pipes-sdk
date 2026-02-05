@@ -1,4 +1,5 @@
 import { NetworkType, networkTypes } from '~/types/init.js'
+
 import { templates } from './builders/transformer-builder/index.js'
 
 export class TemplateNotFoundError extends Error {
@@ -11,19 +12,6 @@ ${Object.keys(templates[network])
   .join('\n')}
   `,
     )
-  }
-}
-
-export class InvalidNetworkTypeError extends Error {
-  constructor(network: string) {
-    super(InvalidNetworkTypeError.getErrorMessage(network))
-  }
-
-  static getErrorMessage(network: unknown) {
-    return `Network type '${network}' is invalid.
-The available values network types are:
-${networkTypes.map((type) => `  - ${type.value}`).join('\n')}
-    `
   }
 }
 

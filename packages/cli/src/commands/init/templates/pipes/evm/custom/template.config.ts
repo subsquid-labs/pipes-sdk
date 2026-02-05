@@ -1,13 +1,14 @@
 import { checkbox, input } from '@inquirer/prompts'
 import chalk from 'chalk'
+import ora from 'ora'
+import z from 'zod'
+
 import { ContractMetadata, SqdAbiService } from '~/services/sqd-abi.js'
 import { PipeTemplateMeta } from '~/types/init.js'
+
 import { renderClickhouse } from './templates/clickhouse-table.sql.js'
 import { renderSchema } from './templates/pg-table.js'
 import { renderTransformer } from './templates/transformer.js'
-import z from 'zod'
-import ora from 'ora'
-import { squidfix } from '~/commands/init/init.handler.js'
 
 const RawInputSchema = z.object({ name: z.string(), type: z.string() })
 
@@ -35,7 +36,11 @@ class CustomTemplate extends PipeTemplateMeta<'evm', typeof CustomTemplateParams
     const addressesInput = await input({
       message: `Contract addresses. ${chalk.dim('Comma separated')}:`,
     })
-    const spinner = ora(squidfix('Fetching contract data...')).start()
+
+    const spinner = ora('Fetching contract data...')
+    spinner.prefixText = chalk.gray(`[🦑 PIPES SDK]`)
+    spinner.start()
+
     const addresses = addressesInput.split(',').map((address) => address.trim())
     const abiService = new SqdAbiService()
     const metadata = await abiService.getContractData('evm', network, addresses)
@@ -65,7 +70,7 @@ class CustomTemplate extends PipeTemplateMeta<'evm', typeof CustomTemplateParams
 
   override async postSetup(network: string, projectPath: string): Promise<void> {
     const abiService = new SqdAbiService()
-    await abiService.generateTypes(
+    abiService.generateTypes(
       this.networkType,
       network,
       projectPath,

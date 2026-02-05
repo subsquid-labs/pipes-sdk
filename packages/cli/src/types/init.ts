@@ -39,18 +39,19 @@ export interface Config<N extends NetworkType> {
 type InferredParams<Params extends z.ZodObject | undefined> = Params extends z.ZodObject ? z.infer<Params> : undefined
 
 export abstract class PipeTemplateMeta<N extends NetworkType, Params extends z.ZodObject | undefined = undefined> {
-  abstract templateId: string
-  abstract templateName: string
-  abstract networkType: N
+  abstract readonly templateId: string
+  abstract readonly templateName: string
+  abstract readonly networkType: N
 
   abstract renderTransformers(): string
   abstract renderPostgresSchemas(): string
   abstract renderClickhouseTables(): string
 
-  paramsSchema?: Params extends z.ZodObject ? Params : undefined
   params?: InferredParams<Params>
-  defaultParams?: InferredParams<Params>
-  disabled?: boolean
+
+  readonly paramsSchema?: Params extends z.ZodObject ? Params : undefined
+  readonly defaultParams?: InferredParams<Params>
+  readonly disabled?: boolean
 
   /**
    * Implement this method if the the template requires a post setup process.
@@ -70,7 +71,6 @@ export abstract class PipeTemplateMeta<N extends NetworkType, Params extends z.Z
       this.params = params
       return this
     }
-
     throw new NoParamsTemplateError()
   }
 

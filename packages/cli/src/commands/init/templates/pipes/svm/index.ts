@@ -1,4 +1,5 @@
 import { PipeTemplateMeta } from '~/types/init.js'
+
 import { custom } from './custom/template.config.js'
 import { tokenBalances } from './token-balances/template.config.js'
 

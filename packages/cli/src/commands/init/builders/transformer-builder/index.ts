@@ -1,13 +1,15 @@
 import Mustache from 'mustache'
+
 import { Config, NetworkType, PipeTemplateMeta } from '~/types/init.js'
 import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
+import { ProjectWriter } from '~/utils/project-writer.js'
+
 import { evmTemplates } from '../../templates/pipes/evm/index.js'
 import { svmTemplates } from '../../templates/pipes/svm/index.js'
 import { SinkBuilder } from '../sink-builder/index.js'
 import { BaseTransformerBuilder } from './base-transformer-builder.js'
 import { EvmTransformerBuilder } from './evm-transformer-builder.js'
 import { SvmTransformerBuilder } from './svm-transformer-builder.js'
-import { ProjectWriter } from '~/utils/project-writer.js'
 
 export class TransformerBuilder<N extends NetworkType> {
   protected static readonly BASE_IMPORTS = ['import "dotenv/config"']
@@ -36,11 +38,13 @@ export class TransformerBuilder<N extends NetworkType> {
   }
 
   async runPostSetups() {
-    await Promise.all(this.config.templates.map(async (t) => {
-      if (t.postSetup) {
-        await t.postSetup(this.config.network, this.projectWriter.getAbsolutePath())
-      }
-    }))
+    await Promise.all(
+      this.config.templates.map(async (t) => {
+        if (t.postSetup) {
+          await t.postSetup(this.config.network, this.projectWriter.getAbsolutePath())
+        }
+      }),
+    )
   }
 
   async render() {
@@ -85,12 +89,16 @@ export class TransformerBuilder<N extends NetworkType> {
   }
 }
 
-export const templates = {
+export const templates: {
+  evm: Record<string, PipeTemplateMeta<'evm', any>>
+  svm: Record<string, PipeTemplateMeta<'svm', any>>
+} = {
   evm: evmTemplates,
   svm: svmTemplates,
 } as const
 
-export type NetworkTemplate<N extends NetworkType> = keyof (typeof templates)[N]
+export type NetworkTemplate<N extends NetworkType> = (typeof templates)[N]
+export type NetworkTemplateValue<N extends NetworkType> = (typeof templates)[N][keyof NetworkTemplate<N>]
 export type TemplateId<N extends NetworkType> = keyof (typeof templates)[N]
 
 export function getTemplate<N extends NetworkType>(
@@ -98,4 +106,8 @@ export function getTemplate<N extends NetworkType>(
   templateId: keyof (typeof templates)[N],
 ): PipeTemplateMeta<N, any> {
   return templates[networkType][templateId] as PipeTemplateMeta<N, any>
+}
+
+export function getTemplates<N extends NetworkType>(networkType: N): NetworkTemplateValue<N>[] {
+  return Object.values(templates[networkType])
 }

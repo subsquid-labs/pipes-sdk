@@ -1,19 +1,19 @@
 import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
+
 import chalk from 'chalk'
 import ora from 'ora'
 import { z } from 'zod'
-import {
-  type Config,
-  type NetworkType,
-  networkTypes,
-  packageManagerTypes,
-  sinkTypes,
-} from '~/types/init.js'
+
+import { type Config, type NetworkType, sinkTypes } from '~/types/init.js'
 import { getTemplateDirname } from '~/utils/fs.js'
-import { InvalidNetworkTypeError, ProjectAlreadyExistError, TemplateNotFoundError } from './init.errors.js'
+import { ProjectWriter } from '~/utils/project-writer.js'
+import { toKebabCase } from '~/utils/string.js'
+
 import { SinkBuilder } from './builders/sink-builder/index.js'
-import { getTemplate, TemplateId, TransformerBuilder } from './builders/transformer-builder/index.js'
+import { TransformerBuilder } from './builders/transformer-builder/index.js'
+import { configJsonSchema, configJsonSchemaRaw } from './config/params.js'
+import { ProjectAlreadyExistError } from './init.errors.js'
 import {
   agentsTemplate,
   biomeConfigTemplate,
@@ -27,43 +27,6 @@ import {
   renderUtilsTemplate,
   tsconfigConfigTemplate,
 } from './templates/config-files/index.js'
-import { toKebabCase } from '~/utils/string.js'
-import { ProjectWriter } from '~/utils/project-writer.js'
-
-const templateSchema = z.object({
-  templateId: z.string(),
-  params: z.record(z.string(), z.any()).optional(),
-})
-
-const configJsonSchema = z
-  .object({
-    // TODO: add regex validation for path
-    projectFolder: z.string().min(1),
-    networkType: z.enum(
-      networkTypes.map((n) => n.value),
-      { error: (iss) => InvalidNetworkTypeError.getErrorMessage(iss.input) },
-    ),
-    packageManager: z.enum(packageManagerTypes.map((p) => p.value)),
-    network: z.string().min(1),
-    templates: z.array(templateSchema),
-    sink: z.enum(sinkTypes.map((s) => s.value)),
-  })
-  .transform((data) => {
-    const networkType = data.networkType
-    return {
-      ...data,
-      networkType,
-      sink: data.sink,
-      packageManager: data.packageManager,
-      templates: data.templates.map((t) => {
-        const template = getTemplate(networkType, t.templateId as TemplateId<NetworkType>)
-        if (!template) throw new TemplateNotFoundError(t.templateId, networkType)
-        return t.params ? template.setParams(t.params) : template
-      }),
-    }
-  })
-
-export const squidfix = (text: string) => chalk.gray(`[🦑 PIPES SDK] ${text} `)
 
 export class InitHandler {
   private readonly projectName: string
@@ -76,32 +39,35 @@ export class InitHandler {
   }
 
   async handle(): Promise<void> {
-    const spinner = ora('\n\nSetting up new Pipes SDK project...').start()
+    const spinner = ora('\n\nSetting up new Pipes SDK project...')
+    spinner.prefixText = chalk.gray(`[🦑 PIPES SDK]`)
+    spinner.start()
+
     try {
       this.checkCurrentProjectPath()
 
-      spinner.text = squidfix('Writing static files')
+      spinner.text = 'Writing static files'
       this.writeStaticFiles()
 
-      spinner.text = squidfix('Writing template files')
+      spinner.text = 'Writing template files'
       await this.writeDynamicFiles()
 
-      spinner.text = squidfix('Copying template contracts')
-      await this.copySrcContent()
+      spinner.text = 'Copying template contracts'
+      this.copySrcContent()
 
-      spinner.text = squidfix('Installing dependencies')
+      spinner.text = 'Installing dependencies'
       await this.installDependencies()
 
-      spinner.text = squidfix('Creating main indexer file')
+      spinner.text = 'Creating main indexer file'
       await this.writeIndexTs()
 
-      spinner.text = squidfix('Creating sink files')
+      spinner.text = 'Creating sink files'
       await this.writeSinkFiles()
 
-      spinner.text = squidfix('Linting project')
+      spinner.text = 'Linting project'
       await this.lintProject()
 
-      spinner.succeed(`${squidfix(`${this.config.projectFolder} project initialized successfully`)}`)
+      spinner.succeed(`${`${this.config.projectFolder} project initialized successfully`}`)
 
       this.nextSteps()
     } catch (error) {
@@ -260,12 +226,11 @@ export class InitHandler {
   }
 
   static fromJson(jsonString: string): InitHandler {
-    try {
-      const result = configJsonSchema.safeParse(JSON.parse(jsonString))
-      if (result.error) throw new Error(z.prettifyError(result.error))
-      return new InitHandler(result.data)
-    } catch (error) {
-      throw new Error(`Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`)
-    }
+    const result = configJsonSchema.parse(JSON.parse(jsonString))
+    return new InitHandler(result)
+  }
+
+  static jsonSchema() {
+    console.log(JSON.stringify(z.toJSONSchema(configJsonSchemaRaw), null, 2))
   }
 }
