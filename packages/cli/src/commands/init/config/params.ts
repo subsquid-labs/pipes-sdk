@@ -10,8 +10,9 @@ function getTemplateSchemas<N extends NetworkType>(networkType: N) {
   const networkTemplates = getTemplates(networkType)
   const options = []
   for (const template of networkTemplates) {
-    const schema = template.paramsSchema.extend({
-      templateId: z.literal(template.templateId),
+    const schema = z.object({
+      templateId: z.string(),
+      ...(template.paramsSchema ? { params: template.paramsSchema } : {}),
     })
     options.push(schema)
   }
