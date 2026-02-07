@@ -40,6 +40,7 @@ export function parsePortalRange(range: PortalRange, defaultValue?: PortalRange)
 
   return { from, to }
 }
+
 export type PortalRange = {
   from?: number | string | 'latest'
   to?: number | string

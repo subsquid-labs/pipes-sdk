@@ -1,7 +1,7 @@
-export * from './composite-transformer.js'
 export * from './formatters.js'
 export * from './logger.js'
 export * from './metrics-server.js'
+export * from './output.js'
 export * from './portal-range.js'
 export * from './portal-source.js'
 export type { ProfilerOptions } from './profiling.js'

@@ -1,13 +1,13 @@
 import { event, indexed } from '@subsquid/evm-abi'
 import * as p from '@subsquid/evm-codec'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, expectTypeOf, it } from 'vitest'
 
 import { createMemoryTarget } from '~/targets/memory/memory-target.js'
 import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/tests/index.js'
 
-import { evmDecoder } from './evm-decoder.js'
+import { FactoryEvent, evmDecoder } from './evm-decoder.js'
 import { evmPortalSource } from './evm-portal-source.js'
-import { factory } from './factory.js'
+import { Factory, InternalFactoryEvent, factory } from './factory.js'
 import { factorySqliteDatabase } from './factory-adapters/sqlite.js'
 
 const factoryAbi = {
@@ -206,8 +206,7 @@ describe('Factory', () => {
     const db = await factorySqliteDatabase({ path: ':memory:' })
     const stream = evmPortalSource({
       portal: mockPortal.url,
-    }).pipe(
-      evmDecoder({
+      outputs: evmDecoder({
         range: { from: 1, to: 2 },
         contracts: factory({
           address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
@@ -219,7 +218,7 @@ describe('Factory', () => {
           swaps: poolAbi.Swap,
         },
       }).pipe((d) => d.swaps),
-    )
+    })
 
     const res = await readAll(stream)
     expect(res).toMatchInlineSnapshot(`
@@ -294,8 +293,7 @@ describe('Factory', () => {
     const db = await factorySqliteDatabase({ path: ':memory:' })
     const stream = evmPortalSource({
       portal: mockPortal.url,
-    }).pipe(
-      evmDecoder({
+      outputs: evmDecoder({
         range: { from: 1, to: 2 },
         contracts: factory({
           address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
@@ -307,7 +305,7 @@ describe('Factory', () => {
           swaps: poolAbi.Swap,
         },
       }).pipe((d) => d.swaps),
-    )
+    })
 
     const res = await readAll(stream)
     expect(res).toMatchInlineSnapshot(`[]`)
@@ -322,31 +320,32 @@ describe('Factory', () => {
     const db = await factorySqliteDatabase({ path: ':memory:' })
     const stream = evmPortalSource({
       portal: mockPortal.url,
-    }).pipeComposite({
-      v1: evmDecoder({
-        range: { from: 1, to: 2 },
-        contracts: factory({
-          address: '0x00000000000000000000000000000000000000000',
-          event: factoryAbi.PoolCreated,
-          parameter: 'pool',
-          database: db,
+      outputs: {
+        v1: evmDecoder({
+          range: { from: 1, to: 2 },
+          contracts: factory({
+            address: '0x00000000000000000000000000000000000000000',
+            event: factoryAbi.PoolCreated,
+            parameter: 'pool',
+            database: db,
+          }),
+          events: {
+            swaps: poolAbi.Swap,
+          },
         }),
-        events: {
-          swaps: poolAbi.Swap,
-        },
-      }),
-      v2: evmDecoder({
-        range: { from: 1, to: 2 },
-        contracts: factory({
-          address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
-          event: factoryAbi.PoolCreated,
-          parameter: 'pool',
-          database: db,
+        v2: evmDecoder({
+          range: { from: 1, to: 2 },
+          contracts: factory({
+            address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+            event: factoryAbi.PoolCreated,
+            parameter: 'pool',
+            database: db,
+          }),
+          events: {
+            swaps: poolAbi.Swap,
+          },
         }),
-        events: {
-          swaps: poolAbi.Swap,
-        },
-      }),
+      },
     })
 
     let v1: any[] = []
@@ -436,35 +435,32 @@ describe('Factory', () => {
       portal: {
         url: mockPortal.url,
       },
-    })
-      .pipe(
-        evmDecoder({
-          range: { from: 1, to: 3 },
-          contracts: factory({
-            address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
-            event: factoryAbi.PoolCreated,
-            parameter: 'pool',
-            database: db,
-          }),
-          events: {
-            swaps: poolAbi.Swap,
-          },
-        }).pipe((d) =>
-          d.swaps.map((s) => {
-            return {
-              ...s,
-              blockNumber: s.block.number,
-            }
-          }),
-        ),
-      )
-      .pipeTo(
-        createMemoryTarget({
-          onData: (data) => {
-            res.push(data)
-          },
+      outputs: evmDecoder({
+        range: { from: 1, to: 3 },
+        contracts: factory({
+          address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+          event: factoryAbi.PoolCreated,
+          parameter: 'pool',
+          database: db,
         }),
-      )
+        events: {
+          swaps: poolAbi.Swap,
+        },
+      }).pipe((d) =>
+        d.swaps.map((s) => {
+          return {
+            ...s,
+            blockNumber: s.block.number,
+          }
+        }),
+      ),
+    }).pipeTo(
+      createMemoryTarget({
+        onData: (data) => {
+          res.push(data)
+        },
+      }),
+    )
 
     expect(res).toMatchInlineSnapshot(`[]`)
 
@@ -475,11 +471,10 @@ describe('Factory', () => {
   it('should filter factory events by indexed parameters', async () => {
     mockPortal = await createMockPortal(FILTERED_FACTORY)
 
-    const db = await factorySqliteDatabase({ path: ':memory:' })
+    // const db = factorySqliteDatabase({ path: ':memory:' })
     const stream = evmPortalSource({
       portal: mockPortal.url,
-    }).pipe(
-      evmDecoder({
+      outputs: evmDecoder({
         range: { from: 1, to: 2 },
         contracts: factory({
           address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
@@ -490,13 +485,13 @@ describe('Factory', () => {
             },
           },
           parameter: 'pool',
-          database: db,
+          database: factorySqliteDatabase({ path: ':memory:' }),
         }),
         events: {
           swaps: poolAbi.Swap,
         },
       }).pipe((d) => d.swaps),
-    )
+    })
 
     const res = await readAll(stream)
 
@@ -526,8 +521,7 @@ describe('Factory', () => {
 
       return evmPortalSource({
         portal: mockPortal.url,
-      }).pipe(
-        evmDecoder({
+        outputs: evmDecoder({
           range: { from: 1, to: 2 },
           contracts: factory({
             address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
@@ -544,7 +538,7 @@ describe('Factory', () => {
             swaps: poolAbi.Swap,
           },
         }).pipe((d) => d.swaps),
-      )
+      })
     }
 
     const firstRun = await getPipeline(weth)
@@ -569,7 +563,8 @@ describe('Factory', () => {
         event: factoryAbi.PoolCreated,
         params: {
           // Parameter in different case than emitted event
-          pool: '0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8'.toUpperCase(),
+          token0: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'.toUpperCase(),
+          token1: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'.toUpperCase(),
         },
       },
       parameter: 'pool',
@@ -578,15 +573,14 @@ describe('Factory', () => {
 
     const stream = evmPortalSource({
       portal: mockPortal.url,
-    }).pipe(
-      evmDecoder({
+      outputs: evmDecoder({
         range: { from: 1, to: 2 },
         contracts: contractsFactory,
         events: {
           swaps: poolAbi.Swap,
         },
       }).pipe((d) => d.swaps),
-    )
+    })
 
     await readAll(stream)
 
@@ -609,5 +603,85 @@ describe('Factory', () => {
         },
       ]
     `)
+  })
+})
+
+describe('Factory types', () => {
+  const args = {
+    token0: indexed(p.address),
+    token1: indexed(p.address),
+    fee: indexed(p.uint24),
+    tickSpacing: p.int24,
+    pool: p.address,
+  }
+  type Args = typeof args
+
+  it('InternalFactoryEvent generates the return types properly', () => {
+    type Result = InternalFactoryEvent<Args>
+    expectTypeOf<Result>().toEqualTypeOf<{
+      childAddress: string
+      factoryAddress: string
+      blockNumber: number
+      transactionIndex: number
+      logIndex: number
+      event: {
+        token0: string
+        token1: string
+        fee: number
+        tickSpacing: number
+        pool: string
+      }
+    }>()
+  })
+
+  it('getAllContracts returns a typed response according to event params', () => {
+    type Result = Awaited<ReturnType<Factory<Args>['getAllContracts']>>
+    expectTypeOf<Result>().toEqualTypeOf<InternalFactoryEvent<Args>[]>
+  })
+
+  it('getContract returns a typed response according to event params', () => {
+    type Result = Awaited<ReturnType<Factory<Args>['getContract']>>
+    expectTypeOf<Result>().toEqualTypeOf<FactoryEvent<{
+      token0: string
+      token1: string
+      fee: number
+      tickSpacing: number
+      pool: string
+    }> | null>()
+  })
+
+  it('getContract returns a typed response according to event params', () => {
+    type Result = Awaited<ReturnType<Factory<Args>['getContract']>>
+    expectTypeOf<Result>().toEqualTypeOf<FactoryEvent<{
+      token0: string
+      token1: string
+      fee: number
+      tickSpacing: number
+      pool: string
+    }> | null>()
+  })
+
+  it('should type factory returns according to params passed', async () => {
+    const poolFactory = factory({
+      address: '',
+      event: {
+        event: factoryAbi.PoolCreated,
+        params: {
+          token0: '',
+        },
+      },
+      parameter: 'pool',
+      database: factorySqliteDatabase({ path: ':memory:' }),
+    })
+
+    type Result = Awaited<ReturnType<(typeof poolFactory)['getContract']>>
+    type Expected = FactoryEvent<{
+      readonly token0: string
+      readonly token1: string
+      readonly fee: number
+      readonly tickSpacing: number
+      readonly pool: string
+    }> | null
+    expectTypeOf<Result>().toEqualTypeOf<Expected>()
   })
 })

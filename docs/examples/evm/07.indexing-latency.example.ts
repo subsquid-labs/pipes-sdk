@@ -23,12 +23,7 @@ async function main() {
   // Create a stream of new blocks from the Base mainnet portal
   const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/base-mainnet',
-    query: { from: 'latest' }, // Start from the latest block
-    metrics: metricsServer({
-      port: 9090,
-    }),
-  }).pipe(
-    evmRpcLatencyWatcher({
+    outputs: evmRpcLatencyWatcher({
       rpcUrl: ['https://base.drpc.org', 'https://base-rpc.publicnode.com'], // RPC endpoints to monitor
     }).pipe((data, { metrics }) => {
       if (!data) return // Skip if no latency data
@@ -45,8 +40,12 @@ async function main() {
       }
 
       return data
+    }), // Start from the latest block
+
+    metrics: metricsServer({
+      port: 9090,
     }),
-  )
+  })
 
   // Iterate over the stream, logging block and RPC latency data
   for await (const { data } of stream) {
