@@ -1,5 +1,5 @@
 import { formatBlock } from '@subsquid/pipes'
-import { EvmQueryBuilder, evmPortalSource, evmRpcLatencyWatcher } from '@subsquid/pipes/evm'
+import { evmPortalSource, evmRpcLatencyWatcher } from '@subsquid/pipes/evm'
 import { metricsServer } from '@subsquid/pipes/metrics/node'
 
 /**

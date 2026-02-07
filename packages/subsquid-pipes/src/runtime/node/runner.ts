@@ -1,5 +1,3 @@
-import * as path from 'node:path'
-
 import { Logger, createDefaultLogger } from '~/core/logger.js'
 import { MetricsServer, noopMetricsServer } from '~/core/metrics-server.js'
 import { MetricsServerOptions, metricsServer } from '~/metrics/node/index.js'
@@ -51,7 +49,7 @@ class Runner<T extends SerializableObject = any> {
         const maxAttempts = this.config.retry || 5
         let attempts = 0
 
-        const logger = this.#logger.child({ pipe_id: pipe.id })
+        const logger = this.#logger.child({ id: pipe.id })
         const ctx: RuntimeContext = {
           id: pipe.id,
           logger,

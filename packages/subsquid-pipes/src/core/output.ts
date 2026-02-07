@@ -34,15 +34,18 @@ export type Outputs<F extends {}, QB extends QueryBuilder<F>> =
  * All lifecycle methods (`start`, `stop`, `fork`) are forwarded to each sub-transformer.
  */
 export function mergeOutputs<F extends {}, Q extends QueryBuilder<F>>(input: Outputs<F, Q>) {
-  if (input instanceof QueryAwareTransformer) return input
-  else if (input instanceof QueryBuilder) return input.build((data) => data)
+  if (input instanceof QueryAwareTransformer) {
+    return input
+  } else if (input instanceof QueryBuilder) {
+    return input.build({ transform: (data) => data })
+  }
 
   const output: Record<string, QueryAwareTransformer<any, any, Q>> = {}
   for (const [key, value] of Object.entries(input)) {
     if (value instanceof QueryAwareTransformer) {
       output[key] = value
     } else {
-      output[key] = value.build((data) => data)
+      output[key] = value.build({ transform: (data) => data })
     }
   }
 
