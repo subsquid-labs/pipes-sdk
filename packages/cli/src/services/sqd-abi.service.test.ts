@@ -1,7 +1,9 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
 import { SqdAbiService } from './sqd-abi.js'
 
 describe('SQD Typegen Service', () => {
@@ -24,6 +26,99 @@ describe('SQD Typegen Service', () => {
     const wethData = await s.getContractData('evm', 'ethereum-mainnet', contracts)
 
     expect(wethData).toEqual([
+      {
+        contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+        contractEvents: [
+          {
+            anonymous: false,
+            inputs: [
+              {
+                indexed: true,
+                name: 'src',
+                type: 'address',
+              },
+              {
+                indexed: true,
+                name: 'guy',
+                type: 'address',
+              },
+              {
+                indexed: false,
+                name: 'wad',
+                type: 'uint256',
+              },
+            ],
+            name: 'Approval',
+            type: 'event',
+          },
+          {
+            anonymous: false,
+            inputs: [
+              {
+                indexed: true,
+                name: 'src',
+                type: 'address',
+              },
+              {
+                indexed: true,
+                name: 'dst',
+                type: 'address',
+              },
+              {
+                indexed: false,
+                name: 'wad',
+                type: 'uint256',
+              },
+            ],
+            name: 'Transfer',
+            type: 'event',
+          },
+          {
+            anonymous: false,
+            inputs: [
+              {
+                indexed: true,
+                name: 'dst',
+                type: 'address',
+              },
+              {
+                indexed: false,
+                name: 'wad',
+                type: 'uint256',
+              },
+            ],
+            name: 'Deposit',
+            type: 'event',
+          },
+          {
+            anonymous: false,
+            inputs: [
+              {
+                indexed: true,
+                name: 'src',
+                type: 'address',
+              },
+              {
+                indexed: false,
+                name: 'wad',
+                type: 'uint256',
+              },
+            ],
+            name: 'Withdrawal',
+            type: 'event',
+          },
+        ],
+        contractName: 'WETH9',
+      },
+    ])
+  })
+
+  it('should fetch implementation ABI for a Proxy contract', async () => {
+    const contracts = ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2']
+    const s = new SqdAbiService()
+    const aavePoolData = await s.getContractData('evm', 'ethereum-mainnet', contracts)
+
+    expect(aavePoolData).toEqual([
       {
         contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
         contractEvents: [
