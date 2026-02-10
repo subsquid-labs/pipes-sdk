@@ -1,4 +1,5 @@
 import { BatchCtx, BlockCursor } from '~/core/index.js'
+
 import { ClickhouseStore } from './clickhouse-store.js'
 
 // FIXME: we need refactor it to make order more deterministic and predictable - WHY?
@@ -141,21 +142,21 @@ export class ClickhouseState {
       query: `SELECT * FROM ${this.#qualifiedName} ORDER BY "timestamp" DESC`,
       format: 'JSONEachRow',
     })
+
     for await (const rows of res.stream<{ rollback_chain: string; finalized: string }>()) {
       for (const row of rows) {
         const raw = row.json()
         const blocks = JSON.parse(raw.rollback_chain) as BlockCursor[]
         if (!blocks.length) continue
 
+        // Sort blocks in descending order by block number to prioritize the most recent ones
         blocks.sort((a, b) => b.number - a.number)
 
         const finalized = JSON.parse(raw.finalized) as BlockCursor
 
         for (const block of blocks) {
-          const found = previousBlocks.find((u) => u.number === block.number && u.hash === block.hash)
-          if (found) {
-            return found
-          }
+          const found = previousBlocks.find((u) => u.hash === block.hash)
+          if (found) return found
 
           if (!previousBlocks.length) {
             if (block.number < finalized.number) {
@@ -163,7 +164,6 @@ export class ClickhouseState {
                *  We can't go beyond the finalized block.
                *  TODO: Dead end? What should we do?
                */
-
               return null
             }
 
@@ -177,6 +177,11 @@ export class ClickhouseState {
 
           // Remove already visited blocks
           previousBlocks = previousBlocks.filter((u) => u.number < block.number)
+        }
+
+        // If none of the blocks in the rollback chain match, we can still try the finalized block as a fallback
+        if (previousBlocks.length === 1 && previousBlocks[0].hash === finalized.hash) {
+          return finalized
         }
       }
     }

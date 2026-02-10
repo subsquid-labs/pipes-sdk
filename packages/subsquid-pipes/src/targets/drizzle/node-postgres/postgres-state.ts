@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm'
+
 import { BatchCtx, BlockCursor, Logger } from '~/core/index.js'
 import { doWithRetry } from '~/internal/function.js'
 import { parseNumber } from '~/internal/number.js'
@@ -221,6 +222,11 @@ export class PostgresState {
 
           // Remove already visited blocks
           previousBlocks = previousBlocks.filter((u) => u.number < block.number)
+        }
+
+        // If none of the blocks in the rollback chain match, we can still try the finalized block as a fallback
+        if (previousBlocks.length === 1 && previousBlocks[0].hash === finalized.hash) {
+          return finalized
         }
       }
 

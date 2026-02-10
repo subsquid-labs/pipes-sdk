@@ -57,14 +57,17 @@ export function createMemoryTarget<T extends { blockNumber: number }[]>({
 }) {
   let recentUnfinalizedBlocks: BlockCursor[] = []
   let unfinalizedData: T[number][] = []
+  let finalizedHead: BlockCursor | undefined
 
   return createTarget<T>({
     write: async ({ read }) => {
       for await (const batch of read()) {
         recentUnfinalizedBlocks.push(...batch.ctx.state.rollbackChain)
-        const finalizedHead = batch.ctx.head.finalized?.number || Infinity
+        finalizedHead = batch.ctx.head.finalized
 
-        const [finalized, newUnfinalized] = arraySplit(batch.data, (item) => item.blockNumber <= finalizedHead)
+        const finalizedNumber = finalizedHead?.number || Infinity
+
+        const [finalized, newUnfinalized] = arraySplit(batch.data, (item) => item.blockNumber <= finalizedNumber)
 
         if (finalized.length) {
           await onData(finalized as T)
@@ -72,7 +75,7 @@ export function createMemoryTarget<T extends { blockNumber: number }[]>({
 
         const [newFinalizedData, stillUnfinalizedData] = arraySplit(
           unfinalizedData,
-          (item) => item.blockNumber <= finalizedHead,
+          (item) => item.blockNumber <= finalizedNumber,
         )
         if (newFinalizedData.length) {
           await onData(newFinalizedData as T)
@@ -92,6 +95,10 @@ export function createMemoryTarget<T extends { blockNumber: number }[]>({
         unfinalizedData = unfinalizedData.filter((item) => item.blockNumber <= rollbackBlock.number)
 
         return rollbackBlock
+      }
+
+      if (finalizedHead && previousBlocks.length && previousBlocks[0].hash === finalizedHead?.hash) {
+        return finalizedHead
       }
 
       recentUnfinalizedBlocks = []
