@@ -2,8 +2,8 @@ import { program } from 'commander'
 import { InitHandler } from './commands/init/init.handler.js'
 import { InitPrompt } from './commands/init/init.prompt.js'
 import { ConfigService } from './services/config.service.js'
-import { ZodError, z } from 'zod'
 import { withErrorHandling } from './utils/error-handling.js'
+import { getInputType } from './utils/string.js'
 
 program.name('pipes').description('Subsquid Pipes CLI').version('0.1.0')
 
@@ -15,7 +15,15 @@ program
   .option('--schema', 'Outputs the config used schema used for `--config` option')
   .action(withErrorHandling(async (options) => {
       if (options.config) {
-        await InitHandler.fromJson(options.config).handle()
+        const { type, content } = getInputType(options.config)
+        switch (type) {
+          case 'json':
+            await InitHandler.fromJson(content).handle()
+            break
+          case 'file':
+            await InitHandler.fromFile(content).handle()
+            break
+        }
       } else if (options.configId) {
         const configService = new ConfigService()
         const config = await configService.getConfigJsonByHash(options.configId)

@@ -1,4 +1,4 @@
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 
 import chalk from 'chalk'
@@ -225,6 +225,10 @@ export class InitHandler {
   ${chalk.gray('Need help? Check our documentation at')} ${chalk.bold.gray.underline('https://beta.docs.sqd.dev/en/sdk/pipes-sdk')}`
 
     console.log(message)
+  }
+
+  static fromFile(filePath: string): InitHandler {
+    return InitHandler.fromJson(readFileSync(filePath, 'utf8'))
   }
 
   static fromJson(jsonString: string): InitHandler {
