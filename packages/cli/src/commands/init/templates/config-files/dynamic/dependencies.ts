@@ -2,12 +2,12 @@ import type { Sink } from '~/types/init.js'
 
 // TODO: use only network specific dependencies
 const baseDependencies: Record<string, string> = {
-  '@subsquid/pipes': '^0.1.0-beta.10',
+  '@subsquid/pipes': '^0.1.0-beta.15',
   '@subsquid/evm-codec': '0.3.0',
   '@subsquid/evm-abi': '0.3.1',
   '@subsquid/borsh': '^0.3.0',
   dotenv: '^16.4.5',
-  'better-sqlite3': '^12.5.0',
+  'better-sqlite3': '^12.4.5',
   zod: '^4.3.4',
 }
 
@@ -21,7 +21,7 @@ const baseDevDependencies: Record<string, string> = {
 
 const sinkDependencies: Record<Sink, Record<string, string>> = {
   clickhouse: {
-    '@clickhouse/client': '^1.15.0',
+    '@clickhouse/client': '^1.14.0',
   },
   postgresql: {
     'drizzle-kit': '^0.30.0',

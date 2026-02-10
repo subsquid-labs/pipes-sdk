@@ -1,12 +1,15 @@
 import { execSync } from 'node:child_process'
-import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
 import { evmTemplates } from '~/commands/init/templates/pipes/evm/index.js'
-import { Config } from '~/types/init.js'
-import { InitHandler } from './init.handler.js'
 import { ContractMetadata } from '~/services/sqd-abi.js'
+import { Config } from '~/types/init.js'
+
+import { InitHandler } from './init.handler.js'
 
 async function exists(p: string) {
   try {

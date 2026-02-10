@@ -1,5 +1,7 @@
 import Mustache from 'mustache'
 
+import { PackageManager } from '~/types/init.js'
+
 const packageJsonTemplate = `{
   "name": "{{projectName}}",
   "version": "0.0.1",
@@ -14,6 +16,15 @@ const packageJsonTemplate = `{
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push"{{/hasPostgresScripts}}
   },
+  {{#isBun}}
+    "trustedDependencies": [
+    "better-sqlite3",
+    "bufferutil",
+    "es5-ext",
+    "keccak",
+    "utf-8-validate"
+  ],
+  {{/isBun}}
   "dependencies": {{{dependencies}}},
   "devDependencies": {{{devDependencies}}}
 }`
@@ -30,14 +41,14 @@ interface PackageJsonTemplateValues {
   dependencies: Record<string, string>
   devDependencies: Record<string, string>
   hasPostgresScripts: boolean
+  packageManager: PackageManager
 }
 
-export function renderPackageJson(
-  values: PackageJsonTemplateValues,
-): string {
+export function renderPackageJson(values: PackageJsonTemplateValues): string {
   return Mustache.render(packageJsonTemplate, {
     ...values,
     dependencies: formatDependencies(values.dependencies),
     devDependencies: formatDependencies(values.devDependencies),
+    isBun: values.packageManager === 'bun',
   })
 }

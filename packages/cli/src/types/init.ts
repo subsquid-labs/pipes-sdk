@@ -1,16 +1,17 @@
 import { input } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { z } from 'zod'
+
 import { ContractMetadata } from '~/services/sqd-abi.js'
 import { getDefaults } from '~/utils/zod.js'
 
 export type WithContractMetadata<T extends object> = T & { contracts: ContractMetadata[] }
 
 export const packageManagerTypes = [
-  { name: 'pnpm', value: 'pnpm' },
-  { name: 'yarn', value: 'yarn' },
-  { name: 'npm', value: 'npm' },
-  { name: 'bun', value: 'bun' },
+  { name: 'pnpm', value: 'pnpm', lockFile: 'pnpm-lock.yaml' },
+  { name: 'yarn', value: 'yarn', lockFile: 'yarn.lock' },
+  { name: 'npm', value: 'npm', lockFile: 'package-lock.json' },
+  { name: 'bun', value: 'bun', lockFile: 'bun.lock' },
 ] as const
 export type PackageManager = (typeof packageManagerTypes)[number]['value']
 

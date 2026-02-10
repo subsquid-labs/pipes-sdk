@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
+
 import { ContractMetadata } from '~/services/sqd-abi.js'
 import { Config } from '~/types/init.js'
+import { ProjectWriter } from '~/utils/project-writer.js'
+
 import { evmTemplates } from '../../templates/pipes/evm/index.js'
 import { TransformerBuilder } from './index.js'
-import { ProjectWriter } from '~/utils/project-writer.js'
 
 describe('EVM Template Builder', () => {
   const projectWriter = new ProjectWriter('mock-folder')

@@ -1,4 +1,5 @@
 import Mustache from 'mustache'
+
 import { Sink } from '~/types/init.js'
 
 interface DbConfig {
@@ -42,7 +43,6 @@ const indexerService = `{{projectName}}:
         condition: service_healthy
     restart: unless-stopped
     profiles: ["with-pipeline"]`
-    
 
 const clickhouseService = `clickhouse:
     image: clickhouse/clickhouse-server:latest

@@ -114,6 +114,7 @@ export class InitHandler {
         dependencies,
         devDependencies,
         hasPostgresScripts: this.config.sink === 'postgresql',
+        packageManager: this.config.packageManager,
       }),
     )
 
@@ -121,6 +122,7 @@ export class InitHandler {
       'Dockerfile',
       renderDockerfile({
         isPostgres: this.config.sink === 'postgresql',
+        packageManager: this.config.packageManager,
       }),
     )
 
