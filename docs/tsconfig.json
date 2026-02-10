@@ -3,7 +3,7 @@
   "compilerOptions": {
     "baseUrl": ".",
     "module": "commonjs",
-    "moduleResolution": "node",
+    "moduleResolution": "node16",
     "declaration": false,
     "outDir": "dist",
     "skipLibCheck": true

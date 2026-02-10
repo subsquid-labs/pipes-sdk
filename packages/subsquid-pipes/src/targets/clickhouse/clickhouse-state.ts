@@ -1,4 +1,5 @@
 import { BatchCtx, BlockCursor } from '~/core/index.js'
+
 import { ClickhouseStore } from './clickhouse-store.js'
 
 // FIXME: we need refactor it to make order more deterministic and predictable - WHY?
@@ -71,6 +72,10 @@ export class ClickhouseState {
     }
 
     this.#qualifiedName = `"${this.options.database}"."${this.options.table}"`
+  }
+
+  setId(id: string) {
+    this.options.id = id
   }
 
   encodeCursor(cursor: BlockCursor | { number: number }): string {
