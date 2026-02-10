@@ -36,10 +36,6 @@ export interface HistogramConfiguration<T extends string> extends MetricConfigur
   buckets?: number[]
   collect?: CollectFunction<Histogram<T>>
 }
-export interface HistogramConfiguration<T extends string> extends MetricConfiguration<T> {
-  buckets?: number[]
-  collect?: CollectFunction<Histogram<T>>
-}
 
 export interface Summary<T extends string> {
   observe(value: number): void
