@@ -47,37 +47,37 @@ describe('inputType', () => {
   describe('valid JSON strings', () => {
     it('should return "json" for valid JSON object', () => {
       const result = getInputType('{"key": "value"}')
-      expect(result).toBe('json')
+      expect(result).toEqual({ type: 'json', content: '{"key": "value"}' })
     })
 
     it('should return "json" for valid JSON array', () => {
       const result = getInputType('[1, 2, 3]')
-      expect(result).toBe('json')
+      expect(result).toEqual({ type: 'json', content: '[1, 2, 3]' })
     })
 
     it('should return "json" for valid JSON with nested objects', () => {
       const result = getInputType('{"a": {"b": "c"}}')
-      expect(result).toBe('json')
+      expect(result).toEqual({ type: 'json', content: '{"a": {"b": "c"}}' })
     })
 
     it('should return "json" for valid JSON string', () => {
       const result = getInputType('"just a string"')
-      expect(result).toBe('json')
+      expect(result).toEqual({ type: 'json', content: '"just a string"' })
     })
 
     it('should return "json" for valid JSON number', () => {
       const result = getInputType('42')
-      expect(result).toBe('json')
+      expect(result).toEqual({ type: 'json', content: '42' })
     })
 
     it('should return "json" for valid JSON boolean', () => {
       const result = getInputType('true')
-      expect(result).toBe('json')
+      expect(result).toEqual({ type: 'json', content: 'true' })
     })
 
     it('should return "json" for valid JSON null', () => {
       const result = getInputType('null')
-      expect(result).toBe('json')
+      expect(result).toEqual({ type: 'json', content: 'null' })
     })
   })
 
@@ -102,12 +102,12 @@ describe('inputType', () => {
   describe('file paths with path separators', () => {
     it('should return "file" for path with forward slash', () => {
       const result = getInputType(tmpJsonFile)
-      expect(result).toBe('file')
+      expect(result).toEqual({ type: 'file', content: tmpJsonFile })
     })
 
     it('should return "file" for nested path within tmp dir', () => {
       const result = getInputType(tmpNestedPath)
-      expect(result).toBe('file')
+      expect(result).toEqual({ type: 'file', content: tmpNestedPath })
     })
 
     it('should throw error for path separator but non-existent file', () => {
@@ -118,7 +118,7 @@ describe('inputType', () => {
   describe('file paths with extensions', () => {
     it('should return "file" for path with .json extension', () => {
       const result = getInputType(tmpJsonFile)
-      expect(result).toBe('file')
+      expect(result).toEqual({ type: 'file', content: tmpJsonFile })
     })
 
     it('should throw error for extension but non-existent file', () => {
@@ -129,13 +129,13 @@ describe('inputType', () => {
   describe('unmatched strings', () => {
     it('should throw error for plain string without JSON or file indicators', () => {
       expect(() => getInputType('just-a-plain-string')).toThrow(
-        'Invalid input: could not determine if string is a valid JSON or file path'
+        'Invalid input: could not determine if string is a valid JSON or file path',
       )
     })
 
     it('should throw error for string that looks like neither JSON nor file', () => {
       expect(() => getInputType('random text here')).toThrow(
-        'Invalid input: could not determine if string is a valid JSON or file path'
+        'Invalid input: could not determine if string is a valid JSON or file path',
       )
     })
   })
@@ -143,12 +143,12 @@ describe('inputType', () => {
   describe('edge cases', () => {
     it('should handle JSON with whitespace', () => {
       const result = getInputType('  {"key": "value"}  ')
-      expect(result).toBe('json')
+      expect(result).toEqual({ type: 'json', content: '  {"key": "value"}  ' })
     })
 
     it('should handle file path with no extension but exists', () => {
       const result = getInputType(tmpFileNoExt)
-      expect(result).toBe('file')
+      expect(result).toEqual({ type: 'file', content: tmpFileNoExt })
     })
 
     it('should throw error for empty string', () => {
@@ -163,7 +163,7 @@ describe('inputType', () => {
         null: null,
       })
       const result = getInputType(complexJson)
-      expect(result).toBe('json')
+      expect(result).toEqual({ type: 'json', content: complexJson })
     })
   })
 })

@@ -14,7 +14,6 @@ describe('Dockerfile generation', () => {
       # Multi-stage Dockerfile for pipes-sdk-deploy-test
       FROM node:22-slim AS builder
 
-      ENV NODE_ENV=production
       WORKDIR /app
 
       # Enable corepack (pnpm comes with Node 22)
@@ -25,7 +24,7 @@ describe('Dockerfile generation', () => {
 
       # Install dependencies
       COPY package.json pnpm-lock.yaml ./
-      RUN pnpm install --prod --frozen-lockfile --dangerously-allow-all-builds
+      RUN pnpm install --frozen-lockfile --dangerously-allow-all-builds
 
       # Build sources
       COPY tsconfig.json ./
@@ -34,7 +33,6 @@ describe('Dockerfile generation', () => {
 
       FROM node:22-slim AS runner
 
-      ENV NODE_ENV=production
       WORKDIR /app
 
       # Enable corepack for completeness (not strictly required at runtime)
@@ -67,7 +65,6 @@ describe('Dockerfile generation', () => {
       # Multi-stage Dockerfile for pipes-sdk-deploy-test
       FROM node:22-slim AS builder
 
-      ENV NODE_ENV=production
       WORKDIR /app
 
       # Enable corepack (pnpm comes with Node 22)
@@ -78,7 +75,7 @@ describe('Dockerfile generation', () => {
 
       # Install dependencies
       COPY package.json package-lock.json ./
-      RUN npm ci --omit=dev
+      RUN npm ci
 
       # Build sources
       COPY tsconfig.json ./
@@ -87,7 +84,6 @@ describe('Dockerfile generation', () => {
 
       FROM node:22-slim AS runner
 
-      ENV NODE_ENV=production
       WORKDIR /app
 
       # Enable corepack for completeness (not strictly required at runtime)
@@ -120,7 +116,6 @@ describe('Dockerfile generation', () => {
       # Multi-stage Dockerfile for pipes-sdk-deploy-test
       FROM oven/bun:1 AS builder
 
-      ENV NODE_ENV=production
       WORKDIR /app
 
       # System deps to build native modules (e.g., better-sqlite3)
@@ -128,7 +123,7 @@ describe('Dockerfile generation', () => {
 
       # Install dependencies
       COPY package.json bun.lock ./
-      RUN bun install --production --frozen-lockfile
+      RUN bun install --frozen-lockfile
 
       # Build sources
       COPY tsconfig.json ./
@@ -137,7 +132,6 @@ describe('Dockerfile generation', () => {
 
       FROM oven/bun:1 AS runner
 
-      ENV NODE_ENV=production
       WORKDIR /app
 
       # Copy production deps and built files from builder
@@ -167,7 +161,6 @@ describe('Dockerfile generation', () => {
       # Multi-stage Dockerfile for pipes-sdk-deploy-test
       FROM node:22-slim AS builder
 
-      ENV NODE_ENV=production
       WORKDIR /app
 
       # Enable corepack (pnpm comes with Node 22)
@@ -178,7 +171,7 @@ describe('Dockerfile generation', () => {
 
       # Install dependencies
       COPY package.json yarn.lock ./
-      RUN yarn workspaces focus --production
+      RUN yarn config set nodeLinker node-modules && yarn install --immutable
 
       # Build sources
       COPY tsconfig.json ./
@@ -187,7 +180,6 @@ describe('Dockerfile generation', () => {
 
       FROM node:22-slim AS runner
 
-      ENV NODE_ENV=production
       WORKDIR /app
 
       # Enable corepack for completeness (not strictly required at runtime)
