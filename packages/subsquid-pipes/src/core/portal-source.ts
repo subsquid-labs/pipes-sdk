@@ -10,7 +10,7 @@ import {
 
 import { last } from '../internal/array.js'
 import { Logger, formatWarning } from './logger.js'
-import { Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
+import { Counter, Gauge, Histogram, Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
 import { Profiler, Span } from './profiling.js'
 import { ProgressState, StartState } from './progress-tracker.js'
 import { QueryBuilder, hashQuery } from './query-builder.js'
@@ -98,6 +98,12 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   readonly #transformers: Transformer<any, any>[]
 
   #started = false
+
+  // Metrics
+  #pipelineRunning: Gauge | null = null
+  #reorgsTotal: Counter | null = null
+  #batchSizeBlocks: Histogram | null = null
+  #batchSizeBytes: Histogram | null = null
 
   constructor({ portal, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
     this.#portal =
@@ -230,6 +236,9 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             logger: this.#logger,
           }
 
+          this.#batchSizeBlocks?.observe(blocks.length)
+          this.#batchSizeBytes?.observe(batch.meta.bytes)
+
           const data = await this.applyTransformers(ctx, { blocks: batch.blocks } as T)
 
           yield { data, ctx }
@@ -360,15 +369,45 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     this.#metricServer.start()
 
+    const metrics = this.#metricServer.metrics
+
+    this.#pipelineRunning = metrics.gauge({
+      name: 'sqd_pipeline_running',
+      help: 'Whether the pipeline is currently running (1) or stopped (0)',
+    })
+
+    this.#reorgsTotal = metrics.counter({
+      name: 'sqd_reorgs_total',
+      help: 'Total number of chain reorganizations detected',
+    })
+
+    this.#batchSizeBlocks = metrics.histogram({
+      name: 'sqd_batch_size_blocks',
+      help: 'Number of blocks per batch',
+      buckets: [1, 5, 10, 50, 100, 500, 1000, 5000, 10000],
+    })
+
+    this.#batchSizeBytes = metrics.histogram({
+      name: 'sqd_batch_size_bytes',
+      help: 'Size of each batch in bytes',
+      buckets: [1024, 10240, 102400, 524288, 1048576, 5242880, 10485760, 52428800],
+    })
+
     profiler.end()
 
     this.#logger.debug(`<start> hook invoked`)
     this.#started = true
+    this.#pipelineRunning.set(1)
   }
 
   /** @internal */
   async stop() {
     this.#started = false
+    this.#pipelineRunning?.set(0)
+    this.#pipelineRunning = null
+    this.#reorgsTotal = null
+    this.#batchSizeBlocks = null
+    this.#batchSizeBytes = null
 
     const profiler = Span.root('stop', this.#options.profiler)
 
@@ -399,6 +438,8 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             return
           } catch (e) {
             if (!isForkException(e)) throw e
+
+            self.#reorgsTotal?.inc(1)
 
             if (!e.previousBlocks.length) {
               // TODO how to explain this error? what to do next?

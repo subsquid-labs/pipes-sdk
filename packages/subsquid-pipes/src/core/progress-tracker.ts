@@ -1,8 +1,15 @@
-import { Gauge } from '~/core/index.js'
+import { Counter, Gauge } from '~/core/index.js'
 import { displayEstimatedTime, formatBlock, formatNumber, humanBytes } from './formatters.js'
 import { Logger } from './logger.js'
 import { createTransformer } from './transformer.js'
 import { BlockCursor } from './types.js'
+
+function mapRequestStatusLabel(statusCode: number): string {
+  if (statusCode === 429) return 'rate_limited'
+  if (statusCode >= 200 && statusCode < 300) return 'success'
+  if (statusCode >= 500) return 'server_error'
+  return 'error'
+}
 
 type HistoryState = {
   ts: number
@@ -203,6 +210,12 @@ export type ProgressTrackerOptions = {
 export function progressTracker<T>({ onProgress, onStart, interval = 5000, logger }: ProgressTrackerOptions) {
   let ticker: NodeJS.Timeout | null = null
   let currentBlock: Gauge | null = null
+  let lastBlock: Gauge | null = null
+  let progressRatio: Gauge | null = null
+  let etaSeconds: Gauge | null = null
+  let blocksPerSecond: Gauge | null = null
+  let bytesDownloaded: Counter | null = null
+  let portalRequests: Counter<'status'> | null = null
   let lastState: ProgressState | null = null
 
   const history = new ProgressHistory()
@@ -262,9 +275,40 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
 
       currentBlock = metrics.gauge({
         name: 'sqd_current_block',
-        help: 'Total number of blocks processed',
+        help: 'Current block number being processed',
       })
       currentBlock.set(-1)
+
+      lastBlock = metrics.gauge({
+        name: 'sqd_last_block',
+        help: 'Latest known chain head block number',
+      })
+
+      progressRatio = metrics.gauge({
+        name: 'sqd_progress_ratio',
+        help: 'Indexing progress as a ratio from 0 to 1',
+      })
+
+      etaSeconds = metrics.gauge({
+        name: 'sqd_eta_seconds',
+        help: 'Estimated time to completion in seconds',
+      })
+
+      blocksPerSecond = metrics.gauge({
+        name: 'sqd_blocks_per_second',
+        help: 'Current indexing speed in blocks per second',
+      })
+
+      bytesDownloaded = metrics.counter({
+        name: 'sqd_bytes_downloaded_total',
+        help: 'Total bytes downloaded from portal',
+      })
+
+      portalRequests = metrics.counter({
+        name: 'sqd_portal_requests_total',
+        help: 'Total portal requests by status category',
+        labelNames: ['status'] as const,
+      })
     },
     transform: async (data, ctx) => {
       history.addState({
@@ -278,6 +322,16 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
       }
 
       lastState = history.calculate()
+
+      lastBlock?.set(lastState.state.last)
+      progressRatio?.set(lastState.state.percent / 100)
+      etaSeconds?.set(lastState.state.etaSeconds)
+      blocksPerSecond?.set(lastState.interval.processedBlocks.perSecond)
+      bytesDownloaded?.inc(ctx.meta.bytesSize)
+
+      for (const [statusCode, count] of Object.entries(ctx.meta.requests)) {
+        portalRequests?.inc({ status: mapRequestStatusLabel(Number(statusCode)) }, count)
+      }
 
       ctx.state.progress = lastState
 
