@@ -9,6 +9,7 @@ import { PipeTemplateMeta } from '~/types/init.js'
 import { renderClickhouse } from './templates/clickhouse-table.sql.js'
 import { renderSchema } from './templates/pg-table.js'
 import { renderTransformer } from './templates/transformer.js'
+import { createSpinner } from '~/utils/spinner.js'
 
 const RawInputSchema = z.object({ name: z.string(), type: z.string() })
 
@@ -37,8 +38,7 @@ class CustomTemplate extends PipeTemplateMeta<'evm', typeof CustomTemplateParams
       message: `Contract addresses. ${chalk.dim('Comma separated')}:`,
     })
 
-    const spinner = ora('Fetching contract data...')
-    spinner.prefixText = chalk.gray(`[🦑 PIPES SDK]`)
+    const spinner = createSpinner('Fetching contract data...')
     spinner.start()
 
     const addresses = addressesInput.split(',').map((address) => address.trim())

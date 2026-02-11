@@ -16,18 +16,22 @@ program
   .action(withErrorHandling(async (options) => {
       if (options.config) {
         const { type, content } = getInputType(options.config)
+        let handler;
         switch (type) {
           case 'json':
-            await InitHandler.fromJson(content).handle()
-            break
+            handler = await InitHandler.fromJson(content);
+            break;
           case 'file':
-            await InitHandler.fromFile(content).handle()
-            break
+            handler = await InitHandler.fromFile(content);
+            break;
         }
+
+        await handler.handle()
       } else if (options.configId) {
         const configService = new ConfigService()
-        const config = await configService.getConfigJsonByHash(options.configId)
-        await InitHandler.fromJson(config).handle()
+        const configJson = await configService.getConfigJsonByHash(options.configId)
+        const handler = await InitHandler.fromJson(configJson)
+        await handler.handle()
       } else if (options.schema) {
         InitHandler.jsonSchema()
       } else {

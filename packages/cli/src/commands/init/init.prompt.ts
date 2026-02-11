@@ -14,6 +14,7 @@ export class InitPrompt {
   async run() {
     try {
       const config = await this.promptConfig()
+      await InitHandler.resolveDuplicateContractNames(config)
       const handler = new InitHandler(config)
       await handler.handle()
     } catch (error) {
