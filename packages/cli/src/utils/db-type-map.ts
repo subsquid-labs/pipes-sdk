@@ -47,24 +47,28 @@ function clickhouseBytesType(size: number) {
   return `FixedString(${size * 2 + 2})`
 }
 
-const solidityToClickHouseTypes = {
-  // Unsigned integers
-  uint8: 'UInt8',
-  uint16: 'UInt16',
-  uint32: 'UInt32',
-  uint64: 'UInt64',
-  uint128: 'UInt128',
-  uint256: 'UInt256',
-  uint: 'UInt256',
+const CLICKHOUSE_INT_SIZES = [8, 16, 32, 64, 128, 256] as const
 
-  // Signed integers
-  int8: 'Int8',
-  int16: 'Int16',
-  int32: 'Int32',
-  int64: 'Int64',
-  int128: 'Int128',
-  int256: 'Int256',
-  int: 'Int256',
+function smallestClickHouseSize(bits: number): (typeof CLICKHOUSE_INT_SIZES)[number] {
+  const size = CLICKHOUSE_INT_SIZES.find((s) => s >= bits)
+  return size ?? 256
+}
+
+function buildSolidityIntEntries<T>(
+  prefix: 'uint' | 'int',
+  toType: (bits: number) => T,
+): Record<string, T> {
+  const entries: Record<string, T> = {}
+  for (let bits = 8; bits <= 256; bits += 8) {
+    entries[`${prefix}${bits}`] = toType(bits)
+  }
+  entries[prefix] = toType(256) // uint → uint256, int → int256
+  return entries
+}
+
+const solidityToClickHouseTypes = {
+  ...buildSolidityIntEntries('uint', (bits) => `UInt${smallestClickHouseSize(bits)}` as const),
+  ...buildSolidityIntEntries('int', (bits) => `Int${smallestClickHouseSize(bits)}` as const),
 
   // Boolean
   bool: 'Bool',
@@ -117,24 +121,27 @@ function postgresBytesType(size: number) {
   return `char({ length: ${size * 2 + 2} })`
 }
 
-const solidityToPostgresTypes = {
-  // Unsigned integers
-  uint8: 'smallint()',
-  uint16: 'integer()',
-  uint32: "bigint({ mode: 'bigint' })",
-  uint64: 'numeric({ precision: 20, scale: 0 })',
-  uint128: 'numeric({ precision: 39, scale: 0 })',
-  uint256: 'numeric({ precision: 78, scale: 0 })',
-  uint: 'numeric({ precision: 78, scale: 0 })',
+function postgresNumericPrecision(bits: number): number {
+  return Math.ceil((bits * Math.LN2) / Math.LN10)
+}
 
-  // Signed integers
-  int8: 'smallint()',
-  int16: 'smallint()',
-  int32: 'integer()',
-  int64: "bigint({ mode: 'number' })",
-  int128: 'numeric({ precision: 39, scale: 0 })',
-  int256: 'numeric({ precision: 78, scale: 0 })',
-  int: 'numeric({ precision: 78, scale: 0 })',
+function postgresUintType(bits: number): string {
+  if (bits <= 8) return 'smallint()'
+  if (bits <= 16) return 'integer()'
+  if (bits <= 32) return "bigint({ mode: 'bigint' })"
+  return `numeric({ precision: ${postgresNumericPrecision(bits)}, scale: 0 })`
+}
+
+function postgresIntType(bits: number): string {
+  if (bits <= 16) return 'smallint()'
+  if (bits <= 32) return 'integer()'
+  if (bits <= 64) return "bigint({ mode: 'number' })"
+  return `numeric({ precision: ${postgresNumericPrecision(bits)}, scale: 0 })`
+}
+
+const solidityToPostgresTypes = {
+  ...buildSolidityIntEntries('uint', postgresUintType),
+  ...buildSolidityIntEntries('int', postgresIntType),
 
   // Boolean
   bool: 'boolean()',
