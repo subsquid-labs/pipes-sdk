@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { ContractMetadata } from '~/services/sqd-abi.js'
 import { Config } from '~/types/init.js'
 import { evmTemplates } from '../../templates/pipes/evm/index.js'
 import { renderSchemasTemplate } from './index.js'
 
-const wethMetadata: ContractMetadata[] = [
+const wethMetadata = [
   {
     contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
     contractName: 'WETH9',
@@ -46,6 +45,7 @@ const wethMetadata: ContractMetadata[] = [
         type: 'event',
       },
     ],
+    range: { from: 'latest' },
   },
 ]
 

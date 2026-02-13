@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { ContractMetadata } from '~/services/sqd-abi.js'
 import { Config } from '~/types/init.js'
 
 import { evmTemplates } from '../templates/pipes/evm/index.js'
 import { configJsonSchema, configJsonSchemaRaw } from './params.js'
 
 describe('--config params schema', () => {
-  const wethMetadata: ContractMetadata[] = [
+  const wethMetadata = [
     {
       contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
       contractName: 'WETH9',
@@ -45,12 +44,13 @@ describe('--config params schema', () => {
               type: 'uint256',
             },
           ],
-          name: 'Transfer',
-          type: 'event',
-        },
-      ],
-    },
-  ]
+        name: 'Transfer',
+        type: 'event',
+      },
+    ],
+    range: { from: 'latest' },
+  },
+]
 
   const strictConfigSchema = {
     projectFolder: './morpho-blue-markets',
@@ -138,6 +138,7 @@ describe('--config params schema', () => {
                   ],
                 },
               ],
+              range: { from: 'latest' },
             },
           ],
         },
@@ -280,6 +281,7 @@ describe('--config params schema', () => {
                     type: 'event',
                   },
                 ],
+                range: { from: 'latest' },
               },
             ],
           },

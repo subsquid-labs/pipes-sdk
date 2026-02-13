@@ -5,7 +5,7 @@ const template = `import { commonAbis, evmDecoder } from '@subsquid/pipes/evm'
 
 const erc20Transfers = evmDecoder({
   profiler: { id: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
-  range: { from: '12,369,621' },
+  range: { from: '{{{range.from}}}'{{#range.to}}, to: '{{{range.to}}}'{{/range.to}} },
   contracts: [
     {{#contractAddresses}}
     '{{.}}',

@@ -9,7 +9,7 @@ import { instructions as {{{contractName}}}Instructions } from "./contracts/{{{c
 import { enrichEvents } from './utils/index.js'
 
 const custom = solanaInstructionDecoder({
-  range: { from: 'latest' },
+  range: { from: '{{{rangeFrom}}}'{{#rangeTo}}, to: '{{{rangeTo}}}'{{/rangeTo}} },
   programId: [
     {{#contracts}}
     "{{{contractAddress}}}",
@@ -32,7 +32,23 @@ const custom = solanaInstructionDecoder({
 `
 
 export function renderTransformer(params: CustomTemplateParams) {
+  // For SVM, use the oldest (smallest block number) range across all contracts
+  const ranges = params.contracts.map((c) => c.range).filter(Boolean)
+  const range = ranges.reduce(
+    (oldest, r) => {
+      if (!r) return oldest
+      const a = Number(oldest.from)
+      const b = Number(r.from)
+      if (isNaN(b)) return oldest
+      if (isNaN(a)) return r
+      return b < a ? r : oldest
+    },
+    ranges[0] ?? { from: 'latest' },
+  )
+
   return Mustache.render(customContractTemplate, {
+    rangeFrom: range.from,
+    rangeTo: range.to,
     contracts: params.contracts.map((c) => ({ ...c, contractName: toCamelCase(c.contractName) })),
   })
 }

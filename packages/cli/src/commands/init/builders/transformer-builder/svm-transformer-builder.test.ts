@@ -3,11 +3,9 @@ import { Config } from '~/types/init.js'
 import { svmTemplates } from '../../templates/pipes/svm/index.js'
 import { TransformerBuilder } from './index.js'
 import { ProjectWriter } from '~/utils/project-writer.js'
-import { ContractMetadata } from '~/services/sqd-abi.js'
-
 const projectWriter = new ProjectWriter('mock-folder')
 
-const whirlpoolMetadata: ContractMetadata[] = [
+const whirlpoolMetadata = [
   {
     contractAddress: '0x0000000000000000000000000000000000000000',
     contractName: 'whirpool',
@@ -31,6 +29,7 @@ const whirlpoolMetadata: ContractMetadata[] = [
         ],
       },
     ],
+    range: { from: 'latest' },
   },
 ]
 

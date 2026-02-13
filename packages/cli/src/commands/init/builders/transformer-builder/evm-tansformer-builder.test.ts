@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import { ContractMetadata } from '~/services/sqd-abi.js'
 import { Config } from '~/types/init.js'
 import { ProjectWriter } from '~/utils/project-writer.js'
 
@@ -9,7 +8,7 @@ import { TransformerBuilder } from './index.js'
 
 describe('EVM Template Builder', () => {
   const projectWriter = new ProjectWriter('mock-folder')
-  const wethMetadata: ContractMetadata[] = [
+  const wethMetadata = [
     {
       contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
       contractName: 'WETH9',
@@ -47,12 +46,13 @@ describe('EVM Template Builder', () => {
               type: 'uint256',
             },
           ],
-          name: 'Transfer',
-          type: 'event',
-        },
-      ],
-    },
-  ]
+        name: 'Transfer',
+        type: 'event',
+      },
+    ],
+    range: { from: 'latest' },
+  },
+]
 
   it('should build index.ts file using single pipe template', async () => {
     const config: Config<'evm'> = {

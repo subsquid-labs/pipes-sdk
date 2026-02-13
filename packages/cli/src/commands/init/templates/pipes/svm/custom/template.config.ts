@@ -6,10 +6,17 @@ import { renderClickhouse } from './templates/clickhouse-table.sql.js'
 import { z } from 'zod'
 import { input, checkbox } from '@inquirer/prompts'
 import chalk from 'chalk'
+import { promptBlockRange } from '~/utils/block-range-prompt.js'
+import { resolveDuplicateContractNames } from '~/utils/resolve-duplicate-contracts.js'
 
 const RawInputSchema = z.object({ name: z.string(), type: z.string() })
 
 const RawAbiEventSchema = z.object({ name: z.string(), type: z.string(), inputs: z.array(RawInputSchema) })
+
+const BlockRangeSchema = z.object({
+  from: z.string(),
+  to: z.string().optional(),
+})
 
 export const CustomTemplateParamsSchema = z.object({
   contracts: z.array(
@@ -17,6 +24,7 @@ export const CustomTemplateParamsSchema = z.object({
       contractAddress: z.string(),
       contractName: z.string(),
       contractEvents: z.array(RawAbiEventSchema),
+      range: BlockRangeSchema.default({ from: 'latest' }),
     }),
   ),
 })
@@ -37,7 +45,9 @@ class CustomTemplate extends PipeTemplateMeta<'svm', typeof CustomTemplateParams
     const abiService = new SqdAbiService()
     const metadata = await abiService.getContractData('svm', network, addresses)
 
-    const contracts: ContractMetadata[] = []
+    await resolveDuplicateContractNames(metadata)
+
+    const contracts: (ContractMetadata & { range: { from: string; to?: string } })[] = []
     for (const contract of metadata) {
       const choices = contract.contractEvents.map((event) => ({
         name: event.name,
@@ -50,10 +60,17 @@ class CustomTemplate extends PipeTemplateMeta<'svm', typeof CustomTemplateParams
         choices,
         pageSize: 15,
       })
+
+      const range = await promptBlockRange({
+        networkType: 'svm',
+        network,
+      })
+
       contracts.push({
         contractAddress: contract.contractAddress,
         contractName: contract.contractName,
         contractEvents: events,
+        range,
       })
     }
 

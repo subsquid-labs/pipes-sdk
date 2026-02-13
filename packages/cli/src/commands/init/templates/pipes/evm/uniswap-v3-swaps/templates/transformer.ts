@@ -6,7 +6,7 @@ import { events as factoryEvents } from './contracts/factory.js'
 import { events as poolEvents } from './contracts/pool.js'
 
 const uniswapV3Swaps = evmDecoder({
-  range: { from: '12,369,621' }, // Uniswap V3 Factory deployment block
+  range: { from: '{{{range.from}}}'{{#range.to}}, to: '{{{range.to}}}'{{/range.to}} },
   contracts: factory({
     address: [
       '{{factoryAddress}}',

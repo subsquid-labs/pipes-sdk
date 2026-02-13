@@ -14,7 +14,7 @@ import { enrichEvents } from './utils/index.js'
 
 {{#decoderGroups}}
 const {{{decoderId}}} = evmDecoder({
-  range: { from: 'latest' },
+  range: { from: '{{{rangeFrom}}}'{{#rangeTo}}, to: '{{{rangeTo}}}'{{/rangeTo}} },
   contracts: [
     {{#contracts}}
     '{{{contractAddress}}}',
@@ -46,6 +46,8 @@ export function renderTransformer({ contracts }: CustomTemplateParams) {
       decoderId: group.decoderId,
       imports: [{ alias, address: firstContract.contractAddress }],
       contracts: group.contracts,
+      rangeFrom: group.range.from,
+      rangeTo: group.range.to,
       events: group.events.map((e) => ({
         name: e.name,
         eventsAlias: alias,

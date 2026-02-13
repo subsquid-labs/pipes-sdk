@@ -2,10 +2,10 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 
 import chalk from 'chalk'
-import { input } from '@inquirer/prompts'
 import { z } from 'zod'
 
 import { type Config, type NetworkType, sinkTypes } from '~/types/init.js'
+import { resolveDuplicateContractNames } from '~/utils/resolve-duplicate-contracts.js'
 import { getTemplateDirname } from '~/utils/fs.js'
 import { ProjectWriter } from '~/utils/project-writer.js'
 import { toKebabCase } from '~/utils/string.js'
@@ -246,61 +246,14 @@ export class InitHandler {
 
   /**
    * If any template has `params.contracts` with duplicate contract names, prompt the user
-   * for unique names and mutate the config in place. Ensures --config flow handles duplicates.
+   * for unique names and mutate the config in place. Safety net for --config flow.
    */
   static async resolveDuplicateContractNames(config: Config<NetworkType>): Promise<void> {
     for (const template of config.templates) {
       const params = template.params as { contracts?: Array<{ contractAddress: string; contractName: string }> } | undefined
       if (!params?.contracts || !Array.isArray(params.contracts)) continue
-
-      const duplicates = InitHandler.findDuplicateContractNames(params.contracts)
-      if (duplicates.size === 0) continue
-
-      const contracts = params.contracts
-      const usedNames = new Set(contracts.map((c) => c.contractName))
-
-      for (const [name, indices] of duplicates) {
-        for (const index of indices) {
-          const contract = contracts[index]
-          usedNames.delete(contract.contractName)
-
-          const newName = await InitHandler.promptForUniqueContractName(name, contract.contractAddress, usedNames)
-
-          ;(contract as { contractName: string }).contractName = newName
-          usedNames.add(newName)
-        }
-      }
+      await resolveDuplicateContractNames(params.contracts)
     }
-  }
-
-  private static findDuplicateContractNames(
-    contracts: Array<{ contractName: string }>,
-  ): Map<string, number[]> {
-    const nameToIndices = new Map<string, number[]>()
-    contracts.forEach((c, index) => {
-      const indices = nameToIndices.get(c.contractName) ?? []
-      indices.push(index)
-      nameToIndices.set(c.contractName, indices)
-    })
-    return new Map(Array.from(nameToIndices.entries()).filter(([, indices]) => indices.length > 1))
-  }
-
-  private static async promptForUniqueContractName(
-    originalName: string,
-    address: string,
-    usedNames: Set<string>,
-  ): Promise<string> {
-    const shortAddress =
-      address.length > 12 ? `${address.slice(0, 6)}...${address.slice(-5)}` : address
-    return input({
-      message: `Contract name "${originalName}" is duplicated. Enter unique name for ${shortAddress}:`,
-      default: `${originalName}_${address.slice(0, 6)}`,
-      validate: (value) => {
-        if (!value.trim()) return 'Contract name cannot be empty'
-        if (usedNames.has(value)) return `Name "${value}" already in use`
-        return true
-      },
-    })
   }
 
   static jsonSchema() {

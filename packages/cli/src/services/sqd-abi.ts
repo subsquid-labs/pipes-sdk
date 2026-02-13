@@ -75,6 +75,11 @@ export class SqdAbiService {
     )
   }
 
+  async getContractCreationBlock(network: string, address: string): Promise<string> {
+    const chainid = getEvmChainId(network)
+    return new EvmAbiService().getContractCreationBlock(address, chainid)
+  }
+
   private getService(networkType: NetworkType): AbiService {
     switch (networkType) {
       case 'evm':
@@ -143,6 +148,27 @@ class EvmAbiService extends AbiService {
       throw e
       // TODO: handle error
     }
+  }
+
+  async getContractCreationBlock(address: string, chainid: string): Promise<string> {
+    const params = new URLSearchParams({
+      chainid,
+      module: 'contract',
+      action: 'getcontractcreation',
+      contractaddresses: address,
+    })
+
+    const url = new URL(EvmAbiService.SERVICE_URL)
+    url.search = params.toString()
+
+    const res = await fetch(url)
+    const data = (await res.json()) as BaseProxyRes<[{ blockNumber: string }]>
+
+    if (!data.result?.[0]?.blockNumber) {
+      throw new Error(`Could not fetch deployment block for ${address}`)
+    }
+
+    return data.result[0].blockNumber
   }
 
   private isContractVerified(abiRes: string) {

@@ -5,6 +5,8 @@ import z from 'zod'
 
 import { ContractMetadata, SqdAbiService } from '~/services/sqd-abi.js'
 import { PipeTemplateMeta } from '~/types/init.js'
+import { promptBlockRange } from '~/utils/block-range-prompt.js'
+import { resolveDuplicateContractNames } from '~/utils/resolve-duplicate-contracts.js'
 import { createSpinner } from '~/utils/spinner.js'
 
 import { groupContractsForDecoders } from './decoder-grouping.js'
@@ -16,12 +18,18 @@ const RawInputSchema = z.object({ name: z.string(), type: z.string() })
 
 const RawAbiEventSchema = z.object({ name: z.string(), type: z.string(), inputs: z.array(RawInputSchema) })
 
+const BlockRangeSchema = z.object({
+  from: z.string(),
+  to: z.string().optional(),
+})
+
 export const CustomTemplateParamsSchema = z.object({
   contracts: z.array(
     z.object({
       contractAddress: z.string(),
       contractName: z.string(),
       contractEvents: z.array(RawAbiEventSchema),
+      range: BlockRangeSchema.default({ from: 'latest' }),
     }),
   ),
 })
@@ -47,7 +55,9 @@ class CustomTemplate extends PipeTemplateMeta<'evm', typeof CustomTemplateParams
     const metadata = await abiService.getContractData('evm', network, addresses)
     spinner.succeed()
 
-    const contracts: ContractMetadata[] = []
+    await resolveDuplicateContractNames(metadata)
+
+    const contracts: (ContractMetadata & { range: { from: string; to?: string } })[] = []
     for (const contract of metadata) {
       const choices = contract.contractEvents.map((event) => ({
         name: event.name,
@@ -59,10 +69,18 @@ class CustomTemplate extends PipeTemplateMeta<'evm', typeof CustomTemplateParams
         choices,
         pageSize: 15,
       })
+
+      const range = await promptBlockRange({
+        networkType: 'evm',
+        network,
+        contractAddresses: [contract.contractAddress],
+      })
+
       contracts.push({
         contractAddress: contract.contractAddress,
         contractName: contract.contractName,
         contractEvents: events,
+        range,
       })
     }
 

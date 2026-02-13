@@ -6,7 +6,6 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { evmTemplates } from '~/commands/init/templates/pipes/evm/index.js'
-import { ContractMetadata } from '~/services/sqd-abi.js'
 import { Config } from '~/types/init.js'
 
 import { InitHandler } from './init.handler.js'
@@ -43,7 +42,7 @@ describe('InitHandler', () => {
   const PROJECT_NAME = 'my-project'
   let tmpRoot: string
   let projectDir: string
-  const wethMetadata: ContractMetadata[] = [
+  const wethMetadata = [
     {
       contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
       contractName: 'WETH9',
@@ -81,12 +80,13 @@ describe('InitHandler', () => {
               type: 'uint256',
             },
           ],
-          name: 'Transfer',
-          type: 'event',
-        },
-      ],
-    },
-  ]
+        name: 'Transfer',
+        type: 'event',
+      },
+    ],
+    range: { from: 'latest' },
+  },
+]
 
   beforeEach(async () => {
     tmpRoot = await mkdtemp(path.join(tmpdir(), 'my-cli-'))
