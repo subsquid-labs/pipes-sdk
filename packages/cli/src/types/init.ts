@@ -48,6 +48,10 @@ export abstract class PipeTemplateMeta<N extends NetworkType, Params extends z.Z
   abstract renderPostgresSchemas(): string
   abstract renderClickhouseTables(): string
 
+  getDecoderIds(): string[] {
+    return [this.templateId]
+  }
+
   params?: InferredParams<Params>
 
   readonly paramsSchema?: Params extends z.ZodObject ? Params : undefined

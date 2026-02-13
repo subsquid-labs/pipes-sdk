@@ -1,9 +1,12 @@
 import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
-import { ContractMetadata, RawAbiItem } from '~/services/sqd-abi.js'
+
 import { evmToPostgresType } from '~/utils/db-type-map.js'
+
 import { tableToSchemaName } from '../../../../../builders/schema-builder/index.js'
+import { type DecoderGrouping } from '../decoder-grouping.js'
 import { CustomTemplateParams } from '../template.config.js'
+import { groupContractsForDecoders } from '../decoder-grouping.js'
 
 export const customContractPgTemplate = `
 import {
@@ -40,11 +43,13 @@ export const {{schemaName}} = pgTable(
 {{/contracts}}
 `
 
-export const eventTableName = (contract: ContractMetadata, event: RawAbiItem) =>
-  toSnakeCase(`${contract.contractName}_${event.name}`)
+export function tableName(grouping: DecoderGrouping, contractName: string, eventName: string) {
+  return grouping.shared ? toSnakeCase(eventName) : toSnakeCase(`${contractName}_${eventName}`)
+}
 
 export function renderSchema({ contracts }: CustomTemplateParams) {
-  const contracsWithDbTypes = getContractWithDbTypes(contracts)
+  const grouping = groupContractsForDecoders(contracts)
+  const contracsWithDbTypes = getContractWithDbTypes(grouping)
 
   return Mustache.render(customContractPgTemplate, {
     typeImports: generateDrizzleImports(contracsWithDbTypes),
@@ -52,14 +57,15 @@ export function renderSchema({ contracts }: CustomTemplateParams) {
   })
 }
 
-export function getContractWithDbTypes(contracts: ContractMetadata[]) {
-  return contracts.flatMap((c) =>
-    c.contractEvents.map((e) => {
-      const tableName = eventTableName(c, e)
+export function getContractWithDbTypes(grouping: DecoderGrouping) {
+  return grouping.groups.flatMap((group) =>
+    group.events.map((e) => {
+      const tbl = tableName(grouping, group.contracts[0].contractName, e.name)
       return {
         event: e.name,
-        schemaName: tableToSchemaName(tableName),
-        tableName,
+        decoderId: group.decoderId,
+        schemaName: tableToSchemaName(tbl),
+        tableName: tbl,
         inputs: e.inputs.map((i) => ({
           ...i,
           dbType: evmToPostgresType(i.type),

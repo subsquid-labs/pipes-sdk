@@ -5,11 +5,12 @@ import z from 'zod'
 
 import { ContractMetadata, SqdAbiService } from '~/services/sqd-abi.js'
 import { PipeTemplateMeta } from '~/types/init.js'
+import { createSpinner } from '~/utils/spinner.js'
 
+import { groupContractsForDecoders } from './decoder-grouping.js'
 import { renderClickhouse } from './templates/clickhouse-table.sql.js'
 import { renderSchema } from './templates/pg-table.js'
 import { renderTransformer } from './templates/transformer.js'
-import { createSpinner } from '~/utils/spinner.js'
 
 const RawInputSchema = z.object({ name: z.string(), type: z.string() })
 
@@ -76,6 +77,10 @@ class CustomTemplate extends PipeTemplateMeta<'evm', typeof CustomTemplateParams
       projectPath,
       this.getParams().contracts.map((c) => c.contractAddress),
     )
+  }
+
+  override getDecoderIds(): string[] {
+    return groupContractsForDecoders(this.getParams().contracts).groups.map((g) => g.decoderId)
   }
 
   override renderTransformers() {

@@ -17,7 +17,12 @@ export async function main() {
   })
   .pipeComposite({
 {{#transformerTemplates}}
+{{#templateId}}
     {{{templateId}}},
+{{/templateId}}
+{{#templateIds}}
+    {{{.}}},
+{{/templateIds}}
 {{/transformerTemplates}}
   })
   .pipeTo({{{sinkTemplate}}})
@@ -44,7 +49,13 @@ export class EvmTransformerBuilder extends BaseTransformerBuilder<'evm'> {
   getTransformerTemplates() {
     return Promise.all(
       this.config.templates.map(async (t) => {
-        return { code: t.renderTransformers(), templateId: t.templateId }
+        const code = t.renderTransformers()
+        const decoderIds = t.getDecoderIds()
+
+        if (decoderIds.length === 1) {
+          return { code, templateId: decoderIds[0] }
+        }
+        return { code, templateIds: decoderIds }
       }),
     )
   }

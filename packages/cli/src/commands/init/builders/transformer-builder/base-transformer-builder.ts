@@ -14,7 +14,8 @@ export interface TemplateValues {
 }
 
 export interface TransformerTemplateBuilder {
-  templateId: string
+  templateId?: string
+  templateIds?: string[]
   code: string
 }
 

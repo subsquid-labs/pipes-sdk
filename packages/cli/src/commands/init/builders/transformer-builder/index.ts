@@ -67,6 +67,7 @@ export class TransformerBuilder<N extends NetworkType> {
     const { code: envCode } = splitImportsAndCode(envTemplate)
     const transformersCode = transformerTemplates.map((t) => ({
       templateId: t.templateId,
+      templateIds: t.templateIds,
       code: splitImportsAndCode(t.code).code,
     }))
 

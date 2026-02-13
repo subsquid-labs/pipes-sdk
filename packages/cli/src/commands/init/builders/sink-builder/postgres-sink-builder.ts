@@ -1,10 +1,15 @@
+import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
+
 import { NetworkType, PipeTemplateMeta } from '~/types/init.js'
-import { BaseSinkBuilder } from './base-sink-builder.js'
+
 import { postgresDefaults } from '../../templates/config-files/dynamic/docker-compose.js'
 import { drizzleConfigTemplate } from '../../templates/config-files/static/drizzle-config.js'
-import { renderSchemasTemplate, tableToSchemaName } from '../schema-builder/index.js'
+import { groupContractsForDecoders } from '../../templates/pipes/evm/custom/decoder-grouping.js'
+import { tableName as pgTableName } from '../../templates/pipes/evm/custom/templates/pg-table.js'
 import { CustomTemplateParamsSchema } from '../../templates/pipes/evm/custom/template.config.js'
+import { renderSchemasTemplate, tableToSchemaName } from '../schema-builder/index.js'
+import { BaseSinkBuilder } from './base-sink-builder.js'
 
 const sinkTemplate = `
 import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
@@ -46,7 +51,7 @@ drizzleTarget({
     {{/templates}}
     {{#customTemplates}}
       {{#schemas}} 
-      for (const values of chunk(data.{{templateId}}.{{event}})) {
+      for (const values of chunk(data.{{decoderId}}.{{event}})) {
         await tx.insert({{schemaName}}).values(values)
       }
       {{/schemas}} 
@@ -65,15 +70,18 @@ export class PostgresSinkBuilder extends BaseSinkBuilder {
 
     const customTemplates = this.config.templates
       .filter((t): t is PipeTemplateMeta<NetworkType, typeof CustomTemplateParamsSchema> => t.templateId === 'custom')
-      .map((t) => ({
-        templateId: t.templateId,
-        schemas: t.getParams().contracts.flatMap((c) =>
-          c.contractEvents.map((e) => ({
+      .flatMap((t) => {
+        const grouping = groupContractsForDecoders(t.getParams().contracts)
+        return grouping.groups.map((group) => ({
+          decoderId: group.decoderId,
+          schemas: group.events.map((e) => ({
             event: e.name,
-            schemaName: tableToSchemaName(`${c.contractName}_${e.name}`),
+            schemaName: tableToSchemaName(
+              pgTableName(grouping, group.contracts[0].contractName, e.name),
+            ),
           })),
-        ),
-      }))
+        }))
+      })
 
     return Mustache.render(sinkTemplate, {
       templates,

@@ -4,8 +4,13 @@ import Mustache from 'mustache'
 import { NetworkType, PipeTemplateMeta } from '~/types/init.js'
 
 import { clickhouseDefaults } from '../../templates/config-files/dynamic/docker-compose.js'
+import { groupContractsForDecoders, type DecoderGrouping } from '../../templates/pipes/evm/custom/decoder-grouping.js'
 import { CustomTemplateParamsSchema } from '../../templates/pipes/evm/custom/template.config.js'
 import { BaseSinkBuilder } from './base-sink-builder.js'
+
+function chTableName(grouping: DecoderGrouping, contractName: string, eventName: string) {
+  return grouping.shared ? toSnakeCase(eventName) : toSnakeCase(`${contractName}_${eventName}`)
+}
 
 const sinkTemplate = `
 import path from 'node:path'
@@ -48,7 +53,7 @@ clickhouseTarget({
     {{#schemaNames}}
       await store.insert({
         table: '{{{tableName}}}',
-        values: toSnakeKeysArray(data.{{templateId}}.{{{event}}}),
+        values: toSnakeKeysArray(data.{{decoderId}}.{{{event}}}),
         format: 'JSONEachRow',
       });
     {{/schemaNames}}
@@ -85,15 +90,16 @@ export class ClickhouseSinkBuilder extends BaseSinkBuilder {
 
     const customTemplates = this.config.templates
       .filter((t): t is PipeTemplateMeta<NetworkType, typeof CustomTemplateParamsSchema> => t.templateId === 'custom')
-      .map((t) => ({
-        templateId: t.templateId,
-        schemaNames: t.getParams().contracts.flatMap((c) =>
-          c.contractEvents.map((e) => ({
+      .flatMap((t) => {
+        const grouping = groupContractsForDecoders(t.getParams().contracts)
+        return grouping.groups.map((group) => ({
+          decoderId: group.decoderId,
+          schemaNames: group.events.map((e) => ({
             event: e.name,
-            tableName: toSnakeCase(`${c.contractName}_${e.name}`),
+            tableName: chTableName(grouping, group.contracts[0].contractName, e.name),
           })),
-        ),
-      }))
+        }))
+      })
 
     return Mustache.render(sinkTemplate, {
       templates,

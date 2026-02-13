@@ -38,5 +38,6 @@ local/
 **/*.sqlite-wal
 
 .cursor
+.agents
 
 scaffolds/

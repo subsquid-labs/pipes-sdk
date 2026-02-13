@@ -1,8 +1,11 @@
 import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
-import { ContractMetadata } from '~/services/sqd-abi.js'
+
 import { evmToClickhouseType } from '~/utils/db-type-map.js'
+
+import { type DecoderGrouping } from '../decoder-grouping.js'
 import { CustomTemplateParams } from '../template.config.js'
+import { groupContractsForDecoders } from '../decoder-grouping.js'
 
 export const customContractChTemplate = `
 {{#contracts}}
@@ -24,19 +27,25 @@ ORDER BY (block_number, tx_hash, log_index);
 {{/contracts}}
 `
 
+function tableName(grouping: DecoderGrouping, contractName: string, eventName: string) {
+  return grouping.shared ? toSnakeCase(eventName) : toSnakeCase(`${contractName}_${eventName}`)
+}
+
 export function renderClickhouse({ contracts }: CustomTemplateParams) {
-  const contracsWithDbTypes = getContractWithDbTypes(contracts)
+  const grouping = groupContractsForDecoders(contracts)
+  const contracsWithDbTypes = getContractWithDbTypes(grouping)
 
   return Mustache.render(customContractChTemplate, {
     contracts: contracsWithDbTypes,
   })
 }
 
-function getContractWithDbTypes(contracts: ContractMetadata[]) {
-  return contracts.flatMap((c) =>
-    c.contractEvents.map((e) => ({
+function getContractWithDbTypes(grouping: DecoderGrouping) {
+  return grouping.groups.flatMap((group) =>
+    group.events.map((e) => ({
       event: e.name,
-      tableName: toSnakeCase(`${c.contractName}_${e.name}`),
+      decoderId: group.decoderId,
+      tableName: tableName(grouping, group.contracts[0].contractName, e.name),
       inputs: e.inputs.map((i) => ({
         ...i,
         name: toSnakeCase(i.name),
