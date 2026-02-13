@@ -6,9 +6,18 @@ import * as hyperliquidFills from './hyperliquid-fills.js'
 import * as solana from './solana.js'
 import * as substrate from './substrate.js'
 
+export type { Block as SolanaBlock, FieldSelection as SolanaFieldSelection } from './solana.js'
+export type { Block as EvmBlock, FieldSelection as EvmFieldSelection } from './evm.js'
+export type { Block as HyperliquidFillsBlock, FieldSelection as HyperliquidFillsFieldSelection } from './hyperliquid-fills.js'
+export type { Block as SubstrateBlock, FieldSelection as SubstrateFieldSelection } from './substrate.js'
+
 export type { PortalBlock, PortalQuery } from './common.js'
 export type { evm, hyperliquidFills, solana, substrate }
 
+export type SolanaQuery = solana.Query
+export type EvmQuery = evm.Query
+export type HyperliquidFillsQuery = hyperliquidFills.Query
+export type SubstrateQuery = substrate.Query
 export type Query = evm.Query | hyperliquidFills.Query | solana.Query | substrate.Query
 
 export type GetBlock<Q extends Query> = Q extends evm.Query
