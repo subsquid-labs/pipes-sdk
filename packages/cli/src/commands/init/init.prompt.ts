@@ -110,15 +110,25 @@ export class InitPrompt {
     }
   }
 
+  private static readonly SKIP_TEMPLATE_VALUE = '__skip__' as const
+
   private async templatePromptLoop<N extends NetworkType>(
     networkType: N,
     network: string,
   ): Promise<PipeTemplateMeta<N, z.ZodObject>[]> {
-    const choices = getTemplatePrompts(networkType)
+    const templateChoices = getTemplatePrompts(networkType)
     const selectedTemplates: PipeTemplateMeta<N, z.ZodObject>[] = []
     let addMore = true
 
     while (addMore) {
+      const choices =
+        selectedTemplates.length > 0
+          ? [
+              ...templateChoices,
+              { name: 'Skip - continue to next step', value: InitPrompt.SKIP_TEMPLATE_VALUE },
+            ]
+          : templateChoices
+
       const templateId = await select({
         message: 'Pick your starter template. You can select multiple:',
         choices,
@@ -129,6 +139,11 @@ export class InitPrompt {
           },
         },
       })
+
+      if (templateId === InitPrompt.SKIP_TEMPLATE_VALUE) {
+        addMore = false
+        continue
+      }
 
       const template = getTemplate(networkType, templateId)
       await template.promptParams(network)
