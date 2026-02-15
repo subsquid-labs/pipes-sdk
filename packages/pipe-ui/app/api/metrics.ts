@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+
 import { client, getUrl } from '~/api/client'
 
 type HttpResponse<T> = {
@@ -9,59 +10,80 @@ export type Stats = {
   sdk: {
     version: string
   }
-  portal: {
-    url: string
-    query: any
-  }
-  progress: {
-    from: number
-    current: number
-    to: number
-    percent: number
-    etaSeconds: number
-  }
-  speed: {
-    blocksPerSecond: number
-    bytesPerSecond: number
-  }
   usage: {
     memory: number
   }
+  pipes: {
+    id: string
+    portal: {
+      url: string
+      query: any
+    }
+    progress: {
+      from: number
+      current: number
+      to: number
+      percent: number
+      etaSeconds: number
+    }
+    speed: {
+      blocksPerSecond: number
+      bytesPerSecond: number
+    }
+  }[]
 }
 
 const MAX_HISTORY = 30
-let history: {
-  blocksPerSecond: number
-  bytesPerSecond: number
-  memory: number
-}[] = new Array(MAX_HISTORY).fill({
-  blocksPerSecond: 0,
-  bytesPerSecond: 0,
-  memory: 0,
-})
+export const DEFAULT_PIPE_ID = 'stream'
+const histories = new Map<
+  string,
+  {
+    blocksPerSecond: number
+    bytesPerSecond: number
+    memory: number
+  }[]
+>()
+
+function getHistory(pipeId: string) {
+  let history = histories.get(pipeId)
+  if (!history) {
+    history = new Array(MAX_HISTORY).fill({
+      blocksPerSecond: 0,
+      bytesPerSecond: 0,
+      memory: 0,
+    })
+    histories.set(pipeId, history)
+  }
+  return history
+}
+
+const BASE_URL = 'http://127.0.0.1:9090'
 
 export function useStats() {
-  const url = getUrl('http://127.0.0.1:9090', '/stats')
+  const url = getUrl(BASE_URL, `/stats`)
 
   return useQuery({
     queryKey: ['pipe/stats'],
     queryFn: async () => {
       try {
-        const res = await client<HttpResponse<Stats>>(url, {
-          withCredentials: true,
-        })
-
-        history.push({
-          bytesPerSecond: res.data.payload.speed.bytesPerSecond,
-          blocksPerSecond: res.data.payload.speed.blocksPerSecond,
-          memory: res.data.payload.usage.memory,
-        })
-
-        history = history.slice(-MAX_HISTORY)
+        const res = await client<HttpResponse<Stats>>(url)
 
         return {
           ...res.data.payload,
-          history,
+          pipes: res.data.payload.pipes.map((pipe) => {
+            let history = getHistory(pipe.id)
+
+            history.push({
+              bytesPerSecond: pipe.speed.bytesPerSecond,
+              blocksPerSecond: pipe.speed.blocksPerSecond,
+              memory: res.data.payload.usage.memory,
+            })
+
+            history = history.slice(-MAX_HISTORY)
+            histories.set(pipe.id, history)
+
+            return { ...pipe, history }
+          }),
         }
       } catch (error) {
         return null
@@ -72,17 +94,25 @@ export function useStats() {
   })
 }
 
+export function usePipe(id: string) {
+  const { data: stats } = useStats()
+
+  const data = stats?.pipes.find((pipe) => pipe.id === id)
+
+  return data
+}
+
 export type ApiProfilerResult = {
   name: string
   totalTime: number
   children: ApiProfilerResult[]
 }
 
-export function useProfilers({ enabled = true }: { enabled?: boolean } = {}) {
-  const url = getUrl('http://127.0.0.1:9090', '/profiler')
+export function useProfilers({ enabled = true, pipeId }: { enabled?: boolean; pipeId: string }) {
+  const url = getUrl(BASE_URL, `/profiler?pipe=${pipeId}`)
 
   return useQuery({
-    queryKey: ['pipe/profiler'],
+    queryKey: ['pipe/profiler', pipeId],
     queryFn: async () => {
       try {
         const res = await client<
@@ -110,11 +140,11 @@ export type ApiExemplarResult = {
   children: ApiExemplarResult[]
 }
 
-export function useTransformationExemplar({ enabled = true }: { enabled?: boolean } = {}) {
-  const url = getUrl('http://127.0.0.1:9090', '/exemplars/transformation')
+export function useTransformationExemplar({ enabled = true, pipeId }: { enabled?: boolean; pipeId: string }) {
+  const url = getUrl(BASE_URL, `/exemplars/transformation?pipe=${pipeId}`)
 
   return useQuery({
-    queryKey: ['pipe/exemplars/transformation'],
+    queryKey: ['pipe/exemplars/transformation', pipeId],
     queryFn: async () => {
       try {
         const res = await client<

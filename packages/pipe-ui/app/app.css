@@ -159,6 +159,10 @@ body {
   background: linear-gradient(#d0a9e2, transparent 85%), linear-gradient(90deg, #433485, #b53cdd);
 }
 
+button {
+  cursor: pointer;
+}
+
 .test {
   position: relative;
   overflow: hidden;

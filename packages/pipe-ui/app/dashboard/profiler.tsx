@@ -1,6 +1,8 @@
+import { useState } from 'react'
+
 import { Toggle } from '@radix-ui/react-toggle'
 import { Play } from 'lucide-react'
-import { useState } from 'react'
+
 import { type ApiProfilerResult, useProfilers } from '~/api/metrics'
 
 type ProfilerResult = {
@@ -94,8 +96,8 @@ export function ProfilerResult({ profiler, useSelfTime }: { profiler: ProfilerRe
   )
 }
 
-export function Profiler() {
-  const { data } = useProfilers()
+export function Profiler({ pipeId }: { pipeId: string }) {
+  const { data } = useProfilers({ pipeId })
   const [useSelfTime, setUseSelfTime] = useState(false)
 
   const profilers = data?.profilers || []

@@ -1,7 +1,9 @@
-import NumberFlow from '@number-flow/react'
 import { useMemo } from 'react'
+
+import NumberFlow from '@number-flow/react'
 // @ts-ignore
 import { Sparklines, SparklinesLine } from 'react-sparklines'
+
 import { useStats } from '~/api/metrics'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { displayEstimatedTime, humanBytes } from '~/dashboard/formatters'
@@ -14,8 +16,11 @@ const sparklineStyle = { fill: '#d0a9e2' }
 // const sparklineStyle = { fill: 'rgba(255,255,255,1)' }
 const sparklineColor = 'rgba(255,255,255,0.5)'
 
-export function Pipeline() {
-  const { data } = useStats()
+export function Pipeline({ pipeId }: { pipeId: string }) {
+  const { data: stats } = useStats()
+
+  const data = stats?.pipes.find((pipe) => pipe.id === pipeId)
+
   const dataset = useMemo(() => {
     return data?.portal.url.replace(/^[\w.\/:]+datasets\//, '')
   }, [data?.portal.url])
@@ -59,13 +64,13 @@ export function Pipeline() {
             <TabsTrigger value="query">Query</TabsTrigger>
           </TabsList>
           <TabsContent value="profiler">
-            <Profiler />
+            <Profiler pipeId={pipeId} />
           </TabsContent>
           <TabsContent value="data-flow">
-            <TransformationExemplar />
+            <TransformationExemplar pipeId={pipeId} />
           </TabsContent>
           <TabsContent value="query">
-            <QueryExemplar />
+            <QueryExemplar pipeId={pipeId} />
           </TabsContent>
         </Tabs>
 
@@ -100,7 +105,7 @@ export function Pipeline() {
             </div>
             <div>
               <div className="text-xxs">Memory</div>
-              <div>{humanBytes(data.usage.memory)}</div>
+              <div>{stats?.usage.memory && humanBytes(stats.usage.memory)}</div>
             </div>
           </div>
         </div>

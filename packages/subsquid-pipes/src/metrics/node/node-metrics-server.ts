@@ -29,21 +29,25 @@ export type Stats = {
   sdk: {
     version: string
   }
-  portal: {
-    url: string
-    query: any
-  }
-  progress: {
-    from: number
-    current: number
-    to: number
-    percent: number
-    etaSeconds: number
-  }
-  speed: {
-    blocksPerSecond: number
-    bytesPerSecond: number
-  }
+  pipes: {
+    id: string
+    portal: {
+      url: string
+      query: any
+    }
+    progress: {
+      from: number
+      current: number
+      to: number
+      percent: number
+      etaSeconds: number
+    }
+    speed: {
+      blocksPerSecond: number
+      bytesPerSecond: number
+    }
+  }[]
+
   usage: {
     memory: number
   }
@@ -104,6 +108,12 @@ function transformExemplar(profiler: Profiler): TransformationResult {
 const MAX_HISTORY = 50
 const DEFAULT_PORT = 9090
 
+type PipeData = {
+  lastBatch?: BatchCtx
+  profilers: { profiler: ProfilerResult; collectedAt: Date }[]
+  transformationExemplar?: TransformationResult
+}
+
 class MetricServer {
   readonly #options: { port: number; enabled: boolean }
   readonly #app: Application
@@ -112,11 +122,7 @@ class MetricServer {
   #started: boolean = false
   #server?: Server
   #logger?: Logger
-  #data: {
-    lastBatch?: BatchCtx
-    profilers: { profiler: ProfilerResult; collectedAt: Date }[]
-    transformationExemplar?: TransformationResult
-  } = { profilers: [] }
+  #pipes: Map<string, PipeData> = new Map()
 
   constructor({ port = DEFAULT_PORT, enabled = true, logger }: MetricsServerOptions = {}) {
     this.#options = {
@@ -197,30 +203,37 @@ class MetricServer {
 
     this.#app.get('/stats', async (req, res) => {
       const memory = await registry.getSingleMetric('process_resident_memory_bytes')?.get()
-      const lastBatch = this.#data.lastBatch
 
       const data: Stats = {
         sdk: {
           version: npmVersion,
         },
-        portal: {
-          url: lastBatch?.query.url || '',
-          query: lastBatch?.query.raw || {},
-        },
-        progress: {
-          from: lastBatch?.state.initial || 0,
-          current: lastBatch?.state.current.number || 0,
-          to: lastBatch?.state.last || 0,
-          percent: lastBatch?.state.progress?.state.percent || 0,
-          etaSeconds: lastBatch?.state.progress?.state.etaSeconds || 0,
-        },
-        speed: {
-          blocksPerSecond: lastBatch?.state.progress?.interval.processedBlocks.perSecond || 0,
-          bytesPerSecond: lastBatch?.state.progress?.interval.bytesDownloaded.perSecond || 0,
-        },
         usage: {
           memory: memory?.values?.[0]?.value || 0,
         },
+        pipes: Array.from(this.#pipes.keys()).map((id) => {
+          const pipeData = this.getPipeData(id)
+          const lastBatch = pipeData?.lastBatch
+
+          return {
+            id,
+            portal: {
+              url: lastBatch?.query.url || '',
+              query: lastBatch?.query.raw || {},
+            },
+            progress: {
+              from: lastBatch?.state.initial || 0,
+              current: lastBatch?.state.current.number || 0,
+              to: lastBatch?.state.last || 0,
+              percent: lastBatch?.state.progress?.state.percent || 0,
+              etaSeconds: lastBatch?.state.progress?.state.etaSeconds || 0,
+            },
+            speed: {
+              blocksPerSecond: lastBatch?.state.progress?.interval.processedBlocks.perSecond || 0,
+              bytesPerSecond: lastBatch?.state.progress?.interval.bytesDownloaded.perSecond || 0,
+            },
+          }
+        }),
       }
 
       res.json({ payload: data })
@@ -228,7 +241,8 @@ class MetricServer {
 
     this.#app.get('/profiler', async (req, res) => {
       const from = parseDate(req.query['from']) || new Date(0)
-      const profilers = this.#data.profilers
+      const pipeData = this.getPipeData(req.query['id'] as string | undefined)
+      const profilers = pipeData?.profilers || []
 
       return res.json({
         // FIXME: remove hardcoded field
@@ -240,7 +254,8 @@ class MetricServer {
     })
 
     this.#app.get('/exemplars/transformation', async (req, res) => {
-      const transformationExemplar = this.#data.transformationExemplar
+      const pipeData = this.getPipeData(req.query['id'] as string | undefined)
+      const transformationExemplar = pipeData?.transformationExemplar
 
       return res.json({
         payload: {
@@ -280,10 +295,25 @@ class MetricServer {
     })
   }
 
-  batchProcessed(ctx: BatchCtx) {
-    const data = this.#data
+  private getPipeData(id?: string): PipeData | undefined {
+    if (id) return this.#pipes.get(id)
+    // Default to the first pipe for backward compatibility
+    const first = this.#pipes.keys().next()
+    return first.done ? undefined : this.#pipes.get(first.value)
+  }
 
-    // console.log('Adding batch context to metrics server', ctx.head)
+  private getOrCreatePipeData(pipeId: string): PipeData {
+    let data = this.#pipes.get(pipeId)
+    if (!data) {
+      data = { profilers: [] }
+      this.#pipes.set(pipeId, data)
+    }
+    return data
+  }
+
+  batchProcessed(ctx: BatchCtx) {
+    const data = this.getOrCreatePipeData(ctx.id)
+
     data.lastBatch = ctx
     data.transformationExemplar = transformExemplar(ctx.profiler)
 

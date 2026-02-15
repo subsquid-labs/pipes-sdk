@@ -5,11 +5,12 @@ export type Params = { dataset: string }
 
 async function transfers({ id, params, metrics, logger }: RunConfig<Params>) {
   const stream = evmPortalSource({
+    id,
     portal: `https://portal.sqd.dev/datasets/${params.dataset}`,
     metrics,
     logger,
     outputs: evmDecoder({
-      range: { from: 'latest' },
+      range: { from: '0' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,
       },
@@ -27,7 +28,7 @@ async function main() {
       { id: 'arb', params: { dataset: 'arbitrum-one' }, stream: transfers },
       { id: 'ethereum', params: { dataset: 'ethereum-mainnet' }, stream: transfers },
     ],
-    { metrics: { port: 3000 } },
+    { metrics: { port: 9090 } },
   )
 
   await run.start()

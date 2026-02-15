@@ -62,7 +62,7 @@ export function Sidebar() {
           ) : null}
         </div>
       </div>
-      <PortalStatus url={data?.portal.url} />
+      <PortalStatus url={data?.pipes[0]?.portal.url} />
     </div>
   )
 }

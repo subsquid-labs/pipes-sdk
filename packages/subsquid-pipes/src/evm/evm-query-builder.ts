@@ -77,6 +77,12 @@ export class EvmQueryBuilder<F extends evm.FieldSelection = {}> extends QueryBui
 
     return new QueryAwareTransformer(setupQuery, options as any)
   }
+
+  transform<Out>({ setupQuery, ...options }: EvmTransformerOpts<F, Out>): EvmTransformerOut<F, Out> {
+    setupQuery = setupQuery ? setupQuery : ({ query }) => query.merge(this)
+
+    return new QueryAwareTransformer(setupQuery, options as any)
+  }
 }
 
 export function evmQuery() {
