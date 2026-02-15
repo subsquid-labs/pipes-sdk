@@ -1,4 +1,5 @@
 import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
+import { metricsServer } from '@subsquid/pipes/metrics/node'
 
 /**
  * Basic example demonstrating how to use pipes for processing EVM data.
@@ -18,6 +19,8 @@ async function cli() {
         transfers: commonAbis.erc20.events.Transfer,
       },
     }),
+
+    metrics: metricsServer(),
   })
 
   for await (const { data } of stream) {

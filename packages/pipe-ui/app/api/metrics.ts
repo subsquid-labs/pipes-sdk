@@ -6,31 +6,37 @@ type HttpResponse<T> = {
   payload: T
 }
 
-export type Stats = {
+export type ApiPipe = {
+  id: string
+
+  portal: {
+    url: string
+    query: any
+  }
+  progress: {
+    from: number
+    current: number
+    to: number
+    percent: number
+    etaSeconds: number
+  }
+  speed: {
+    blocksPerSecond: number
+    bytesPerSecond: number
+  }
+}
+
+export type ApiStats = {
   sdk: {
     version: string
+  }
+  code?: {
+    filename: string
   }
   usage: {
     memory: number
   }
-  pipes: {
-    id: string
-    portal: {
-      url: string
-      query: any
-    }
-    progress: {
-      from: number
-      current: number
-      to: number
-      percent: number
-      etaSeconds: number
-    }
-    speed: {
-      blocksPerSecond: number
-      bytesPerSecond: number
-    }
-  }[]
+  pipes: ApiPipe[]
 }
 
 const MAX_HISTORY = 30
@@ -65,31 +71,29 @@ export function useStats() {
   return useQuery({
     queryKey: ['pipe/stats'],
     queryFn: async () => {
-      try {
-        const res = await client<HttpResponse<Stats>>(url)
+      const res = await client<HttpResponse<ApiStats>>(url)
 
-        return {
-          ...res.data.payload,
-          pipes: res.data.payload.pipes.map((pipe) => {
-            let history = getHistory(pipe.id)
+      return {
+        ...res.data.payload,
+        pipes: res.data.payload.pipes.map((pipe) => {
+          let history = getHistory(pipe.id)
 
-            history.push({
-              bytesPerSecond: pipe.speed.bytesPerSecond,
-              blocksPerSecond: pipe.speed.blocksPerSecond,
-              memory: res.data.payload.usage.memory,
-            })
+          history.push({
+            bytesPerSecond: pipe.speed.bytesPerSecond,
+            blocksPerSecond: pipe.speed.blocksPerSecond,
+            memory: res.data.payload.usage.memory,
+          })
 
-            history = history.slice(-MAX_HISTORY)
-            histories.set(pipe.id, history)
+          history = history.slice(-MAX_HISTORY)
+          histories.set(pipe.id, history)
 
-            return { ...pipe, history }
-          }),
-        }
-      } catch (error) {
-        return null
+          return { ...pipe, history }
+        }),
       }
     },
-
+    // No retry — refetchInterval already handles re-polling, and retries would delay showing the disconnected state
+    retry: false,
+    placeholderData: (prev) => prev,
     refetchInterval: 1000,
   })
 }
@@ -109,27 +113,25 @@ export type ApiProfilerResult = {
 }
 
 export function useProfilers({ enabled = true, pipeId }: { enabled?: boolean; pipeId: string }) {
-  const url = getUrl(BASE_URL, `/profiler?pipe=${pipeId}`)
+  const url = getUrl(BASE_URL, `/profiler?id=${pipeId}`)
 
   return useQuery({
     queryKey: ['pipe/profiler', pipeId],
     queryFn: async () => {
-      try {
-        const res = await client<
-          HttpResponse<{
-            enabled: boolean
-            profilers: ApiProfilerResult[]
-          }>
-        >(url, {
-          withCredentials: true,
-        })
+      const res = await client<
+        HttpResponse<{
+          enabled: boolean
+          profilers: ApiProfilerResult[]
+        }>
+      >(url, {
+        withCredentials: true,
+      })
 
-        return res.data.payload
-      } catch (error) {
-        return null
-      }
+      return res.data.payload
     },
     enabled,
+    // No retry — refetchInterval already handles re-polling, and retries would delay showing the disconnected state
+    retry: false,
     refetchInterval: 2000,
   })
 }
@@ -141,26 +143,24 @@ export type ApiExemplarResult = {
 }
 
 export function useTransformationExemplar({ enabled = true, pipeId }: { enabled?: boolean; pipeId: string }) {
-  const url = getUrl(BASE_URL, `/exemplars/transformation?pipe=${pipeId}`)
+  const url = getUrl(BASE_URL, `/exemplars/transformation?id=${pipeId}`)
 
   return useQuery({
     queryKey: ['pipe/exemplars/transformation', pipeId],
     queryFn: async () => {
-      try {
-        const res = await client<
-          HttpResponse<{
-            transformation: ApiExemplarResult
-          }>
-        >(url, {
-          withCredentials: true,
-        })
+      const res = await client<
+        HttpResponse<{
+          transformation: ApiExemplarResult
+        }>
+      >(url, {
+        withCredentials: true,
+      })
 
-        return res.data.payload
-      } catch (error) {
-        return null
-      }
+      return res.data.payload
     },
     enabled,
+    // No retry — refetchInterval already handles re-polling, and retries would delay showing the disconnected state
+    retry: false,
     refetchInterval: 1500,
   })
 }

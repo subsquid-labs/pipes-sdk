@@ -1,8 +1,10 @@
-import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router'
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, isRouteErrorResponse } from 'react-router'
 
 import type { Route } from './+types/root'
 import './app.css'
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
 import { ThemeProvider } from '~/components/theme-provider'
 
 export const links: Route.LinksFunction = () => [

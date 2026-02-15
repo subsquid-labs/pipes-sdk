@@ -87,6 +87,8 @@ export type PortalSourceOptions<Query> = {
   }
 }
 
+export const DEFAULT_PIPE_NAME = 'stream'
+
 export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   readonly #id: string
   readonly #options: {
@@ -101,7 +103,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   #started = false
 
   constructor({ portal, id, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
-    this.#id = id || 'stream'
+    this.#id = id || DEFAULT_PIPE_NAME
     this.#logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ id: this.#id, level: logger })
 
     this.#portal =

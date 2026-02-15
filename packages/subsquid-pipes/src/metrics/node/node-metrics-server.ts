@@ -29,6 +29,9 @@ export type Stats = {
   sdk: {
     version: string
   }
+  code: {
+    filename: string
+  }
   pipes: {
     id: string
     portal: {
@@ -210,6 +213,9 @@ class MetricServer {
         },
         usage: {
           memory: memory?.values?.[0]?.value || 0,
+        },
+        code: {
+          filename: process.argv[1],
         },
         pipes: Array.from(this.#pipes.keys()).map((id) => {
           const pipeData = this.getPipeData(id)

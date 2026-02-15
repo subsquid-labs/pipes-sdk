@@ -1,5 +1,7 @@
-import { Pause, Play } from 'lucide-react'
 import { useMemo, useState } from 'react'
+
+import { Pause, Play } from 'lucide-react'
+
 import { useTransformationExemplar } from '~/api/metrics'
 import { Code } from '~/components/ui/code'
 import { Toggle } from '~/components/ui/toggle'
@@ -66,7 +68,7 @@ export function TransformerExample({
   )
 }
 
-export function TransformationExemplar({ pipeId }: { pipeId?: string }) {
+export function TransformationExemplar({ pipeId }: { pipeId: string }) {
   const [enabled, useEnabled] = useState(true)
   const [autoStopped, useAutoStoppedEnabled] = useState(false)
   const { data } = useTransformationExemplar({ enabled, pipeId })
