@@ -9,7 +9,7 @@ import {
 
 import { last } from '../internal/array.js'
 import { LogLevel, Logger, createDefaultLogger, formatWarning } from './logger.js'
-import { Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
+import { Counter, Histogram, Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
 import { Profiler, Span } from './profiling.js'
 import { ProgressEvent, StartEvent } from './progress-tracker.js'
 import { QueryBuilder, hashQuery } from './query-builder.js'
@@ -101,6 +101,11 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   readonly #metricServer: MetricsServer
   readonly #transformers: Transformer<any, any>[] = []
   #started = false
+
+  // Metrics
+  #reorgsTotal: Counter | null = null
+  #batchSizeBlocks: Histogram | null = null
+  #batchSizeBytes: Histogram | null = null
 
   constructor({ portal, id, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
     this.#id = id || DEFAULT_PIPE_NAME
@@ -231,6 +236,9 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             logger: this.#logger,
           }
 
+          this.#batchSizeBlocks?.observe(batch.blocks.length)
+          this.#batchSizeBytes?.observe(batch.meta.bytes)
+
           const data = await this.applyTransformers(ctx, batch.blocks as T)
 
           yield { data, ctx }
@@ -333,6 +341,25 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     this.#metricServer.start()
 
+    const metrics = this.#metricServer.metrics()
+
+    this.#reorgsTotal = metrics.counter({
+      name: 'sqd_reorgs_total',
+      help: 'Total number of chain reorganizations detected',
+    })
+
+    this.#batchSizeBlocks = metrics.histogram({
+      name: 'sqd_batch_size_blocks',
+      help: 'Number of blocks per batch',
+      buckets: [1, 5, 10, 50, 100, 500, 1000, 5000, 10000],
+    })
+
+    this.#batchSizeBytes = metrics.histogram({
+      name: 'sqd_batch_size_bytes',
+      help: 'Size of each batch in bytes',
+      buckets: [1024, 10240, 102400, 524288, 1048576, 5242880, 10485760, 52428800],
+    })
+
     profiler.end()
 
     this.#logger.debug(`<start> hook invoked`)
@@ -372,6 +399,8 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             return
           } catch (e) {
             if (!isForkException(e)) throw e
+
+            self.#reorgsTotal?.inc(1)
 
             if (!e.previousBlocks.length) {
               // TODO how to explain this error? what to do next?
