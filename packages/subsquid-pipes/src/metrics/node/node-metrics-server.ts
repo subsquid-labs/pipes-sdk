@@ -3,7 +3,7 @@ import { Server } from 'http'
 import express, { Application } from 'express'
 import client from 'prom-client'
 
-import { Logger, Metrics, createDefaultLogger } from '~/core/index.js'
+import { Logger, Metrics } from '~/core/index.js'
 import {
   Counter,
   CounterConfiguration,
@@ -117,7 +117,7 @@ type PipeData = {
   transformationExemplar?: TransformationResult
 }
 
-class MetricServer {
+class ExpressMetricServer implements MetricsServer {
   readonly #options: { port: number; enabled: boolean }
   readonly #app: Application
   readonly #metrics: Metrics
@@ -218,7 +218,7 @@ class MetricServer {
           filename: process.argv[1],
         },
         pipes: Array.from(this.#pipes.keys()).map((id) => {
-          const pipeData = this.getPipeData(id)
+          const pipeData = this.getPipe(id)
           const lastBatch = pipeData?.lastBatch
 
           return {
@@ -247,7 +247,7 @@ class MetricServer {
 
     this.#app.get('/profiler', async (req, res) => {
       const from = parseDate(req.query['from']) || new Date(0)
-      const pipeData = this.getPipeData(req.query['id'] as string | undefined)
+      const pipeData = this.getPipe(req.query['id'] as string | undefined)
       const profilers = pipeData?.profilers || []
 
       return res.json({
@@ -260,7 +260,7 @@ class MetricServer {
     })
 
     this.#app.get('/exemplars/transformation', async (req, res) => {
-      const pipeData = this.getPipeData(req.query['id'] as string | undefined)
+      const pipeData = this.getPipe(req.query['id'] as string | undefined)
       const transformationExemplar = pipeData?.transformationExemplar
 
       return res.json({
@@ -301,24 +301,24 @@ class MetricServer {
     })
   }
 
-  private getPipeData(id?: string): PipeData | undefined {
+  private getPipe(id?: string): PipeData | undefined {
     if (id) return this.#pipes.get(id)
     // Default to the first pipe for backward compatibility
     const first = this.#pipes.keys().next()
     return first.done ? undefined : this.#pipes.get(first.value)
   }
 
-  private getOrCreatePipeData(pipeId: string): PipeData {
-    let data = this.#pipes.get(pipeId)
+  registerPipe(id: string) {
+    let data = this.#pipes.get(id)
     if (!data) {
       data = { profilers: [] }
-      this.#pipes.set(pipeId, data)
+      this.#pipes.set(id, data)
     }
     return data
   }
 
   batchProcessed(ctx: BatchCtx) {
-    const data = this.getOrCreatePipeData(ctx.id)
+    const data = this.registerPipe(ctx.id)
 
     data.lastBatch = ctx
     data.transformationExemplar = transformExemplar(ctx.profiler)
@@ -341,7 +341,7 @@ class MetricServer {
   }
 }
 
-const servers = new Map<number, MetricServer>()
+const servers = new Map<number, ExpressMetricServer>()
 
 export function metricsServer(options: MetricsServerOptions = {}): MetricsServer {
   const port = options.port || DEFAULT_PORT
@@ -349,7 +349,7 @@ export function metricsServer(options: MetricsServerOptions = {}): MetricsServer
   const existed = servers.get(port)
   if (existed) return existed
 
-  const server = new MetricServer(options)
+  const server = new ExpressMetricServer(options)
   servers.set(port, server)
 
   return server

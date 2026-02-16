@@ -75,7 +75,7 @@ export function mergeOutputs<F extends {}, Q extends QueryBuilder<F>>(input: Out
       transform: async (data, ctx) => {
         const res = {} as any
         for (const key in output) {
-          res[key] = await output[key].transform(data, ctx)
+          res[key] = await output[key].run(data, ctx)
         }
         return res
       },

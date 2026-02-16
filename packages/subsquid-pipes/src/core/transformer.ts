@@ -86,7 +86,7 @@ export class Transformer<In, Out> {
   /**
    * @internal
    */
-  async transform(data: In, ctx: BatchCtx): Promise<Out> {
+  async run(data: In, ctx: BatchCtx): Promise<Out> {
     const span = ctx.profiler.start(this.options.profiler?.id || 'anonymous')
     let res = await this.options.transform(data, { ...ctx, profiler: span })
     span.addTransformerExemplar(res)
@@ -97,7 +97,7 @@ export class Transformer<In, Out> {
     }
 
     for (const child of this.children) {
-      res = await child.transform(res, { ...ctx, profiler: span })
+      res = await child.run(res, { ...ctx, profiler: span })
     }
 
     span.end()
@@ -133,6 +133,15 @@ export class Transformer<In, Out> {
    * Otherwise, type information about the very first input would be lost,
    * and downstream code would see only the immediate `Out` type.
    */
+  transform<Res>(transformer: Transformer<Out, Res> | TransformerArgs<Out, Res>): Transformer<In, Res> {
+    this.children.push(transformer instanceof Transformer ? transformer : new Transformer(transformer))
+
+    return this as unknown as Transformer<In, Res>
+  }
+
+  /**
+   * @deprecated
+   */
   pipe<Res>(transformer: Transformer<Out, Res> | TransformerArgs<Out, Res>): Transformer<In, Res> {
     this.children.push(transformer instanceof Transformer ? transformer : new Transformer(transformer))
 
@@ -166,9 +175,15 @@ export class QueryAwareTransformer<
   /**
    * We need to override the return type
    */
+  override transform<Res>(
+    transformer: Transformer<Out, Res> | TransformerArgs<Out, Res>,
+  ): QueryAwareTransformer<In, Res, Query> {
+    return super.transform(transformer) as unknown as QueryAwareTransformer<In, Res, Query>
+  }
+
   override pipe<Res>(
     transformer: Transformer<Out, Res> | TransformerArgs<Out, Res>,
   ): QueryAwareTransformer<In, Res, Query> {
-    return super.pipe(transformer) as unknown as QueryAwareTransformer<In, Res, Query>
+    return super.transform(transformer) as unknown as QueryAwareTransformer<In, Res, Query>
   }
 }

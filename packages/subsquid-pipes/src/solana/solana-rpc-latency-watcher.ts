@@ -68,6 +68,10 @@ class SolanaRpcLatencyWatcher extends RpcLatencyWatcher {
 }
 
 export function solanaRpcLatencyWatcher({ rpcUrl }: { rpcUrl: string[] }) {
+  const transformer = rpcLatencyWatcher({
+    watcher: new SolanaRpcLatencyWatcher(rpcUrl),
+  })
+
   return solanaQuery()
     .addFields({
       block: {
@@ -75,5 +79,5 @@ export function solanaRpcLatencyWatcher({ rpcUrl }: { rpcUrl: string[] }) {
         timestamp: true,
       },
     })
-    .build(rpcLatencyWatcher(new SolanaRpcLatencyWatcher(rpcUrl)))
+    .build(transformer.options)
 }

@@ -64,6 +64,7 @@ export type Metrics = {
 export type MetricsServer = {
   start(): void
   stop(): Promise<void>
+  registerPipe(id: string): void
   batchProcessed(ctx: BatchCtx): void
   metrics(): Metrics
 }
@@ -100,6 +101,7 @@ export function noopMetricsServer(): MetricsServer {
   return {
     start() {},
     async stop() {},
+    registerPipe: () => {},
     batchProcessed() {},
     metrics() {
       return metrics

@@ -77,13 +77,10 @@ type Latency = {
   }[]
 }
 
-export function rpcLatencyWatcher(watcher: RpcLatencyWatcher) {
+export function rpcLatencyWatcher({ watcher }: { watcher: RpcLatencyWatcher }) {
   return createTransformer<
     {
-      header: {
-        number: number
-        timestamp: number
-      }
+      header: { number: number; timestamp: number }
     }[],
     Latency | null
   >({

@@ -137,6 +137,8 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     this.#metricServer = options.metrics ?? noopMetricsServer()
     this.#transformers = options.transformers || []
+
+    this.#metricServer.registerPipe(this.#id)
   }
 
   private async *read(cursor?: BlockCursor): AsyncIterable<PortalBatch<T>> {
@@ -272,7 +274,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     const span = ctx.profiler.start('apply transformers')
 
     for (const transformer of this.#transformers) {
-      data = await transformer.transform(data, {
+      data = await transformer.run(data, {
         ...ctx,
         profiler: span,
         logger: this.#logger,
