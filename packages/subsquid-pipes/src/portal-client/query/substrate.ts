@@ -282,7 +282,7 @@ const EventShape: ObjectValidatorShape<EventFields> = {
     ApplyExtrinsic: constant('ApplyExtrinsic'),
     Finalization: constant('Finalization'),
   }),
-  extrinsicIndex: NAT,
+  extrinsicIndex: nullable(NAT),
   callAddress: array(NAT),
   topics: array(BYTES),
 }
