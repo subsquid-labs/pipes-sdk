@@ -56,6 +56,8 @@ POC script (`docs/examples/substrate/02.bittensor-staking-rewards.example.ts`) i
 
 - **Dataset:** `bittensor` at `https://portal.sqd.dev/datasets/bittensor`
 - **Current height:** ~7,556,000+ blocks
+- **Full 2025 coverage confirmed:** block 4,600,000 (Dec 31, 2024) through current head. No gaps.
+- **Bittensor block time:** 12 seconds (~7,200 blocks/day)
 - **Lag:** ~600 blocks behind chain head (~2 hours)
 - **Stream throughput:** ~1,500 blocks/second
 - **Limitation:** Event streaming only, no state/storage queries
