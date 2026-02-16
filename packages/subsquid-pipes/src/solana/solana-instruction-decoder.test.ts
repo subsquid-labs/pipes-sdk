@@ -1,17 +1,16 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { solanaInstructionDecoder } from '~/solana/solana-instruction-decoder.js'
 import { solanaPortalSource } from '~/solana/solana-portal-source.js'
-import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/tests/test-server.js'
+import { MockPortal, MockResponse, closeMockPortal, createMockPortal } from '~/tests/test-server.js'
 
 import * as tokenProgram from './abi/tokenProgram/index.js'
 
 describe('solanaInstructionDecoder transform', () => {
   let mockPortal: MockPortal
 
-  beforeEach(async () => {
-    if (mockPortal) closeMockPortal(mockPortal)
-    mockPortal = await createMockPortal(PORTAL_MOCK_RESPONSE)
+  afterEach(async () => {
+    await closeMockPortal(mockPortal)
   })
 
   const PORTAL_MOCK_RESPONSE: MockResponse[] = [
@@ -39,22 +38,25 @@ describe('solanaInstructionDecoder transform', () => {
   ]
 
   it('should decode the events', async () => {
+    mockPortal = await createMockPortal(PORTAL_MOCK_RESPONSE)
+
+    const decoder = solanaInstructionDecoder({
+      range: { from: 0, to: 1 },
+      programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+      instructions: {
+        transfers: tokenProgram.instructions.transfer,
+      },
+    })
+
     const stream = solanaPortalSource({
       portal: mockPortal.url,
-      logger: false,
+      outputs: decoder,
     })
-      .pipe(
-        solanaInstructionDecoder({
-          range: { from: 0, to: 1 },
-          programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-          instructions: {
-            transfers: tokenProgram.instructions.transfer,
-          },
-        }),
-      )
-      .pipe((e) => e.transfers)
 
-    const res = await readAll(stream)
+    const res = []
+    for await (const { data } of stream) {
+      res.push(...data.transfers)
+    }
 
     expect(res).toHaveLength(1)
 
@@ -73,24 +75,26 @@ describe('solanaInstructionDecoder transform', () => {
   })
 
   it('should filter events by programId across multiple decoders', async () => {
+    mockPortal = await createMockPortal(PORTAL_MOCK_RESPONSE)
+
     const stream = solanaPortalSource({
       portal: mockPortal.url,
-      logger: false,
-    }).pipeComposite({
-      validProgramId: solanaInstructionDecoder({
-        range: { from: 0, to: 1 },
-        programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-        instructions: {
-          transfers: tokenProgram.instructions.transfer,
-        },
-      }),
-      unknownProgramId: solanaInstructionDecoder({
-        range: { from: 0, to: 1 },
-        programId: 'xxxx',
-        instructions: {
-          transfers: tokenProgram.instructions.transfer,
-        },
-      }),
+      outputs: {
+        validProgramId: solanaInstructionDecoder({
+          range: { from: 0, to: 1 },
+          programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+          instructions: {
+            transfers: tokenProgram.instructions.transfer,
+          },
+        }),
+        unknownProgramId: solanaInstructionDecoder({
+          range: { from: 0, to: 1 },
+          programId: 'xxxx',
+          instructions: {
+            transfers: tokenProgram.instructions.transfer,
+          },
+        }),
+      },
     })
 
     const valid = []
