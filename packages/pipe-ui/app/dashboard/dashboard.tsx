@@ -9,7 +9,7 @@ import { Pipeline } from '~/dashboard/pipeline'
 import { Sidebar } from '~/dashboard/sidebar'
 
 export function Dashboard() {
-  const { data: stats, isError } = useStats()
+  const { data: stats } = useStats()
 
   const [selectedPipe, setSelectedPipe] = useState<string | null>(null)
   const pipes = stats?.pipes || []
@@ -32,7 +32,7 @@ export function Dashboard() {
           </Button>
         </div>
         <div className="flex gap-10">
-          <Sidebar pipes={pipes} selectedPipeId={pipeId} isError={isError} onSelectPipe={setSelectedPipe} />
+          <Sidebar pipes={pipes} selectedPipeId={pipeId} onSelectPipe={setSelectedPipe} />
           <Pipeline pipeId={pipeId} />
         </div>
       </div>

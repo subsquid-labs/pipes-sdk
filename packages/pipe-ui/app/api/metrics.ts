@@ -1,6 +1,4 @@
-import * as process from 'node:process'
-
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { client, getUrl } from '~/api/client'
 
@@ -60,7 +58,7 @@ export type ApiStats = {
 }
 
 const MAX_HISTORY = 30
-export const DEFAULT_PIPE_ID = 'stream'
+
 const histories = new Map<string, PipeHistory[]>()
 
 function getHistory(pipeId: string) {
@@ -78,41 +76,55 @@ function getHistory(pipeId: string) {
 
 const BASE_URL = 'http://127.0.0.1:9090'
 
+type StatsResult = Omit<ApiStats, 'pipes'> & { pipes: Pipe[] }
+
 export function useStats() {
   const url = getUrl(BASE_URL, `/stats`)
+  const queryClient = useQueryClient()
 
   return useQuery({
     queryKey: ['pipe/stats'],
-    queryFn: async () => {
-      const res = await client<HttpResponse<ApiStats>>(url)
+    queryFn: async (): Promise<StatsResult> => {
+      try {
+        const res = await client<HttpResponse<ApiStats>>(url)
 
-      return {
-        ...res.data.payload,
-        pipes: res.data.payload.pipes.map((pipe): Pipe => {
-          let history = getHistory(pipe.id)
+        return {
+          ...res.data.payload,
+          pipes: res.data.payload.pipes.map((pipe): Pipe => {
+            let history = getHistory(pipe.id)
 
-          history.push({
-            bytesPerSecond: pipe.speed.bytesPerSecond,
-            blocksPerSecond: pipe.speed.blocksPerSecond,
-            memory: res.data.payload.usage.memory,
-          })
+            history.push({
+              bytesPerSecond: pipe.speed.bytesPerSecond,
+              blocksPerSecond: pipe.speed.blocksPerSecond,
+              memory: res.data.payload.usage.memory,
+            })
 
-          history = history.slice(-MAX_HISTORY)
-          histories.set(pipe.id, history)
+            history = history.slice(-MAX_HISTORY)
+            histories.set(pipe.id, history)
 
-          let status = PipeStatus.Syncing
-          if (pipe.progress.percent === 0) {
-            status = PipeStatus.Calculating
-          } else if (pipe.progress.etaSeconds < 1) {
-            status = PipeStatus.Synced
-          }
+            let status = PipeStatus.Syncing
+            if (pipe.progress.percent === 0) {
+              status = PipeStatus.Calculating
+            } else if (pipe.progress.etaSeconds < 1) {
+              status = PipeStatus.Synced
+            }
 
+            return {
+              ...pipe,
+              status,
+              history,
+            }
+          }),
+        }
+      } catch (error) {
+        const prev = queryClient.getQueryData<StatsResult>(['pipe/stats'])
+        if (prev) {
           return {
-            ...pipe,
-            status,
-            history,
+            ...prev,
+            pipes: prev.pipes.map((pipe) => ({ ...pipe, status: PipeStatus.Disconnected })),
           }
-        }),
+        }
+        throw error
       }
     },
 

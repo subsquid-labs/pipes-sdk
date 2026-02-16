@@ -11,7 +11,7 @@ function CircularProgress({ percent }: { percent: number }) {
   const offset = circumference - (percent / 100) * circumference
 
   return (
-    <svg width="32" height="32" viewBox="0 0 16 16">
+    <svg width="26" height="26" viewBox="0 0 16 16">
       <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeWidth="2" opacity={0.2} />
       <circle
         cx="8"
@@ -63,13 +63,11 @@ function PipeSelector({
   description,
   pipes,
   selectedPipeId,
-  isError,
   onSelectPipe,
 }: {
   description?: string
   pipes: Pipe[]
   selectedPipeId?: string
-  isError: boolean
   onSelectPipe: (id: string) => void
 }) {
   if (!pipes.length) return null
@@ -92,8 +90,8 @@ function PipeSelector({
             }`}
           >
             <div className="flex items-center gap-2">
-              <div className="w-[32px] h-[32px] flex items-center justify-center">
-                {isError ? (
+              <div className="flex flex-[0_32px] items-center justify-center">
+                {pipe.status === PipeStatus.Disconnected ? (
                   <AlertCircle size={20} className="text-destructive opacity-75 shrink-0" />
                 ) : (
                   <CircularProgress percent={pipe.progress.percent} />
@@ -104,11 +102,12 @@ function PipeSelector({
 
                 {pipe.status === PipeStatus.Calculating ? (
                   <div className="flex w-full font-thin justify-between text-xxs animate-pulse">Calculating...</div>
+                ) : pipe.status === PipeStatus.Disconnected ? (
+                  <div className="flex w-full font-thin justify-between text-xxs text-destructive">Disconnected</div>
                 ) : (
                   <div
                     className={
                       'flex w-full font-thin justify-between text-xxs' +
-                      (pipe.status === PipeStatus.Disconnected ? ' text-destructive' : '') +
                       (pipe.status === PipeStatus.Syncing ? ' animate-pulse' : '')
                     }
                   >
@@ -129,16 +128,14 @@ function PipeSelector({
 export function Sidebar({
   pipes,
   selectedPipeId,
-  isError,
   onSelectPipe,
 }: {
   pipes: Pipe[]
   selectedPipeId?: string
-  isError: boolean
   onSelectPipe: (id: string) => void
 }) {
   const { data } = useStats()
-  const connected = !!data && !isError
+  const connected = !!data
 
   return (
     <div className="flex-[0_250px]">
@@ -167,7 +164,7 @@ export function Sidebar({
           ) : null}
         </div>
       </div>
-      <PipeSelector pipes={pipes} selectedPipeId={selectedPipeId} isError={isError} onSelectPipe={onSelectPipe} />
+      <PipeSelector pipes={pipes} selectedPipeId={selectedPipeId} onSelectPipe={onSelectPipe} />
       {data?.code?.filename && (
         <div className="my-2 font-thin text-muted-foreground text-[10px]">{data?.code?.filename}</div>
       )}
