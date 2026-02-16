@@ -1,5 +1,6 @@
 import { evmPortalSource } from '@subsquid/pipes/evm'
 import pino from 'pino'
+
 import { erc20Transfers } from './decoders'
 
 /**
@@ -26,7 +27,8 @@ async function cli() {
   const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     logger: pino(transport),
-  }).pipe(erc20Transfers())
+    outputs: erc20Transfers(),
+  })
 
   for await (const { data } of stream) {
     console.log(`parsed ${data.length} transfers`)

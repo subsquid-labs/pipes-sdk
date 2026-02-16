@@ -10,6 +10,7 @@
     "JetBrains Mono", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
     "Noto Color Emoji";
 
+
   /*--font-sans:*/
   /*  "Anonymous Pro", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",*/
   /*  "Noto Color Emoji";*/
@@ -25,7 +26,7 @@
 
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
+  @apply dark:bg-gray-950;
 
   min-height: 100vh;
 
@@ -143,7 +144,7 @@ body {
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring/50 font-thin;
   }
   body {
     @apply bg-background text-foreground;
@@ -157,6 +158,10 @@ body {
 }
 .gradient-primary {
   background: linear-gradient(#d0a9e2, transparent 85%), linear-gradient(90deg, #433485, #b53cdd);
+}
+
+button {
+  cursor: pointer;
 }
 
 .test {

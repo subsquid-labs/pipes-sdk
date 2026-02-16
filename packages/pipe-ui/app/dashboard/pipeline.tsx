@@ -1,10 +1,14 @@
-import NumberFlow from '@number-flow/react'
 import { useMemo } from 'react'
+
+import NumberFlow from '@number-flow/react'
+import { Terminal } from 'lucide-react'
 // @ts-ignore
 import { Sparklines, SparklinesLine } from 'react-sparklines'
+
 import { useStats } from '~/api/metrics'
+import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
-import { displayEstimatedTime, humanBytes } from '~/dashboard/formatters'
+import { humanBytes } from '~/dashboard/formatters'
 import { PipelineDisconnected } from '~/dashboard/pipeline-disconnected'
 import { Profiler } from '~/dashboard/profiler'
 import { QueryExemplar } from '~/dashboard/query-exemplar'
@@ -14,8 +18,11 @@ const sparklineStyle = { fill: '#d0a9e2' }
 // const sparklineStyle = { fill: 'rgba(255,255,255,1)' }
 const sparklineColor = 'rgba(255,255,255,0.5)'
 
-export function Pipeline() {
-  const { data } = useStats()
+export function Pipeline({ pipeId }: { pipeId: string }) {
+  const { data: stats, isError } = useStats()
+
+  const data = stats?.pipes.find((pipe) => pipe.id === pipeId)
+
   const dataset = useMemo(() => {
     return data?.portal.url.replace(/^[\w.\/:]+datasets\//, '')
   }, [data?.portal.url])
@@ -23,10 +30,20 @@ export function Pipeline() {
   if (!data) return <PipelineDisconnected />
 
   return (
-    <div className="w-full">
-      <div className="p-4 border rounded-xl">
+    <div className="flex-1">
+      {isError ? (
+        <Alert variant="destructive" className="mb-3">
+          <Terminal />
+          <AlertTitle>Pipe disconnected</AlertTitle>
+          <AlertDescription>Showing last known data. Waiting for reconnection...</AlertDescription>
+        </Alert>
+      ) : null}
+      <div className={`p-4 border rounded-xl${isError ? ' opacity-60' : ''}`}>
         <div className="flex justify-between">
-          <div>{dataset}</div>
+          <div className="flex gap-2">
+            <div>{pipeId}</div>
+          </div>
+
           <div className="justify-end">
             <div className="flex gap-1">
               <NumberFlow value={data.progress.current}></NumberFlow>
@@ -35,7 +52,6 @@ export function Pipeline() {
             </div>
           </div>
         </div>
-
         <div className="w-full h-4 overflow-hidden rounded-full bg-gradient-primary my-1.5">
           <div
             style={{
@@ -46,7 +62,7 @@ export function Pipeline() {
         </div>
 
         <div className="flex justify-between mb-3 text-muted-foreground text-xs">
-          <div>{displayEstimatedTime(data.progress.etaSeconds)}</div>
+          <div>{dataset}</div>
           <div>{data.progress.percent.toFixed(2)}%</div>
         </div>
 
@@ -59,13 +75,13 @@ export function Pipeline() {
             <TabsTrigger value="query">Query</TabsTrigger>
           </TabsList>
           <TabsContent value="profiler">
-            <Profiler />
+            <Profiler pipeId={pipeId} />
           </TabsContent>
           <TabsContent value="data-flow">
-            <TransformationExemplar />
+            <TransformationExemplar pipeId={pipeId} />
           </TabsContent>
           <TabsContent value="query">
-            <QueryExemplar />
+            <QueryExemplar pipeId={pipeId} />
           </TabsContent>
         </Tabs>
 
@@ -100,7 +116,7 @@ export function Pipeline() {
             </div>
             <div>
               <div className="text-xxs">Memory</div>
-              <div>{humanBytes(data.usage.memory)}</div>
+              <div>{stats?.usage.memory && humanBytes(stats.usage.memory)}</div>
             </div>
           </div>
         </div>

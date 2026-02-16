@@ -1,6 +1,8 @@
-import { PortalRange, parsePortalRange } from '~/core/portal-range.js'
 import { Query } from '~/portal-client/index.js'
+
 import { Heap } from '../internal/heap.js'
+import { PortalRange, parsePortalRange } from './portal-range.js'
+import { QueryAwareTransformer, SetupQueryFn, TransformerArgs } from './transformer.js'
 
 /**
  * A range of blocks with inclusive boundaries
@@ -22,8 +24,8 @@ export type RequestOptions<R> = {
   request: R
 }
 
-export type Subset<T, U> = {
-  [K in keyof T]: K extends keyof U ? T[K] : never
+export type QueryTransformerOpts<In, Out, Query extends QueryBuilder<any>> = TransformerArgs<In, Out> & {
+  setupQuery?: SetupQueryFn<Query>
 }
 
 export abstract class QueryBuilder<F extends {}, R = any> {
@@ -33,6 +35,7 @@ export abstract class QueryBuilder<F extends {}, R = any> {
   abstract getType(): string
   abstract mergeDataRequests(...requests: R[]): R
   abstract addFields(fields: F): QueryBuilder<F, R>
+  abstract build(options: QueryTransformerOpts<any, any, any>): QueryAwareTransformer<any, any, any>
 
   getRequests() {
     return this.requests

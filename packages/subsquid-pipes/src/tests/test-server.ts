@@ -168,8 +168,8 @@ function getServerAddress(server: Server): string {
   return `http://127.0.0.1:${address.port}`
 }
 
-export async function readAll(stream: AsyncIterable<MockData>) {
-  const res: MockData[] = []
+export async function readAll<T>(stream: AsyncIterable<{ data: T[] }>): Promise<T[]> {
+  const res: T[] = []
 
   for await (const chunk of stream) {
     res.push(...chunk.data)

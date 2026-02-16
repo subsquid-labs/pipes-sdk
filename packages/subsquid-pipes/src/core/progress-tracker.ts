@@ -1,15 +1,9 @@
-import { Counter, Gauge } from '~/core/index.js'
+import { Gauge } from '~/core/index.js'
+
 import { displayEstimatedTime, formatBlock, formatNumber, humanBytes } from './formatters.js'
 import { Logger } from './logger.js'
 import { createTransformer } from './transformer.js'
 import { BlockCursor } from './types.js'
-
-function mapRequestStatusLabel(statusCode: number): string {
-  if (statusCode === 429) return 'rate_limited'
-  if (statusCode >= 200 && statusCode < 300) return 'success'
-  if (statusCode >= 500) return 'server_error'
-  return 'error'
-}
 
 type HistoryState = {
   ts: number
@@ -19,46 +13,52 @@ type HistoryState = {
 }
 type LastCursorState = { initial: number; last: number; current: BlockCursor }
 
-export type StartState = {
-  initial: number
-  current?: BlockCursor
-}
-
-export type ProgressState = {
+export type StartEvent = {
   state: {
     initial: number
-    last: number
-    current: number
-    percent: number
-    etaSeconds: number
+    current?: BlockCursor
   }
-  interval: {
-    requests: {
-      total: {
-        count: number
-      }
-      successful: {
-        count: number
-        percent: number
-      }
-      rateLimited: {
-        count: number
-        percent: number
-      }
-      failed: {
-        count: number
-        percent: number
-      }
+  logger: Logger
+}
+
+export type ProgressEvent = {
+  progress: {
+    state: {
+      initial: number
+      last: number
+      current: number
+      percent: number
+      etaSeconds: number
     }
-    processedBlocks: {
-      count: number
-      perSecond: number
-    }
-    bytesDownloaded: {
-      count: number
-      perSecond: number
+    interval: {
+      requests: {
+        total: {
+          count: number
+        }
+        successful: {
+          count: number
+          percent: number
+        }
+        rateLimited: {
+          count: number
+          percent: number
+        }
+        failed: {
+          count: number
+          percent: number
+        }
+      }
+      processedBlocks: {
+        count: number
+        perSecond: number
+      }
+      bytesDownloaded: {
+        count: number
+        perSecond: number
+      }
     }
   }
+  logger: Logger
 }
 
 type ProgressHistoryOptions = {
@@ -147,7 +147,7 @@ class ProgressHistory {
     }
   }
 
-  calculate(): ProgressState {
+  calculate(): ProgressEvent['progress'] {
     const stat = this.validateHistory(this.#states)
 
     const last = this.#lastCursorState?.last || 0
@@ -201,40 +201,31 @@ class ProgressHistory {
 }
 
 export type ProgressTrackerOptions = {
-  onStart?: (progress: StartState) => void
-  onProgress?: (progress: ProgressState) => void
+  onStart?: (state: StartEvent) => void
+  onProgress?: (state: ProgressEvent) => void
   interval?: number
-  logger?: Logger
 }
 
-export function progressTracker<T>({ onProgress, onStart, interval = 5000, logger }: ProgressTrackerOptions) {
+export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: ProgressTrackerOptions) {
   let ticker: NodeJS.Timeout | null = null
   let currentBlock: Gauge | null = null
-  let lastBlock: Gauge | null = null
-  let progressRatio: Gauge | null = null
-  let etaSeconds: Gauge | null = null
-  let blocksPerSecond: Gauge | null = null
-  let bytesDownloaded: Counter | null = null
-  let portalRequests: Counter<'status'> | null = null
-  let lastState: ProgressState | null = null
+  let lastProgress: ProgressEvent['progress'] | null = null
 
   const history = new ProgressHistory()
 
   if (!onStart) {
-    onStart = (data: StartState) => {
-      if (data.current) {
-        logger?.info(`Resuming indexing from ${formatBlock(data.current.number)} block`)
+    onStart = ({ state, logger }) => {
+      if (state.current) {
+        logger.info(`Resuming indexing from ${formatBlock(state.current.number)} block`)
         return
       }
 
-      logger?.info(`Start indexing from ${formatBlock(data.initial)} block`)
+      logger.info(`Start indexing from ${formatBlock(state.initial)} block`)
     }
   }
 
   if (!onProgress) {
-    onProgress = ({ state, interval }) => {
-      if (!logger) return
-
+    onProgress = ({ progress: { state, interval }, logger }) => {
       if (state.current === 0 && state.last === 0) {
         logger.info({ message: 'Initializing...' })
         return
@@ -252,8 +243,17 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
       }
 
       if (interval.requests.total.count > 0) {
-        msg['requests'] =
-          `${formatNumber(interval.requests.successful.percent)}% successful, ${formatNumber(interval.requests.rateLimited.percent)}% rate limited, ${formatNumber(interval.requests.failed.percent)}% failed out of ${formatNumber(interval.requests.total.count)} requests`
+        msg['requests'] = [
+          interval.requests.successful.percent > 0
+            ? `${formatNumber(interval.requests.successful.percent)}% successful`
+            : false,
+          interval.requests.rateLimited.percent
+            ? `${formatNumber(interval.requests.rateLimited.percent)}% rate limited`
+            : false,
+          interval.requests.failed.percent > 0 ? `${formatNumber(interval.requests.failed.percent)}% failed` : false,
+        ]
+          .filter(Boolean)
+          .join(', ')
       }
 
       logger.info(msg)
@@ -262,53 +262,22 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
 
   return createTransformer<T, T>({
     profiler: { id: 'track progress' },
-    start: ({ metrics, state }) => {
+    start: ({ metrics, state, logger }) => {
       if (interval > 0) {
         ticker = setInterval(() => {
-          if (!lastState) return
+          if (!lastProgress) return
 
-          onProgress(lastState)
+          onProgress({ progress: lastProgress, logger })
         }, interval)
       }
 
-      onStart(state)
+      onStart({ state, logger })
 
       currentBlock = metrics.gauge({
         name: 'sqd_current_block',
-        help: 'Current block number being processed',
+        help: 'Total number of blocks processed',
       })
       currentBlock.set(-1)
-
-      lastBlock = metrics.gauge({
-        name: 'sqd_last_block',
-        help: 'Latest known chain head block number',
-      })
-
-      progressRatio = metrics.gauge({
-        name: 'sqd_progress_ratio',
-        help: 'Indexing progress as a ratio from 0 to 1',
-      })
-
-      etaSeconds = metrics.gauge({
-        name: 'sqd_eta_seconds',
-        help: 'Estimated time to completion in seconds',
-      })
-
-      blocksPerSecond = metrics.gauge({
-        name: 'sqd_blocks_per_second',
-        help: 'Current indexing speed in blocks per second',
-      })
-
-      bytesDownloaded = metrics.counter({
-        name: 'sqd_bytes_downloaded_total',
-        help: 'Total bytes downloaded from portal',
-      })
-
-      portalRequests = metrics.counter({
-        name: 'sqd_portal_requests_total',
-        help: 'Total portal requests by status category',
-        labelNames: ['status'] as const,
-      })
     },
     transform: async (data, ctx) => {
       history.addState({
@@ -321,19 +290,9 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000, logge
         currentBlock?.set(ctx.state.current.number)
       }
 
-      lastState = history.calculate()
+      lastProgress = history.calculate()
 
-      lastBlock?.set(lastState.state.last)
-      progressRatio?.set(lastState.state.percent / 100)
-      etaSeconds?.set(lastState.state.etaSeconds)
-      blocksPerSecond?.set(lastState.interval.processedBlocks.perSecond)
-      bytesDownloaded?.inc(ctx.meta.bytesSize)
-
-      for (const [statusCode, count] of Object.entries(ctx.meta.requests)) {
-        portalRequests?.inc({ status: mapRequestStatusLabel(Number(statusCode)) }, count)
-      }
-
-      ctx.state.progress = lastState
+      ctx.state.progress = lastProgress
 
       return data
     },

@@ -1,8 +1,8 @@
-import { RpcLatencyWatcher, rpcLatencyWatcher } from '~/monitoring/index.js'
-import { WebSocketListener } from '~/monitoring/rpc-latency/ws-client.js'
+import { evmQuery } from '~/evm/evm-query-builder.js'
+import { RpcLatencyWatcher, WebSocketListener, rpcLatencyWatcher } from '~/monitoring/index.js'
 
 class EvmRpcLatencyWatcher extends RpcLatencyWatcher {
-  watch(url: string) {
+  watch(url: string): WebSocketListener {
     const listener = new WebSocketListener(url)
 
     const payload = {
@@ -12,7 +12,7 @@ class EvmRpcLatencyWatcher extends RpcLatencyWatcher {
       params: ['newHeads'],
     }
 
-    listener.subscribe(payload, (message) => {
+    listener.subscribe(payload, (message: { method: string; params: { result: { number: string; timestamp: string } } }) => {
       if (message.method !== 'eth_subscription') return
       const head = message.params.result
 
@@ -28,5 +28,16 @@ class EvmRpcLatencyWatcher extends RpcLatencyWatcher {
 }
 
 export function evmRpcLatencyWatcher({ rpcUrl }: { rpcUrl: string[] }) {
-  return rpcLatencyWatcher(new EvmRpcLatencyWatcher(rpcUrl))
+  const transformer = rpcLatencyWatcher({
+    watcher: new EvmRpcLatencyWatcher(rpcUrl),
+  })
+
+  return evmQuery()
+    .addFields({
+      block: {
+        number: true,
+        timestamp: true,
+      },
+    })
+    .build(transformer.options)
 }

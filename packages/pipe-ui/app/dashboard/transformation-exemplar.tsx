@@ -1,5 +1,7 @@
-import { Pause, Play } from 'lucide-react'
 import { useMemo, useState } from 'react'
+
+import { Pause, Play } from 'lucide-react'
+
 import { useTransformationExemplar } from '~/api/metrics'
 import { Code } from '~/components/ui/code'
 import { Toggle } from '~/components/ui/toggle'
@@ -66,10 +68,10 @@ export function TransformerExample({
   )
 }
 
-export function TransformationExemplar() {
+export function TransformationExemplar({ pipeId }: { pipeId: string }) {
   const [enabled, useEnabled] = useState(true)
   const [autoStopped, useAutoStoppedEnabled] = useState(false)
-  const { data } = useTransformationExemplar({ enabled })
+  const { data } = useTransformationExemplar({ enabled, pipeId })
 
   // If the exemplar is opened, and we are enabled, disable it (pause updates).
   // If the exemplar is closed, and we were auto-stopped, re-enable it (resume updates).

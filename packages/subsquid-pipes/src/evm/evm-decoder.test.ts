@@ -1,8 +1,8 @@
 import { event, indexed } from '@subsquid/evm-abi'
 import * as p from '@subsquid/evm-codec'
-import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
-import { PortalRange, Transformer } from '~/core/index.js'
+import { PortalRange, QueryAwareTransformer } from '~/core/index.js'
 import { createTestLogger } from '~/tests/test-logger.js'
 import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/tests/test-server.js'
 
@@ -22,14 +22,17 @@ import { EvmQueryBuilder } from './evm-query-builder.js'
 import { factory } from './factory.js'
 import { factorySqliteDatabase } from './factory-adapters/sqlite.js'
 
-async function captureQueryBuilder(decoder: Transformer<any, any, EvmQueryBuilder>) {
-  const mockQueryBuilder = new EvmQueryBuilder()
-  await decoder.query({
-    queryBuilder: mockQueryBuilder,
-    logger: createTestLogger(),
-    portal: {} as any,
+async function captureQueryBuilder(
+  decoder: QueryAwareTransformer<any, any, EvmQueryBuilder<any>>,
+  logger = createTestLogger(),
+) {
+  const query = new EvmQueryBuilder()
+  await decoder.setupQuery({
+    query,
+    logger,
+    // portal: {} as any,
   })
-  return mockQueryBuilder
+  return query
 }
 
 const factoryAbi = {
@@ -676,12 +679,7 @@ describe('evmDecoder queries', () => {
           transfers2: duplicateEvent,
         },
       })
-
-      await decoder.query({
-        queryBuilder: new EvmQueryBuilder(),
-        logger,
-        portal: {} as any,
-      })
+      await captureQueryBuilder(decoder, logger)
 
       expect(errorSpy).toHaveBeenCalledTimes(1)
 
@@ -713,11 +711,7 @@ describe('evmDecoder queries', () => {
         },
       })
 
-      await decoder.query({
-        queryBuilder: new EvmQueryBuilder(),
-        logger,
-        portal: {} as any,
-      })
+      await captureQueryBuilder(decoder, logger)
 
       expect(errorSpy).toHaveBeenCalledTimes(1)
 
@@ -743,11 +737,7 @@ describe('evmDecoder queries', () => {
         },
       })
 
-      await decoder.query({
-        queryBuilder: new EvmQueryBuilder(),
-        logger,
-        portal: {} as any,
-      })
+      await captureQueryBuilder(decoder, logger)
 
       expect(errorSpy).not.toHaveBeenCalled()
 
@@ -828,8 +818,11 @@ describe('evmDecoder transform', () => {
   let mockPortal: MockPortal
 
   beforeEach(async () => {
-    if (mockPortal) closeMockPortal(mockPortal)
     mockPortal = await createMockPortal(PORTAL_MOCK_RESPONSE)
+  })
+
+  afterEach(async () => {
+    await closeMockPortal(mockPortal)
   })
 
   const PORTAL_MOCK_RESPONSE: MockResponse[] = [
@@ -884,17 +877,13 @@ describe('evmDecoder transform', () => {
   it('should decode the events when passed AbiEvent', async () => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
-      logger: false,
-    })
-      .pipe(
-        evmDecoder({
-          range: { from: 0, to: 1 },
-          events: {
-            transfers: commonAbis.erc20.events.Transfer,
-          },
-        }),
-      )
-      .pipe((e) => e['transfers'])
+      outputs: evmDecoder({
+        range: { from: 0, to: 1 },
+        events: {
+          transfers: commonAbis.erc20.events.Transfer,
+        },
+      }),
+    }).pipe((e) => e.transfers)
 
     const res = await readAll(stream)
 
@@ -965,18 +954,14 @@ describe('evmDecoder transform', () => {
   ])(`should filter events by specified contracts $contracts -> $expected`, async ({ contracts, expected }) => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
-      logger: false,
+      outputs: evmDecoder({
+        range: { from: 0, to: 1 },
+        contracts, // No contracts should filter out all events
+        events: {
+          transfers: commonAbis.erc20.events.Transfer,
+        },
+      }).pipe((e) => e.transfers),
     })
-      .pipe(
-        evmDecoder({
-          range: { from: 0, to: 1 },
-          contracts, // No contracts should filter out all events
-          events: {
-            transfers: commonAbis.erc20.events.Transfer,
-          },
-        }),
-      )
-      .pipe((e) => e['transfers'])
 
     const res = await readAll(stream)
 
@@ -986,22 +971,18 @@ describe('evmDecoder transform', () => {
   it('should decode the events when passed an EventWithArgs', async () => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
-      logger: false,
-    })
-      .pipe(
-        evmDecoder({
-          range: { from: 0, to: 1 },
-          events: {
-            transfers: {
-              event: commonAbis.erc20.events.Transfer,
-              params: {
-                from: '0x7a250d5630b4cf539739df2c5dacb4c659f2488d',
-              },
+      outputs: evmDecoder({
+        range: { from: 0, to: 1 },
+        events: {
+          transfers: {
+            event: commonAbis.erc20.events.Transfer,
+            params: {
+              from: '0x7a250d5630b4cf539739df2c5dacb4c659f2488d',
             },
           },
-        }),
-      )
-      .pipe((e) => e['transfers'])
+        },
+      }),
+    }).pipe((e) => e.transfers)
 
     const res = await readAll(stream)
     expect(res).toMatchInlineSnapshot(`
@@ -1065,23 +1046,19 @@ describe('evmDecoder transform', () => {
   it('should decode the events when mixed EventWithArgs and AbiEvent', async () => {
     const stream = evmPortalSource({
       portal: mockPortal.url,
-      logger: false,
-    })
-      .pipe(
-        evmDecoder({
-          range: { from: 0, to: 1 },
-          events: {
-            approvals: commonAbis.erc20.events.Approval,
-            transfers: {
-              event: commonAbis.erc20.events.Transfer,
-              params: {
-                from: '0x7a250d5630b4cf539739df2c5dacb4c659f2488d',
-              },
+      outputs: evmDecoder({
+        range: { from: 0, to: 1 },
+        events: {
+          approvals: commonAbis.erc20.events.Approval,
+          transfers: {
+            event: commonAbis.erc20.events.Transfer,
+            params: {
+              from: '0x7a250d5630b4cf539739df2c5dacb4c659f2488d',
             },
           },
-        }),
-      )
-      .pipe((e) => [...e['transfers'], ...e['approvals']])
+        },
+      }),
+    }).pipe((e) => [...e['transfers'], ...e['approvals']])
 
     const res = await readAll(stream)
 
