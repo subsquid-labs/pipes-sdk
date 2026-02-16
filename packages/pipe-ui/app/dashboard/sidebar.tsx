@@ -72,7 +72,6 @@ function PipeSelector({
 }) {
   if (!pipes.length) return null
 
-  console.log(pipes)
   return (
     <div>
       <Separator className="my-5" />
