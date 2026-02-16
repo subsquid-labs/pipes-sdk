@@ -1,6 +1,6 @@
 import { AlertCircle } from 'lucide-react'
 
-import { type ApiPipe, useStats } from '~/api/metrics'
+import { type Pipe, PipeStatus, useStats } from '~/api/metrics'
 import { usePortalStatus } from '~/api/portal'
 import { Separator } from '~/components/ui/separator'
 import { displayEstimatedTime } from '~/dashboard/formatters'
@@ -67,13 +67,14 @@ function PipeSelector({
   onSelectPipe,
 }: {
   description?: string
-  pipes: ApiPipe[]
+  pipes: Pipe[]
   selectedPipeId?: string
   isError: boolean
   onSelectPipe: (id: string) => void
 }) {
   if (!pipes.length) return null
 
+  console.log(pipes)
   return (
     <div>
       <Separator className="my-5" />
@@ -100,10 +101,21 @@ function PipeSelector({
               </div>
               <div className="text-left w-full">
                 <div className="text-sm">{pipe.id}</div>
-                <div className="flex w-full font-thin justify-between text-xxs">
-                  <div>{pipe.progress.percent.toFixed(2)}%</div>
-                  <div>{displayEstimatedTime(pipe.progress.etaSeconds, { etaLabel: '≈' })}</div>
-                </div>
+
+                {pipe.status === PipeStatus.Calculating ? (
+                  <div className="flex w-full font-thin justify-between text-xxs animate-pulse">Calculating...</div>
+                ) : (
+                  <div
+                    className={
+                      'flex w-full font-thin justify-between text-xxs' +
+                      (pipe.status === PipeStatus.Disconnected ? ' text-destructive' : '') +
+                      (pipe.status === PipeStatus.Syncing ? ' animate-pulse' : '')
+                    }
+                  >
+                    <div>{pipe.progress.percent.toFixed(2)}%</div>
+                    <div>{displayEstimatedTime(pipe, { etaLabel: '≈' })}</div>
+                  </div>
+                )}
               </div>
             </div>
           </button>
@@ -120,7 +132,7 @@ export function Sidebar({
   isError,
   onSelectPipe,
 }: {
-  pipes: ApiPipe[]
+  pipes: Pipe[]
   selectedPipeId?: string
   isError: boolean
   onSelectPipe: (id: string) => void

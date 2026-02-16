@@ -1,3 +1,5 @@
+import * as process from 'node:process'
+
 import { useQuery } from '@tanstack/react-query'
 
 import { client, getUrl } from '~/api/client'
@@ -6,7 +8,7 @@ type HttpResponse<T> = {
   payload: T
 }
 
-export type ApiPipe = {
+type ApiPipe = {
   id: string
 
   portal: {
@@ -26,6 +28,24 @@ export type ApiPipe = {
   }
 }
 
+type PipeHistory = {
+  blocksPerSecond: number
+  bytesPerSecond: number
+  memory: number
+}
+
+export enum PipeStatus {
+  Calculating = 'Calculating',
+  Syncing = 'Syncing',
+  Synced = 'Synced',
+  Disconnected = 'Disconnected',
+}
+
+export type Pipe = ApiPipe & {
+  status: PipeStatus
+  history: PipeHistory[]
+}
+
 export type ApiStats = {
   sdk: {
     version: string
@@ -41,14 +61,7 @@ export type ApiStats = {
 
 const MAX_HISTORY = 30
 export const DEFAULT_PIPE_ID = 'stream'
-const histories = new Map<
-  string,
-  {
-    blocksPerSecond: number
-    bytesPerSecond: number
-    memory: number
-  }[]
->()
+const histories = new Map<string, PipeHistory[]>()
 
 function getHistory(pipeId: string) {
   let history = histories.get(pipeId)
@@ -75,7 +88,7 @@ export function useStats() {
 
       return {
         ...res.data.payload,
-        pipes: res.data.payload.pipes.map((pipe) => {
+        pipes: res.data.payload.pipes.map((pipe): Pipe => {
           let history = getHistory(pipe.id)
 
           history.push({
@@ -87,13 +100,24 @@ export function useStats() {
           history = history.slice(-MAX_HISTORY)
           histories.set(pipe.id, history)
 
-          return { ...pipe, history }
+          let status = PipeStatus.Syncing
+          if (pipe.progress.percent === 0) {
+            status = PipeStatus.Calculating
+          } else if (pipe.progress.etaSeconds < 1) {
+            status = PipeStatus.Synced
+          }
+
+          return {
+            ...pipe,
+            status,
+            history,
+          }
         }),
       }
     },
+
     // No retry — refetchInterval already handles re-polling, and retries would delay showing the disconnected state
     retry: false,
-    placeholderData: (prev) => prev,
     refetchInterval: 1000,
   })
 }
