@@ -1,7 +1,20 @@
 import { findDuplicates } from '~/internal/array.js'
 
 import { QueryBuilder } from './query-builder.js'
-import { QueryAwareTransformer } from './transformer.js'
+import { QueryAwareTransformer, Transformer } from './transformer.js'
+
+// export class Output<In, Out, Query extends QueryBuilder<any>> {
+//   #transformer: Transformer<In, Out>
+//   #query: Transformer<In, Out>
+//
+//   constructor({ query }) {
+//     this.#transformer = query
+//   }
+//
+//   transform(data: In, ctx: { query: Query; logger: any }) {
+//     return new Transformer<In, Out>()
+//   }
+// }
 
 export type Outputs<F extends {}, QB extends QueryBuilder<F>> =
   | QB
