@@ -1,6 +1,6 @@
 import { AlertCircle } from 'lucide-react'
 
-import { type Pipe, PipeStatus, useStats } from '~/api/metrics'
+import { ApiStatus, type Pipe, PipeStatus, useStats } from '~/api/metrics'
 import { usePortalStatus } from '~/api/portal'
 import { Separator } from '~/components/ui/separator'
 import { displayEstimatedTime } from '~/dashboard/formatters'
@@ -134,7 +134,7 @@ export function Sidebar({
   onSelectPipe: (id: string) => void
 }) {
   const { data } = useStats()
-  const connected = !!data
+  const connected = data?.status === ApiStatus.Connected
 
   return (
     <div className="flex-[0_250px]">

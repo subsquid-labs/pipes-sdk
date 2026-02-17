@@ -32,6 +32,11 @@ type PipeHistory = {
   memory: number
 }
 
+export enum ApiStatus {
+  Connected = 'Connected',
+  Disconnected = 'Disconnected',
+}
+
 export enum PipeStatus {
   Calculating = 'Calculating',
   Syncing = 'Syncing',
@@ -76,7 +81,10 @@ function getHistory(pipeId: string) {
 
 const BASE_URL = 'http://127.0.0.1:9090'
 
-type StatsResult = Omit<ApiStats, 'pipes'> & { pipes: Pipe[] }
+type StatsResult = Omit<ApiStats, 'pipes'> & {
+  status: ApiStatus
+  pipes: Pipe[]
+}
 
 export function useStats() {
   const url = getUrl(BASE_URL, `/stats`)
@@ -90,6 +98,7 @@ export function useStats() {
 
         return {
           ...res.data.payload,
+          status: ApiStatus.Connected,
           pipes: res.data.payload.pipes.map((pipe): Pipe => {
             let history = getHistory(pipe.id)
 
@@ -121,6 +130,7 @@ export function useStats() {
         if (prev) {
           return {
             ...prev,
+            status: ApiStatus.Disconnected,
             pipes: prev.pipes.map((pipe) => ({ ...pipe, status: PipeStatus.Disconnected })),
           }
         }

@@ -5,7 +5,7 @@ import { Terminal } from 'lucide-react'
 // @ts-ignore
 import { Sparklines, SparklinesLine } from 'react-sparklines'
 
-import { useStats } from '~/api/metrics'
+import { ApiStatus, PipeStatus, useStats } from '~/api/metrics'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { humanBytes } from '~/dashboard/formatters'
@@ -19,19 +19,19 @@ const sparklineStyle = { fill: '#d0a9e2' }
 const sparklineColor = 'rgba(255,255,255,0.5)'
 
 export function Pipeline({ pipeId }: { pipeId: string }) {
-  const { data: stats, isError } = useStats()
+  const { data, isError } = useStats()
 
-  const data = stats?.pipes.find((pipe) => pipe.id === pipeId)
+  const pipe = data?.pipes.find((pipe) => pipe.id === pipeId)
 
   const dataset = useMemo(() => {
-    return data?.portal.url.replace(/^[\w.\/:]+datasets\//, '')
-  }, [data?.portal.url])
+    return pipe?.portal.url.replace(/^[\w.\/:]+datasets\//, '')
+  }, [pipe?.portal.url])
 
-  if (!data) return <PipelineDisconnected />
+  if (!pipe) return <PipelineDisconnected />
 
   return (
     <div className="flex-1">
-      {isError ? (
+      {pipe.status === PipeStatus.Disconnected ? (
         <Alert variant="destructive" className="mb-3">
           <Terminal />
           <AlertTitle>Pipe disconnected</AlertTitle>
@@ -46,16 +46,16 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
 
           <div className="justify-end">
             <div className="flex gap-1">
-              <NumberFlow value={data.progress.current}></NumberFlow>
+              <NumberFlow value={pipe.progress.current}></NumberFlow>
               <div className="text-muted">/</div>
-              <NumberFlow className="text-muted-foreground" value={data.progress.to}></NumberFlow>
+              <NumberFlow className="text-muted-foreground" value={pipe.progress.to}></NumberFlow>
             </div>
           </div>
         </div>
         <div className="w-full h-4 overflow-hidden rounded-full bg-gradient-primary my-1.5">
           <div
             style={{
-              width: data.progress.percent.toFixed(0) + '%',
+              width: pipe.progress.percent.toFixed(0) + '%',
             }}
             className="h-full gradient-primary rounded-full"
           />
@@ -63,7 +63,7 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
 
         <div className="flex justify-between mb-3 text-muted-foreground text-xs">
           <div>{dataset}</div>
-          <div>{data.progress.percent.toFixed(2)}%</div>
+          <div>{pipe.progress.percent.toFixed(2)}%</div>
         </div>
 
         <Tabs className="mt-4 mb-6" defaultValue="profiler">
@@ -88,35 +88,35 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
         <div className="flex items-center justify-between font-medium text-muted-foreground text-xs opacity-60">
           <div className="flex items-center gap-1">
             <div className="w-[100px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
-              <Sparklines min={0} data={data.history.map((v) => v.blocksPerSecond)} width={100} height={32} margin={0}>
+              <Sparklines min={0} data={pipe.history.map((v) => v.blocksPerSecond)} width={100} height={32} margin={0}>
                 <SparklinesLine style={sparklineStyle} color={sparklineColor} />
               </Sparklines>
             </div>
             <div>
               <div className="text-xxs">Indexing speed</div>
-              <div>{data.speed.blocksPerSecond.toFixed(data.speed.blocksPerSecond > 1 ? 0 : 2)} blocks/sec</div>
+              <div>{pipe.speed.blocksPerSecond.toFixed(pipe.speed.blocksPerSecond > 1 ? 0 : 2)} blocks/sec</div>
             </div>
           </div>
           <div className="flex items-center gap-1">
             <div className="w-[100px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
-              <Sparklines min={0} data={data.history.map((v) => v.bytesPerSecond)} width={100} height={32} margin={0}>
+              <Sparklines min={0} data={pipe.history.map((v) => v.bytesPerSecond)} width={100} height={32} margin={0}>
                 <SparklinesLine style={sparklineStyle} color={sparklineColor} />
               </Sparklines>
             </div>
             <div>
               <div className="text-xxs">Download speed</div>
-              <div>{humanBytes(data.speed.bytesPerSecond)}/sec</div>
+              <div>{humanBytes(pipe.speed.bytesPerSecond)}/sec</div>
             </div>
           </div>
           <div className="flex items-center gap-1">
             <div className="w-[100px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
-              <Sparklines min={0} data={data.history.map((v) => v.memory)} width={100} height={32} margin={0}>
+              <Sparklines min={0} data={pipe.history.map((v) => v.memory)} width={100} height={32} margin={0}>
                 <SparklinesLine style={sparklineStyle} color={sparklineColor} />
               </Sparklines>
             </div>
             <div>
               <div className="text-xxs">Memory</div>
-              <div>{stats?.usage.memory && humanBytes(stats.usage.memory)}</div>
+              <div>{data?.usage.memory && humanBytes(data.usage.memory)}</div>
             </div>
           </div>
         </div>
