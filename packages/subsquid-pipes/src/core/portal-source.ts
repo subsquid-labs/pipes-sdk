@@ -104,6 +104,9 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
   // Metrics
   #reorgsTotal: Counter | null = null
+  #portalRequestsTotal: Counter | null = null
+  #portalRequestsSuccess: Counter | null = null
+  #portalRequestsError: Counter | null = null
   #batchSizeBlocks: Histogram | null = null
   #batchSizeBytes: Histogram | null = null
 
@@ -239,6 +242,15 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
           this.#batchSizeBlocks?.observe(batch.blocks.length)
           this.#batchSizeBytes?.observe(batch.meta.bytes)
 
+          for (const [status, count] of Object.entries(batch.meta.requests)) {
+            this.#portalRequestsTotal?.inc(count)
+            if (Number(status) >= 200 && Number(status) < 300) {
+              this.#portalRequestsSuccess?.inc(count)
+            } else {
+              this.#portalRequestsError?.inc(count)
+            }
+          }
+
           const data = await this.applyTransformers(ctx, batch.blocks as T)
 
           yield { data, ctx }
@@ -346,6 +358,21 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     this.#reorgsTotal = metrics.counter({
       name: 'sqd_reorgs_total',
       help: 'Total number of chain reorganizations detected',
+    })
+
+    this.#portalRequestsTotal = metrics.counter({
+      name: 'sqd_portal_requests_total',
+      help: 'Total number of requests to the portal',
+    })
+
+    this.#portalRequestsSuccess = metrics.counter({
+      name: 'sqd_portal_requests_success',
+      help: 'Total number of successful portal requests',
+    })
+
+    this.#portalRequestsError = metrics.counter({
+      name: 'sqd_portal_requests_error',
+      help: 'Total number of failed portal requests (4xx/5xx)',
     })
 
     this.#batchSizeBlocks = metrics.histogram({

@@ -192,8 +192,50 @@ describe('Pipeline metrics', () => {
     }
 
     expect(tracking.get('sqd_reorgs_total')).toBeDefined()
+    expect(tracking.get('sqd_portal_requests_total')).toBeDefined()
+    expect(tracking.get('sqd_portal_requests_success')).toBeDefined()
+    expect(tracking.get('sqd_portal_requests_error')).toBeDefined()
     expect(tracking.get('sqd_batch_size_blocks')).toBeDefined()
     expect(tracking.get('sqd_batch_size_bytes')).toBeDefined()
+  })
+
+  it('should track portal request counts', async () => {
+    mockPortal = await createMockPortal([
+      {
+        statusCode: 200,
+        data: [
+          { header: { number: 1, hash: '0x1', timestamp: 1000 } },
+          { header: { number: 2, hash: '0x2', timestamp: 2000 } },
+        ],
+      },
+    ])
+
+    const tracking = createTrackingMetricsServer()
+
+    const stream = evmPortalSource({
+      portal: mockPortal.url,
+      outputs: blockOutputs({ from: 0, to: 2 }),
+      metrics: tracking.server,
+    })
+
+    for await (const _batch of stream) {
+      // consume
+    }
+
+    const total = tracking.get<TrackingCounter>('sqd_portal_requests_total')
+    expect(total).toBeDefined()
+    expect(total.total).toBeGreaterThan(0)
+
+    const success = tracking.get<TrackingCounter>('sqd_portal_requests_success')
+    expect(success).toBeDefined()
+    expect(success.total).toBeGreaterThan(0)
+
+    // All requests were successful, so error should be 0
+    const error = tracking.get<TrackingCounter>('sqd_portal_requests_error')
+    expect(error).toBeDefined()
+    expect(error.total).toBe(0)
+
+    expect(total.total).toBe(success.total)
   })
 
   it('should update progress-tracker metrics on batch processing', async () => {
