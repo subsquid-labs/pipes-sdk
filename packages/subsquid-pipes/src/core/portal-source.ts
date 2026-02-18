@@ -104,9 +104,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
   // Metrics
   #reorgsTotal: Counter | null = null
-  #portalRequestsTotal: Counter | null = null
-  #portalRequestsSuccess: Counter | null = null
-  #portalRequestsError: Counter | null = null
+  #portalRequestsTotal: Counter<'classification' | 'status'> | null = null
   #batchSizeBlocks: Histogram | null = null
   #batchSizeBytes: Histogram | null = null
 
@@ -242,13 +240,9 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
           this.#batchSizeBlocks?.observe(batch.blocks.length)
           this.#batchSizeBytes?.observe(batch.meta.bytes)
 
-          for (const [status, count] of Object.entries(batch.meta.requests)) {
-            this.#portalRequestsTotal?.inc(count)
-            if (Number(status) >= 200 && Number(status) < 300) {
-              this.#portalRequestsSuccess?.inc(count)
-            } else {
-              this.#portalRequestsError?.inc(count)
-            }
+          for (const [statusCode, count] of Object.entries(batch.meta.requests)) {
+            const classification = Number(statusCode) >= 200 && Number(statusCode) < 300 ? 'success' : 'error'
+            this.#portalRequestsTotal?.inc({ classification, status: statusCode }, count)
           }
 
           const data = await this.applyTransformers(ctx, batch.blocks as T)
@@ -363,16 +357,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     this.#portalRequestsTotal = metrics.counter({
       name: 'sqd_portal_requests_total',
       help: 'Total number of requests to the portal',
-    })
-
-    this.#portalRequestsSuccess = metrics.counter({
-      name: 'sqd_portal_requests_success',
-      help: 'Total number of successful portal requests',
-    })
-
-    this.#portalRequestsError = metrics.counter({
-      name: 'sqd_portal_requests_error',
-      help: 'Total number of failed portal requests (4xx/5xx)',
+      labelNames: ['classification', 'status'] as const,
     })
 
     this.#batchSizeBlocks = metrics.histogram({

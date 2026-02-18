@@ -193,13 +193,11 @@ describe('Pipeline metrics', () => {
 
     expect(tracking.get('sqd_reorgs_total')).toBeDefined()
     expect(tracking.get('sqd_portal_requests_total')).toBeDefined()
-    expect(tracking.get('sqd_portal_requests_success')).toBeDefined()
-    expect(tracking.get('sqd_portal_requests_error')).toBeDefined()
     expect(tracking.get('sqd_batch_size_blocks')).toBeDefined()
     expect(tracking.get('sqd_batch_size_bytes')).toBeDefined()
   })
 
-  it('should track portal request counts', async () => {
+  it('should track portal request counts with classification and status labels', async () => {
     mockPortal = await createMockPortal([
       {
         statusCode: 200,
@@ -222,20 +220,15 @@ describe('Pipeline metrics', () => {
       // consume
     }
 
-    const total = tracking.get<TrackingCounter>('sqd_portal_requests_total')
-    expect(total).toBeDefined()
-    expect(total.total).toBeGreaterThan(0)
+    const requests = tracking.get<TrackingCounter>('sqd_portal_requests_total')
+    expect(requests).toBeDefined()
+    expect(requests.total).toBeGreaterThan(0)
 
-    const success = tracking.get<TrackingCounter>('sqd_portal_requests_success')
-    expect(success).toBeDefined()
-    expect(success.total).toBeGreaterThan(0)
-
-    // All requests were successful, so error should be 0
-    const error = tracking.get<TrackingCounter>('sqd_portal_requests_error')
-    expect(error).toBeDefined()
-    expect(error.total).toBe(0)
-
-    expect(total.total).toBe(success.total)
+    // All requests should have classification=success and status=200
+    for (const call of requests.calls) {
+      expect(call.labels?.['classification']).toBe('success')
+      expect(call.labels?.['status']).toBe('200')
+    }
   })
 
   it('should update progress-tracker metrics on batch processing', async () => {
