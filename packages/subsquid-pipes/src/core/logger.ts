@@ -9,11 +9,13 @@ function isEnvFalse(name: string): boolean {
   return val === 'false' || val === '0'
 }
 
-export function createDefaultLogger({ level }: { level?: LogLevel } = {}): Logger {
+export function createDefaultLogger({ id, level }: { level?: LogLevel; id?: string } = {}): Logger {
   const baseLevel = level !== false && level !== null ? level : 'silent'
 
+  const pretty = process.stdout?.isTTY && !isEnvFalse('LOG_PRETTY')
+
   return pino({
-    base: null,
+    base: id ? { id } : undefined,
     messageKey: 'message',
     level: baseLevel ?? (process.env['LOG_LEVEL'] || 'info'),
     formatters: {
@@ -25,16 +27,20 @@ export function createDefaultLogger({ level }: { level?: LogLevel } = {}): Logge
       error: pino.stdSerializers.errWithCause,
       err: pino.stdSerializers.errWithCause,
     },
-    transport:
-      process.stdout?.isTTY && !isEnvFalse('LOG_PRETTY')
-        ? {
-            target: 'pino-pretty',
-            options: {
-              colorize: true,
-              messageKey: 'message',
-            },
-          }
-        : undefined,
+    transport: pretty
+      ? {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            singleLine: true,
+            colorizeObjects: 'dim',
+            ignore: 'id',
+            messageKey: 'message',
+            messageFormat: '\x1B[0m\x1b[2m{id}\x1B[0m {message}',
+            quote: false,
+          },
+        }
+      : undefined,
   })
 }
 

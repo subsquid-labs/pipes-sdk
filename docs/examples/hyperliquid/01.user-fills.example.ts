@@ -37,7 +37,7 @@ async function cli() {
   })
 
   for await (const { data } of stream) {
-    for (const block of data.blocks) {
+    for (const block of data) {
       if (block.fills.length === 0) continue
 
       console.log(block.fills)

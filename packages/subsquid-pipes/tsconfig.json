@@ -4,7 +4,8 @@
     "baseUrl": ".",
     "types": ["bun-types"],
     "paths": {
-      "~/*": ["src/*"]
+      "~/*": ["src/*"],
+      "$context": ["src/runtime/node/context.ts"]
     },
     "declaration": true,
     "outDir": "dist",

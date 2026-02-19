@@ -1,7 +1,24 @@
-import { parsePortalRange } from '~/core/index.js'
+import { QueryAwareTransformer, Subset, parsePortalRange } from '~/core/index.js'
 import { mergeDeep } from '~/internal/object/merge-deep.js'
-import { concatQueryLists, QueryBuilder, RequestOptions, Subset } from '../core/query-builder.js'
-import { evm } from '../portal-client/index.js'
+import * as evm from '~/portal-client/query/evm.js'
+
+import { QueryBuilder, QueryTransformerOpts, RequestOptions, concatQueryLists } from '../core/query-builder.js'
+
+export type { Subset } from '~/core/index.js'
+
+export type EvmPortalData<F extends evm.FieldSelection> = evm.Block<F>[]
+
+type EvmTransformerOpts<F extends evm.FieldSelection, Out> = QueryTransformerOpts<
+  EvmPortalData<F>,
+  Out,
+  EvmQueryBuilder<F>
+>
+
+type EvmTransformerOut<F extends evm.FieldSelection, Out> = QueryAwareTransformer<
+  EvmPortalData<F>,
+  Out,
+  EvmQueryBuilder<F>
+>
 
 // biome-ignore lint/complexity/noBannedTypes: <it is a default generic constraint>
 export class EvmQueryBuilder<F extends evm.FieldSelection = {}> extends QueryBuilder<F, evm.DataRequest> {
@@ -9,8 +26,8 @@ export class EvmQueryBuilder<F extends evm.FieldSelection = {}> extends QueryBui
     return 'evm'
   }
 
-  addFields<T extends Subset<T, evm.FieldSelection>>(fields: T): EvmQueryBuilder<F & T> {
-    this.fields = mergeDeep(this.fields, fields)
+  addFields<T extends evm.FieldSelection>(fields: Subset<T, evm.FieldSelection>): EvmQueryBuilder<F & T> {
+    this.fields = mergeDeep(this.fields, fields as object)
 
     return this as unknown as EvmQueryBuilder<F & T>
   }
@@ -54,4 +71,20 @@ export class EvmQueryBuilder<F extends evm.FieldSelection = {}> extends QueryBui
     }
     return res
   }
+
+  override build<Out>({ setupQuery, ...options }: EvmTransformerOpts<F, Out>): EvmTransformerOut<F, Out> {
+    setupQuery = setupQuery ? setupQuery : ({ query }) => query.merge(this)
+
+    return new QueryAwareTransformer(setupQuery, options as any)
+  }
+
+  transform<Out>({ setupQuery, ...options }: EvmTransformerOpts<F, Out>): EvmTransformerOut<F, Out> {
+    setupQuery = setupQuery ? setupQuery : ({ query }) => query.merge(this)
+
+    return new QueryAwareTransformer(setupQuery, options as any)
+  }
+}
+
+export function evmQuery() {
+  return new EvmQueryBuilder()
 }
