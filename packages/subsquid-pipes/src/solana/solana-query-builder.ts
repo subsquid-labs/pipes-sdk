@@ -3,6 +3,15 @@ import { mergeDeep } from '~/internal/object/merge-deep.js'
 import { concatQueryLists, QueryBuilder, Range, RequestOptions, Subset } from '../core/query-builder.js'
 import { solana } from '../portal-client/index.js'
 
+const LOG_FIELD_SELECTION = {
+  transactionIndex: true,
+  logIndex: true,
+  instructionAddress: true,
+  programId: true,
+  kind: true,
+  message: true,
+} as const satisfies solana.LogMessageFieldSelection
+
 // biome-ignore lint/complexity/noBannedTypes: <it is a default generic constraint>
 export class SolanaQueryBuilder<F extends solana.FieldSelection = {}> extends QueryBuilder<F, solana.DataRequest> {
   getType() {
@@ -30,8 +39,10 @@ export class SolanaQueryBuilder<F extends solana.FieldSelection = {}> extends Qu
     return this
   }
 
-  addLog(options: RequestOptions<solana.LogRequest>): this {
-    return this.addRequest('logs', options)
+  addLog(options: RequestOptions<solana.LogRequest>): SolanaQueryBuilder<F & { log: typeof LOG_FIELD_SELECTION }> {
+    this.fields = mergeDeep(this.fields, { log: LOG_FIELD_SELECTION })
+    this.addRequest('logs', options)
+    return this as unknown as SolanaQueryBuilder<F & { log: typeof LOG_FIELD_SELECTION }>
   }
 
   addTransaction(options: RequestOptions<solana.TransactionRequest>): this {

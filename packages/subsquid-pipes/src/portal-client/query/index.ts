@@ -14,10 +14,10 @@ export type Query = evm.Query | hyperliquidFills.Query | solana.Query | substrat
 export type GetBlock<Q extends Query> = Q extends evm.Query
   ? evm.Block<Q['fields']>
   : Q extends solana.Query
-    ? solana.Block<Q['fields']>
-    : Q extends substrate.Query
-      ? substrate.Block<Q['fields']>
-      : hyperliquidFills.Block<Q['fields']>
+  ? solana.Block<Q['fields']>
+  : Q extends substrate.Query
+  ? substrate.Block<Q['fields']>
+  : hyperliquidFills.Block<Q['fields']>
 
 export function createQuery<Q extends Query>(query: Q): Simplify<Q & Query> {
   return {
@@ -35,7 +35,7 @@ export function getBlockSchema<Block>(query: Query): Validator<Block, any> {
 
   switch (query.type) {
     case 'solana':
-      schema = solana.getBlockSchema(query.fields)
+      schema = solana.getBlockSchema(query)
       break
     case 'evm':
       schema = evm.getBlockSchema(query.fields)
