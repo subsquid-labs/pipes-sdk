@@ -12,5 +12,6 @@ export function blockDecoder(range: PortalRange) {
         timestamp: true,
       },
     })
-    .build((d) => d.flatMap((b) => b.header))
+    .build()
+    .transform((d) => d.flatMap((b) => b.header))
 }

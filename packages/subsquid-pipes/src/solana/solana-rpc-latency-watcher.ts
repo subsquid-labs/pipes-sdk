@@ -79,5 +79,6 @@ export function solanaRpcLatencyWatcher({ rpcUrl }: { rpcUrl: string[] }) {
         timestamp: true,
       },
     })
-    .build(transformer.options)
+    .build()
+    .transform(transformer.options)
 }

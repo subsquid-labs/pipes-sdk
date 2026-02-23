@@ -7,7 +7,8 @@ function myDecoder() {
       block: { timestamp: true },
       log: { address: true, transactionHash: true },
     })
-    .build((data) => {
+    .build()
+    .transform((data) => {
       return data.map((d) => ({
         block_number: d.header.timestamp,
         d,

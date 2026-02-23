@@ -180,7 +180,7 @@ export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEv
     })
   }
 
-  return query.build({
+  return query.build().transform({
     profiler: opts.profiler || { id: 'instruction decoder' },
 
     transform: async (data, ctx) => {

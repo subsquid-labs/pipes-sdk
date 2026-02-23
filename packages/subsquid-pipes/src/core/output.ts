@@ -50,7 +50,7 @@ export function mergeOutputs<F extends {}, Q extends QueryBuilder<F>>(input: Out
   if (input instanceof QueryAwareTransformer) {
     return input
   } else if (input instanceof QueryBuilder) {
-    return input.build({ transform: (data) => data })
+    return input.build()
   }
 
   const output: Record<string, QueryAwareTransformer<any, any, Q>> = {}
@@ -58,7 +58,7 @@ export function mergeOutputs<F extends {}, Q extends QueryBuilder<F>>(input: Out
     if (value instanceof QueryAwareTransformer) {
       output[key] = value
     } else {
-      output[key] = value.build({ transform: (data) => data })
+      output[key] = value.build()
     }
   }
 

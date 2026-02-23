@@ -330,119 +330,122 @@ export function evmDecoder<T extends Events, C extends Contracts>({
     query.addLog({ range: decodedRange, request })
   }
 
-  return query.build({
-    profiler: profiler ?? { id: 'EVM decoder' },
-    setupQuery: (config) => {
-      const allEventTopics = normalizedEvents.map(({ event }) => event.topic)
-      const duplicates = findDuplicates(allEventTopics)
-      if (duplicates.length) {
-        config.logger.error(DUPLICATED_EVENTS(getDuplicateEvents(events, duplicates)))
-      }
+  return query
+    .build({
+      setupQuery: (config) => {
+        const allEventTopics = normalizedEvents.map(({ event }) => event.topic)
+        const duplicates = findDuplicates(allEventTopics)
+        if (duplicates.length) {
+          config.logger.error(DUPLICATED_EVENTS(getDuplicateEvents(events, duplicates)))
+        }
 
-      config.query.merge(query)
-    },
-    start: async ({ logger }) => {
-      if (Factory.isFactory(contracts)) {
-        await contracts.migrate()
-      }
-    },
-    transform: async (data, ctx): Promise<EventResponse<T, C>> => {
-      const result = {} as EventResponse<T, C>
-      // TODO: should use normalizedEvents instead of events here
-      for (const eventName in events) {
-        ;(result[eventName as keyof T] as DecodeEventsFunctions<T>[]) = []
-      }
+        config.query.merge(query)
+      },
+    })
+    .transform({
+      profiler: profiler ?? { id: 'EVM decoder' },
+      start: async ({ logger }) => {
+        if (Factory.isFactory(contracts)) {
+          await contracts.migrate()
+        }
+      },
+      transform: async (data, ctx): Promise<EventResponse<T, C>> => {
+        const result = {} as EventResponse<T, C>
+        // TODO: should use normalizedEvents instead of events here
+        for (const eventName in events) {
+          ;(result[eventName as keyof T] as DecodeEventsFunctions<T>[]) = []
+        }
 
-      if (Factory.isFactory(contracts)) {
-        const span = ctx.profiler.start('factory event decode')
+        if (Factory.isFactory(contracts)) {
+          const span = ctx.profiler.start('factory event decode')
+          for (const block of data) {
+            if (!block.logs) continue
+            for (const log of block.logs) {
+              if (Factory.isFactory(contracts) && contracts.isFactoryEvent(log)) {
+                contracts.decode(log, block.header.number)
+              }
+            }
+          }
+          span.end()
+        }
+
+        const span = Factory.isFactory(contracts) ? ctx.profiler.start('child events decode') : undefined
         for (const block of data) {
           if (!block.logs) continue
+
           for (const log of block.logs) {
-            if (Factory.isFactory(contracts) && contracts.isFactoryEvent(log)) {
-              contracts.decode(log, block.header.number)
-            }
-          }
-        }
-        span.end()
-      }
-
-      const span = Factory.isFactory(contracts) ? ctx.profiler.start('child events decode') : undefined
-      for (const block of data) {
-        if (!block.logs) continue
-
-        for (const log of block.logs) {
-          let factoryEvent: FactoryEvent<any> | null = null
-          if (Factory.isFactory(contracts)) {
-            factoryEvent = await contracts.getContract(log.address)
-            if (!factoryEvent) {
-              continue
-            }
-          } else if (
-            normalizedContracts &&
-            // We have a list of contracts to filter by - skip non-matching addresses
-            // this is needed because, when using the same topic hashes, portal may return logs from other contracts
-            (normalizedContracts.length === 0 || !normalizedContracts.includes(log.address))
-          ) {
-            continue
-          }
-
-          for (const eventName in events) {
-            const eventValue = events[eventName]
-            let eventAbi: AbiEvent<any>
-
-            if (isEventWithArgs(eventValue)) {
-              eventAbi = eventValue.event
-            } else {
-              eventAbi = eventValue
-            }
-
-            const topic0 = log.topics[0]
-            if (topic0 !== eventAbi.topic) {
-              continue
-            } else if (!eventAbi.is(log)) {
+            let factoryEvent: FactoryEvent<any> | null = null
+            if (Factory.isFactory(contracts)) {
+              factoryEvent = await contracts.getContract(log.address)
+              if (!factoryEvent) {
+                continue
+              }
+            } else if (
+              normalizedContracts &&
+              // We have a list of contracts to filter by - skip non-matching addresses
+              // this is needed because, when using the same topic hashes, portal may return logs from other contracts
+              (normalizedContracts.length === 0 || !normalizedContracts.includes(log.address))
+            ) {
               continue
             }
 
-            try {
-              const decoded = eventAbi.decode(log)
-              const eventArray = result[eventName as keyof T] as ReturnType<typeof eventAbi.decode>[]
+            for (const eventName in events) {
+              const eventValue = events[eventName]
+              let eventAbi: AbiEvent<any>
 
-              eventArray.push({
-                event: decoded,
-                contract: log.address,
-                rawEvent: log,
-                block: {
-                  number: block.header.number,
-                  hash: block.header.hash,
-                },
-                factory: factoryEvent,
-                timestamp: new Date(block.header.timestamp * 1000),
-              })
-            } catch (error) {
-              if (onError) {
-                await onError(ctx, error)
+              if (isEventWithArgs(eventValue)) {
+                eventAbi = eventValue.event
+              } else {
+                eventAbi = eventValue
               }
 
-              throw error
+              const topic0 = log.topics[0]
+              if (topic0 !== eventAbi.topic) {
+                continue
+              } else if (!eventAbi.is(log)) {
+                continue
+              }
+
+              try {
+                const decoded = eventAbi.decode(log)
+                const eventArray = result[eventName as keyof T] as ReturnType<typeof eventAbi.decode>[]
+
+                eventArray.push({
+                  event: decoded,
+                  contract: log.address,
+                  rawEvent: log,
+                  block: {
+                    number: block.header.number,
+                    hash: block.header.hash,
+                  },
+                  factory: factoryEvent,
+                  timestamp: new Date(block.header.timestamp * 1000),
+                })
+              } catch (error) {
+                if (onError) {
+                  await onError(ctx, error)
+                }
+
+                throw error
+              }
+              break
             }
-            break
           }
         }
-      }
-      span?.end()
+        span?.end()
 
-      if (Factory.isFactory(contracts)) {
-        const span = ctx.profiler.start('persist factory state')
-        await contracts.persist()
-        span.end()
-      }
+        if (Factory.isFactory(contracts)) {
+          const span = ctx.profiler.start('persist factory state')
+          await contracts.persist()
+          span.end()
+        }
 
-      return result
-    },
-    fork(cursor) {
-      if (!Factory.isFactory(contracts)) return
+        return result
+      },
+      fork(cursor) {
+        if (!Factory.isFactory(contracts)) return
 
-      return contracts.fork(cursor)
-    },
-  })
+        return contracts.fork(cursor)
+      },
+    })
 }

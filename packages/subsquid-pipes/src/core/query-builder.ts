@@ -35,7 +35,7 @@ export abstract class QueryBuilder<F extends {}, R = any> {
   abstract getType(): string
   abstract mergeDataRequests(...requests: R[]): R
   abstract addFields(fields: F): QueryBuilder<F, R>
-  abstract build(options: QueryTransformerOpts<any, any, any>): QueryAwareTransformer<any, any, any>
+  abstract build(opts?: { setupQuery?: SetupQueryFn<any> }): QueryAwareTransformer<any, any, any>
 
   getRequests() {
     return this.requests
