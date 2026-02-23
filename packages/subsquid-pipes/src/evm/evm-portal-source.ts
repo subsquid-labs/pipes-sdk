@@ -7,7 +7,6 @@ import {
   PortalCache,
   PortalSource,
   Transformer,
-  createDefaultLogger,
   createTransformer,
   mergeOutputs,
 } from '~/core/index.js'
@@ -19,6 +18,8 @@ import * as evm from '../portal-client/query/evm.js'
 import { EvmPortalData, EvmQueryBuilder } from './evm-query-builder.js'
 
 export type EvmFieldSelection = evm.FieldSelection
+
+export * as api from '../portal-client/query/evm.js'
 
 export type EvmOutputs = Outputs<evm.FieldSelection, EvmQueryBuilder<any>>
 

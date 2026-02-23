@@ -8,6 +8,7 @@ import {
 } from '~/portal-client/index.js'
 
 import { last } from '../internal/array.js'
+import { DefaultPipeIdError, ForkCursorMissingError, ForkNoPreviousBlocksError, TargetForkNotSupportedError } from './errors.js'
 import { LogLevel, Logger, createDefaultLogger, formatWarning } from './logger.js'
 import { Counter, Histogram, Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
 import { Profiler, Span } from './profiling.js'
@@ -402,6 +403,10 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   }
 
   writeTo(target: Target<T>) {
+    if (this.#id === DEFAULT_PIPE_NAME) {
+      throw new DefaultPipeIdError()
+    }
+
     const self = this
 
     return target.write({
@@ -422,13 +427,11 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             self.#reorgsTotal?.inc(1)
 
             if (!e.previousBlocks.length) {
-              // TODO how to explain this error? what to do next?
-              throw new Error('Previous blocks are empty, but fork is detected')
+              throw new ForkNoPreviousBlocksError()
             }
 
             if (!target.fork) {
-              // TODO add docs about fork and how to implement it
-              throw new Error('Target does not support fork')
+              throw new TargetForkNotSupportedError()
             }
 
             const forkProfiler = Span.root('fork', self.#options.profiler)
@@ -438,8 +441,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             span.end()
 
             if (!forkedCursor) {
-              // TODO how to explain this error? what to do next?
-              throw Error(`Fork detected, but target did not return a new cursor`)
+              throw new ForkCursorMissingError()
             }
 
             await self.forkTransformers(forkProfiler, forkedCursor)
