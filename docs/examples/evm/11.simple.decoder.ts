@@ -28,7 +28,7 @@ type MyTransformationOut = ResultOf<typeof myTransformation> // { block_number_r
 
 const outputs = {
   v1: myDecoder(),
-  v2: myDecoder().pipe(myTransformation()),
+  v2: myDecoder().transform(myTransformation()),
 }
 
 type FullOutputs = ResultOf<typeof outputs> // { v1: { block_number: number }[], v2: { block_number_renamed: number }[] }
@@ -43,7 +43,7 @@ async function cli() {
   const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     outputs,
-  }).pipe(wholePipeTransform())
+  }).transform(wholePipeTransform())
 
   for await (const { data } of stream) {
     console.log(data.v1.map((d) => d.block_number))

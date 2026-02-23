@@ -258,7 +258,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     await this.stop()
   }
 
-  pipe<Out>(options: TransformerArgs<T, Out> | Transformer<T, Out>): PortalSource<Q, Out> {
+  transform<Out>(options: TransformerArgs<T, Out> | Transformer<T, Out>): PortalSource<Q, Out> {
     if (this.#started) throw new Error('Source is closed')
 
     const transformer = options instanceof Transformer ? options : new Transformer(options)
@@ -282,6 +282,13 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       metrics: this.#metricServer,
       transformers: [...this.#transformers, transformer],
     })
+  }
+
+  /**
+   * @deprecated use `transform` instead. `pipe` is an alias for `transform` and will be removed in future versions.
+   */
+  pipe<Out>(options: TransformerArgs<T, Out> | Transformer<T, Out>): PortalSource<Q, Out> {
+    return this.transform(options)
   }
 
   private async applyTransformers(ctx: BatchCtx, data: T) {
@@ -394,7 +401,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     await this.#metricServer.stop()
   }
 
-  pipeTo(target: Target<T>) {
+  writeTo(target: Target<T>) {
     const self = this
 
     return target.write({
@@ -444,6 +451,13 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
         }
       },
     })
+  }
+
+  /**
+   * @deprecated use `writeTo` instead. `pipeTo` is an alias for `writeTo` and will be removed in future versions.
+   */
+  pipeTo(target: Target<T>) {
+    return this.writeTo(target)
   }
 
   private batchEnd(ctx: BatchCtx) {
