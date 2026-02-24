@@ -20,7 +20,13 @@ import { Profiler, Span, SpanHooks } from './profiling.js'
 import { ProgressEvent, StartEvent } from './progress-tracker.js'
 import { QueryBuilder, hashQuery } from './query-builder.js'
 import { Target } from './target.js'
-import { QueryAwareTransformer, Transformer, TransformerArgs } from './transformer.js'
+import {
+  QueryAwareTransformer,
+  Transformer,
+  TransformerArgs,
+  TransformerFn,
+  TransformerOptions,
+} from './transformer.js'
 import { BlockCursor, Ctx } from './types.js'
 
 const NOT_REAL_TIME_WARNING = (name: string) => {
@@ -266,7 +272,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     await this.stop()
   }
 
-  transform<Out>(options: TransformerArgs<T, Out> | Transformer<T, Out>): PortalSource<Q, Out> {
+  pipe<Out>(options: TransformerArgs<T, Out>): PortalSource<Q, Out> {
     if (this.#started) throw new Error('Source is closed')
 
     const transformer = options instanceof Transformer ? options : new Transformer(options)
@@ -290,13 +296,6 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       metrics: this.#metricServer,
       transformers: [...this.#transformers, transformer],
     })
-  }
-
-  /**
-   * @deprecated use `transform` instead. `pipe` is an alias for `transform` and will be removed in future versions.
-   */
-  pipe<Out>(options: TransformerArgs<T, Out> | Transformer<T, Out>): PortalSource<Q, Out> {
-    return this.transform(options)
   }
 
   private async applyTransformers(ctx: BatchCtx, data: T) {
@@ -385,7 +384,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     await this.#metricServer.stop()
   }
 
-  writeTo(target: Target<T>) {
+  pipeTo(target: Target<T>) {
     if (this.#id === DEFAULT_PIPE_NAME) {
       throw new DefaultPipeIdError()
     }
@@ -434,13 +433,6 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
         }
       },
     })
-  }
-
-  /**
-   * @deprecated use `writeTo` instead. `pipeTo` is an alias for `writeTo` and will be removed in future versions.
-   */
-  pipeTo(target: Target<T>) {
-    return this.writeTo(target)
   }
 
   private batchEnd(ctx: BatchCtx) {

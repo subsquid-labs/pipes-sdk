@@ -13,5 +13,5 @@ export function blockDecoder(range: PortalRange) {
       },
     })
     .build()
-    .transform((d) => d.flatMap((b) => b.header))
+    .pipe((d) => d.flatMap((b) => b.header))
 }

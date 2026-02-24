@@ -57,48 +57,16 @@ for await (const { data } of rawStream) {
 }
 
 // after — data is the array
-const transformer = query.build().transform((data) => data.map(decode))
+const transformer = query.build().pipe((data) => data.map(decode))
 
 for await (const { data } of rawStream) {
   data // evm.Block<F>[]
 }
 ```
 
-#### `.pipe()` renamed to `.transform()`, `.pipeTo()` renamed to `.writeTo()`
+#### Pipe `id` is required when calling `.pipeTo()`
 
-```ts
-// before
-source.pipe(myTransformer).pipeTo(myTarget)
-
-// after
-source.transform(myTransformer).writeTo(myTarget)
-```
-
-`.pipe()` and `.pipeTo()` still work but are deprecated.
-
-#### `.build()` no longer accepts a transform function
-
-For custom query builder usage, the transform callback has been moved out of `.build()` into a chained `.transform()` call.
-
-```ts
-// before
-query.build((data) => data.blocks.map(decode))
-
-query.build({
-  setupQuery: ({ query }) => query.merge(myQuery),
-  transform: (data, ctx) => data.blocks.map(decode),
-})
-
-// after
-query.build().transform((data) => data.map(decode))
-
-query.build({ setupQuery: ({ query }) => query.merge(myQuery) })
-     .transform((data, ctx) => data.map(decode))
-```
-
-#### Pipe `id` is required when calling `writeTo()`
-
-Targets persist cursor state keyed by pipe ID. Calling `writeTo()` without setting an `id` throws `DefaultPipeIdError` (E0001) at startup.
+Targets persist cursor state keyed by pipe ID. Calling `.pipeTo()` without setting an `id` throws `DefaultPipeIdError` (E0001) at startup.
 
 ```ts
 // before — id was optional
@@ -108,7 +76,7 @@ evmPortalSource({ portal: '...' })
 
 // after — id is required
 evmPortalSource({ id: 'my-pipe', portal: '...', outputs: evmDecoder({ ... }) })
-  .writeTo(myTarget)
+  .pipeTo(myTarget)
 ```
 
 #### `solanaPortalSource` `query` option removed, `outputs` required
@@ -207,7 +175,7 @@ All framework errors extend `PipeError` and carry a unique code linking to the d
 
 | Error | Code | Thrown when |
 |---|---|---|
-| `DefaultPipeIdError` | E0001 | `writeTo()` called without a pipe `id` |
+| `DefaultPipeIdError` | E0001 | `.pipeTo()` called without a pipe `id` |
 | `TargetForkNotSupportedError` | E1001 | Fork detected but target has no `fork()` method |
 | `ForkNoPreviousBlocksError` | E1002 | Fork exception carried no previous blocks |
 | `ForkCursorMissingError` | E1003 | Target `fork()` returned `null` |

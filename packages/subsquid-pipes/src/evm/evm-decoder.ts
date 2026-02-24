@@ -342,9 +342,9 @@ export function evmDecoder<T extends Events, C extends Contracts>({
         config.query.merge(query)
       },
     })
-    .transform({
+    .pipe({
       profiler: profiler ?? { id: 'EVM decoder' },
-      start: async ({ logger }) => {
+      start: async () => {
         if (Factory.isFactory(contracts)) {
           await contracts.migrate()
         }

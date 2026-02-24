@@ -12,16 +12,19 @@ class EvmRpcLatencyWatcher extends RpcLatencyWatcher {
       params: ['newHeads'],
     }
 
-    listener.subscribe(payload, (message: { method: string; params: { result: { number: string; timestamp: string } } }) => {
-      if (message.method !== 'eth_subscription') return
-      const head = message.params.result
+    listener.subscribe(
+      payload,
+      (message: { method: string; params: { result: { number: string; timestamp: string } } }) => {
+        if (message.method !== 'eth_subscription') return
+        const head = message.params.result
 
-      this.addBlock(url, {
-        number: parseInt(head.number),
-        timestamp: new Date(parseInt(head.timestamp) * 1000),
-        receivedAt: new Date(),
-      })
-    })
+        this.addBlock(url, {
+          number: parseInt(head.number),
+          timestamp: new Date(parseInt(head.timestamp) * 1000),
+          receivedAt: new Date(),
+        })
+      },
+    )
 
     return listener
   }
@@ -40,5 +43,5 @@ export function evmRpcLatencyWatcher({ rpcUrl }: { rpcUrl: string[] }) {
       },
     })
     .build()
-    .transform(transformer.options)
+    .pipe(transformer.options)
 }

@@ -48,7 +48,7 @@ describe('solanaInstructionDecoder transform', () => {
         instructions: {
           transfers: tokenProgram.instructions.transfer,
         },
-      }).transform((e) => e.transfers),
+      }).pipe((e) => e.transfers),
     })
 
     const res = await readAll(stream)

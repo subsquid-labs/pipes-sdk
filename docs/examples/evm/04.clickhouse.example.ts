@@ -24,7 +24,7 @@ async function cli() {
         transfers: commonAbis.erc20.events.Transfer,
       },
     }),
-  }).writeTo(
+  }).pipeTo(
     clickhouseTarget({
       client,
       onRollback: async () => {},

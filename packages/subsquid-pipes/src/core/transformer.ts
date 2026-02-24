@@ -25,12 +25,12 @@ export type TransformerOptions<In, Out> = {
   stop?: (ctx: StopCtx) => Promise<void> | void
 }
 
-export type TransformerArgs<In, Out> = TransformerOptions<In, Out> | TransformerFn<In, Out>
+export type TransformerArgs<In, Out> = Transformer<In, Out> | TransformerOptions<In, Out> | TransformerFn<In, Out>
 
 export class Transformer<In, Out> {
   options: TransformerOptions<In, Out>
 
-  constructor(options: TransformerArgs<In, Out>) {
+  constructor(options: TransformerOptions<In, Out> | TransformerFn<In, Out>) {
     if (typeof options === 'function') {
       this.options = { transform: options }
     } else {
@@ -134,16 +134,7 @@ export class Transformer<In, Out> {
    * Otherwise, type information about the very first input would be lost,
    * and downstream code would see only the immediate `Out` type.
    */
-  transform<Res>(transformer: Transformer<Out, Res> | TransformerArgs<Out, Res>): Transformer<In, Res> {
-    this.children.push(transformer instanceof Transformer ? transformer : new Transformer(transformer))
-
-    return this as unknown as Transformer<In, Res>
-  }
-
-  /**
-   * @deprecated
-   */
-  pipe<Res>(transformer: Transformer<Out, Res> | TransformerArgs<Out, Res>): Transformer<In, Res> {
+  pipe<Res>(transformer: TransformerArgs<Out, Res>): Transformer<In, Res> {
     this.children.push(transformer instanceof Transformer ? transformer : new Transformer(transformer))
 
     return this as unknown as Transformer<In, Res>
@@ -167,7 +158,7 @@ export class QueryAwareTransformer<
    */
   setupQuery: SetupQueryFn<Query>
 
-  constructor(setupQuery: SetupQueryFn<Query>, options: TransformerArgs<In, Out>) {
+  constructor(setupQuery: SetupQueryFn<Query>, options: TransformerOptions<In, Out>) {
     super(options)
 
     this.setupQuery = setupQuery
@@ -176,15 +167,7 @@ export class QueryAwareTransformer<
   /**
    * We need to override the return type
    */
-  override transform<Res>(
-    transformer: Transformer<Out, Res> | TransformerArgs<Out, Res>,
-  ): QueryAwareTransformer<In, Res, Query> {
-    return super.transform(transformer) as unknown as QueryAwareTransformer<In, Res, Query>
-  }
-
-  override pipe<Res>(
-    transformer: Transformer<Out, Res> | TransformerArgs<Out, Res>,
-  ): QueryAwareTransformer<In, Res, Query> {
-    return super.transform(transformer) as unknown as QueryAwareTransformer<In, Res, Query>
+  override pipe<Res>(transformer: TransformerArgs<Out, Res>): QueryAwareTransformer<In, Res, Query> {
+    return super.pipe(transformer) as unknown as QueryAwareTransformer<In, Res, Query>
   }
 }

@@ -56,7 +56,7 @@ describe('Clickhouse state', () => {
       await evmPortalSource({
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
-      }).writeTo(
+      }).pipeTo(
         clickhouseTarget({
           client,
           settings: {
@@ -565,7 +565,7 @@ describe('Clickhouse state', () => {
       await evmPortalSource({
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
-      }).writeTo(
+      }).pipeTo(
         clickhouseTarget({
           client,
           onData: async ({ store, data }) => {

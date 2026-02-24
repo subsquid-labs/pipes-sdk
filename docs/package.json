@@ -16,6 +16,8 @@
   "dependencies": {
     "@apollo/server": "^5.1.0",
     "@clickhouse/client": "^1.12.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.212.0",
+    "@opentelemetry/sdk-node": "^0.212.0",
     "@subsquid/borsh": "0.3.0",
     "@subsquid/evm-abi": "0.3.1",
     "@subsquid/evm-codec": "0.3.0",

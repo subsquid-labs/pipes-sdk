@@ -25,7 +25,7 @@ async function main() {
     portal: 'https://portal.sqd.dev/datasets/base-mainnet',
     outputs: evmRpcLatencyWatcher({
       rpcUrl: ['https://base.drpc.org', 'https://base-rpc.publicnode.com'], // RPC endpoints to monitor
-    }).transform((data, { metrics }) => {
+    }).pipe((data, { metrics }) => {
       if (!data) return // Skip if no latency data
 
       // For each RPC endpoint, update the latency gauge metric

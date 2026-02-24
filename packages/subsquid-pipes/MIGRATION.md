@@ -56,7 +56,7 @@ The `data` shape is unchanged — `data.transfers`, `data.swaps` etc. still work
 
 ---
 
-## 2. Replace `.pipeTo()` with `.writeTo()` and add a pipe `id`
+## 2. Add a pipe `id` when calling `.pipeTo()`
 
 ```ts
 // before
@@ -69,10 +69,10 @@ await evmPortalSource({
   id: 'my-pipe',           // required — stable ID for cursor persistence
   portal: '...',
   outputs: evmDecoder({ ... }),
-}).writeTo(clickhouseTarget({ ... }))
+}).pipeTo(clickhouseTarget({ ... }))
 ```
 
-> `.pipeTo()` still works but is deprecated. The `id` is always required for `writeTo()`.
+> The `id` is always required when calling `.pipeTo()`.
 
 ---
 
@@ -120,7 +120,7 @@ source.pipe({
 })
 
 // after
-source.transform({
+source.pipe({
   profiler: { id: 'my transformer' },
   transform: (data, ctx) => {
     return data.map((block) => ({
@@ -152,7 +152,7 @@ const decoder = evmQuery()
 const decoder = evmQuery()
   .addFields(myFields)
   .build({ setupQuery: ({ query }) => query.merge(extraQuery) })
-  .transform({
+  .pipe({
     profiler: { id: 'my-decoder' },
     transform: (data, ctx) => data.map(decode),
     fork: async (cursor, ctx) => { /* rollback state */ },
@@ -249,11 +249,10 @@ evmPortalSource({
 
 - [ ] `.pipe(decoder)` → `outputs: decoder` in `evmPortalSource` / `solanaPortalSource`
 - [ ] `.pipeComposite({ ... })` → `outputs: { ... }`
-- [ ] `.pipeTo(target)` → `.writeTo(target)`
-- [ ] Add `id: 'my-pipe'` to any source that calls `writeTo()`
+- [ ] Add `id: 'my-pipe'` to any source that calls `.pipeTo()`
 - [ ] `createSolanaInstructionDecoder` → `solanaInstructionDecoder`
 - [ ] Custom transformers: `data.blocks` → `data`
-- [ ] Custom `.build({ transform })` → `.build().transform()`
+- [ ] Custom `.build({ transform })` → `.build().pipe()`
 - [ ] `server.addBatchContext(ctx)` → `server.batchProcessed(ctx)`
 - [ ] `StartState` → `StartEvent`, `ProgressState` → `ProgressEvent`
 - [ ] `createEvmPortalSource` → `evmPortalSource`

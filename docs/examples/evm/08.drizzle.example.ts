@@ -81,7 +81,7 @@ async function main() {
       },
     }),
     metrics: metricsServer(),
-  }).writeTo(
+  }).pipeTo(
     // Configure Drizzle ORM target to store events in PostgreSQL database
     drizzleTarget({
       db: drizzle(DB_URL),
