@@ -5,22 +5,39 @@ import { MetricsServerOptions, metricsServer } from '~/metrics/node/index.js'
 import { RuntimeContext, runWithContext } from './context.js'
 
 type Config = {
+  /**
+   * Maximum number of restart attempts per pipe before the runner gives up and
+   * re-throws the error. Defaults to `5`.
+   */
   retry?: number
+  /**
+   * When provided, starts a Prometheus metrics server shared by all pipes.
+   */
   metrics?: MetricsServerOptions
 }
 
 type SerializableObject = Record<string, string | number | Date | boolean>
 
+/**
+ * Context passed to each pipe's `stream` function at runtime.
+ */
 export type RunConfig<T extends SerializableObject> = {
+  /** Stable ID for this pipe, used for cursor persistence and log prefixing. */
   id: string
+  /** Params supplied in the pipe declaration. */
   params: T
+  /** Shared metrics server. */
   metrics: MetricsServer
+  /** Logger scoped to this pipe's ID. */
   logger: Logger
 }
 
 type StreamConfig<T extends SerializableObject> = {
+  /** Stable, unique identifier for this pipe. */
   id: string
+  /** Arbitrary params forwarded to the `stream` function. */
   params: T
+  /** Async function that runs the pipe to completion. */
   stream: string | ((ctx: RunConfig<T>) => Promise<unknown>)
 }
 
@@ -105,6 +122,41 @@ class Runner<T extends SerializableObject = any> {
   }
 }
 
-export function createRunner<T extends SerializableObject>(streams: StreamConfig<T>[], defaultConfig?: Config) {
+/**
+ * **For local development only.**
+ *
+ * Runs multiple pipes concurrently inside a single Node.js process.
+ *
+ * **Why not for production:**
+ * - **Single-threaded.** All pipes share one JS thread. A CPU-intensive pipe
+ *   will starve its neighbours. Worker-thread support is planned for a future
+ *   release.
+ * - **Shared fate.** If the process crashes, every pipe goes down together.
+ *   The runner retries the *individual* pipe that threw, but an OS-level kill
+ *   or an unhandled rejection that escapes the retry loop takes everything
+ *   with it.
+ *
+ * For production, run each pipe as a separate process or container so
+ * failures stay isolated and resources can be scaled independently.
+ *
+ * @example
+ * ```ts
+ * import { createDevRunner } from '@subsquid/pipes/runtime/node'
+ *
+ * const runner = createDevRunner([
+ *   {
+ *     id: 'transfers',
+ *     params: { portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet' },
+ *     stream: async ({ id, params, logger, metrics }) => {
+ *       const stream = evmPortalSource({ id, portal: params.portal, outputs: evmDecoder({ ... }) })
+ *       for await (const { data } of stream) { ... }
+ *     },
+ *   },
+ * ], { retry: 5, metrics: { port: 9090 } })
+ *
+ * await runner.start()
+ * ```
+ */
+export function createDevRunner<T extends SerializableObject>(streams: StreamConfig<T>[], defaultConfig?: Config) {
   return new Runner(streams, defaultConfig)
 }

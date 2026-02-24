@@ -265,12 +265,12 @@ import { evmQuery } from '@subsquid/pipes/evm'
 evmQuery()
 ```
 
-#### Runner — multi-pipe management
+#### Runner — multi-pipe management (local development only)
 
 ```ts
-import { createRunner } from '@subsquid/pipes/runtime/node'
+import { createDevRunner } from '@subsquid/pipes/runtime/node'
 
-const runner = createRunner(
+const runner = createDevRunner(
   [
     {
       id: 'transfers',

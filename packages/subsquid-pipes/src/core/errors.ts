@@ -4,7 +4,7 @@ import { lines } from './formatters.js'
 
 const DOCS_BASE = 'https://docs.sqd.dev/errors'
 
-export enum PipeErrorName {
+export enum SdkError {
   PipeConfiguration = 'PipeConfiguration',
   ForkHandling = 'ForkHandling',
 }
@@ -12,7 +12,7 @@ export enum PipeErrorName {
 export class PipeError extends Error {
   readonly code: string
 
-  constructor(code: string, name: PipeErrorName, message: string | string[]) {
+  constructor(code: string, name: SdkError, message: string | string[]) {
     super(lines([...arrayify(message), '', `See: ${DOCS_BASE}/${code}`]))
     this.code = code
     this.name = name
@@ -27,7 +27,7 @@ export class PipeError extends Error {
  */
 export class DefaultPipeIdError extends PipeError {
   constructor() {
-    super('E0001', PipeErrorName.PipeConfiguration, [
+    super('E0001', SdkError.PipeConfiguration, [
       'Pipe requires a non-default ID when used with targets.',
       'Set a unique id in your pipe source options:',
       '',
@@ -43,7 +43,7 @@ export class DefaultPipeIdError extends PipeError {
  */
 export class TargetForkNotSupportedError extends PipeError {
   constructor() {
-    super('E1001', PipeErrorName.ForkHandling, [
+    super('E1001', SdkError.ForkHandling, [
       'A blockchain fork was detected, but the target does not support fork handling.',
       'Implement the fork() method on your target to handle chain reorganizations.',
     ])
@@ -55,7 +55,7 @@ export class TargetForkNotSupportedError extends PipeError {
  */
 export class ForkNoPreviousBlocksError extends PipeError {
   constructor() {
-    super('E1002', PipeErrorName.ForkHandling, [
+    super('E1002', SdkError.ForkHandling, [
       'A blockchain fork was detected, but no previous blocks were provided.',
       'This is an internal error — please report it as a bug.',
     ])
@@ -67,7 +67,7 @@ export class ForkNoPreviousBlocksError extends PipeError {
  */
 export class ForkCursorMissingError extends PipeError {
   constructor() {
-    super('E1003', PipeErrorName.ForkHandling, [
+    super('E1003', SdkError.ForkHandling, [
       'A blockchain fork was detected, but the target fork() did not return a new cursor.',
       'The fork() method must return the cursor to resume from after rolling back.',
     ])

@@ -1,5 +1,5 @@
 import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
-import { RunConfig, createRunner } from '@subsquid/pipes/runtime/node'
+import { RunConfig, createDevRunner } from '@subsquid/pipes/runtime/node'
 
 export type Params = { dataset: string }
 
@@ -23,7 +23,7 @@ async function transfers({ id, params, metrics, logger }: RunConfig<Params>) {
 }
 
 async function main() {
-  const run = createRunner<Params>(
+  const run = createDevRunner<Params>(
     [
       { id: 'arb', params: { dataset: 'arbitrum-one' }, stream: transfers },
       { id: 'ethereum', params: { dataset: 'ethereum-mainnet' }, stream: transfers },
