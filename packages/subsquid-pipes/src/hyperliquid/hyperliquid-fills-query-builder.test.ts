@@ -9,7 +9,7 @@ describe('HyperliquidFillsQueryBuilder', () => {
       builder.addRange({ from: 'latest' })
 
       const { bounded } = await builder.calculateRanges({
-        portal: { getHead: async () => ({ number: 15, hash: '0x' }) },
+        portal: { getHead: async () => ({ number: 15, hash: '0x' }), resolveTimestamp: async () => 0 },
       })
 
       expect(bounded).toMatchInlineSnapshot(`
@@ -29,7 +29,7 @@ describe('HyperliquidFillsQueryBuilder', () => {
       builder.addRange({ from: 'latest' })
 
       const { bounded } = await builder.calculateRanges({
-        portal: { getHead: async () => ({ number: 15, hash: '0x' }) },
+        portal: { getHead: async () => ({ number: 15, hash: '0x' }), resolveTimestamp: async () => 0 },
         bound: { from: 10 },
       })
 

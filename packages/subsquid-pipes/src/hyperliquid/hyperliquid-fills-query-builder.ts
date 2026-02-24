@@ -1,9 +1,10 @@
 import { QueryAwareTransformer, SetupQueryFn, Subset, parsePortalRange } from '~/core/index.js'
-import { HyperliquidFillsPortalData } from '~/hyperliquid/hyperliquid-fills-portal-source.js'
 import { mergeDeep } from '~/internal/object/merge-deep.js'
 
 import { QueryBuilder, Range, RequestOptions, concatQueryLists } from '../core/query-builder.js'
 import * as api from '../portal-client/query/hyperliquid-fills.js'
+
+export type HyperliquidFillsPortalData<F extends api.FieldSelection> = api.Block<F>[]
 
 type HyperliquidFillsTransformerOut<F extends api.FieldSelection> = QueryAwareTransformer<
   HyperliquidFillsPortalData<F>,
@@ -57,4 +58,8 @@ export class HyperliquidFillsQueryBuilder<F extends api.FieldSelection = {}> ext
     const setupQuery = opts?.setupQuery ?? (({ query }) => query.merge(this))
     return new QueryAwareTransformer(setupQuery, (data) => data)
   }
+}
+
+export function hyperliquidFillsQuery() {
+  return new HyperliquidFillsQueryBuilder()
 }

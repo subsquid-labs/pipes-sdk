@@ -7,43 +7,66 @@ import * as hl from '~/portal-client/query/hyperliquid-fills.js'
 import {
   LogLevel,
   Logger,
+  Outputs,
   PortalCache,
-  PortalRange,
   PortalSource,
   SpanHooks,
-  createDefaultLogger,
+  Transformer,
   createTransformer,
+  mergeOutputs,
 } from '../core/index.js'
 import { PortalClientOptions, getBlockSchema } from '../portal-client/index.js'
-import { HyperliquidFillsQueryBuilder } from './hyperliquid-fills-query-builder.js'
+import { HyperliquidFillsPortalData, HyperliquidFillsQueryBuilder } from './hyperliquid-fills-query-builder.js'
 
-export type HyperliquidFillsPortalData<F extends hl.FieldSelection> = hl.Block<F>[]
+export type HyperliquidFillsFieldSelection = hl.FieldSelection
 
-export function hyperliquidFillsPortalSource<F extends hl.FieldSelection = any>({
+export * as api from '../portal-client/query/hyperliquid-fills.js'
+
+export type HyperliquidFillsOutputs = Outputs<hl.FieldSelection, HyperliquidFillsQueryBuilder<any>>
+
+type HyperliquidFillsPortalStream<T extends HyperliquidFillsOutputs> =
+  T extends HyperliquidFillsQueryBuilder<infer Q>
+    ? HyperliquidFillsPortalData<Q>
+    : T extends Transformer<any, infer O>
+      ? O
+      : T extends Record<string, Transformer<any, any> | HyperliquidFillsQueryBuilder<any>>
+        ? {
+            [K in keyof T]: T[K] extends Transformer<any, infer O>
+              ? O
+              : T[K] extends HyperliquidFillsQueryBuilder<infer Q>
+                ? HyperliquidFillsPortalData<Q>
+                : never
+          }
+        : never
+
+export function hyperliquidFillsPortalSource<Out extends HyperliquidFillsOutputs>({
+  id,
   portal,
-  query,
+  outputs,
   cache,
   logger,
   metrics,
   profiler,
   progress,
 }: {
+  id?: string
   portal: string | PortalClientOptions
-  query?: PortalRange | HyperliquidFillsQueryBuilder<F>
+  outputs: Out
   cache?: PortalCache
   metrics?: MetricsServer
   logger?: Logger | LogLevel
   profiler?: boolean | SpanHooks
   progress?: ProgressTrackerOptions
 }) {
-  //FIXME STREAMS
-  return new PortalSource<HyperliquidFillsQueryBuilder<F>, HyperliquidFillsPortalData<F>>({
+  type F = { block: { hash: true; number: true } }
+  const query = new HyperliquidFillsQueryBuilder<F>().addFields({
+    block: { hash: true, number: true },
+  })
+
+  return new PortalSource<HyperliquidFillsQueryBuilder<F>, HyperliquidFillsPortalStream<Out>>({
+    id,
     portal,
-    query: !query
-      ? new HyperliquidFillsQueryBuilder<F>()
-      : query instanceof HyperliquidFillsQueryBuilder
-        ? query
-        : new HyperliquidFillsQueryBuilder<F>(),
+    query,
     cache,
     logger,
     metrics,
@@ -62,6 +85,7 @@ export function hyperliquidFillsPortalSource<F extends hl.FieldSelection = any>(
           return data.map((b) => cast(schema, b))
         },
       }),
+      mergeOutputs(outputs),
     ],
   })
 }
