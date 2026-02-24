@@ -4,24 +4,10 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  /*"IBM Plex Mono", !**! */
-
   --font-sans:
-    "JetBrains Mono", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
-    "Noto Color Emoji";
-
-
-  /*--font-sans:*/
-  /*  "Anonymous Pro", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",*/
-  /*  "Noto Color Emoji";*/
-
-  /*--font-sans:*/
-  /*  "Share Tech Mono", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",*/
-  /*  "Noto Color Emoji";*/
-
-  /*--font-sans:*/
-  /*  "Fira Code", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",*/
-  /*  "Noto Color Emoji";*/
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 html,

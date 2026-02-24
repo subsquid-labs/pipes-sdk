@@ -20,7 +20,6 @@ export function TransformerExample({
   onClick?: (childIsOpen: boolean) => void
 }) {
   const opacity = transformer.data ? 1 : 0.5
-  const fontSize = transformer.data ? 12 : 10
   const [open, setOpen] = useState(false)
 
   const data = useMemo(() => {
@@ -48,7 +47,7 @@ export function TransformerExample({
           onClick?.(!open)
         }}
       >
-        <div className="pt-3 pl-1" style={{ opacity, fontSize }}>
+        <div className="pt-3 pl-1 text-xs" style={{ opacity }}>
           {transformer.name}
         </div>
         <div className="text-xxs text-nowrap">
