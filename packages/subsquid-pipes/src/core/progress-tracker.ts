@@ -66,6 +66,28 @@ type ProgressHistoryOptions = {
   maxStaleSeconds?: number
 }
 
+enum Classification {
+  Successful = 'successful',
+  RateLimited = 'rateLimited',
+  Failed = 'failed',
+}
+
+const METRIC_LABELS: Record<Classification, string> = {
+  [Classification.Successful]: 'success',
+  [Classification.RateLimited]: 'rate_limited',
+  [Classification.Failed]: 'error',
+}
+
+function mapRequestStatus(statusCode: number): Classification {
+  if (statusCode >= 200 && statusCode < 300) {
+    return Classification.Successful
+  } else if (statusCode === 429) {
+    return Classification.RateLimited
+  } else {
+    return Classification.Failed
+  }
+}
+
 class ProgressHistory {
   #options: Required<ProgressHistoryOptions>
   #states: HistoryState[] = []
@@ -96,16 +118,6 @@ class ProgressHistory {
     this.#states = this.#states.slice(-this.#options.maxHistory)
   }
 
-  private mapRequestStatus(statusCode: number): 'successful' | 'rateLimited' | 'failed' {
-    if (statusCode >= 200 && statusCode < 300) {
-      return 'successful'
-    } else if (statusCode === 429) {
-      return 'rateLimited'
-    } else {
-      return 'failed'
-    }
-  }
-
   private validateHistory(states: HistoryState[]) {
     const lastTs = states[states.length - 1]?.ts
 
@@ -132,7 +144,7 @@ class ProgressHistory {
         (acc, state) => {
           for (const [status, value] of Object.entries(state.requests)) {
             acc.total += value
-            acc[this.mapRequestStatus(Number(status))] += value
+            acc[mapRequestStatus(Number(status))] += value
           }
 
           return acc
@@ -217,7 +229,6 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
   let etaSeconds: Gauge<'id'> | null = null
   let blocksPerSecond: Gauge<'id'> | null = null
   let bytesDownloaded: Counter<'id'> | null = null
-  let pipelineRunning: Gauge<'id'> | null = null
   let reorgsTotal: Counter<'id'> | null = null
   let portalRequestsTotal: Counter<'id' | 'classification' | 'status'> | null = null
   let batchSizeBlocks: Histogram<'id'> | null = null
@@ -292,40 +303,41 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
         help: 'Current block number being processed',
         labelNames: ['id'] as const,
       })
+
       lastBlock = metrics.gauge({
         name: 'sqd_last_block',
         help: 'Last known block number in the chain',
         labelNames: ['id'] as const,
       })
+
       progressRatio = metrics.gauge({
         name: 'sqd_progress_ratio',
         help: 'Indexing progress as a ratio from 0 to 1',
         labelNames: ['id'] as const,
       })
+
       etaSeconds = metrics.gauge({
         name: 'sqd_eta_seconds',
         help: 'Estimated time to full sync in seconds',
         labelNames: ['id'] as const,
       })
+
+      // FIXME should be counter?
       blocksPerSecond = metrics.gauge({
         name: 'sqd_blocks_per_second',
         help: 'Block processing speed',
         labelNames: ['id'] as const,
       })
+
       bytesDownloaded = metrics.counter({
         name: 'sqd_bytes_downloaded_total',
         help: 'Total bytes downloaded from portal',
         labelNames: ['id'] as const,
       })
-      pipelineRunning = metrics.gauge({
-        name: 'sqd_pipeline_running',
-        help: 'Whether the pipeline is currently running (1 = running, 0 = stopped)',
-        labelNames: ['id'] as const,
-      })
 
       reorgsTotal = metrics.counter({
-        name: 'sqd_reorgs_total',
-        help: 'Total number of chain reorganizations detected',
+        name: 'sqd_forks_total',
+        help: 'Total number of chain forks detected',
         labelNames: ['id'] as const,
       })
 
@@ -339,6 +351,8 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
         name: 'sqd_batch_size_blocks',
         help: 'Number of blocks per batch',
         labelNames: ['id'] as const,
+        // TODO are these buckets good by default?
+        // TODO make it configurable!
         buckets: [1, 5, 10, 50, 100, 500, 1000, 5000, 10000],
       })
 
@@ -346,11 +360,21 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
         name: 'sqd_batch_size_bytes',
         help: 'Size of each batch in bytes',
         labelNames: ['id'] as const,
-        buckets: [1024, 10240, 102400, 524288, 1048576, 5242880, 10485760, 52428800],
+        // TODO are these buckets good by default?
+        // TODO make it configurable
+        buckets: [
+          1024, // 1kb
+          10240, // 10kb
+          102400, // 100kb
+          524288, // 512kb
+          1048576, // 1mb
+          5242880, // 5mb
+          10485760, // 10mb
+          52428800, // 50mb
+        ],
       })
 
       currentBlock.set({ id }, -1)
-      pipelineRunning.set({ id }, 1)
     },
     transform: async (data, ctx) => {
       history.addState({
@@ -363,8 +387,14 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
       batchSizeBytes?.observe({ id: ctx.id }, ctx.meta.bytesSize)
 
       for (const [statusCode, count] of Object.entries(ctx.meta.requests)) {
-        const classification = Number(statusCode) >= 200 && Number(statusCode) < 300 ? 'success' : 'error'
-        portalRequestsTotal?.inc({ id: ctx.id, classification, status: statusCode }, count)
+        portalRequestsTotal?.inc(
+          {
+            id: ctx.id,
+            classification: METRIC_LABELS[mapRequestStatus(Number(statusCode))],
+            status: statusCode,
+          },
+          count,
+        )
       }
 
       if (ctx.state.current?.number) {
@@ -390,7 +420,6 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
       if (ticker) {
         clearInterval(ticker)
       }
-      pipelineRunning?.set({ id: pipeId }, 0)
     },
   })
 }
