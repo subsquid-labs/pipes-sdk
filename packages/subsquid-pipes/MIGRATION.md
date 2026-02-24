@@ -163,15 +163,13 @@ const decoder = evmQuery()
 
 ## 6. Update `MetricsServer` implementations
 
-If you implement or test a custom `MetricsServer`, update two things:
+If you implement or test a custom `MetricsServer`, rename one method:
 
 ```ts
-// before — metrics is a property, addBatchContext is the method name
-server.metrics.counter({ name: 'my_counter', help: '...' })
+// before
 server.addBatchContext(ctx)
 
-// after — metrics() is a method, batchProcessed is the method name
-server.metrics().counter({ name: 'my_counter', help: '...' })
+// after
 server.batchProcessed(ctx)
 ```
 
@@ -256,7 +254,6 @@ evmPortalSource({
 - [ ] `createSolanaInstructionDecoder` → `solanaInstructionDecoder`
 - [ ] Custom transformers: `data.blocks` → `data`
 - [ ] Custom `.build({ transform })` → `.build().transform()`
-- [ ] `server.metrics` → `server.metrics()`
 - [ ] `server.addBatchContext(ctx)` → `server.batchProcessed(ctx)`
 - [ ] `StartState` → `StartEvent`, `ProgressState` → `ProgressEvent`
 - [ ] `createEvmPortalSource` → `evmPortalSource`

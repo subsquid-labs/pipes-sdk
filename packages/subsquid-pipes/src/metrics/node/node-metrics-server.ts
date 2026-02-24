@@ -330,7 +330,7 @@ class ExpressMetricServer implements MetricsServer {
     data.profilers = data.profilers.slice(-MAX_HISTORY)
   }
 
-  metrics() {
+  get metrics() {
     return this.#metrics
   }
 

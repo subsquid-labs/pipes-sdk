@@ -62,7 +62,7 @@ export type MetricsServer = {
   stop(): Promise<void>
   registerPipe(id: string): void
   batchProcessed(ctx: BatchCtx): void
-  metrics(): Metrics
+  metrics: Metrics
 }
 
 class NoopCounter<T extends string> implements Counter<T> {
@@ -99,8 +99,6 @@ export function noopMetricsServer(): MetricsServer {
     async stop() {},
     registerPipe: () => {},
     batchProcessed() {},
-    metrics() {
-      return metrics
-    },
+    metrics,
   }
 }

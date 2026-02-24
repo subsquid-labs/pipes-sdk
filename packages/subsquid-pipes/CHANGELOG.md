@@ -143,15 +143,13 @@ import { solanaInstructionDecoder } from '@subsquid/pipes/solana'
 
 #### `MetricsServer` interface changes
 
-`metrics` changed from a property to a method, and `addBatchContext` was renamed to `batchProcessed`.
+`addBatchContext` was renamed to `batchProcessed`.
 
 ```ts
 // before
-server.metrics.counter({ name: 'my_metric', help: '...' })
 server.addBatchContext(ctx)
 
 // after
-server.metrics().counter({ name: 'my_metric', help: '...' })
 server.batchProcessed(ctx)
 ```
 

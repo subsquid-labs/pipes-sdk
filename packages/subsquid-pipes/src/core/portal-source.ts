@@ -234,7 +234,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
             // Context for transformers
             profiler: batchSpan,
-            metrics: this.#metricServer.metrics(),
+            metrics: this.#metricServer.metrics,
             logger: this.#logger,
           }
 
@@ -347,7 +347,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     const span = profiler.start('transformers')
     const ctx = this.context(span, {
-      metrics: this.#metricServer.metrics(),
+      metrics: this.#metricServer.metrics,
       state,
     })
     await Promise.all(this.#transformers.map((t) => t.start(ctx)))
@@ -355,7 +355,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     this.#metricServer.start()
 
-    const metrics = this.#metricServer.metrics()
+    const metrics = this.#metricServer.metrics
 
     this.#reorgsTotal = metrics.counter({
       name: 'sqd_reorgs_total',
