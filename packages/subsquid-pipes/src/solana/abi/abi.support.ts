@@ -1,6 +1,7 @@
+import assert from 'assert'
+
 import { Codec, GetCodecType, Src } from '@subsquid/borsh'
 import { getInstructionData } from '@subsquid/solana-stream'
-import assert from 'assert'
 
 export type Bytes = string
 export type Base58Bytes = string

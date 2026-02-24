@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
+
 import { solana } from '~/portal-client/index.js'
 import { SolanaQueryBuilder } from '~/solana/solana-query-builder.js'
-import { closeMockPortal, createMockPortal, MockPortal } from '../tests/index.js'
+
+import { MockPortal, closeMockPortal, createMockPortal } from '../tests/index.js'
 import { solanaPortalSource } from './solana-portal-source.js'
 
 describe('Portal abstract stream', () => {
