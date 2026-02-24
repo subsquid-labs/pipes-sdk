@@ -58,6 +58,10 @@ The `data` shape is unchanged — `data.transfers`, `data.swaps` etc. still work
 
 ## 2. Add a pipe `id` when calling `.pipeTo()`
 
+Every portal source now accepts an `id`. It must be **globally unique and stable** — targets use it as a cursor key to persist progress. Two pipes that share the same `id` will overwrite each other's cursor. The `id` is also used to scope log lines and Prometheus metric labels.
+
+Calling `.pipeTo()` without an `id` throws `DefaultPipeIdError` (E0001) at startup.
+
 ```ts
 // before
 await evmPortalSource({ portal: '...' })
@@ -66,13 +70,11 @@ await evmPortalSource({ portal: '...' })
 
 // after
 await evmPortalSource({
-  id: 'my-pipe',           // required — stable ID for cursor persistence
+  id: 'eth-transfers',     // globally unique, stable ID for cursor persistence
   portal: '...',
   outputs: evmDecoder({ ... }),
 }).pipeTo(clickhouseTarget({ ... }))
 ```
-
-> The `id` is always required when calling `.pipeTo()`.
 
 ---
 
@@ -213,6 +215,8 @@ evmPortalSource({
 | `createSolanaPortalSource` | `solanaPortalSource` | Alias removed |
 | `createSolanaInstructionDecoder` | `solanaInstructionDecoder` | Renamed, no alias |
 | `new EvmQueryBuilder()` | `evmQuery()` | Shorthand factory, old still works |
+| `new SolanaQueryBuilder()` | `solanaQuery()` | Shorthand factory, old still works |
+| `new HyperliquidFillsQueryBuilder()` | `hyperliquidFillsQuery()` | Shorthand factory, old still works |
 
 ---
 
@@ -249,7 +253,7 @@ evmPortalSource({
 
 - [ ] `.pipe(decoder)` → `outputs: decoder` in `evmPortalSource` / `solanaPortalSource`
 - [ ] `.pipeComposite({ ... })` → `outputs: { ... }`
-- [ ] Add `id: 'my-pipe'` to any source that calls `.pipeTo()`
+- [ ] Add a globally unique `id` to any source that calls `.pipeTo()`
 - [ ] `createSolanaInstructionDecoder` → `solanaInstructionDecoder`
 - [ ] Custom transformers: `data.blocks` → `data`
 - [ ] Custom `.build({ transform })` → `.build().pipe()`

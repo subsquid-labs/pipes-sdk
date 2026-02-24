@@ -274,6 +274,8 @@ async function indexTransfers({ id, params, logger, metrics }: RunConfig<{ porta
   const stream = evmPortalSource({
     id,
     portal: params.portal,
+    logger,
+    metrics,
     outputs: evmDecoder({
       range: { from: '2024-01-01' },
       events: { transfers: erc20.events.Transfer },
