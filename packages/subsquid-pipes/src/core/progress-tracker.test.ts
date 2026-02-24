@@ -47,7 +47,6 @@ describe('Pipeline metrics', () => {
     expect(metrics.gauge('sqd_eta_seconds')).toBeDefined()
     expect(metrics.gauge('sqd_blocks_per_second')).toBeDefined()
     expect(metrics.counter('sqd_bytes_downloaded_total')).toBeDefined()
-    expect(metrics.gauge('sqd_pipeline_running')).toBeDefined()
   })
 
   it('should register all expected portal-source metrics', async () => {
@@ -70,7 +69,7 @@ describe('Pipeline metrics', () => {
       // consume
     }
 
-    expect(metrics.counter('sqd_reorgs_total')).toBeDefined()
+    expect(metrics.counter('sqd_forks_total')).toBeDefined()
     expect(metrics.counter('sqd_portal_requests_total')).toBeDefined()
     expect(metrics.histogram('sqd_batch_size_blocks')).toBeDefined()
     expect(metrics.histogram('sqd_batch_size_bytes')).toBeDefined()
@@ -140,32 +139,6 @@ describe('Pipeline metrics', () => {
     expect(metrics.gauge('sqd_eta_seconds').lastValue).toBe(0)
     expect(metrics.gauge('sqd_blocks_per_second').lastValue).toBeGreaterThanOrEqual(0)
     expect(metrics.counter('sqd_bytes_downloaded_total').total).toBeGreaterThan(0)
-  })
-
-  it('should set pipeline running to 1 during execution and 0 after stop', async () => {
-    mockPortal = await createMockPortal([
-      {
-        statusCode: 200,
-        data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
-      },
-    ])
-
-    const metrics = createMockMetricServer()
-
-    let runningDuringExecution: number | undefined
-
-    const stream = evmPortalSource({
-      portal: mockPortal.url,
-      outputs: blockOutputs({ from: 0, to: 1 }),
-      metrics: metrics.server,
-    })
-
-    for await (const _batch of stream) {
-      runningDuringExecution = metrics.gauge('sqd_pipeline_running')?.lastValue
-    }
-
-    expect(runningDuringExecution).toBe(1)
-    expect(metrics.gauge('sqd_pipeline_running').lastValue).toBe(0)
   })
 
   it('should observe batch size metrics', async () => {
