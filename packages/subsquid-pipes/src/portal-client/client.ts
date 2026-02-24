@@ -154,6 +154,16 @@ export class PortalClient {
     return res.body
   }
 
+  async resolveTimestamp(seconds: number, options?: PortalRequestOptions): Promise<number> {
+    const res = await this.request<{ block_number: number }>(
+      'GET',
+      this.getDatasetUrl(`timestamps/${seconds}/block`),
+      options,
+    )
+
+    return res.body.block_number
+  }
+
   async getHead(options?: PortalRequestOptions & { finalized: boolean }): Promise<BlockRef | undefined> {
     const res = await this.request<BlockRef>(
       'GET',

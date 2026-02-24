@@ -1,6 +1,6 @@
 import { IncomingMessage, Server, ServerResponse, createServer } from 'http'
 
-export type MockData<T extends object = any> = T
+import { Portal } from '~/core/query-builder.js'
 
 type ValidateRequest = (res: any) => unknown
 
@@ -176,4 +176,12 @@ export async function readAll<T>(stream: AsyncIterable<{ data: T[] }>): Promise<
   }
 
   return res
+}
+
+export function mockPortalRestApi(overrides: Partial<Portal> = {}): Portal {
+  return {
+    getHead: async () => ({ number: 1, hash: '0x' }),
+    resolveTimestamp: async () => 0,
+    ...overrides,
+  }
 }

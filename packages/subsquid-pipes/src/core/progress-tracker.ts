@@ -1,4 +1,4 @@
-import { Counter, Gauge } from '~/core/index.js'
+import { Counter, Gauge, Histogram } from '~/core/index.js'
 
 import { displayEstimatedTime, formatBlock, formatNumber, humanBytes } from './formatters.js'
 import { Logger } from './logger.js'
@@ -218,6 +218,10 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
   let blocksPerSecond: Gauge<'id'> | null = null
   let bytesDownloaded: Counter<'id'> | null = null
   let pipelineRunning: Gauge<'id'> | null = null
+  let reorgsTotal: Counter<'id'> | null = null
+  let portalRequestsTotal: Counter<'id' | 'classification' | 'status'> | null = null
+  let batchSizeBlocks: Histogram<'id'> | null = null
+  let batchSizeBytes: Histogram<'id'> | null = null
 
   const history = new ProgressHistory()
 
@@ -319,6 +323,32 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
         labelNames: ['id'] as const,
       })
 
+      reorgsTotal = metrics.counter({
+        name: 'sqd_reorgs_total',
+        help: 'Total number of chain reorganizations detected',
+        labelNames: ['id'] as const,
+      })
+
+      portalRequestsTotal = metrics.counter({
+        name: 'sqd_portal_requests_total',
+        help: 'Total number of requests to the portal',
+        labelNames: ['id', 'classification', 'status'] as const,
+      })
+
+      batchSizeBlocks = metrics.histogram({
+        name: 'sqd_batch_size_blocks',
+        help: 'Number of blocks per batch',
+        labelNames: ['id'] as const,
+        buckets: [1, 5, 10, 50, 100, 500, 1000, 5000, 10000],
+      })
+
+      batchSizeBytes = metrics.histogram({
+        name: 'sqd_batch_size_bytes',
+        help: 'Size of each batch in bytes',
+        labelNames: ['id'] as const,
+        buckets: [1024, 10240, 102400, 524288, 1048576, 5242880, 10485760, 52428800],
+      })
+
       currentBlock.set({ id }, -1)
       pipelineRunning.set({ id }, 1)
     },
@@ -328,6 +358,14 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
         bytes: ctx.meta.bytesSize,
         requests: ctx.meta.requests,
       })
+
+      batchSizeBlocks?.observe({ id: ctx.id }, ctx.meta.blocksCount)
+      batchSizeBytes?.observe({ id: ctx.id }, ctx.meta.bytesSize)
+
+      for (const [statusCode, count] of Object.entries(ctx.meta.requests)) {
+        const classification = Number(statusCode) >= 200 && Number(statusCode) < 300 ? 'success' : 'error'
+        portalRequestsTotal?.inc({ id: ctx.id, classification, status: statusCode }, count)
+      }
 
       if (ctx.state.current?.number) {
         currentBlock?.set({ id: ctx.id }, ctx.state.current.number)
@@ -344,6 +382,9 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
       ctx.state.progress = lastProgress
 
       return data
+    },
+    fork: () => {
+      reorgsTotal?.inc({ id: pipeId }, 1)
     },
     stop: () => {
       if (ticker) {

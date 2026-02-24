@@ -8,9 +8,14 @@ import {
 } from '~/portal-client/index.js'
 
 import { last } from '../internal/array.js'
-import { DefaultPipeIdError, ForkCursorMissingError, ForkNoPreviousBlocksError, TargetForkNotSupportedError } from './errors.js'
+import {
+  DefaultPipeIdError,
+  ForkCursorMissingError,
+  ForkNoPreviousBlocksError,
+  TargetForkNotSupportedError,
+} from './errors.js'
 import { LogLevel, Logger, createDefaultLogger, formatWarning } from './logger.js'
-import { Counter, Histogram, Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
+import { Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
 import { Profiler, Span, SpanHooks } from './profiling.js'
 import { ProgressEvent, StartEvent } from './progress-tracker.js'
 import { QueryBuilder, hashQuery } from './query-builder.js'
@@ -56,6 +61,7 @@ export type BatchCtx = {
     progress?: ProgressEvent['progress']
   }
   meta: {
+    blocksCount: number
     bytesSize: number
     requests: Record<number, number>
     lastBlockReceivedAt: Date
@@ -116,12 +122,6 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   readonly #metricServer: MetricsServer
   readonly #transformers: Transformer<any, any>[] = []
   #started = false
-
-  // Metrics
-  #reorgsTotal: Counter<'id'> | null = null
-  #portalRequestsTotal: Counter<'id' | 'classification' | 'status'> | null = null
-  #batchSizeBlocks: Histogram<'id'> | null = null
-  #batchSizeBytes: Histogram<'id'> | null = null
 
   constructor({ portal, id, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
     this.#id = id || DEFAULT_PIPE_NAME
@@ -221,6 +221,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             // Batch metadata
             id: this.#id,
             meta: {
+              blocksCount: batch.blocks.length,
               bytesSize: batch.meta.bytes,
               requests: batch.meta.requests,
               lastBlockReceivedAt: batch.meta.lastBlockReceivedAt,
@@ -250,14 +251,6 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             profiler: batchSpan,
             metrics: this.#metricServer.metrics,
             logger: this.#logger,
-          }
-
-          this.#batchSizeBlocks?.observe({ id: this.#id }, batch.blocks.length)
-          this.#batchSizeBytes?.observe({ id: this.#id }, batch.meta.bytes)
-
-          for (const [statusCode, count] of Object.entries(batch.meta.requests)) {
-            const classification = Number(statusCode) >= 200 && Number(statusCode) < 300 ? 'success' : 'error'
-            this.#portalRequestsTotal?.inc({ id: this.#id, classification, status: statusCode }, count)
           }
 
           const data = await this.applyTransformers(ctx, batch.blocks as T)
@@ -370,34 +363,6 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     this.#metricServer.start()
 
-    const metrics = this.#metricServer.metrics
-
-    this.#reorgsTotal = metrics.counter({
-      name: 'sqd_reorgs_total',
-      help: 'Total number of chain reorganizations detected',
-      labelNames: ['id'] as const,
-    })
-
-    this.#portalRequestsTotal = metrics.counter({
-      name: 'sqd_portal_requests_total',
-      help: 'Total number of requests to the portal',
-      labelNames: ['id', 'classification', 'status'] as const,
-    })
-
-    this.#batchSizeBlocks = metrics.histogram({
-      name: 'sqd_batch_size_blocks',
-      help: 'Number of blocks per batch',
-      labelNames: ['id'] as const,
-      buckets: [1, 5, 10, 50, 100, 500, 1000, 5000, 10000],
-    })
-
-    this.#batchSizeBytes = metrics.histogram({
-      name: 'sqd_batch_size_bytes',
-      help: 'Size of each batch in bytes',
-      labelNames: ['id'] as const,
-      buckets: [1024, 10240, 102400, 524288, 1048576, 5242880, 10485760, 52428800],
-    })
-
     profiler.end()
 
     this.#logger.debug(`<start> hook invoked`)
@@ -441,8 +406,6 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             return
           } catch (e) {
             if (!isForkException(e)) throw e
-
-            self.#reorgsTotal?.inc({ id: self.#id }, 1)
 
             if (!e.previousBlocks.length) {
               throw new ForkNoPreviousBlocksError()

@@ -16,11 +16,12 @@
   "dependencies": {
     "@apollo/server": "^5.1.0",
     "@clickhouse/client": "^1.12.1",
-    "@subsquid/pipes": "workspace:*",
     "@subsquid/borsh": "0.3.0",
     "@subsquid/evm-abi": "0.3.1",
     "@subsquid/evm-codec": "0.3.0",
+    "@subsquid/pipes": "workspace:*",
     "@subsquid/solana-stream": "0.3.1",
+    "date-fns": "^4.1.0",
     "drizzle-graphql": "^0.8.5",
     "drizzle-orm": "^0.44.7",
     "graphql": "^16.12.0",

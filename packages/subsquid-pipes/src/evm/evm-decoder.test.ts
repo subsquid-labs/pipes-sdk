@@ -3,8 +3,14 @@ import * as p from '@subsquid/evm-codec'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import { PortalRange, QueryAwareTransformer } from '~/core/index.js'
-import { createTestLogger } from '~/tests/test-logger.js'
-import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/tests/test-server.js'
+import {
+  MockPortal,
+  MockResponse,
+  closeMockPortal,
+  createMockPortal,
+  createTestLogger,
+  readAll,
+} from '~/tests/index.js'
 
 import { commonAbis } from './abi/common.js'
 import {
