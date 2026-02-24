@@ -1,4 +1,4 @@
-import { BlockCursor, createTarget } from '~/core/index.js'
+import { BlockCursor, createTarget, resolveForkCursor } from '~/core/index.js'
 
 function arraySplit<T>(array: T[], predicate: (item: T) => boolean): [T[], T[]] {
   const pass: T[] = []
@@ -19,37 +19,6 @@ function arraySplit<T>(array: T[], predicate: (item: T) => boolean): [T[], T[]] 
   return [pass, fail]
 }
 
-function findRollbackIndex(chainA: BlockCursor[], chainB: BlockCursor[]): number {
-  let aIndex = 0
-  let bIndex = 0
-  let lastCommonIndex = -1
-
-  while (aIndex < chainA.length && bIndex < chainB.length) {
-    const blockA = chainA[aIndex]
-    const blockB = chainB[bIndex]
-
-    if (blockA.number < blockB.number) {
-      aIndex++
-      continue
-    }
-
-    if (blockA.number > blockB.number) {
-      bIndex++
-      continue
-    }
-
-    if (blockA.number === blockB.number && blockA.hash !== blockB.hash) {
-      return lastCommonIndex
-    }
-
-    lastCommonIndex = aIndex
-    aIndex++
-    bIndex++
-  }
-
-  return lastCommonIndex
-}
-
 export function createMemoryTarget<T extends { blockNumber: number }[]>({
   onData,
 }: {
@@ -57,14 +26,17 @@ export function createMemoryTarget<T extends { blockNumber: number }[]>({
 }) {
   let recentUnfinalizedBlocks: BlockCursor[] = []
   let unfinalizedData: T[number][] = []
+  let finalizedHead: BlockCursor | undefined
 
   return createTarget<T>({
     write: async ({ read }) => {
       for await (const batch of read()) {
         recentUnfinalizedBlocks.push(...batch.ctx.state.rollbackChain)
-        const finalizedHead = batch.ctx.head.finalized?.number || Infinity
+        finalizedHead = batch.ctx.head.finalized
 
-        const [finalized, newUnfinalized] = arraySplit(batch.data, (item) => item.blockNumber <= finalizedHead)
+        const finalizedNumber = finalizedHead?.number || Infinity
+
+        const [finalized, newUnfinalized] = arraySplit(batch.data, (item) => item.blockNumber <= finalizedNumber)
 
         if (finalized.length) {
           await onData(finalized as T)
@@ -72,7 +44,7 @@ export function createMemoryTarget<T extends { blockNumber: number }[]>({
 
         const [newFinalizedData, stillUnfinalizedData] = arraySplit(
           unfinalizedData,
-          (item) => item.blockNumber <= finalizedHead,
+          (item) => item.blockNumber <= finalizedNumber,
         )
         if (newFinalizedData.length) {
           await onData(newFinalizedData as T)
@@ -83,19 +55,19 @@ export function createMemoryTarget<T extends { blockNumber: number }[]>({
     },
 
     fork: async (previousBlocks) => {
-      const rollbackIndex = findRollbackIndex(recentUnfinalizedBlocks, previousBlocks)
+      const safeCursor = await resolveForkCursor(
+        [{ rollbackChain: recentUnfinalizedBlocks, finalized: finalizedHead }],
+        previousBlocks,
+      )
 
-      if (rollbackIndex >= 0) {
-        const rollbackBlock = recentUnfinalizedBlocks[rollbackIndex]
-
-        recentUnfinalizedBlocks = recentUnfinalizedBlocks.slice(0, rollbackIndex + 1)
-        unfinalizedData = unfinalizedData.filter((item) => item.blockNumber <= rollbackBlock.number)
-
-        return rollbackBlock
+      if (safeCursor) {
+        recentUnfinalizedBlocks = recentUnfinalizedBlocks.filter((b) => b.number <= safeCursor.number)
+        unfinalizedData = unfinalizedData.filter((item) => item.blockNumber <= safeCursor.number)
+      } else {
+        recentUnfinalizedBlocks = []
       }
 
-      recentUnfinalizedBlocks = []
-      return null
+      return safeCursor
     },
   })
 }

@@ -56,7 +56,7 @@ describe('Clickhouse state', () => {
       await evmPortalSource({
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
-      }).pipeTo(
+      }).writeTo(
         clickhouseTarget({
           client,
           settings: {
@@ -75,7 +75,7 @@ describe('Clickhouse state', () => {
             "current": "{"number":3,"hash":"0x3","timestamp":3000}",
             "finalized": "{"hash":"0x2","number":2}",
             "id": "stream",
-            "rollback_chain": "[{"number":2,"hash":"0x2","timestamp":2000},{"number":3,"hash":"0x3","timestamp":3000}]",
+            "rollback_chain": "[{"number":3,"hash":"0x3","timestamp":3000}]",
             "sign": 1,
           },
           {
@@ -388,13 +388,13 @@ describe('Clickhouse state', () => {
               format: 'JSONEachRow',
             })
           },
-          onRollback: async ({ type, store, cursor }) => {
+          onRollback: async ({ store, safeCursor }) => {
             rollbackCalls++
-            expect(cursor).toMatchObject({ number: 3, hash: '0x3' })
+            expect(safeCursor).toMatchObject({ number: 3, hash: '0x3' })
             await store.removeAllRows({
               tables: 'test',
               where: `block_number > {latest:UInt32}`,
-              params: { latest: cursor.number },
+              params: { latest: safeCursor.number },
             })
           },
         }),
@@ -447,6 +447,197 @@ describe('Clickhouse state', () => {
             },
           ]
         `)
+    })
+
+    it('should handle fork with missing finalized block in stream', async () => {
+      mockPortal = await createMockPortal([
+        {
+          // 1. The First response is okay, it gets 5 blocks
+          statusCode: 200,
+          data: [
+            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
+            { header: { number: 3, hash: '0x3', timestamp: 3000 } },
+            { header: { number: 4, hash: '0x4', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5', timestamp: 5000 } },
+          ],
+          head: {
+            finalized: {
+              number: 1,
+              hash: '0x1',
+            },
+          },
+        },
+
+        {
+          // 2. A reorg for 2 blocks happens
+          statusCode: 409,
+          data: {
+            previousBlocks: [
+              { number: 4, hash: '0x4a' },
+              { number: 5, hash: '0x5a' },
+            ],
+          },
+          validateRequest: (req) => {
+            // Request should include block 6 and hash for the previous block
+            expect(req).toMatchInlineSnapshot(`
+              {
+                "fields": {
+                  "block": {
+                    "hash": true,
+                    "number": true,
+                    "timestamp": true,
+                  },
+                },
+                "fromBlock": 6,
+                "parentBlockHash": "0x5",
+                "toBlock": 7,
+                "type": "evm",
+              }
+            `)
+          },
+        },
+        {
+          // 2. A reorg for 2 blocks happens
+          statusCode: 409,
+          data: {
+            previousBlocks: [
+              { number: 1, hash: '0x1' },
+              { number: 2, hash: '0x2a' },
+              { number: 3, hash: '0x3a' },
+            ],
+          },
+          validateRequest: (req) => {
+            // Request should include block 6 and hash for the previous block
+            expect(req).toMatchInlineSnapshot(`
+              {
+                "fields": {
+                  "block": {
+                    "hash": true,
+                    "number": true,
+                    "timestamp": true,
+                  },
+                },
+                "fromBlock": 4,
+                "parentBlockHash": "0x3",
+                "toBlock": 7,
+                "type": "evm",
+              }
+            `)
+          },
+        },
+        {
+          statusCode: 200,
+          data: [
+            { header: { number: 2, hash: '0x2a', timestamp: 2000 } },
+            { header: { number: 3, hash: '0x3a', timestamp: 3000 } },
+            { header: { number: 4, hash: '0x4a', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5a', timestamp: 5000 } },
+            { header: { number: 6, hash: '0x6a', timestamp: 6000 } },
+            { header: { number: 7, hash: '0x7a', timestamp: 7000 } },
+          ],
+          head: { finalized: { number: 4, hash: '0x4a' } },
+          validateRequest: (req) => {
+            /**
+             * Request should include block 4 and hash for the last unforked block
+             * which is 3 in that test
+             */
+            expect(req).toMatchInlineSnapshot(`
+              {
+                "fields": {
+                  "block": {
+                    "hash": true,
+                    "number": true,
+                    "timestamp": true,
+                  },
+                },
+                "fromBlock": 2,
+                "parentBlockHash": "0x1",
+                "toBlock": 7,
+                "type": "evm",
+              }
+            `)
+          },
+        },
+      ])
+
+      let rollbackCalls = 0
+
+      await evmPortalSource({
+        portal: mockPortal.url,
+        outputs: blockDecoder({ from: 0, to: 7 })({ from: 0, to: 7 }),
+      })
+        .pipeTo(
+          clickhouseTarget({
+            client,
+            onData: async ({ store, data }) => {
+              await store.insert({
+                table: 'test',
+                values: data.map((b) => ({
+                  block_number: b.number,
+                  timestamp: b.timestamp,
+                  block_hash: b.hash,
+                  sign: 1,
+                })),
+                format: 'JSONEachRow',
+              })
+            },
+            onRollback: async ({ type, store, safeCursor }) => {
+              if (rollbackCalls === 0) {
+                expect(safeCursor).toMatchObject({ number: 3, hash: '0x3' })
+              } else {
+                expect(safeCursor).toMatchObject({ number: 1, hash: '0x1' })
+              }
+
+              rollbackCalls++
+              await store.removeAllRows({
+                tables: 'test',
+                where: `block_number > {latest:UInt32}`,
+                params: { latest: safeCursor.number },
+              })
+            },
+          }),
+        )
+
+      const res = await client.query({
+        query: 'SELECT * FROM test FINAL ORDER BY block_number ASC',
+        format: 'JSONEachRow',
+      })
+      const data = await res.json()
+
+      expect(data).toMatchInlineSnapshot(`
+        [
+          {
+            "block_hash": "0x2a",
+            "block_number": 2,
+            "sign": 1,
+          },
+          {
+            "block_hash": "0x3a",
+            "block_number": 3,
+            "sign": 1,
+          },
+          {
+            "block_hash": "0x4a",
+            "block_number": 4,
+            "sign": 1,
+          },
+          {
+            "block_hash": "0x5a",
+            "block_number": 5,
+            "sign": 1,
+          },
+          {
+            "block_hash": "0x6a",
+            "block_number": 6,
+            "sign": 1,
+          },
+          {
+            "block_hash": "0x7a",
+            "block_number": 7,
+            "sign": 1,
+          },
+        ]
+      `)
     })
 
     it('should handle fork up to last finalized block', async () => {
@@ -544,7 +735,7 @@ describe('Clickhouse state', () => {
             "current": "{"number":2,"hash":"0x2"}",
             "finalized": "{"hash":"0x1","number":1}",
             "id": "stream",
-            "rollback_chain": "[{"number":1,"hash":"0x1"},{"number":2,"hash":"0x2"}]",
+            "rollback_chain": "[{"number":2,"hash":"0x2"}]",
             "sign": 1,
           },
           {
@@ -572,14 +763,14 @@ describe('Clickhouse state', () => {
             "current": "{"number":3,"hash":"0x3a"}",
             "finalized": "{"hash":"0x2a","number":2}",
             "id": "stream",
-            "rollback_chain": "[{"number":2,"hash":"0x2a"},{"number":3,"hash":"0x3a"}]",
+            "rollback_chain": "[{"number":3,"hash":"0x3a"}]",
             "sign": 1,
           },
           {
             "current": "{"number":5,"hash":"0x5a"}",
             "finalized": "{"hash":"0x4a","number":4}",
             "id": "stream",
-            "rollback_chain": "[{"number":4,"hash":"0x4a"},{"number":5,"hash":"0x5a"}]",
+            "rollback_chain": "[{"number":5,"hash":"0x5a"}]",
             "sign": 1,
           },
           {

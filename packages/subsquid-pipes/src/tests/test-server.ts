@@ -18,6 +18,7 @@ export type MockResponse =
           timestamp?: number
         }
         logs?: any[]
+        instructions?: any[]
       }[]
       head?: {
         finalized?: { number: number; hash: string }

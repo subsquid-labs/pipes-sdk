@@ -1,7 +1,7 @@
 import pino, { Logger as PinoLogger } from 'pino'
 
 export type Logger = PinoLogger
-export type LogLevel = 'pino' | 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent' | false | null
+export type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent' | false | null
 
 function isEnvFalse(name: string): boolean {
   const val = process.env[name]

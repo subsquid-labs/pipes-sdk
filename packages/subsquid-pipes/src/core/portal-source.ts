@@ -68,8 +68,22 @@ export type BatchCtx = {
 
 export type PortalBatch<T = any> = { data: T; ctx: BatchCtx }
 
-export function cursorFromHeader(block: { header: { number: number; hash: string; timestamp?: number } }): BlockCursor {
+type PartialBlock = { header: { number: number; hash: string; timestamp?: number } }
+
+export function cursorFromHeader(block: PartialBlock): BlockCursor {
   return { number: block.header.number, hash: block.header.hash, timestamp: block.header.timestamp }
+}
+
+/** @internal */
+export function extractRollbackChain({ blocks, head }: { blocks: PartialBlock[]; head?: BlockCursor }): BlockCursor[] {
+  if (!head) return []
+  if (!blocks.length) return []
+
+  return blocks
+    .filter((b) => {
+      return b.header.number > head.number
+    })
+    .map(cursorFromHeader)
 }
 
 export type PortalSourceOptions<Query> = {
@@ -197,7 +211,6 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
         if (blocks.length > 0) {
           // TODO WTF with any?
           const lastBatchBlock = last(blocks as { header: { number: number } }[])
-          const finalizedHead = batch.head.finalized?.number
 
           const lastBlockNumber = Math.max(
             Math.min(last(bounded)?.range?.to || batch.head.latest?.number || batch.head.finalized?.number || Infinity),
@@ -227,9 +240,10 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
               initial,
               current: cursorFromHeader(lastBatchBlock as any),
               last: lastBlockNumber,
-              rollbackChain: finalizedHead
-                ? batch.blocks.filter((b) => b.header.number >= finalizedHead).map(cursorFromHeader)
-                : [],
+              rollbackChain: extractRollbackChain({
+                blocks: batch.blocks,
+                head: batch.head.finalized,
+              }),
             },
 
             // Context for transformers
