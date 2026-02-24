@@ -99,6 +99,12 @@ export function extractRollbackChain({ blocks, head }: { blocks: PartialBlock[];
 }
 
 export type PortalSourceOptions<Query> = {
+  /**
+   * Globally unique, stable identifier for this pipe.
+   * Targets use it as a cursor key to persist progress — two pipes with the
+   * same `id` will share (and overwrite) each other's cursor.
+   * Required when calling `.pipeTo()`.
+   */
   id?: string
   portal: string | PortalClientOptions | PortalClient
   query: Query

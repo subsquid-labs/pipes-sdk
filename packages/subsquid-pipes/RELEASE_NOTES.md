@@ -1,10 +1,8 @@
-# Changelog
+# Pipes SDK 1.0 — Release Notes
 
-## Pipes SDK 1.0
+## Breaking changes
 
-### Breaking changes
-
-#### Decoders are now passed via `outputs`, not chained with `.pipe()`
+### Decoders are now passed via `outputs`, not chained with `.pipe()`
 
 `evmPortalSource` and `solanaPortalSource` no longer expose `.pipe()` / `.pipeComposite()` on the source level. Pass your decoder(s) directly through the new `outputs` option.
 
@@ -42,44 +40,35 @@ evmPortalSource({
 
 The same change applies to `solanaPortalSource`.
 
-#### `EvmPortalData` / `SolanaPortalData` are now plain arrays
+### `EvmPortalData` / `SolanaPortalData` are now plain block arrays
 
-The `.blocks` wrapper has been removed. This only affects custom transformers or code that reads raw portal data directly without a decoder.
+Previously these types were objects with a `.blocks` property. Now they are the block array directly:
 
 ```ts
-// before — data had a .blocks wrapper
-const transformer = query.build({
-  transform: (data) => data.blocks.map(decode),
-})
+// before
+type EvmPortalData<F>    = { blocks: evm.Block<F>[] }
+type SolanaPortalData<F> = { blocks: solana.Block<F>[] }
 
+// after
+type EvmPortalData<F>    = evm.Block<F>[]
+type SolanaPortalData<F> = solana.Block<F>[]
+```
+
+This affects custom transformers and any code that reads raw portal data without a decoder:
+
+```ts
+// before
 for await (const { data } of rawStream) {
   data.blocks // evm.Block<F>[]
 }
 
-// after — data is the array
-const transformer = query.build().pipe((data) => data.map(decode))
-
+// after
 for await (const { data } of rawStream) {
   data // evm.Block<F>[]
 }
 ```
 
-#### Pipe `id` is required when calling `.pipeTo()`
-
-Targets persist cursor state keyed by pipe ID. Calling `.pipeTo()` without setting an `id` throws `DefaultPipeIdError` (E0001) at startup.
-
-```ts
-// before — id was optional
-evmPortalSource({ portal: '...' })
-  .pipe(evmDecoder({ ... }))
-  .pipeTo(myTarget)
-
-// after — id is required
-evmPortalSource({ id: 'my-pipe', portal: '...', outputs: evmDecoder({ ... }) })
-  .pipeTo(myTarget)
-```
-
-#### `solanaPortalSource` `query` option removed, `outputs` required
+### `solanaPortalSource` `query` option removed, `outputs` required
 
 ```ts
 // before
@@ -97,7 +86,7 @@ solanaPortalSource({
 })
 ```
 
-#### `createSolanaInstructionDecoder` renamed to `solanaInstructionDecoder`
+### `createSolanaInstructionDecoder` renamed to `solanaInstructionDecoder`
 
 The `create` prefix has been dropped. The old export is removed with no deprecation alias.
 
@@ -109,7 +98,7 @@ import { createSolanaInstructionDecoder } from '@subsquid/pipes/solana'
 import { solanaInstructionDecoder } from '@subsquid/pipes/solana'
 ```
 
-#### `MetricsServer` interface changes
+### `MetricsServer` interface changes
 
 `addBatchContext` was renamed to `batchProcessed`.
 
@@ -121,7 +110,7 @@ server.addBatchContext(ctx)
 server.batchProcessed(ctx)
 ```
 
-#### Progress tracker event types renamed and restructured
+### Progress tracker event types renamed and restructured
 
 | Before | After |
 |---|---|
@@ -150,9 +139,9 @@ evmPortalSource({
 
 ---
 
-### New features
+## New features
 
-#### Time-based ranges
+### Time-based ranges
 
 Ranges now accept ISO date strings and `Date` objects in addition to block numbers. Dates are automatically resolved to the corresponding block numbers via the portal API.
 
@@ -187,24 +176,7 @@ Supported `from` / `to` formats:
 
 Date-only strings (e.g. `'2024-01-01'`) are treated as UTC midnight. Identical timestamps across multiple ranges are deduplicated into a single portal API call.
 
-#### Multiple named outputs in a single source
-
-```ts
-const stream = evmPortalSource({
-  portal: '...',
-  outputs: {
-    transfers: evmDecoder({ events: { Transfer: erc20.events.Transfer } }),
-    approvals:  evmDecoder({ events: { Approval: erc20.events.Approval } }),
-  },
-})
-
-for await (const { data } of stream) {
-  data.transfers // Transfer[]
-  data.approvals // Approval[]
-}
-```
-
-#### Typed error system with documentation links
+### Typed error system with documentation links
 
 All framework errors extend `PipeError` and carry a unique code linking to the docs (`https://docs.sqd.dev/errors/<code>`).
 
@@ -215,7 +187,7 @@ All framework errors extend `PipeError` and carry a unique code linking to the d
 | `ForkNoPreviousBlocksError` | E1002 | Fork exception carried no previous blocks |
 | `ForkCursorMissingError` | E1003 | Target `fork()` returned `null` |
 
-#### OpenTelemetry integration — `@subsquid/pipes/opentelemetry`
+### OpenTelemetry integration — `@subsquid/pipes/opentelemetry`
 
 Export profiler spans to Jaeger, Tempo, or any OTEL-compatible backend:
 
@@ -231,7 +203,7 @@ evmPortalSource({
 
 Requires `@opentelemetry/api` (optional peer dependency) plus an OTEL SDK in the app.
 
-#### `SpanHooks` — pluggable profiler backend
+### `SpanHooks` — pluggable profiler backend
 
 Implement `SpanHooks` to bridge the internal profiler to any tracing system:
 
@@ -246,17 +218,27 @@ const myHooks: SpanHooks = {
 evmPortalSource({ profiler: myHooks, ... })
 ```
 
-#### `profiler` option on all portal sources
+### Pipe `id` on all portal sources
 
-`evmPortalSource`, `solanaPortalSource`, and `hyperliquidFillsPortalSource` now all accept `profiler?: boolean | SpanHooks`.
+Every portal source now accepts an `id`. It must be **globally unique and stable** — targets use it as a cursor key to persist progress. Two pipes that share the same `id` will overwrite each other's cursor. The `id` is also used to scope log lines and Prometheus metric labels.
 
-#### Pipe `id` on all portal sources
+Required when calling `.pipeTo()` (throws `DefaultPipeIdError` / E0001 otherwise).
 
 ```ts
-evmPortalSource({ id: 'transfers', portal: '...', outputs: evmDecoder({ ... }) })
+// before — id was optional
+evmPortalSource({ portal: '...' })
+  .pipe(evmDecoder({ ... }))
+  .pipeTo(myTarget)
+
+// after — id is required for .pipeTo()
+evmPortalSource({ id: 'eth-transfers', portal: '...', outputs: evmDecoder({ ... }) })
+  .pipeTo(myTarget) // cursor stored under key "eth-transfers"
+
+solanaPortalSource({ id: 'sol-swaps', portal: '...', outputs: solanaInstructionDecoder({ ... }) })
+  .pipeTo(myTarget) // cursor stored under key "sol-swaps"
 ```
 
-#### Query builder factory shorthands
+### Query builder factory shorthands
 
 Every query builder now has a matching factory function:
 
@@ -280,21 +262,34 @@ solanaQuery()
 hyperliquidFillsQuery()
 ```
 
-#### Runner — multi-pipe management (local development only)
+### Runner — multi-pipe management (local development only)
+
+Define your pipe logic once, then run it against multiple datasets concurrently with shared metrics and automatic retries:
 
 ```ts
 import { createDevRunner } from '@subsquid/pipes/runtime/node'
 
+// one pipe function, reused across chains
+async function indexTransfers({ id, params, logger, metrics }: RunConfig<{ portal: string }>) {
+  const stream = evmPortalSource({
+    id,
+    portal: params.portal,
+    outputs: evmDecoder({
+      range: { from: '2024-01-01' },
+      events: { transfers: erc20.events.Transfer },
+    }),
+  })
+
+  for await (const { data } of stream) {
+    logger.info(`Got ${data.transfers.length} transfers`)
+  }
+}
+
 const runner = createDevRunner(
   [
-    {
-      id: 'transfers',
-      params: { portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet' },
-      stream: async ({ id, params, logger, metrics }) => {
-        const stream = evmPortalSource({ id, portal: params.portal, outputs: evmDecoder({ ... }) })
-        for await (const { data } of stream) { /* ... */ }
-      },
-    },
+    { id: 'eth-transfers',  params: { portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet' },  stream: indexTransfers },
+    { id: 'base-transfers', params: { portal: 'https://portal.sqd.dev/datasets/base-mainnet' },      stream: indexTransfers },
+    { id: 'arb-transfers',  params: { portal: 'https://portal.sqd.dev/datasets/arbitrum-mainnet' },   stream: indexTransfers },
   ],
   { retry: 5, metrics: { port: 9090 } },
 )
@@ -302,7 +297,9 @@ const runner = createDevRunner(
 await runner.start()
 ```
 
-#### New Prometheus metrics
+All pipes run concurrently in a single process, share a Prometheus metrics server, and each gets its own scoped logger and cursor persistence keyed by `id`.
+
+### New Prometheus metrics
 
 The following metrics are now collected automatically for every source:
 
@@ -321,13 +318,9 @@ The following metrics are now collected automatically for every source:
 
 All metrics are labelled with the pipe `id`.
 
-#### Logger now shows pipe ID
-
-`createDefaultLogger` accepts an `id` that is rendered as a dim prefix in every log line when `LOG_PRETTY` is enabled.
-
 ---
 
-### Removals
+## Removals
 
 - `CompositeTransformer` / `compositeTransformer` / `composite-transformer.ts` removed — use named `outputs`
 - `.pipeComposite()` removed from `PortalSource` — use named `outputs`
