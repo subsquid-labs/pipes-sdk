@@ -1,4 +1,4 @@
-import { BatchCtx, BlockCursor } from '~/core/index.js'
+import { BatchCtx, BlockCursor, RollbackRecord, resolveForkCursor } from '~/core/index.js'
 
 import { ClickhouseStore } from './clickhouse-store.js'
 
@@ -143,49 +143,18 @@ export class ClickhouseState {
       format: 'JSONEachRow',
     })
 
-    for await (const rows of res.stream<{ rollback_chain: string; finalized: string }>()) {
-      for (const row of rows) {
-        const raw = row.json()
-        const blocks = JSON.parse(raw.rollback_chain) as BlockCursor[]
-        if (!blocks.length) continue
-
-        // Sort blocks in descending order by block number to prioritize the most recent ones
-        blocks.sort((a, b) => b.number - a.number)
-
-        const finalized = JSON.parse(raw.finalized) as BlockCursor
-
-        for (const block of blocks) {
-          const found = previousBlocks.find((u) => u.hash === block.hash)
-          if (found) return found
-
-          if (!previousBlocks.length) {
-            if (block.number < finalized.number) {
-              /**
-               *  We can't go beyond the finalized block.
-               *  TODO: Dead end? What should we do?
-               */
-              return null
-            }
-
-            /*
-             * This indicates a deep blockchain fork where we've exhausted all previously known blocks.
-             * We'll return the current block as the fork point
-             * and let the portal fetch a new valid chain of blocks.
-             */
-            return block
+    async function* records(): AsyncIterable<RollbackRecord> {
+      for await (const rows of res.stream<{ rollback_chain: string; finalized: string }>()) {
+        for (const row of rows) {
+          const raw = row.json()
+          yield {
+            rollbackChain: JSON.parse(raw.rollback_chain) as BlockCursor[],
+            finalized: JSON.parse(raw.finalized) as BlockCursor,
           }
-
-          // Remove already visited blocks
-          previousBlocks = previousBlocks.filter((u) => u.number < block.number)
-        }
-
-        // If none of the blocks in the rollback chain match, we can still try the finalized block as a fallback
-        if (previousBlocks.length === 1 && previousBlocks[0].hash === finalized.hash) {
-          return finalized
         }
       }
     }
 
-    return null
+    return resolveForkCursor(records(), previousBlocks)
   }
 }
