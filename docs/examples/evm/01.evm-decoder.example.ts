@@ -1,6 +1,5 @@
 import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
 import { metricsServer } from '@subsquid/pipes/metrics/node'
-import { addDays } from 'date-fns'
 
 /**
  * Basic example demonstrating how to use pipes for processing EVM data.
@@ -12,8 +11,7 @@ import { addDays } from 'date-fns'
 
 async function cli() {
   const stream = evmPortalSource({
-    id: 'base-mainnet-erc20-transfers',
-    portal: 'https://portal.sqd.dev/datasets/base-mainnet',
+    portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     outputs: evmDecoder({
       range: {
         // from: 'latest',
