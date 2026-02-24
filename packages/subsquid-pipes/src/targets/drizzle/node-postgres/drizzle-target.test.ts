@@ -255,11 +255,11 @@ describe('Drizzle target', () => {
           // 1. The First response is okay, it gets 5 blocks
           statusCode: 200,
           data: [
-            { header: { number: 1, hash: '0x1' } },
-            { header: { number: 2, hash: '0x2' } },
-            { header: { number: 3, hash: '0x3' } },
-            { header: { number: 4, hash: '0x4' } },
-            { header: { number: 5, hash: '0x5' } },
+            { header: { number: 1, hash: '0x1', timestamp: 1000 } },
+            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
+            { header: { number: 3, hash: '0x3', timestamp: 3000 } },
+            { header: { number: 4, hash: '0x4', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
           head: {
             finalized: {
@@ -290,6 +290,7 @@ describe('Drizzle target', () => {
                   "block": {
                     "hash": true,
                     "number": true,
+                    "timestamp": true,
                   },
                 },
                 "fromBlock": 6,
@@ -303,10 +304,10 @@ describe('Drizzle target', () => {
         {
           statusCode: 200,
           data: [
-            { header: { number: 4, hash: '0x4a' } },
-            { header: { number: 5, hash: '0x5a' } },
-            { header: { number: 6, hash: '0x6a' } },
-            { header: { number: 7, hash: '0x7a' } },
+            { header: { number: 4, hash: '0x4a', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5a', timestamp: 5000 } },
+            { header: { number: 6, hash: '0x6a', timestamp: 6000 } },
+            { header: { number: 7, hash: '0x7a', timestamp: 7000 } },
           ],
           validateRequest: (req) => {
             /**
@@ -319,6 +320,7 @@ describe('Drizzle target', () => {
                   "block": {
                     "hash": true,
                     "number": true,
+                    "timestamp": true,
                   },
                 },
                 "fromBlock": 4,
@@ -402,7 +404,7 @@ describe('Drizzle target', () => {
           return {
             // 1. The First response is okay, it gets 5 blocks
             statusCode: 200,
-            data: [{ header: { number: block, hash: `0x${block}` } }],
+            data: [{ header: { number: block, hash: `0x${block}`, timestamp: block * 1000 } }],
             head: {
               finalized: {
                 number: 1,
@@ -427,7 +429,10 @@ describe('Drizzle target', () => {
         },
         {
           statusCode: 200,
-          data: [{ header: { number: 4, hash: '0x4a' } }, { header: { number: 5, hash: '0x5a' } }],
+          data: [
+            { header: { number: 4, hash: '0x4a', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5a', timestamp: 5000 } },
+          ],
         },
       ])
 
@@ -466,7 +471,7 @@ describe('Drizzle target', () => {
 
             expect(cursor.number).toEqual(3)
             expect(cursor.hash).toEqual('0x3')
-            expect(row.data).toEqual(JSON.stringify(cursor))
+            expect(JSON.parse(row?.data || '')).toMatchObject(cursor)
           },
         }),
       )
@@ -479,7 +484,7 @@ describe('Drizzle target', () => {
           {
             "block_hash": "test",
             "block_number": -1,
-            "data": "{"number":5,"hash":"0x5a"}",
+            "data": "{"number":5,"hash":"0x5a","timestamp":5000}",
           },
         ]
       `)
@@ -492,7 +497,7 @@ describe('Drizzle target', () => {
           return {
             // 1. The First response is okay, it gets 5 blocks
             statusCode: 200,
-            data: [{ header: { number: block, hash: `0x${block}` } }],
+            data: [{ header: { number: block, hash: `0x${block}`, timestamp: block * 1000 } }],
             head: {
               finalized: {
                 number: 1,
@@ -517,7 +522,10 @@ describe('Drizzle target', () => {
         },
         {
           statusCode: 200,
-          data: [{ header: { number: 4, hash: '0x4a' } }, { header: { number: 5, hash: '0x5a' } }],
+          data: [
+            { header: { number: 4, hash: '0x4a', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5a', timestamp: 5000 } },
+          ],
         },
       ])
 
@@ -573,7 +581,7 @@ describe('Drizzle target', () => {
           {
             "block_hash": "test",
             "block_number": -1,
-            "data": "{"number":5,"hash":"0x5a"}",
+            "data": "{"number":5,"hash":"0x5a","timestamp":5000}",
           },
         ]
       `)
@@ -616,7 +624,7 @@ describe('Drizzle target', () => {
           return {
             // 1. The First response is okay, it gets 5 blocks
             statusCode: 200,
-            data: [{ header: { number: block, hash: `0x${block}` } }],
+            data: [{ header: { number: block, hash: `0x${block}`, timestamp: block * 1000 } }],
             head: {
               finalized: {
                 number: 1,
@@ -641,7 +649,10 @@ describe('Drizzle target', () => {
         },
         {
           statusCode: 200,
-          data: [{ header: { number: 4, hash: '0x4a' } }, { header: { number: 5, hash: '0x5a' } }],
+          data: [
+            { header: { number: 4, hash: '0x4a', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5a', timestamp: 5000 } },
+          ],
         },
       ])
 
