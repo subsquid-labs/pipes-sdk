@@ -564,39 +564,38 @@ describe('Clickhouse state', () => {
 
       await evmPortalSource({
         portal: mockPortal.url,
-        outputs: blockDecoder({ from: 0, to: 7 })({ from: 0, to: 7 }),
-      })
-        .pipeTo(
-          clickhouseTarget({
-            client,
-            onData: async ({ store, data }) => {
-              await store.insert({
-                table: 'test',
-                values: data.map((b) => ({
-                  block_number: b.number,
-                  timestamp: b.timestamp,
-                  block_hash: b.hash,
-                  sign: 1,
-                })),
-                format: 'JSONEachRow',
-              })
-            },
-            onRollback: async ({ type, store, safeCursor }) => {
-              if (rollbackCalls === 0) {
-                expect(safeCursor).toMatchObject({ number: 3, hash: '0x3' })
-              } else {
-                expect(safeCursor).toMatchObject({ number: 1, hash: '0x1' })
-              }
+        outputs: blockDecoder({ from: 0, to: 7 }),
+      }).writeTo(
+        clickhouseTarget({
+          client,
+          onData: async ({ store, data }) => {
+            await store.insert({
+              table: 'test',
+              values: data.map((b) => ({
+                block_number: b.number,
+                timestamp: b.timestamp,
+                block_hash: b.hash,
+                sign: 1,
+              })),
+              format: 'JSONEachRow',
+            })
+          },
+          onRollback: async ({ type, store, safeCursor }) => {
+            if (rollbackCalls === 0) {
+              expect(safeCursor).toMatchObject({ number: 3, hash: '0x3' })
+            } else {
+              expect(safeCursor).toMatchObject({ number: 1, hash: '0x1' })
+            }
 
-              rollbackCalls++
-              await store.removeAllRows({
-                tables: 'test',
-                where: `block_number > {latest:UInt32}`,
-                params: { latest: safeCursor.number },
-              })
-            },
-          }),
-        )
+            rollbackCalls++
+            await store.removeAllRows({
+              tables: 'test',
+              where: `block_number > {latest:UInt32}`,
+              params: { latest: safeCursor.number },
+            })
+          },
+        }),
+      )
 
       const res = await client.query({
         query: 'SELECT * FROM test FINAL ORDER BY block_number ASC',

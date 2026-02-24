@@ -42,17 +42,14 @@ describe('solanaInstructionDecoder transform', () => {
     const stream = solanaPortalSource({
       portal: mockPortal.url,
       logger: false,
+      outputs: solanaInstructionDecoder({
+        range: { from: 0, to: 1 },
+        programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+        instructions: {
+          transfers: tokenProgram.instructions.transfer,
+        },
+      }).transform((e) => e.transfers),
     })
-      .pipe(
-        solanaInstructionDecoder({
-          range: { from: 0, to: 1 },
-          programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-          instructions: {
-            transfers: tokenProgram.instructions.transfer,
-          },
-        }),
-      )
-      .pipe((e) => e.transfers)
 
     const res = await readAll(stream)
 
@@ -76,21 +73,22 @@ describe('solanaInstructionDecoder transform', () => {
     const stream = solanaPortalSource({
       portal: mockPortal.url,
       logger: false,
-    }).pipeComposite({
-      validProgramId: solanaInstructionDecoder({
-        range: { from: 0, to: 1 },
-        programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-        instructions: {
-          transfers: tokenProgram.instructions.transfer,
-        },
-      }),
-      unknownProgramId: solanaInstructionDecoder({
-        range: { from: 0, to: 1 },
-        programId: 'xxxx',
-        instructions: {
-          transfers: tokenProgram.instructions.transfer,
-        },
-      }),
+      outputs: {
+        validProgramId: solanaInstructionDecoder({
+          range: { from: 0, to: 1 },
+          programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+          instructions: {
+            transfers: tokenProgram.instructions.transfer,
+          },
+        }),
+        unknownProgramId: solanaInstructionDecoder({
+          range: { from: 0, to: 1 },
+          programId: 'xxxx',
+          instructions: {
+            transfers: tokenProgram.instructions.transfer,
+          },
+        }),
+      },
     })
 
     const valid = []
