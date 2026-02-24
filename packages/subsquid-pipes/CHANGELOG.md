@@ -152,6 +152,41 @@ evmPortalSource({
 
 ### New features
 
+#### Time-based ranges
+
+Ranges now accept ISO date strings and `Date` objects in addition to block numbers. Dates are automatically resolved to the corresponding block numbers via the portal API.
+
+```ts
+evmPortalSource({
+  portal: '...',
+  outputs: evmDecoder({
+    range: { from: '2024-01-01' },              // date string
+    events: { transfers: erc20.events.Transfer },
+  }),
+})
+
+// Date objects work too
+evmDecoder({
+  range: {
+    from: new Date('2024-01-01T00:00:00Z'),
+    to:   new Date('2024-02-01T00:00:00Z'),
+  },
+  events: { ... },
+})
+```
+
+Supported `from` / `to` formats:
+
+| Format | Example |
+|---|---|
+| Block number | `18908900` |
+| Formatted block number | `'1,000,000'` or `'1_000_000'` |
+| ISO date string | `'2024-01-01'` or `'2024-01-01T00:00:00Z'` |
+| `Date` object | `new Date('2024-01-01')` |
+| Latest block | `'latest'` (only `from`) |
+
+Date-only strings (e.g. `'2024-01-01'`) are treated as UTC midnight. Identical timestamps across multiple ranges are deduplicated into a single portal API call.
+
 #### Multiple named outputs in a single source
 
 ```ts
@@ -221,16 +256,28 @@ evmPortalSource({ profiler: myHooks, ... })
 evmPortalSource({ id: 'transfers', portal: '...', outputs: evmDecoder({ ... }) })
 ```
 
-#### `evmQuery()` factory shorthand
+#### Query builder factory shorthands
+
+Every query builder now has a matching factory function:
 
 ```ts
 // before
 import { EvmQueryBuilder } from '@subsquid/pipes/evm'
+import { SolanaQueryBuilder } from '@subsquid/pipes/solana'
+import { HyperliquidFillsQueryBuilder } from '@subsquid/pipes/hyperliquid'
+
 new EvmQueryBuilder()
+new SolanaQueryBuilder()
+new HyperliquidFillsQueryBuilder()
 
 // after
 import { evmQuery } from '@subsquid/pipes/evm'
+import { solanaQuery } from '@subsquid/pipes/solana'
+import { hyperliquidFillsQuery } from '@subsquid/pipes/hyperliquid'
+
 evmQuery()
+solanaQuery()
+hyperliquidFillsQuery()
 ```
 
 #### Runner — multi-pipe management (local development only)
@@ -259,10 +306,20 @@ await runner.start()
 
 The following metrics are now collected automatically for every source:
 
-- `sqd_reorgs_total` — chain reorganizations detected
-- `sqd_portal_requests_total{classification, status}` — HTTP requests to the portal by status code
-- `sqd_batch_size_blocks` — histogram of blocks per batch
-- `sqd_batch_size_bytes` — histogram of batch payload bytes
+| Metric | Type | Description |
+|---|---|---|
+| `sqd_current_block{id}` | gauge | Current block number being processed |
+| `sqd_last_block{id}` | gauge | Last known block number in the chain |
+| `sqd_progress_ratio{id}` | gauge | Indexing progress as a ratio from 0 to 1 |
+| `sqd_eta_seconds{id}` | gauge | Estimated time to full sync in seconds |
+| `sqd_blocks_per_second{id}` | gauge | Block processing speed |
+| `sqd_bytes_downloaded_total{id}` | counter | Total bytes downloaded from portal |
+| `sqd_forks_total{id}` | counter | Chain reorganizations detected |
+| `sqd_portal_requests_total{id, classification, status}` | counter | HTTP requests to the portal by status code |
+| `sqd_batch_size_blocks{id}` | histogram | Number of blocks per batch |
+| `sqd_batch_size_bytes{id}` | histogram | Size of each batch in bytes |
+
+All metrics are labelled with the pipe `id`.
 
 #### Logger now shows pipe ID
 
