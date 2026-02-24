@@ -11,6 +11,7 @@ import {
   Outputs,
   PortalCache,
   PortalSource,
+  SpanHooks,
   Transformer,
   createDefaultLogger,
   createTransformer,
@@ -45,6 +46,7 @@ export function solanaPortalSource<Out extends SolanaOutputs>({
   cache,
   logger,
   metrics,
+  profiler,
   progress,
 }: {
   portal: string | PortalClientOptions
@@ -52,6 +54,7 @@ export function solanaPortalSource<Out extends SolanaOutputs>({
   cache?: PortalCache
   metrics?: MetricsServer
   logger?: Logger | LogLevel
+  profiler?: boolean | SpanHooks
   progress?: ProgressTrackerOptions
 }) {
   type F = { block: { hash: true; number: true } }
@@ -65,6 +68,7 @@ export function solanaPortalSource<Out extends SolanaOutputs>({
     cache,
     logger,
     metrics,
+    profiler,
     transformers: [
       progressTracker({
         interval: progress?.interval,

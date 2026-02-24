@@ -10,6 +10,7 @@ import {
   PortalCache,
   PortalRange,
   PortalSource,
+  SpanHooks,
   createDefaultLogger,
   createTransformer,
 } from '../core/index.js'
@@ -24,6 +25,7 @@ export function hyperliquidFillsPortalSource<F extends hl.FieldSelection = any>(
   cache,
   logger,
   metrics,
+  profiler,
   progress,
 }: {
   portal: string | PortalClientOptions
@@ -31,6 +33,7 @@ export function hyperliquidFillsPortalSource<F extends hl.FieldSelection = any>(
   cache?: PortalCache
   metrics?: MetricsServer
   logger?: Logger | LogLevel
+  profiler?: boolean | SpanHooks
   progress?: ProgressTrackerOptions
 }) {
   //FIXME STREAMS
@@ -44,6 +47,7 @@ export function hyperliquidFillsPortalSource<F extends hl.FieldSelection = any>(
     cache,
     logger,
     metrics,
+    profiler,
     transformers: [
       progressTracker({
         interval: progress?.interval,

@@ -5,6 +5,18 @@ import { arrayify } from '../internal/array.js'
 
 export type ProfilerOptions = { id: string } | null
 
+/**
+ * Lifecycle hooks for a single profiler span.
+ * Implement this interface to bridge spans to any tracing backend (OTEL, Datadog, Zipkin, …).
+ *
+ * When a child span starts, `onStart(name)` is called and must return hooks for that child.
+ * When this span ends, `onEnd()` is called.
+ */
+export interface SpanHooks {
+  onStart(name: string): SpanHooks
+  onEnd(): void
+}
+
 export interface Profiler {
   name: string
   elapsed: number
@@ -55,18 +67,34 @@ export class Span implements Profiler {
   labels: string[] = []
   data?: any
 
-  static root(name: string, enabled: boolean): Profiler {
-    if (!enabled) return new DummyProfiler()
+  readonly #hooks: SpanHooks | null
 
-    return new Span(name)
+  /**
+   * Creates a root Profiler span.
+   *
+   * - `enabled = false`     → returns a no-op DummyProfiler
+   * - `enabled = true`      → creates a plain Span (no external tracing)
+   * - `enabled = SpanHooks` → creates a Span wired to the provided hooks;
+   *                           use `otelProfilerHooks()` to export to Jaeger / any OTEL backend
+   */
+  static root(name: string, enabled: boolean | SpanHooks): Profiler {
+    if (enabled === false) return new DummyProfiler()
+
+    const hooks = enabled === true ? null : enabled.onStart(name)
+    return new Span(name, hooks)
   }
 
-  private constructor(public name: string) {
+  private constructor(
+    public name: string,
+    hooks: SpanHooks | null,
+  ) {
     this.started = performance.now()
+    this.#hooks = hooks
   }
 
   start(name: string) {
-    const child = new Span(name)
+    const childHooks = this.#hooks?.onStart(name) ?? null
+    const child = new Span(name, childHooks)
     this.children.push(child)
     return child
   }
@@ -91,12 +119,12 @@ export class Span implements Profiler {
 
   /**
    Marks the end of the span and calculates the elapsed time.
-   Optionally accepts a snapshot object that can store how the span changed the state.
 
    Returns the current span instance for chaining.
    */
   end() {
     this.elapsed = performance.now() - this.started
+    this.#hooks?.onEnd()
 
     return this
   }
@@ -118,9 +146,11 @@ export class DummyProfiler implements Profiler {
   start(name: string | null) {
     return this
   }
+
   addLabels(labels: string | string[]) {
     return this
   }
+
   end() {
     return this
   }

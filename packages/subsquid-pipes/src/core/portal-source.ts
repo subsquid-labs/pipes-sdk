@@ -11,7 +11,7 @@ import { last } from '../internal/array.js'
 import { DefaultPipeIdError, ForkCursorMissingError, ForkNoPreviousBlocksError, TargetForkNotSupportedError } from './errors.js'
 import { LogLevel, Logger, createDefaultLogger, formatWarning } from './logger.js'
 import { Counter, Histogram, Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
-import { Profiler, Span } from './profiling.js'
+import { Profiler, Span, SpanHooks } from './profiling.js'
 import { ProgressEvent, StartEvent } from './progress-tracker.js'
 import { QueryBuilder, hashQuery } from './query-builder.js'
 import { Target } from './target.js'
@@ -77,7 +77,7 @@ export type PortalSourceOptions<Query> = {
   portal: string | PortalClientOptions | PortalClient
   query: Query
   logger?: Logger | LogLevel
-  profiler?: boolean
+  profiler?: boolean | SpanHooks
   cache?: PortalCache
   transformers?: Transformer<any, any>[]
   metrics?: MetricsServer
@@ -93,7 +93,7 @@ export const DEFAULT_PIPE_NAME = 'stream'
 export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   readonly #id: string
   readonly #options: {
-    profiler: boolean
+    profiler: boolean | SpanHooks
     cache?: PortalCache
   }
   readonly #queryBuilder: Q

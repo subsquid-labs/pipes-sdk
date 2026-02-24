@@ -6,6 +6,7 @@ import {
   Outputs,
   PortalCache,
   PortalSource,
+  SpanHooks,
   Transformer,
   createTransformer,
   mergeOutputs,
@@ -45,6 +46,7 @@ export function evmPortalSource<Out extends EvmOutputs>({
   cache,
   logger,
   metrics,
+  profiler,
   progress,
 }: {
   id?: string
@@ -53,6 +55,7 @@ export function evmPortalSource<Out extends EvmOutputs>({
   cache?: PortalCache
   metrics?: MetricsServer
   logger?: Logger | LogLevel
+  profiler?: boolean | SpanHooks
   progress?: ProgressTrackerOptions
 }) {
   type F = { block: { hash: true; number: true } }
@@ -67,6 +70,7 @@ export function evmPortalSource<Out extends EvmOutputs>({
     cache,
     logger,
     metrics,
+    profiler,
     transformers: [
       progressTracker({
         interval: progress?.interval,
