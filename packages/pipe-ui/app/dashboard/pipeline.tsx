@@ -5,7 +5,7 @@ import { Terminal } from 'lucide-react'
 // @ts-ignore
 import { Sparklines, SparklinesLine } from 'react-sparklines'
 
-import { ApiStatus, PipeStatus, useStats } from '~/api/metrics'
+import { PipeStatus, useStats } from '~/api/metrics'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { humanBytes } from '~/dashboard/formatters'
@@ -15,7 +15,6 @@ import { QueryExemplar } from '~/dashboard/query-exemplar'
 import { TransformationExemplar } from '~/dashboard/transformation-exemplar'
 
 const sparklineStyle = { fill: '#d0a9e2' }
-// const sparklineStyle = { fill: 'rgba(255,255,255,1)' }
 const sparklineColor = 'rgb(170, 140, 235)'
 
 export function Pipeline({ pipeId }: { pipeId: string }) {
