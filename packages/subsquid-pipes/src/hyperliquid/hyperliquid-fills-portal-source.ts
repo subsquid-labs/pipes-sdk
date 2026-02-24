@@ -49,6 +49,12 @@ export function hyperliquidFillsPortalSource<Out extends HyperliquidFillsOutputs
   profiler,
   progress,
 }: {
+  /**
+   * Globally unique, stable identifier for this pipe.
+   * Targets use it as a cursor key to persist progress — two pipes with the
+   * same `id` will share (and overwrite) each other's cursor.
+   * Required when calling `.pipeTo()`.
+   */
   id?: string
   portal: string | PortalClientOptions
   outputs: Out

@@ -41,6 +41,7 @@ type SolanaPortalStream<T extends SolanaOutputs> =
         : never
 
 export function solanaPortalSource<Out extends SolanaOutputs>({
+  id,
   portal,
   outputs,
   cache,
@@ -49,6 +50,13 @@ export function solanaPortalSource<Out extends SolanaOutputs>({
   profiler,
   progress,
 }: {
+  /**
+   * Globally unique, stable identifier for this pipe.
+   * Targets use it as a cursor key to persist progress — two pipes with the
+   * same `id` will share (and overwrite) each other's cursor.
+   * Required when calling `.pipeTo()`.
+   */
+  id?: string
   portal: string | PortalClientOptions
   outputs: Out
   cache?: PortalCache
@@ -63,6 +71,7 @@ export function solanaPortalSource<Out extends SolanaOutputs>({
   })
 
   return new PortalSource<SolanaQueryBuilder<F>, SolanaPortalStream<Out>>({
+    id,
     portal,
     query,
     cache,
