@@ -163,19 +163,19 @@ describe('Portal abstract stream', () => {
       const res = await readAll(stream)
 
       expect(res).toMatchInlineSnapshot(`
-      [
-        {
-          "hash": "0x123",
-          "number": 1,
-          "timestamp": 1000,
-        },
-        {
-          "hash": "0x456",
-          "number": 2,
-          "timestamp": 2000,
-        },
-      ]
-    `)
+        [
+          {
+            "hash": "0x123",
+            "number": 1,
+            "timestamp": 1000,
+          },
+          {
+            "hash": "0x456",
+            "number": 2,
+            "timestamp": 2000,
+          },
+        ]
+      `)
     })
 
     it('should retries 10 by default', async () => {
@@ -202,19 +202,19 @@ describe('Portal abstract stream', () => {
       const res = await readAll(stream)
 
       expect(res).toMatchInlineSnapshot(`
-      [
-        {
-          "hash": "0x123",
-          "number": 1,
-          "timestamp": 1000,
-        },
-        {
-          "hash": "0x456",
-          "number": 2,
-          "timestamp": 2000,
-        },
-      ]
-    `)
+        [
+          {
+            "hash": "0x123",
+            "number": 1,
+            "timestamp": 1000,
+          },
+          {
+            "hash": "0x456",
+            "number": 2,
+            "timestamp": 2000,
+          },
+        ]
+      `)
     })
 
     it('should throw an error after max retries', async () => {
@@ -321,19 +321,19 @@ describe('Portal abstract stream', () => {
       const res = await readAll(stream)
 
       expect(res).toMatchInlineSnapshot(`
-      [
-        {
-          "hash": "0x123",
-          "number": 1,
-          "timestamp": 1000,
-        },
-        {
-          "hash": "0x456",
-          "number": 2,
-          "timestamp": 2000,
-        },
-      ]
-    `)
+        [
+          {
+            "hash": "0x123",
+            "number": 1,
+            "timestamp": 1000,
+          },
+          {
+            "hash": "0x456",
+            "number": 2,
+            "timestamp": 2000,
+          },
+        ]
+      `)
     })
   })
 })

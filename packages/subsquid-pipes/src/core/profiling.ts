@@ -3,7 +3,7 @@
 
 import { arrayify } from '../internal/array.js'
 
-export type ProfilerOptions = { id: string } | null
+export type ProfilerOptions = { id: string; hidden?: boolean }
 
 /**
  * Lifecycle hooks for a single profiler span.
@@ -18,55 +18,34 @@ export interface SpanHooks {
 }
 
 export interface Profiler {
-  name: string
+  id: string
   elapsed: number
+  hidden: boolean
   children: Profiler[]
   data?: any
 
-  start(name: string): Profiler
-  measure<T>(name: string, fn: (span: Profiler) => Promise<T>): Promise<T>
+  start(options?: string | ProfilerOptions): Profiler
+  measure<T>(name: string | ProfilerOptions, fn: (span: Profiler) => Promise<T>): Promise<T>
+  measureSync<T>(name: string | ProfilerOptions, fn: (span: Profiler) => T): T
   addLabels(labels: string | string[]): Profiler
   end(): Profiler
-  addTransformerExemplar(dataExample: any): Profiler
-  transform<T>(transformer: (span: Span, level: number) => T, level?: number): T[]
-}
-
-function packExemplar(value: any): any {
-  if (Array.isArray(value)) {
-    if (
-      value.length <= 10 &&
-      !value.some((v) => typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean')
-    ) {
-      return value
-    }
-
-    if (value.length > 10) {
-      return [packExemplar(value[0]), `... ${value.length - 1} more ...`]
-    }
-
-    return value.map(packExemplar)
-  }
-
-  if (value === null || value instanceof Date) return value
-
-  if (typeof value === 'object') {
-    const res: any = {}
-    for (const key in value) {
-      res[key] = packExemplar(value[key])
-    }
-    return res
-  }
-
-  return value
+  flatten<T>(transformer: (span: Span, level: number) => T, level?: number): T[]
+  /**
+   * Recursively transforms the span tree into a new tree structure.
+   * Hidden spans are skipped — their children are promoted to the parent level.
+   */
+  transform<T>(fn: (span: Profiler, children: T[]) => T): T
 }
 
 export class Span implements Profiler {
+  id: string
   children: Span[] = []
   elapsed = 0
   started = 0
   labels: string[] = []
   data?: any
 
+  readonly hidden: boolean
   readonly #hooks: SpanHooks | null
 
   /**
@@ -81,21 +60,44 @@ export class Span implements Profiler {
     if (enabled === false) return new DummyProfiler()
 
     const hooks = enabled === true ? null : enabled.onStart(name)
-    return new Span(name, hooks)
+    return new Span({ id: name, hooks })
   }
 
-  private constructor(
-    public name: string,
-    hooks: SpanHooks | null,
-  ) {
+  private constructor(opts: {
+    id: string
+    hooks?: SpanHooks | null
+    hidden?: boolean
+  }) {
+    this.id = opts.id
     this.started = performance.now()
-    this.#hooks = hooks
+    this.hidden = opts.hidden ?? false
+    this.#hooks = opts.hooks ?? null
   }
 
-  start(name: string) {
-    const childHooks = this.#hooks?.onStart(name) ?? null
-    const child = new Span(name, childHooks)
+  start(options?: string | ProfilerOptions) {
+    if (typeof options === 'string') {
+      options = { id: options }
+    } else if (!options) {
+      options = { id: 'anonymous' }
+    }
+
+    if (options.hidden) {
+      const child = new Span({
+        id: options.id,
+        hooks: this.#hooks,
+        hidden: true,
+      })
+      this.children.push(child)
+
+      return child
+    }
+
+    const child = new Span({
+      id: options.id,
+      hooks: this.#hooks?.onStart(options.id) ?? null,
+    })
     this.children.push(child)
+
     return child
   }
 
@@ -104,17 +106,20 @@ export class Span implements Profiler {
     return this
   }
 
-  async measure<T = any>(name: string, fn: (span: Profiler) => Promise<T>): Promise<T> {
-    const span = this.start(name)
+  async measure<T = any>(name: string | ProfilerOptions, fn: (span: Profiler) => Promise<T>): Promise<T> {
+    const span = this.start(typeof name === 'string' ? { id: name } : name)
     const res = await fn(span)
     span.end()
 
     return res
   }
 
-  addTransformerExemplar(data: any) {
-    this.data = packExemplar(data)
-    return this
+  measureSync<T = any>(name: string | ProfilerOptions, fn: (span: Profiler) => T): T {
+    const span = this.start(typeof name === 'string' ? { id: name } : name)
+    const res = fn(span)
+    span.end()
+
+    return res
   }
 
   /**
@@ -124,26 +129,45 @@ export class Span implements Profiler {
    */
   end() {
     this.elapsed = performance.now() - this.started
-    this.#hooks?.onEnd()
+    if (!this.hidden) {
+      this.#hooks?.onEnd()
+    }
 
     return this
   }
 
-  transform<T>(transformer: (span: Span, level: number) => T, level = 0): T[] {
-    return [transformer(this, level), ...this.children.flatMap((child) => child.transform(transformer, level + 1))]
+  flatten<T>(transformer: (span: Span, level: number) => T, level = 0): T[] {
+    if (this.hidden) {
+      return this.children.flatMap((child) => child.flatten(transformer, level))
+    }
+    return [transformer(this, level), ...this.children.flatMap((child) => child.flatten(transformer, level + 1))]
+  }
+
+  transform<T>(fn: (span: Profiler, children: T[]) => T): T {
+    return fn(this, this.#transformChildren(fn))
+  }
+
+  #transformChildren<T>(fn: (span: Profiler, children: T[]) => T): T[] {
+    return this.children.flatMap((child) => {
+      if (child.hidden) {
+        return child.#transformChildren(fn)
+      }
+      return [child.transform(fn)]
+    })
   }
 
   toString() {
-    return this.transform((s, level) => `${''.padEnd(level, ' ')}[${s.name}] ${s.elapsed.toFixed(2)}ms`).join('\n')
+    return this.flatten((s, level) => `${''.padEnd(level, ' ')}[${s.id}] ${s.elapsed.toFixed(2)}ms`).join('\n')
   }
 }
 
 export class DummyProfiler implements Profiler {
-  name: string = ''
+  id: string = ''
   elapsed: number = 0
+  hidden: boolean = false
   children: DummyProfiler[] = []
 
-  start(name: string | null) {
+  start(options?: string | ProfilerOptions) {
     return this
   }
 
@@ -155,15 +179,19 @@ export class DummyProfiler implements Profiler {
     return this
   }
 
-  async measure<T>(name: string, fn: (span: Profiler) => Promise<T>): Promise<T> {
+  async measure<T>(name: string | ProfilerOptions, fn: (span: Profiler) => Promise<T>): Promise<T> {
     return fn(this)
   }
 
-  addTransformerExemplar() {
-    return this
+  measureSync<T>(name: string | ProfilerOptions, fn: (span: Profiler) => T): T {
+    return fn(this)
   }
 
-  transform<T>(transformer: (span: Span, level: number) => T, level: number = 0): T[] {
+  flatten<T>(transformer: (span: Span, level: number) => T, level: number = 0): T[] {
     return []
+  }
+
+  transform<T>(fn: (span: Profiler, children: T[]) => T): T {
+    return fn(this, [])
   }
 }

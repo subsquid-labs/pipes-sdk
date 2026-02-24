@@ -70,8 +70,10 @@ export class EvmQueryBuilder<F extends evm.FieldSelection = {}> extends QueryBui
     const setupQuery = opts?.setupQuery ?? (({ query }) => query.merge(this))
 
     return new QueryAwareTransformer(setupQuery, {
-      // we disable profiler to reduce noise in the metrics
-      profiler: null,
+      profiler: {
+        id: 'query builder',
+        hidden: true,
+      },
       transform: (data) => data,
     })
   }

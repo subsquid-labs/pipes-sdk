@@ -78,11 +78,11 @@ type ProfilerResult = {
 }
 
 function transformProfiler(profiler: Profiler): ProfilerResult {
-  return {
-    name: profiler.name,
-    totalTime: profiler.elapsed,
-    children: profiler.children.map((c) => transformProfiler(c)),
-  }
+  return profiler.transform((span, children) => ({
+    name: span.id,
+    totalTime: span.elapsed,
+    children,
+  }))
 }
 
 type TransformationResult = {
@@ -91,10 +91,39 @@ type TransformationResult = {
   children: TransformationResult[]
 }
 
+function packExemplar(value: any): any {
+  if (Array.isArray(value)) {
+    if (
+      value.length <= 10 &&
+      !value.some((v) => typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean')
+    ) {
+      return value
+    }
+
+    if (value.length > 10) {
+      return [packExemplar(value[0]), `... ${value.length - 1} more ...`]
+    }
+
+    return value.map(packExemplar)
+  }
+
+  if (value === null || value instanceof Date) return value
+
+  if (typeof value === 'object') {
+    const res: any = {}
+    for (const key in value) {
+      res[key] = packExemplar(value[key])
+    }
+    return res
+  }
+
+  return value
+}
+
 function transformExemplar(profiler: Profiler): TransformationResult {
-  return {
-    name: profiler.name,
-    data: JSON.stringify(profiler.data, (k: string, v: any) => {
+  return profiler.transform((span, children) => ({
+    name: span.id,
+    data: JSON.stringify(packExemplar(span.data), (k: string, v: any) => {
       if (typeof v === 'bigint') {
         return v.toString() + 'n'
       }
@@ -104,8 +133,8 @@ function transformExemplar(profiler: Profiler): TransformationResult {
 
       return v
     }),
-    children: profiler.children.map((c) => transformExemplar(c)),
-  }
+    children,
+  }))
 }
 
 const MAX_HISTORY = 50
@@ -136,6 +165,7 @@ class ExpressMetricServer implements MetricsServer {
 
     const registry = new client.Registry()
     client.collectDefaultMetrics({ register: registry })
+
     const metricsCache = new Map<string, any>()
 
     this.#app = express()
@@ -262,11 +292,10 @@ class ExpressMetricServer implements MetricsServer {
 
     this.#app.get('/exemplars/transformation', async (req, res) => {
       const pipeData = this.getPipe(req.query['id'] as string | undefined)
-      const transformationExemplar = pipeData?.transformationExemplar
 
       return res.json({
         payload: {
-          transformation: transformationExemplar,
+          transformation: pipeData?.transformationExemplar,
         },
       })
     })
@@ -319,16 +348,23 @@ class ExpressMetricServer implements MetricsServer {
   }
 
   batchProcessed(ctx: BatchCtx) {
+    const span = ctx.profiler.start('metrics processing')
     const data = this.registerPipe(ctx.id)
 
     data.lastBatch = ctx
     data.transformationExemplar = transformExemplar(ctx.profiler)
 
+    const profiler = transformProfiler(ctx.profiler)
+
     data.profilers.push({
-      profiler: transformProfiler(ctx.profiler),
+      profiler,
       collectedAt: new Date(),
     })
     data.profilers = data.profilers.slice(-MAX_HISTORY)
+    span.end()
+
+    // Update total time for the root metrics processing
+    profiler.children[profiler.children.length - 1].totalTime = span.elapsed
   }
 
   get metrics() {

@@ -464,10 +464,10 @@ describe('Clickhouse state', () => {
           // 1. The First response is okay, it gets 5 blocks
           statusCode: 200,
           data: [
-            { header: { number: 2, hash: '0x2' } },
-            { header: { number: 3, hash: '0x3' } },
-            { header: { number: 4, hash: '0x4' } },
-            { header: { number: 5, hash: '0x5' } },
+            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
+            { header: { number: 3, hash: '0x3', timestamp: 3000 } },
+            { header: { number: 4, hash: '0x4', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
           head: {
             finalized: {
@@ -494,6 +494,7 @@ describe('Clickhouse state', () => {
                   "block": {
                     "hash": true,
                     "number": true,
+                    "timestamp": true,
                   },
                 },
                 "fromBlock": 6,
@@ -522,6 +523,7 @@ describe('Clickhouse state', () => {
                   "block": {
                     "hash": true,
                     "number": true,
+                    "timestamp": true,
                   },
                 },
                 "fromBlock": 4,
@@ -554,6 +556,7 @@ describe('Clickhouse state', () => {
                   "block": {
                     "hash": true,
                     "number": true,
+                    "timestamp": true,
                   },
                 },
                 "fromBlock": 2,
@@ -803,11 +806,11 @@ describe('Clickhouse state', () => {
           // 1. The First response is okay, it gets 5 blocks
           statusCode: 200,
           data: [
-            { header: { number: 1, hash: '0x1' } },
-            { header: { number: 2, hash: '0x2' } },
-            { header: { number: 3, hash: '0x3' } },
-            { header: { number: 4, hash: '0x4' } },
-            { header: { number: 5, hash: '0x5' } },
+            { header: { number: 1, hash: '0x1', timestamp: 1000 } },
+            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
+            { header: { number: 3, hash: '0x3', timestamp: 3000 } },
+            { header: { number: 4, hash: '0x4', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5', timestamp: 5000 } },
           ],
           head: {
             finalized: {
@@ -834,6 +837,7 @@ describe('Clickhouse state', () => {
                   "block": {
                     "hash": true,
                     "number": true,
+                    "timestamp": true,
                   },
                 },
                 "fromBlock": 6,
@@ -862,6 +866,7 @@ describe('Clickhouse state', () => {
                   "block": {
                     "hash": true,
                     "number": true,
+                    "timestamp": true,
                   },
                 },
                 "fromBlock": 4,
@@ -875,12 +880,12 @@ describe('Clickhouse state', () => {
         {
           statusCode: 200,
           data: [
-            { header: { number: 2, hash: '0x2a' } },
-            { header: { number: 3, hash: '0x3a' } },
-            { header: { number: 4, hash: '0x4a' } },
-            { header: { number: 5, hash: '0x5a' } },
-            { header: { number: 6, hash: '0x6a' } },
-            { header: { number: 7, hash: '0x7a' } },
+            { header: { number: 2, hash: '0x2a', timestamp: 2000 } },
+            { header: { number: 3, hash: '0x3a', timestamp: 3000 } },
+            { header: { number: 4, hash: '0x4a', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5a', timestamp: 5000 } },
+            { header: { number: 6, hash: '0x6a', timestamp: 6000 } },
+            { header: { number: 7, hash: '0x7a', timestamp: 7000 } },
           ],
           validateRequest: (req) => {
             /**
@@ -893,6 +898,7 @@ describe('Clickhouse state', () => {
                   "block": {
                     "hash": true,
                     "number": true,
+                    "timestamp": true,
                   },
                 },
                 "fromBlock": 2,

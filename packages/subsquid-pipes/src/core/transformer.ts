@@ -51,7 +51,10 @@ export class Transformer<In, Out> {
    * @internal
    */
   setId(profilerId: string) {
-    this.options.profiler = { id: profilerId }
+    this.options.profiler = {
+      id: profilerId,
+      hidden: this.options.profiler?.hidden,
+    }
   }
 
   /**
@@ -88,9 +91,9 @@ export class Transformer<In, Out> {
    * @internal
    */
   async run(data: In, ctx: BatchCtx): Promise<Out> {
-    const span = ctx.profiler.start(this.options.profiler?.id || 'anonymous')
+    const span = ctx.profiler.start(this.options.profiler)
     let res = await this.options.transform(data, { ...ctx, profiler: span })
-    span.addTransformerExemplar(res)
+    span.data = res
 
     if (this.children.length === 0) {
       span.end()

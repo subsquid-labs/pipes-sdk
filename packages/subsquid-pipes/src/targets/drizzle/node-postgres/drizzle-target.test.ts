@@ -44,9 +44,9 @@ describe('Drizzle target', () => {
       id: integer().primaryKey(),
     })
 
-    afterEach(async () => {
+    beforeEach(async () => {
       await execute(`
-        DROP SCHEMA IF EXISTS "public" CASCADE; 
+        DROP SCHEMA IF EXISTS "public" CASCADE;
         CREATE SCHEMA IF NOT EXISTS "public";
       `)
     })
