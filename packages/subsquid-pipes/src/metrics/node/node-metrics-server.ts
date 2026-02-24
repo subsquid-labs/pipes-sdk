@@ -135,6 +135,7 @@ class ExpressMetricServer implements MetricsServer {
     this.#logger = logger
 
     const registry = new client.Registry()
+    client.collectDefaultMetrics({ register: registry })
     const metricsCache = new Map<string, any>()
 
     this.#app = express()
