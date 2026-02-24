@@ -26,10 +26,10 @@ export const links: Route.LinksFunction = () => [
   //   rel: 'stylesheet',
   //   href: 'https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap',
   // },
-  // {
-  //   rel: 'stylesheet',
-  //   href: 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&display=swap',
-  // },
+  {
+    rel: 'stylesheet',
+    href: 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&display=swap',
+  },
 ]
 
 export function Layout({ children }: { children: React.ReactNode }) {

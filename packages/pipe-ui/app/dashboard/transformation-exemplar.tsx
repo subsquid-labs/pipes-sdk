@@ -34,8 +34,8 @@ export function TransformerExample({
         // Convert the second element into a TypeScript comment showing the number of truncated items
         res.replace(/"\.\.\.\s+(\d+)\s+more\s+\.\.\."/gm, '// ... truncated $1 items ...')
       : // If not open, just truncate to 100 characters
-        res.length > 85
-        ? res.substring(0, 85) + '...'
+        res.length > 79
+        ? res.substring(0, 79) + '...'
         : res
   }, [transformer.data, open])
 
