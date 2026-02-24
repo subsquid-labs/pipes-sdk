@@ -1,4 +1,5 @@
 import { DecodedEvent, evmDecoder, evmPortalSource, factory, factorySqliteDatabase } from '@subsquid/pipes/evm'
+
 import { events as factoryAbi } from './abi/uniswap.v3/factory'
 import { events as swapsAbi } from './abi/uniswap.v3/swaps'
 

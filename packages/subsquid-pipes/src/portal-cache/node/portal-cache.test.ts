@@ -165,13 +165,7 @@ describe('Portal cache', () => {
                 },
                 "initial": 0,
                 "last": 5,
-                "rollbackChain": [
-                  {
-                    "hash": "0x5",
-                    "number": 5,
-                    "timestamp": 5000,
-                  },
-                ],
+                "rollbackChain": [],
               },
             },
           },
@@ -421,11 +415,6 @@ describe('Portal cache', () => {
                 "last": 5,
                 "rollbackChain": [
                   {
-                    "hash": "0x2",
-                    "number": 2,
-                    "timestamp": 2000,
-                  },
-                  {
                     "hash": "0x3",
                     "number": 3,
                     "timestamp": 3000,
@@ -592,13 +581,7 @@ describe('Portal cache', () => {
                 },
                 "initial": 0,
                 "last": 5,
-                "rollbackChain": [
-                  {
-                    "hash": "0x2",
-                    "number": 2,
-                    "timestamp": 2000,
-                  },
-                ],
+                "rollbackChain": [],
               },
             },
           },
@@ -655,13 +638,7 @@ describe('Portal cache', () => {
                 },
                 "initial": 0,
                 "last": 5,
-                "rollbackChain": [
-                  {
-                    "hash": "0x5",
-                    "number": 5,
-                    "timestamp": 5000,
-                  },
-                ],
+                "rollbackChain": [],
               },
             },
           },
