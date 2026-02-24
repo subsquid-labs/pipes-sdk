@@ -2,7 +2,6 @@ import { AlertCircle } from 'lucide-react'
 
 import { ApiStatus, type Pipe, PipeStatus, useStats } from '~/api/metrics'
 import { usePortalStatus } from '~/api/portal'
-import { Separator } from '~/components/ui/separator'
 import { displayEstimatedTime } from '~/dashboard/formatters'
 
 function CircularProgress({ percent }: { percent: number }) {
@@ -38,7 +37,6 @@ export function PortalStatus({ url }: { url?: string }) {
 
   return (
     <div>
-      <Separator className="my-5" />
       <div className="w-full">
         <div className="mb-2">
           <h1 className="text-md font-bold mb-2">Portal</h1>
@@ -74,8 +72,7 @@ function PipeSelector({
 
   return (
     <div>
-      <Separator className="my-5" />
-      {/*<h1 className="text-md font-bold mb-2">Pipes</h1>*/}
+      <div className="text-xs font-normal text-muted-foreground mb-1">Pipes</div>
 
       <div className="flex flex-col gap-1">
         {pipes.map((pipe) => (
@@ -138,11 +135,11 @@ export function Sidebar({
 
   return (
     <div className="flex-[0_250px]">
-      <div className="w-full ">
+      <div className="w-full mb-2">
         <h1 className="text-2xl font-normal mb-2">Pipes SDK</h1>
         <div className="w-full flex flex-col items-start text-xs gap-2">
           <div className="flex items-center gap-2">
-            <div className="text-muted-foreground w-[60px]">Status</div>
+            <div className="text-xs font-normal text-muted-foreground w-[60px]">Status</div>
             <div className="font-medium text-foreground flex items-center gap-1">
               <div className="flex items-center gap-2">
                 {connected ? (
@@ -157,17 +154,22 @@ export function Sidebar({
 
           {data ? (
             <div className="flex items-center gap-2">
-              <div className="text-muted-foreground w-[60px]">Version</div>
+              <div className="text-xs font-normal text-muted-foreground w-[60px]">Version</div>
               <div className=" flex items-center gap-1">{data.sdk.version}</div>
             </div>
           ) : null}
         </div>
       </div>
-      <PipeSelector pipes={pipes} selectedPipeId={selectedPipeId} onSelectPipe={onSelectPipe} />
-      {data?.code?.filename && (
-        <div className="my-2 font-thin text-muted-foreground text-[10px]">{data?.code?.filename}</div>
-      )}
       <PortalStatus url={data?.pipes[0]?.portal.url} />
+      <div className="mt-2">
+        <PipeSelector pipes={pipes} selectedPipeId={selectedPipeId} onSelectPipe={onSelectPipe} />
+      </div>
+      {data?.code?.filename && (
+        <div className="my-2">
+          <div className="text-xs font-normal text-muted-foreground mb-0.5">Entry point</div>
+          <div className="text-foreground text-xs">{data?.code?.filename}</div>
+        </div>
+      )}
     </div>
   )
 }

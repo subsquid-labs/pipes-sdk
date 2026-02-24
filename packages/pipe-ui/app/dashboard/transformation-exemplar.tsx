@@ -34,8 +34,8 @@ export function TransformerExample({
         // Convert the second element into a TypeScript comment showing the number of truncated items
         res.replace(/"\.\.\.\s+(\d+)\s+more\s+\.\.\."/gm, '// ... truncated $1 items ...')
       : // If not open, just truncate to 100 characters
-        res.length > 100
-        ? res.substring(0, 100) + '...'
+        res.length > 85
+        ? res.substring(0, 85) + '...'
         : res
   }, [transformer.data, open])
 
@@ -99,7 +99,7 @@ export function TransformationExemplar({ pipeId }: { pipeId: string }) {
         </Toggle>
       </div>
       {data?.transformation ? (
-        <div className="max-h-[400px] overflow-auto border rounded-md px-1 dotted-background">
+        <div className="max-h-[400px] overflow-auto border rounded-md px-1 pb-1 dotted-background">
           <TransformerExample transformer={data.transformation} onClick={handleOnClick} />
         </div>
       ) : (

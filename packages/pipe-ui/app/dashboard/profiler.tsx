@@ -71,7 +71,7 @@ export function ProfilerResult({ profiler, useSelfTime }: { profiler: ProfilerRe
     <div className="tree">
       <div style={{ fontSize }} className="p-2 relative">
         <div
-          className={`absolute top-1 left-0 bottom-0 bg-fuchsia-300/5 rounded-md z-1 transition-width duration-300 ease-out`}
+          className={`absolute top-1 left-0 bottom-1 bg-fuchsia-300/7 rounded-md z-1 transition-width duration-300 ease-out`}
           style={{
             width: `${profiler.percent}%`,
             minWidth: 1,
@@ -81,7 +81,7 @@ export function ProfilerResult({ profiler, useSelfTime }: { profiler: ProfilerRe
           <div className="font-normal" style={{ opacity }}>
             {profiler.name}
           </div>
-          <div style={{ opacity }} className="flex leading-none text-muted-foreground gap-2 mt-[2px]">
+          <div style={{ opacity }} className="flex leading-none text-white/80 gap-2 mt-[2px] font-xs">
             <div>{time.toFixed(2)}ms</div>
             <div>{profiler.percent.toFixed(2)}%</div>
           </div>
@@ -122,7 +122,7 @@ export function Profiler({ pipeId }: { pipeId: string }) {
         ))}
       </div>
 
-      <div className="text-xxs mt-1 flex justify-end">
+      <div className="text-xxs font-normal mt-1 flex justify-end">
         <div className="text-muted">{totalSamples} samples</div>
       </div>
     </div>
