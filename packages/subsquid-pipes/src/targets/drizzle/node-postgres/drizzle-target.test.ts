@@ -143,11 +143,6 @@ describe('Drizzle target', () => {
             "id": "stream",
             "rollback_chain": [
               {
-                "hash": "0x2",
-                "number": 2,
-                "timestamp": 2000,
-              },
-              {
                 "hash": "0x3",
                 "number": 3,
                 "timestamp": 3000,

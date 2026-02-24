@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
-import { BatchCtx, BlockCursor, Logger } from '~/core/index.js'
+
+import { BatchCtx, BlockCursor, Logger, RollbackRecord, resolveForkCursor } from '~/core/index.js'
 import { doWithRetry } from '~/internal/function.js'
 import { parseNumber } from '~/internal/number.js'
 import { Transaction } from '~/targets/drizzle/node-postgres/drizzle-target.js'
@@ -181,52 +182,31 @@ export class PostgresState {
 
   async fork(previousBlocks: BlockCursor[]): Promise<BlockCursor | null> {
     const PAGE_SIZE = 1000
-    let offset = 0
+    const client = this.client
+    const fqnName = this.#sync.fqnName
+    const id = this.options.id
 
-    while (true) {
-      const res = await this.client.query<StateSelect>(
-        `SELECT * FROM ${this.#sync.fqnName} WHERE "id" = $1 ORDER BY "current_number" DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
-        [this.options.id],
-      )
-      if (!res.rows.length) break
+    async function* records(): AsyncIterable<RollbackRecord> {
+      let offset = 0
 
-      for (const row of res.rows) {
-        const blocks = row.rollback_chain
-        if (!blocks) continue
+      while (true) {
+        const res = await client.query<StateSelect>(
+          `SELECT * FROM ${fqnName} WHERE "id" = $1 ORDER BY "current_number" DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
+          [id],
+        )
+        if (!res.rows.length) break
 
-        blocks.sort((a, b) => b.number - a.number)
-
-        const finalized = row.finalized
-        for (const block of blocks) {
-          const found = previousBlocks.find((u) => u.number === block.number && u.hash === block.hash)
-          if (found) return found
-
-          if (!previousBlocks.length) {
-            if (block.number < finalized.number) {
-              /**
-               *  We can't go beyond the finalized block.
-               *  TODO: Dead end? What should we do?
-               */
-
-              return null
-            }
-
-            /*
-             * This indicates a deep blockchain fork where we've exhausted all previously known blocks.
-             * We'll return the current block as the fork point
-             * and let the portal fetch a new valid chain of blocks.
-             */
-            return block
+        for (const row of res.rows) {
+          yield {
+            rollbackChain: row.rollback_chain || [],
+            finalized: row.finalized,
           }
-
-          // Remove already visited blocks
-          previousBlocks = previousBlocks.filter((u) => u.number < block.number)
         }
-      }
 
-      offset += PAGE_SIZE
+        offset += PAGE_SIZE
+      }
     }
 
-    return null
+    return resolveForkCursor(records(), previousBlocks)
   }
 }
