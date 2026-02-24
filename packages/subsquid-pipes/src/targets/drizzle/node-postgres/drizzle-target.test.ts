@@ -68,6 +68,7 @@ describe('Drizzle target', () => {
 
       await expect(async () => {
         await evmPortalSource({
+          id: 'test',
           portal: mockPortal.url,
           outputs: blockDecoder({ from: 0, to: 5 }),
         }).pipeTo(
@@ -107,6 +108,7 @@ describe('Drizzle target', () => {
       ])
 
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(
@@ -197,6 +199,7 @@ describe('Drizzle target', () => {
       ])
 
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
       }).pipeTo(
@@ -211,6 +214,7 @@ describe('Drizzle target', () => {
       )
 
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 1, to: 2 }),
       }).pipeTo(
@@ -328,6 +332,7 @@ describe('Drizzle target', () => {
       ])
 
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(
@@ -429,6 +434,7 @@ describe('Drizzle target', () => {
       let callCount = 0
 
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(
@@ -517,6 +523,7 @@ describe('Drizzle target', () => {
 
       let callCount = 0
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(
@@ -641,6 +648,7 @@ describe('Drizzle target', () => {
       let callCount = 0
 
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(

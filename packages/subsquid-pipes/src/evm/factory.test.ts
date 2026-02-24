@@ -432,6 +432,7 @@ describe('Factory', () => {
     const db = await factorySqliteDatabase({ path: ':memory:' })
 
     await evmPortalSource({
+      id: 'test-factory',
       portal: {
         url: mockPortal.url,
       },

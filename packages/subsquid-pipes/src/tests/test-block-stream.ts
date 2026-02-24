@@ -9,7 +9,6 @@ export function blockDecoder(range: PortalRange) {
       block: {
         number: true,
         hash: true,
-        timestamp: true,
       },
     })
     .build()

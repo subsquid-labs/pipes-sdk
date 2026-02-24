@@ -54,6 +54,7 @@ describe('Clickhouse state', () => {
       ])
 
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(
@@ -63,7 +64,7 @@ describe('Clickhouse state', () => {
             table: 'sync',
           },
           onData: ({ data }) => {
-            console.log(data)
+            // console.log(data)
           },
         }),
       )
@@ -116,6 +117,7 @@ describe('Clickhouse state', () => {
       ])
 
       await evmPortalSource({
+        id: 'test',
         portal: {
           url: mockPortal.url,
           // we need to save each response separately
@@ -170,6 +172,7 @@ describe('Clickhouse state', () => {
       ])
 
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 3 }),
       }).pipeTo(
@@ -206,6 +209,7 @@ describe('Clickhouse state', () => {
       ])
 
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
       }).pipeTo(
@@ -251,6 +255,7 @@ describe('Clickhouse state', () => {
       ])
 
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
       }).pipeTo(
@@ -261,6 +266,7 @@ describe('Clickhouse state', () => {
       )
 
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 1, to: 2 }),
       }).pipeTo(
@@ -372,6 +378,7 @@ describe('Clickhouse state', () => {
 
       let rollbackCalls = 0
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(
@@ -455,10 +462,10 @@ describe('Clickhouse state', () => {
           // 1. The First response is okay, it gets 5 blocks
           statusCode: 200,
           data: [
-            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
-            { header: { number: 3, hash: '0x3', timestamp: 3000 } },
-            { header: { number: 4, hash: '0x4', timestamp: 4000 } },
-            { header: { number: 5, hash: '0x5', timestamp: 5000 } },
+            { header: { number: 2, hash: '0x2' } },
+            { header: { number: 3, hash: '0x3' } },
+            { header: { number: 4, hash: '0x4' } },
+            { header: { number: 5, hash: '0x5' } },
           ],
           head: {
             finalized: {
@@ -485,7 +492,6 @@ describe('Clickhouse state', () => {
                   "block": {
                     "hash": true,
                     "number": true,
-                    "timestamp": true,
                   },
                 },
                 "fromBlock": 6,
@@ -514,7 +520,6 @@ describe('Clickhouse state', () => {
                   "block": {
                     "hash": true,
                     "number": true,
-                    "timestamp": true,
                   },
                 },
                 "fromBlock": 4,
@@ -547,7 +552,6 @@ describe('Clickhouse state', () => {
                   "block": {
                     "hash": true,
                     "number": true,
-                    "timestamp": true,
                   },
                 },
                 "fromBlock": 2,
@@ -563,6 +567,7 @@ describe('Clickhouse state', () => {
       let rollbackCalls = 0
 
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(
@@ -573,7 +578,6 @@ describe('Clickhouse state', () => {
               table: 'test',
               values: data.map((b) => ({
                 block_number: b.number,
-                timestamp: b.timestamp,
                 block_hash: b.hash,
                 sign: 1,
               })),
@@ -698,6 +702,7 @@ describe('Clickhouse state', () => {
       while (!finished) {
         try {
           await evmPortalSource({
+            id: 'test',
             portal: mockPortal.url,
             outputs: blockDecoder({ from: 0, to: 7 }),
           }).pipeTo(
@@ -796,11 +801,11 @@ describe('Clickhouse state', () => {
           // 1. The First response is okay, it gets 5 blocks
           statusCode: 200,
           data: [
-            { header: { number: 1, hash: '0x1', timestamp: 1000 } },
-            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
-            { header: { number: 3, hash: '0x3', timestamp: 3000 } },
-            { header: { number: 4, hash: '0x4', timestamp: 4000 } },
-            { header: { number: 5, hash: '0x5', timestamp: 5000 } },
+            { header: { number: 1, hash: '0x1' } },
+            { header: { number: 2, hash: '0x2' } },
+            { header: { number: 3, hash: '0x3' } },
+            { header: { number: 4, hash: '0x4' } },
+            { header: { number: 5, hash: '0x5' } },
           ],
           head: {
             finalized: {
@@ -827,7 +832,6 @@ describe('Clickhouse state', () => {
                   "block": {
                     "hash": true,
                     "number": true,
-                    "timestamp": true,
                   },
                 },
                 "fromBlock": 6,
@@ -856,7 +860,6 @@ describe('Clickhouse state', () => {
                   "block": {
                     "hash": true,
                     "number": true,
-                    "timestamp": true,
                   },
                 },
                 "fromBlock": 4,
@@ -870,12 +873,12 @@ describe('Clickhouse state', () => {
         {
           statusCode: 200,
           data: [
-            { header: { number: 2, hash: '0x2a', timestamp: 2000 } },
-            { header: { number: 3, hash: '0x3a', timestamp: 3000 } },
-            { header: { number: 4, hash: '0x4a', timestamp: 4000 } },
-            { header: { number: 5, hash: '0x5a', timestamp: 5000 } },
-            { header: { number: 6, hash: '0x6a', timestamp: 6000 } },
-            { header: { number: 7, hash: '0x7a', timestamp: 7000 } },
+            { header: { number: 2, hash: '0x2a' } },
+            { header: { number: 3, hash: '0x3a' } },
+            { header: { number: 4, hash: '0x4a' } },
+            { header: { number: 5, hash: '0x5a' } },
+            { header: { number: 6, hash: '0x6a' } },
+            { header: { number: 7, hash: '0x7a' } },
           ],
           validateRequest: (req) => {
             /**
@@ -888,7 +891,6 @@ describe('Clickhouse state', () => {
                   "block": {
                     "hash": true,
                     "number": true,
-                    "timestamp": true,
                   },
                 },
                 "fromBlock": 2,
@@ -904,6 +906,7 @@ describe('Clickhouse state', () => {
       let rollbackCalls = 0
 
       await evmPortalSource({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(
@@ -914,7 +917,6 @@ describe('Clickhouse state', () => {
               table: 'test',
               values: data.map((b) => ({
                 block_number: b.number,
-                timestamp: b.timestamp,
                 block_hash: b.hash,
                 sign: 1,
               })),
