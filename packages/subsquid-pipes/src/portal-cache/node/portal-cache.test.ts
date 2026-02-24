@@ -142,7 +142,7 @@ describe('Portal cache', () => {
                 "bytesSize": 265,
               },
               "query": {
-                "hash": "8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b",
+                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
                 "raw": {
                   "fields": {
                     "block": {
@@ -152,8 +152,12 @@ describe('Portal cache', () => {
                     },
                   },
                   "fromBlock": 0,
+                  "logs": undefined,
                   "parentBlockHash": undefined,
+                  "stateDiffs": undefined,
                   "toBlock": 5,
+                  "traces": undefined,
+                  "transactions": undefined,
                   "type": "evm",
                 },
               },
@@ -175,7 +179,7 @@ describe('Portal cache', () => {
       // check stored rows by query hash
       const rows = await readAllChunks(
         cache.stream({
-          queryHash: '8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b',
+          queryHash: '1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5',
           fromBlock: 0,
         }),
       )
@@ -276,7 +280,7 @@ describe('Portal cache', () => {
                 "bytesSize": 265,
               },
               "query": {
-                "hash": "8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b",
+                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
                 "raw": {
                   "fields": {
                     "block": {
@@ -309,7 +313,7 @@ describe('Portal cache', () => {
       // check stored rows by query hash
       const rows = await readAllChunks(
         cache.stream({
-          queryHash: '8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b',
+          queryHash: '1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5',
           fromBlock: 0,
         }),
       )
@@ -390,7 +394,7 @@ describe('Portal cache', () => {
                 "bytesSize": 159,
               },
               "query": {
-                "hash": "8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b",
+                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
                 "raw": {
                   "fields": {
                     "block": {
@@ -443,7 +447,7 @@ describe('Portal cache', () => {
                 "bytesSize": 53,
               },
               "query": {
-                "hash": "8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b",
+                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
                 "raw": {
                   "fields": {
                     "block": {
@@ -496,7 +500,7 @@ describe('Portal cache', () => {
                 "bytesSize": 53,
               },
               "query": {
-                "hash": "8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b",
+                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
                 "raw": {
                   "fields": {
                     "block": {
@@ -558,7 +562,7 @@ describe('Portal cache', () => {
                 "bytesSize": 159,
               },
               "query": {
-                "hash": "8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b",
+                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
                 "raw": {
                   "fields": {
                     "block": {
@@ -568,8 +572,12 @@ describe('Portal cache', () => {
                     },
                   },
                   "fromBlock": 0,
+                  "logs": undefined,
                   "parentBlockHash": undefined,
+                  "stateDiffs": undefined,
                   "toBlock": 5,
+                  "traces": undefined,
+                  "transactions": undefined,
                   "type": "evm",
                 },
               },
@@ -615,7 +623,7 @@ describe('Portal cache', () => {
                 "bytesSize": 159,
               },
               "query": {
-                "hash": "8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b",
+                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
                 "raw": {
                   "fields": {
                     "block": {
@@ -625,8 +633,12 @@ describe('Portal cache', () => {
                     },
                   },
                   "fromBlock": 0,
+                  "logs": undefined,
                   "parentBlockHash": undefined,
+                  "stateDiffs": undefined,
                   "toBlock": 5,
+                  "traces": undefined,
+                  "transactions": undefined,
                   "type": "evm",
                 },
               },
@@ -648,7 +660,7 @@ describe('Portal cache', () => {
       // check stored rows by query hash
       const rows = await readAllChunks(
         cache.stream({
-          queryHash: '8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b',
+          queryHash: '1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5',
           fromBlock: 0,
         }),
       )
