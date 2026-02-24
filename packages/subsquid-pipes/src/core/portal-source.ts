@@ -104,10 +104,10 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   #started = false
 
   // Metrics
-  #reorgsTotal: Counter | null = null
-  #portalRequestsTotal: Counter<'classification' | 'status'> | null = null
-  #batchSizeBlocks: Histogram | null = null
-  #batchSizeBytes: Histogram | null = null
+  #reorgsTotal: Counter<'id'> | null = null
+  #portalRequestsTotal: Counter<'id' | 'classification' | 'status'> | null = null
+  #batchSizeBlocks: Histogram<'id'> | null = null
+  #batchSizeBytes: Histogram<'id'> | null = null
 
   constructor({ portal, id, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
     this.#id = id || DEFAULT_PIPE_NAME
@@ -238,12 +238,12 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             logger: this.#logger,
           }
 
-          this.#batchSizeBlocks?.observe(batch.blocks.length)
-          this.#batchSizeBytes?.observe(batch.meta.bytes)
+          this.#batchSizeBlocks?.observe({ id: this.#id }, batch.blocks.length)
+          this.#batchSizeBytes?.observe({ id: this.#id }, batch.meta.bytes)
 
           for (const [statusCode, count] of Object.entries(batch.meta.requests)) {
             const classification = Number(statusCode) >= 200 && Number(statusCode) < 300 ? 'success' : 'error'
-            this.#portalRequestsTotal?.inc({ classification, status: statusCode }, count)
+            this.#portalRequestsTotal?.inc({ id: this.#id, classification, status: statusCode }, count)
           }
 
           const data = await this.applyTransformers(ctx, batch.blocks as T)
@@ -347,6 +347,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     const span = profiler.start('transformers')
     const ctx = this.context(span, {
+      id: this.#id,
       metrics: this.#metricServer.metrics,
       state,
     })
@@ -360,23 +361,26 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     this.#reorgsTotal = metrics.counter({
       name: 'sqd_reorgs_total',
       help: 'Total number of chain reorganizations detected',
+      labelNames: ['id'] as const,
     })
 
     this.#portalRequestsTotal = metrics.counter({
       name: 'sqd_portal_requests_total',
       help: 'Total number of requests to the portal',
-      labelNames: ['classification', 'status'] as const,
+      labelNames: ['id', 'classification', 'status'] as const,
     })
 
     this.#batchSizeBlocks = metrics.histogram({
       name: 'sqd_batch_size_blocks',
       help: 'Number of blocks per batch',
+      labelNames: ['id'] as const,
       buckets: [1, 5, 10, 50, 100, 500, 1000, 5000, 10000],
     })
 
     this.#batchSizeBytes = metrics.histogram({
       name: 'sqd_batch_size_bytes',
       help: 'Size of each batch in bytes',
+      labelNames: ['id'] as const,
       buckets: [1024, 10240, 102400, 524288, 1048576, 5242880, 10485760, 52428800],
     })
 
@@ -424,7 +428,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
           } catch (e) {
             if (!isForkException(e)) throw e
 
-            self.#reorgsTotal?.inc(1)
+            self.#reorgsTotal?.inc({ id: self.#id }, 1)
 
             if (!e.previousBlocks.length) {
               throw new ForkNoPreviousBlocksError()

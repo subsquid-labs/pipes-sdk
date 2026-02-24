@@ -48,8 +48,12 @@ export class MockGauge<T extends string = string> implements Gauge<T> {
 export class MockHistogram<T extends string = string> implements Histogram<T> {
   observations: number[] = []
 
-  observe(value: number): void {
-    this.observations.push(value)
+  observe(labelsOrValue: any, value?: number): void {
+    if (typeof labelsOrValue === 'number') {
+      this.observations.push(labelsOrValue)
+    } else {
+      this.observations.push(value!)
+    }
   }
 }
 

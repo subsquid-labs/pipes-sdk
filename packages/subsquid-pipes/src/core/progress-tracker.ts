@@ -210,13 +210,14 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
   let ticker: NodeJS.Timeout | null = null
   let lastProgress: ProgressEvent['progress'] | null = null
 
-  let currentBlock: Gauge | null = null
-  let lastBlock: Gauge | null = null
-  let progressRatio: Gauge | null = null
-  let etaSeconds: Gauge | null = null
-  let blocksPerSecond: Gauge | null = null
-  let bytesDownloaded: Counter | null = null
-  let pipelineRunning: Gauge | null = null
+  let pipeId = ''
+  let currentBlock: Gauge<'id'> | null = null
+  let lastBlock: Gauge<'id'> | null = null
+  let progressRatio: Gauge<'id'> | null = null
+  let etaSeconds: Gauge<'id'> | null = null
+  let blocksPerSecond: Gauge<'id'> | null = null
+  let bytesDownloaded: Counter<'id'> | null = null
+  let pipelineRunning: Gauge<'id'> | null = null
 
   const history = new ProgressHistory()
 
@@ -269,7 +270,9 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
 
   return createTransformer<T, T>({
     profiler: { id: 'track progress' },
-    start: ({ metrics, state, logger }) => {
+    start: ({ id, metrics, state, logger }) => {
+      pipeId = id
+
       if (interval > 0) {
         ticker = setInterval(() => {
           if (!lastProgress) return
@@ -283,34 +286,41 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
       currentBlock = metrics.gauge({
         name: 'sqd_current_block',
         help: 'Current block number being processed',
+        labelNames: ['id'] as const,
       })
       lastBlock = metrics.gauge({
         name: 'sqd_last_block',
         help: 'Last known block number in the chain',
+        labelNames: ['id'] as const,
       })
       progressRatio = metrics.gauge({
         name: 'sqd_progress_ratio',
         help: 'Indexing progress as a ratio from 0 to 1',
+        labelNames: ['id'] as const,
       })
       etaSeconds = metrics.gauge({
         name: 'sqd_eta_seconds',
         help: 'Estimated time to full sync in seconds',
+        labelNames: ['id'] as const,
       })
       blocksPerSecond = metrics.gauge({
         name: 'sqd_blocks_per_second',
         help: 'Block processing speed',
+        labelNames: ['id'] as const,
       })
       bytesDownloaded = metrics.counter({
         name: 'sqd_bytes_downloaded_total',
         help: 'Total bytes downloaded from portal',
+        labelNames: ['id'] as const,
       })
       pipelineRunning = metrics.gauge({
         name: 'sqd_pipeline_running',
         help: 'Whether the pipeline is currently running (1 = running, 0 = stopped)',
+        labelNames: ['id'] as const,
       })
 
-      currentBlock.set(-1)
-      pipelineRunning.set(1)
+      currentBlock.set({ id }, -1)
+      pipelineRunning.set({ id }, 1)
     },
     transform: async (data, ctx) => {
       history.addState({
@@ -320,16 +330,16 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
       })
 
       if (ctx.state.current?.number) {
-        currentBlock?.set(ctx.state.current.number)
+        currentBlock?.set({ id: ctx.id }, ctx.state.current.number)
       }
 
       lastProgress = history.calculate()
 
-      lastBlock?.set(lastProgress.state.last)
-      progressRatio?.set(lastProgress.state.percent / 100)
-      etaSeconds?.set(lastProgress.state.etaSeconds)
-      blocksPerSecond?.set(lastProgress.interval.processedBlocks.perSecond)
-      bytesDownloaded?.inc(ctx.meta.bytesSize)
+      lastBlock?.set({ id: ctx.id }, lastProgress.state.last)
+      progressRatio?.set({ id: ctx.id }, lastProgress.state.percent / 100)
+      etaSeconds?.set({ id: ctx.id }, lastProgress.state.etaSeconds)
+      blocksPerSecond?.set({ id: ctx.id }, lastProgress.interval.processedBlocks.perSecond)
+      bytesDownloaded?.inc({ id: ctx.id }, ctx.meta.bytesSize)
 
       ctx.state.progress = lastProgress
 
@@ -339,7 +349,7 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
       if (ticker) {
         clearInterval(ticker)
       }
-      pipelineRunning?.set(0)
+      pipelineRunning?.set({ id: pipeId }, 0)
     },
   })
 }

@@ -31,6 +31,7 @@ export interface GaugeConfiguration<T extends string> extends MetricConfiguratio
 
 export interface Histogram<T extends string = string> {
   observe(value: number): void
+  observe(labels: LabelValues<T>, value: number): void
 }
 export interface HistogramConfiguration<T extends string> extends MetricConfiguration<T> {
   buckets?: number[]

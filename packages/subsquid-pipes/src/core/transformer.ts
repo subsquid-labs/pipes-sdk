@@ -7,6 +7,7 @@ import { QueryBuilder } from './query-builder.js'
 import { BlockCursor, Ctx } from './types.js'
 
 export type StartCtx = {
+  id: string
   state: { current?: BlockCursor; initial: number }
   logger: Logger
   metrics: Metrics
