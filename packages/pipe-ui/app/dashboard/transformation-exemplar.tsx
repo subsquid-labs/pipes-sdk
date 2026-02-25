@@ -4,10 +4,10 @@ import { useMemo, useState } from 'react'
 
 import { Maximize2, Minimize2, Pause, Play } from 'lucide-react'
 
-import { useTransformationExemplar } from '~/hooks/use-metrics'
-import { useServerIndex } from '~/hooks/use-server-context'
 import { Code } from '~/components/ui/code'
 import { Toggle } from '~/components/ui/toggle'
+import { useTransformationExemplar } from '~/hooks/use-metrics'
+import { useServerIndex } from '~/hooks/use-server-context'
 
 type TransformerExample = {
   name: string
@@ -88,11 +88,7 @@ export function TransformationExemplar({ pipeId }: { pipeId: string }) {
   }
 
   return (
-    <div className={
-      fullscreen
-        ? 'fixed inset-0 z-50 bg-background p-6 overflow-auto'
-        : 'relative space-y-1'
-    }>
+    <div className={fullscreen ? 'fixed inset-0 z-50 bg-background p-6 overflow-auto' : 'relative space-y-1'}>
       <div className={`absolute right-1 top-1 rounded-md z-10 bg-gray-950 ${fullscreen ? 'fixed right-6 top-6' : ''}`}>
         <Toggle onClick={() => useEnabled(true)} pressed={enabled}>
           <Play />
@@ -105,7 +101,9 @@ export function TransformationExemplar({ pipeId }: { pipeId: string }) {
         </Toggle>
       </div>
       {data?.transformation ? (
-        <div className={`overflow-auto border rounded-md px-1 pb-1 dotted-background ${fullscreen ? 'h-full' : 'max-h-[400px]'}`}>
+        <div
+          className={`overflow-auto border rounded-md px-1 pb-1 dotted-background ${fullscreen ? 'h-full' : 'h-[400px]'}`}
+        >
           <TransformerExample transformer={data.transformation} onClick={handleOnClick} />
         </div>
       ) : (

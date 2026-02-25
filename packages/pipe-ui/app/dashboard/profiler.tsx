@@ -117,7 +117,7 @@ export function Profiler({ pipeId }: { pipeId: string }) {
 
   return (
     <div>
-      <div className="max-h-[400px] overflow-auto border rounded-md px-1 dotted-background">
+      <div className="h-[400px] overflow-auto border rounded-md px-1 dotted-background">
         {res.map((profiler) => (
           <ProfilerResult key={profiler.name} profiler={profiler} useSelfTime={useSelfTime} />
         ))}
