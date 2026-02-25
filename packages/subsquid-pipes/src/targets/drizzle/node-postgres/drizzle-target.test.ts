@@ -5,7 +5,7 @@ import { Pool, QueryResultRow } from 'pg'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { evmPortalSource } from '~/evm/index.js'
-import { MockPortal, MockResponse, blockDecoder, closeMockPortal, createMockPortal } from '~/tests/index.js'
+import { MockPortal, MockResponse, blockDecoder, closeMockPortal, createMockPortal } from '~/testing/index.js'
 
 import { drizzleTarget } from './index.js'
 

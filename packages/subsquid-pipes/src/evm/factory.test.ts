@@ -3,7 +3,7 @@ import * as p from '@subsquid/evm-codec'
 import { afterEach, describe, expect, expectTypeOf, it } from 'vitest'
 
 import { createMemoryTarget } from '~/targets/memory/memory-target.js'
-import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/tests/index.js'
+import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/testing/index.js'
 
 import { FactoryEvent, evmDecoder } from './evm-decoder.js'
 import { evmPortalSource } from './evm-portal-source.js'

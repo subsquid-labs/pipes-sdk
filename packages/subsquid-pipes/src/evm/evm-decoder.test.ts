@@ -10,7 +10,7 @@ import {
   createMockPortal,
   createTestLogger,
   readAll,
-} from '~/tests/index.js'
+} from '~/testing/index.js'
 
 import { commonAbis } from './abi/common.js'
 import {

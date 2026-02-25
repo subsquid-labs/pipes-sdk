@@ -7,7 +7,6 @@
   "files": [
     "dist",
     "src",
-    "!**/tests",
     "!**/*.test.*",
     "package.json",
     "README.md",
@@ -28,7 +27,6 @@
     "@types/pg": "8.15.6",
     "@vitest/coverage-v8": "3.2.4",
     "typescript": "5.9.2",
-    "viem": "^2.45.1",
     "vitest": "3.2.4"
   },
   "dependencies": {
@@ -49,7 +47,8 @@
     "@clickhouse/client": "1.14.0",
     "better-sqlite3": "12.4.5",
     "drizzle-orm": "0.44.7",
-    "pg": "8.16.3"
+    "pg": "8.16.3",
+    "viem": "^2.45.1"
   },
   "peerDependenciesMeta": {
     "@opentelemetry/api": {
@@ -65,6 +64,9 @@
       "optional": true
     },
     "pg": {
+      "optional": true
+    },
+    "viem": {
       "optional": true
     }
   },
@@ -137,6 +139,16 @@
       "types": "./dist/opentelemetry/index.d.ts",
       "import": "./dist/opentelemetry/index.js",
       "require": "./dist/opentelemetry/index.cjs"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js",
+      "require": "./dist/testing/index.cjs"
+    },
+    "./testing/evm": {
+      "types": "./dist/testing/evm/index.d.ts",
+      "import": "./dist/testing/evm/index.js",
+      "require": "./dist/testing/evm/index.cjs"
     }
   },
   "typesVersions": {
@@ -173,6 +185,12 @@
       ],
       "opentelemetry": [
         "./dist/opentelemetry/index.d.ts"
+      ],
+      "testing": [
+        "./dist/testing/index.d.ts"
+      ],
+      "testing/evm": [
+        "./dist/testing/evm/index.d.ts"
       ]
     }
   }

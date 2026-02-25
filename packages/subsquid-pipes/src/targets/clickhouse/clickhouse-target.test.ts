@@ -2,7 +2,7 @@ import { createClient } from '@clickhouse/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { evmPortalSource } from '~/evm/index.js'
-import { MockPortal, blockDecoder, closeMockPortal, createMockPortal } from '~/tests/index.js'
+import { MockPortal, blockDecoder, closeMockPortal, createMockPortal } from '~/testing/index.js'
 
 import { clickhouseTarget } from './clickouse-target.js'
 

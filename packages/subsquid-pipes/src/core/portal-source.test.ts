@@ -8,7 +8,7 @@ import {
   createFinalizedMockPortal,
   createMockPortal,
   readAll,
-} from '~/tests/index.js'
+} from '~/testing/index.js'
 
 describe('Portal abstract stream', () => {
   let mockPortal: MockPortal

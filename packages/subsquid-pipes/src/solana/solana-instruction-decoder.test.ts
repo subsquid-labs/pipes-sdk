@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { solanaInstructionDecoder } from '~/solana/solana-instruction-decoder.js'
 import { solanaPortalSource } from '~/solana/solana-portal-source.js'
-import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/tests/index.js'
+import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/testing/index.js'
 
 import * as tokenProgram from './abi/tokenProgram/index.js'
 

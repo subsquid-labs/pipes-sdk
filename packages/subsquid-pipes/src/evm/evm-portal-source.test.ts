@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { MockPortal, closeMockPortal, createMockPortal } from '../tests/index.js'
+import { MockPortal, closeMockPortal, createMockPortal } from '../testing/index.js'
 import { evmPortalSource } from './evm-portal-source.js'
 import { evmQuery } from './evm-query-builder.js'
 

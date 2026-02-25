@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { MockPortal, closeMockPortal, createMockPortal } from '../tests/index.js'
+import { MockPortal, closeMockPortal, createMockPortal } from '../testing/index.js'
 import { hyperliquidFillsPortalSource } from './hyperliquid-fills-portal-source.js'
 import { HyperliquidFillsQueryBuilder } from './hyperliquid-fills-query-builder.js'
 

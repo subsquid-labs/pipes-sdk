@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { evmQuery } from '~/evm/evm-query-builder.js'
 import { evmPortalSource } from '~/evm/index.js'
-import { MockPortal, closeMockPortal, createMockMetricServer, createMockPortal } from '~/tests/index.js'
+import { MockPortal, closeMockPortal, createMockMetricServer, createMockPortal } from '~/testing/index.js'
 
 function blockOutputs(range: { from: number; to: number }) {
   return evmQuery()

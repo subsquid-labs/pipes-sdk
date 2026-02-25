@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PortalBatch } from '~/core/index.js'
 import { evmPortalSource } from '~/evm/index.js'
 import { portalSqliteCache } from '~/portal-cache/node/node-sqlite-cache-adapter.js'
-import { MockPortal, blockDecoder, closeMockPortal, createMockPortal } from '~/tests/index.js'
+import { MockPortal, blockDecoder, closeMockPortal, createMockPortal } from '~/testing/index.js'
 
 // Transform batch to only include data and meta without any functions or complex objects
 const transformBatch = ({
