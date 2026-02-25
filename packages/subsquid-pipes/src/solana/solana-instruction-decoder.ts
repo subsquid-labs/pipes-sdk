@@ -1,4 +1,4 @@
-import { BatchCtx, PortalRange, ProfilerOptions, parsePortalRange } from '~/core/index.js'
+import { BatchCtx, PortalRange, ProfilerOptions, Subset, parsePortalRange } from '~/core/index.js'
 import { arrayify } from '~/internal/array.js'
 import { FieldSelection, Instruction, TokenBalance, Transaction } from '~/portal-client/query/solana.js'
 
@@ -37,15 +37,17 @@ const decodedEventFields = {
 
 type SelectedFields = typeof decodedEventFields
 
-export type DecodedInstruction<D> = {
+type FieldOf<F, K extends string> = K extends keyof F ? (F[K] extends object ? F[K] : {}) : {}
+
+export type DecodedInstruction<D, F extends FieldSelection = {}> = {
   instruction: D
   programId: string
   blockNumber: number
   timestamp: Date
-  transaction: Transaction<SelectedFields['transaction']>
-  innerInstructions: Instruction<SelectedFields['instruction']>[]
-  rawInstruction: Instruction<SelectedFields['instruction']>
-  tokenBalances: TokenBalance<SelectedFields['tokenBalance']>[]
+  transaction: Transaction<SelectedFields['transaction'] & FieldOf<F, 'transaction'>>
+  innerInstructions: Instruction<SelectedFields['instruction'] & FieldOf<F, 'instruction'>>[]
+  rawInstruction: Instruction<SelectedFields['instruction'] & FieldOf<F, 'instruction'>>
+  tokenBalances: TokenBalance<SelectedFields['tokenBalance'] & FieldOf<F, 'tokenBalance'>>[]
 }
 
 interface AbiInstruction<A, D> {
@@ -63,30 +65,38 @@ type InstructionsArgs<T extends Instructions> = {
   readonly [K in keyof T]: T[K] extends AbiInstruction<any, any> ? T[K] : never
 }
 
-export type AbiDecodeInstruction<T extends AbiInstruction<any, any>> = DecodedInstruction<ReturnType<T['decode']>>
+export type AbiDecodeInstruction<T extends AbiInstruction<any, any>, F extends FieldSelection = {}> = DecodedInstruction<
+  ReturnType<T['decode']>,
+  F
+>
 
-export type EventResponse<T extends Instructions> = {
-  [K in keyof T]: AbiDecodeInstruction<T[K]>[]
+export type EventResponse<T extends Instructions, F extends FieldSelection = {}> = {
+  [K in keyof T]: AbiDecodeInstruction<T[K], F>[]
 }
 
 const defaultError = (ctx: BatchCtx, error: any) => {
   throw error
 }
 
-type DecodedEventPipeArgs<T extends Instructions> = {
+type DecodedEventPipeArgs<T extends Instructions, F extends FieldSelection = {}> = {
   range: PortalRange
   programId: string | string[]
   instructions: InstructionsArgs<T>
+  extraFields?: F
   profiler?: ProfilerOptions
   onError?: (ctx: BatchCtx, error: any) => unknown | Promise<unknown>
 }
 
-export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEventPipeArgs<T>) {
+export function solanaInstructionDecoder<T extends Instructions, F extends FieldSelection = {}>(
+  opts: DecodedEventPipeArgs<T, F>,
+) {
   const range = parsePortalRange(opts.range)
   const programId = arrayify(opts.programId)
   const onError = opts.onError || defaultError
 
-  const query = solanaQuery().addFields(decodedEventFields)
+  const query = solanaQuery()
+    .addFields(decodedEventFields)
+    .addFields((opts.extraFields ?? {}) as Subset<F, FieldSelection>)
 
   const d1: string[] = []
   const d2: string[] = []
@@ -184,7 +194,7 @@ export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEv
     profiler: opts.profiler || { id: 'instruction decoder' },
 
     transform: async (data, ctx) => {
-      const result = {} as EventResponse<T>
+      const result = {} as EventResponse<T, F>
       for (const insName in opts.instructions) {
         ;(result[insName as keyof T] as ReturnType<T[keyof T]['decode']>[]) = []
       }

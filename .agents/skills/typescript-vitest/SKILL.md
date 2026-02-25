@@ -316,6 +316,19 @@ describe('UserRepository', () => {
 })
 ```
 
+### Complex object testing 
+
+Prefer inline snapshots for small but complex outputs, but for larger objects, use external snapshot files:
+
+```ts
+expect(formatData(data)).toMatchSnapshot('formatted-data')
+```
+or 
+```ts
+expect(formatData(data)).toMatchInlineSnapshot()
+```
+
+
 ### Environment Variables in Tests
 
 ```ts
