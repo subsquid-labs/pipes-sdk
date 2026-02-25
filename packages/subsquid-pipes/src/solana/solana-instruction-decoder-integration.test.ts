@@ -132,6 +132,9 @@ describe('solanaInstructionDecoder integration - logs presence – raydium-clmm-
 
             expect(tx).toBeDefined()
 
+            const countRaydium = block.logs.filter(l => l.programId === RAYDIUM_PROGRAM_ID).length
+            expect(countRaydium).equal(block.logs.length)
+
             const txLogs = block.logs.filter(
               (l) =>
                 l.transactionIndex === tx!.transactionIndex &&
