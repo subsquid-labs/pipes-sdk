@@ -100,7 +100,8 @@ describe('solanaInstructionDecoder integration - logs presence – raydium-clmm-
             innerInstructions: true,
             logs: true,
           },
-        }).addLog({
+        })
+        .addLog({
           range,
           request: {
             programId: [RAYDIUM_PROGRAM_ID],
