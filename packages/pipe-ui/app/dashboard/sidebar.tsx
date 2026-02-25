@@ -2,10 +2,10 @@
 
 import { AlertCircle } from 'lucide-react'
 
+import { displayEstimatedTime } from '~/dashboard/formatters'
 import { ApiStatus, type Pipe, PipeStatus, useStats } from '~/hooks/use-metrics'
 import { usePortalStatus } from '~/hooks/use-portal'
 import { useServerIndex } from '~/hooks/use-server-context'
-import { displayEstimatedTime } from '~/dashboard/formatters'
 
 function CircularProgress({ percent }: { percent: number }) {
   const r = 6
@@ -171,7 +171,7 @@ export function Sidebar({
           ) : null}
         </div>
       </div>
-      <PortalStatus url={data?.pipes[0]?.portal.url} />
+      {/*<PortalStatus url={data?.pipes[0]?.portal.url} />*/}
       <div className="mt-2">
         <PipeSelector pipes={pipes} selectedPipeId={selectedPipeId} onSelectPipe={onSelectPipe} />
       </div>

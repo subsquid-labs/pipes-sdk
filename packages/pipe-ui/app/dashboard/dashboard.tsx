@@ -4,15 +4,15 @@ import { useState } from 'react'
 
 import { ArrowUpRightIcon } from 'lucide-react'
 
-import { useStats } from '~/hooks/use-metrics'
-import { ServerContext } from '~/hooks/use-server-context'
-import { useServers } from '~/hooks/use-servers'
 import { Button } from '~/components/ui/button'
 import { Logo } from '~/components/ui/logo'
 import { DashboardSkeleton } from '~/dashboard/dashboard-skeleton'
 import { Pipeline } from '~/dashboard/pipeline'
-import { Sidebar } from '~/dashboard/sidebar'
 import { ServerSelector } from '~/dashboard/server-selector'
+import { Sidebar } from '~/dashboard/sidebar'
+import { useStats } from '~/hooks/use-metrics'
+import { ServerContext } from '~/hooks/use-server-context'
+import { useServers } from '~/hooks/use-servers'
 
 const DOCS_URL = 'https://beta.docs.sqd.dev'
 
