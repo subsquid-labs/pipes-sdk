@@ -48,35 +48,30 @@ const generatedSwap = event(
   },
 )
 
-// 2) defineAbi
-const definedAbi = defineAbi(swapJsonAbi)
+// 2) defineAbi (pre-resolve the event, same as you'd do in real code)
+const definedSwap = defineAbi(swapJsonAbi).events.Swap
 
 // 3) viem
 const viemAbi = parseAbi([
   'event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)',
 ])
 
-describe('decode Uniswap V3 Swap event', () => {
-  bench('subsquid generated', () => {
-    generatedSwap.decode({
-      topics,
-      data,
-    })
-  })
+const swapLog = { topics, data }
 
+describe('decode Uniswap V3 Swap event', () => {
   bench('subsquid defineAbi', () => {
-    definedAbi.events.Swap.decode({
-      topics,
-      data,
-    })
+    definedSwap.decode(swapLog)
   })
 
   bench('viem decodeEventLog', () => {
     decodeEventLog({
       abi: viemAbi,
-      // expect a tuple of topics, but we have array, so we need to cast it
       topics: [topics[0], topics[1], topics[2]],
       data,
     })
+  })
+
+  bench('subsquid generated', () => {
+    generatedSwap.decode(swapLog)
   })
 })
