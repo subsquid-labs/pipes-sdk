@@ -303,7 +303,25 @@ export type Block<F extends FieldSelection> = Simplify<{
   rewards: Reward<Selected<F, 'reward'>>[]
 }>
 
-export function getBlockSchema<F extends FieldSelection>(fields: F): Validator<Block<F>, unknown> {
+export function getBlockSchema<F extends FieldSelection>(
+  queryOrFields: Query<F> | F,
+): Validator<Block<F>, unknown> {
+  const fields =
+    typeof queryOrFields === 'object' && 'fields' in queryOrFields
+      ? (queryOrFields as Query<F>).fields
+      : (queryOrFields as F)
+  const hasLogsRequest =
+    typeof queryOrFields === 'object' &&
+    'logs' in queryOrFields &&
+    (queryOrFields as Query<F>).logs?.length
+  const logMessage = object(
+    fields.log
+      ? project(LogMessageShape, fields.log)
+      : hasLogsRequest
+        ? LogMessageShape
+        : project(LogMessageShape, undefined),
+  )
+
   let header = object(project(BlockHeaderShape, fields.block))
 
   let transaction = object(project(TransactionShape, fields.transaction))
@@ -317,8 +335,6 @@ export function getBlockSchema<F extends FieldSelection>(fields: F): Validator<B
     pre: object(project(PreTokenBalanceShape, fields.tokenBalance)),
     post: object(project(PostTokenBalanceShape, fields.tokenBalance)),
   })
-
-  let logMessage = object(project(LogMessageShape, fields.log))
 
   let reward = object(project(RewardShape, fields.reward))
 
