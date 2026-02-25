@@ -1,0 +1,72 @@
+{
+  "name": "@iankressin/pipes-cli",
+  "type": "module",
+  "version": "0.1.0-beta.22",
+  "author": "Subsquid Team",
+  "files": [
+    "dist",
+    "src",
+    "!**/tests",
+    "!**/*.test.*",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "bin": {
+    "pipes": "./dist/index.cjs"
+  },
+  "exports": {
+    ".": "./dist/index.cjs",
+    "./config/networks": {
+      "types": "./dist/config/networks.d.ts",
+      "import": "./dist/config/networks.js",
+      "require": "./dist/config/networks.cjs"
+    },
+    "./config/templates": {
+      "types": "./dist/config/templates.d.ts",
+      "import": "./dist/config/templates.js",
+      "require": "./dist/config/templates.cjs"
+    },
+    "./config/sinks": {
+      "types": "./dist/config/sinks.d.ts",
+      "import": "./dist/config/sinks.js",
+      "require": "./dist/config/sinks.cjs"
+    },
+    "./services/sqd-abi": {
+      "types": "./dist/services/sqd-abi.d.ts",
+      "import": "./dist/services/sqd-abi.js",
+      "require": "./dist/services/sqd-abi.cjs"
+    }
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts init",
+    "build": "tsup",
+    "lint": "biome check . --write",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.1.0",
+    "@solana/addresses": "^5.4.0",
+    "@subsquid/pipes": "workspace:*",
+    "@subsquid/rpc-client": "^4.14.0",
+    "@subsquid/solana-typegen": "^0.9.0",
+    "chalk": "^4.1.2",
+    "commander": "^14.0.2",
+    "drizzle-orm": "^0.44.7",
+    "inquirer": "^13.1.0",
+    "mustache": "^4.2.0",
+    "ora": "9.3.0",
+    "zod": "^4.3.4"
+  },
+  "devDependencies": {
+    "@subsquid/evm-abi": "0.3.1",
+    "@subsquid/evm-codec": "0.3.0",
+    "@types/mustache": "^4.2.6",
+    "@types/node": "22.14.1",
+    "@vitest/coverage-v8": "3.2.4",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}

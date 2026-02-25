@@ -17,6 +17,20 @@
       "outputs": ["dist/**", "dist-dts/**"],
       "outputLogs": "new-only"
     },
+    "@subsquid/pipes-cli#build": {
+      "inputs": [
+        "src/**/*.ts",
+        "package.json",
+        "README.md",
+        "../README.md",
+        "tsconfig.json",
+        "tsconfig.*.json",
+        "tsup.config.js",
+        "../tsconfig.json"
+      ],
+      "outputs": ["dist/**", "dist-dts/**"],
+      "outputLogs": "new-only"
+    },
     "@sqd-pipes/docs#build": {
       "inputs": ["examples/**/*.ts", "tsconfig.json"],
       "dependsOn": ["@subsquid/pipes#build"],

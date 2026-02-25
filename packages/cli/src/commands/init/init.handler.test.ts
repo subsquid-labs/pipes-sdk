@@ -1,0 +1,415 @@
+import { execSync } from 'node:child_process'
+import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
+import { evmTemplates } from '~/commands/init/templates/pipes/evm/index.js'
+import { Config } from '~/types/init.js'
+
+import { InitHandler } from './init.handler.js'
+
+async function exists(p: string) {
+  try {
+    await stat(p)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function isDir(p: string) {
+  const st = await stat(p)
+  return st.isDirectory()
+}
+
+async function isDirEmpty(p: string) {
+  const files = await readdir(p)
+  return files.length === 0
+}
+
+async function isFile(p: string) {
+  const st = await stat(p)
+  return st.isFile()
+}
+
+function fileContent(p: string) {
+  return readFile(p, 'utf8')
+}
+
+describe('InitHandler', () => {
+  const PROJECT_NAME = 'my-project'
+  let tmpRoot: string
+  let projectDir: string
+  const wethMetadata = [
+    {
+      contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+      contractName: 'WETH9',
+      contractEvents: [
+        {
+          inputs: [
+            {
+              name: 'src',
+              type: 'address',
+            },
+            {
+              name: 'guy',
+              type: 'address',
+            },
+            {
+              name: 'wad',
+              type: 'uint256',
+            },
+          ],
+          name: 'Approval',
+          type: 'event',
+        },
+        {
+          inputs: [
+            {
+              name: 'src',
+              type: 'address',
+            },
+            {
+              name: 'dst',
+              type: 'address',
+            },
+            {
+              name: 'wad',
+              type: 'uint256',
+            },
+          ],
+        name: 'Transfer',
+        type: 'event',
+      },
+    ],
+    range: { from: 'latest' },
+  },
+]
+
+  beforeEach(async () => {
+    tmpRoot = await mkdtemp(path.join(tmpdir(), 'my-cli-'))
+    projectDir = path.join(tmpRoot, PROJECT_NAME)
+  })
+
+  afterEach(async () => {
+    await rm(tmpRoot, { recursive: true, force: true })
+  })
+
+  it('creates expected base folder structure', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates.erc20Transfers],
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    await expect(exists(projectDir)).resolves.toBe(true)
+    await expect(isDir(projectDir)).resolves.toBe(true)
+    await expect(isDir(path.join(projectDir, 'src'))).resolves.toBe(true)
+    await expect(isDir(path.join(projectDir, 'node_modules'))).resolves.toBe(true)
+  })
+
+  it('creates project base files', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates.erc20Transfers],
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    const filesInRoot = await readdir(projectDir)
+
+    expect(filesInRoot).toEqual(
+      expect.arrayContaining([
+        'package.json',
+        'biome.json',
+        'tsconfig.json',
+        '.env',
+        '.gitignore',
+        'pnpm-lock.yaml',
+        'Dockerfile',
+        'docker-compose.yml',
+      ]),
+    )
+  })
+
+  it('ensures build pass for erc20Transfers + clickhouse template', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates.erc20Transfers],
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
+  })
+
+  it('ensures build pass for erc20Transfers + postgres template', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates.erc20Transfers],
+      sink: 'postgresql',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
+  })
+
+  it('ensures build pass for custom contract + clickhouse template', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
+  })
+
+  it('ensures build pass for custom contract + postgresql template', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
+      sink: 'postgresql',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
+  })
+
+  it('ensures build pass for multiple templates + postgresql template', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata }), evmTemplates.erc20Transfers],
+      sink: 'postgresql',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
+  })
+
+  it('creates project specific folders and files for pre-built template sink is clickhouse ', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates.erc20Transfers],
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    const packageJsonContent = await fileContent(path.join(projectDir, 'package.json'))
+    expect(packageJsonContent).to.not.include('"db:generate": "drizzle-kit generate"')
+    expect(packageJsonContent).to.not.include('"db:migrate": "drizzle-kit migrate"')
+    expect(packageJsonContent).to.not.include('"db:push": "drizzle-kit push"')
+
+    await expect(isDir(path.join(projectDir, 'migrations'))).resolves.toBe(true)
+    await expect(isDirEmpty(path.join(projectDir, 'migrations'))).resolves.toBe(false)
+
+    const dockerComposePath = path.join(projectDir, 'docker-compose.yml')
+    await expect(isFile(dockerComposePath)).resolves.toBe(true)
+    await expect(fileContent(dockerComposePath)).resolves.toMatchInlineSnapshot(`
+      "services:
+        my-project:
+          build:
+            context: .
+            dockerfile: Dockerfile
+          environment:
+            CLICKHOUSE_URL: http://clickhouse:8123
+            CLICKHOUSE_DATABASE: pipes
+            CLICKHOUSE_USER: default
+            CLICKHOUSE_PASSWORD: password
+          command: ["sh", "-lc", "node dist/index.js"]
+          depends_on:
+            clickhouse:
+              condition: service_healthy
+          restart: unless-stopped
+          profiles: ["with-pipeline"]
+
+        clickhouse:
+          image: clickhouse/clickhouse-server:latest
+          ports:
+            - "8123:8123"
+          environment:
+            CLICKHOUSE_DB: pipes
+            CLICKHOUSE_USER: default
+            CLICKHOUSE_PASSWORD: password
+          healthcheck:
+            test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+            interval: 3s
+            timeout: 5s
+            retries: 5
+
+      "
+    `)
+  })
+
+  it('creates migration folder and file for custom template when sink is clickhouse', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    await expect(isDir(path.join(projectDir, 'migrations'))).resolves.toBeTruthy()
+    await expect(isDirEmpty(path.join(projectDir, 'migrations'))).resolves.toBeFalsy()
+  })
+
+  it('creates project specific folders and files for postgresql sink', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+
+      templates: [evmTemplates.erc20Transfers],
+      sink: 'postgresql',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    const packageJsonContent = await fileContent(path.join(projectDir, 'package.json'))
+    expect(packageJsonContent).to.include('"db:generate": "drizzle-kit generate"')
+    expect(packageJsonContent).to.include('"db:migrate": "drizzle-kit migrate"')
+    expect(packageJsonContent).to.include('"db:push": "drizzle-kit push"')
+
+    await expect(isDir(path.join(projectDir, 'migrations'))).resolves.toBe(true)
+    await expect(isFile(path.join(projectDir, 'src/schemas.ts'))).resolves.toBe(true)
+
+    const dockerComposePath = path.join(projectDir, 'docker-compose.yml')
+    await expect(isFile(dockerComposePath)).resolves.toBe(true)
+    await expect(fileContent(dockerComposePath)).resolves.toMatchInlineSnapshot(`
+      "services:
+        my-project:
+          build:
+            context: .
+            dockerfile: Dockerfile
+          environment:
+            DB_CONNECTION_STR: postgresql://postgres:password@postgres:5432/pipes
+          command: ["sh", "-lc", "pnpm db:generate && pnpm db:migrate && node dist/index.js"]
+          depends_on:
+            postgres:
+              condition: service_healthy
+          restart: unless-stopped
+          profiles: ["with-pipeline"]
+
+        postgres:
+          image: postgres:latest
+          environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: password
+            POSTGRES_DB: pipes
+          ports:
+            - "5432:5432"
+          healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres"]
+            interval: 3s
+            timeout: 5s
+            retries: 5
+
+      "
+    `)
+  })
+
+  it('generates additional folders from pipe templates', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates.uniswapV3Swaps],
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    const contractsDir = path.join(projectDir, 'src/contracts')
+    await expect(isDir(contractsDir)).resolves.toBe(true)
+
+    const filesInContractsDir = await readdir(contractsDir)
+    expect(filesInContractsDir).toEqual(expect.arrayContaining(['factory.ts', 'pool.ts']))
+  })
+
+  it('install dependencies using pnpm as package manager', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates.erc20Transfers],
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
+    }
+
+    await new InitHandler(config).handle()
+
+    await expect(isFile(path.join(projectDir, 'pnpm-lock.yaml'))).resolves.toBe(true)
+  })
+
+  it('install dependencies using yarn as package manager', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates.erc20Transfers],
+      sink: 'clickhouse',
+      packageManager: 'yarn',
+    }
+
+    await new InitHandler(config).handle()
+
+    await expect(isFile(path.join(projectDir, 'yarn.lock'))).resolves.toBe(true)
+  })
+
+  // Skipped to avoid CI failures due to bun not being installed in the CI environment
+  it.skip('install dependencies using bun as package manager', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [evmTemplates.erc20Transfers],
+      sink: 'clickhouse',
+      packageManager: 'bun',
+    }
+
+    await new InitHandler(config).handle()
+
+    await expect(isFile(path.join(projectDir, 'bun.lock'))).resolves.toBe(true)
+  })
+})
