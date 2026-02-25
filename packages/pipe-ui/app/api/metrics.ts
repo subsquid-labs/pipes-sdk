@@ -134,7 +134,12 @@ export function useStats() {
             pipes: prev.pipes.map((pipe) => ({ ...pipe, status: PipeStatus.Disconnected })),
           }
         }
-        throw error
+        return {
+          status: ApiStatus.Disconnected,
+          sdk: { version: '' },
+          usage: { memory: 0 },
+          pipes: [],
+        }
       }
     },
 
