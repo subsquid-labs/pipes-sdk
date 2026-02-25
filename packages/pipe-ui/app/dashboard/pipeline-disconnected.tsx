@@ -1,10 +1,47 @@
+'use client'
+
 import { ArrowUpRightIcon, Terminal } from 'lucide-react'
 
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Button } from '~/components/ui/button'
 import { Code } from '~/components/ui/code'
 
-import example from './code.example?raw'
+const DOCS_URL = 'https://beta.docs.sqd.dev'
+
+const example = `import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
+import { metricsServer } from '@subsquid/pipes/metrics/node'
+
+async function cli() {
+  // Create a data stream from the Ethereum mainnet portal
+  const stream = evmPortalSource({
+    portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
+    outputs: {
+      // Decode ERC-20 Transfer events starting from block 12,000,000
+      erc20: evmDecoder({
+        range: { from: '12,000,000' },
+        events: {
+          transfers: commonAbis.erc20.events.Transfer,
+        },
+      }),
+    },
+
+    /*
+     * IMPORTANT!
+     * ============================
+     * Enable the metrics server to connect with the Pipe UI dashboard.
+     * Without it, no metrics will be collected or displayed.
+     * ============================
+     */
+    metrics: metricsServer(),
+  })
+
+  // Consume the stream and log the number of parsed transfers in each batch
+  for await (const { data } of stream) {
+    console.log(\`parsed \${data.erc20.transfers.length} transfers\`)
+  }
+}
+
+void cli()`
 
 export function PipelineDisconnected() {
   return (
@@ -36,7 +73,7 @@ export function PipelineDisconnected() {
           <h4 className="mb-1">3. Explore docs</h4>
           <div className="text-xs text-muted pt-2 pb-8">
             <Button size="xl" asChild variant="default">
-              <a href={`${import.meta.env.VITE_DOCS_URL}/en/sdk/pipes-sdk/quickstart`} target="_blank">
+              <a href={`${DOCS_URL}/en/sdk/pipes-sdk/quickstart`} target="_blank">
                 Documentation
                 <ArrowUpRightIcon />
               </a>

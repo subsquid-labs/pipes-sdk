@@ -1,10 +1,14 @@
+'use client'
+
 import { useMemo } from 'react'
 
-import { usePipe } from '~/api/metrics'
+import { usePipe } from '~/hooks/use-metrics'
+import { useServerIndex } from '~/hooks/use-server-context'
 import { Code } from '~/components/ui/code'
 
 export function QueryExemplar({ pipeId }: { pipeId: string }) {
-  const data = usePipe(pipeId)
+  const { serverIndex } = useServerIndex()
+  const data = usePipe(serverIndex, pipeId)
 
   if (!data) return <div>No data</div>
 

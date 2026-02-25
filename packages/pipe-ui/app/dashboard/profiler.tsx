@@ -1,9 +1,9 @@
+'use client'
+
 import { useState } from 'react'
 
-import { Toggle } from '@radix-ui/react-toggle'
-import { Play } from 'lucide-react'
-
-import { type ApiProfilerResult, useProfilers } from '~/api/metrics'
+import { type ApiProfilerResult, useProfilers } from '~/hooks/use-metrics'
+import { useServerIndex } from '~/hooks/use-server-context'
 
 type ProfilerResult = {
   name: string
@@ -97,7 +97,8 @@ export function ProfilerResult({ profiler, useSelfTime }: { profiler: ProfilerRe
 }
 
 export function Profiler({ pipeId }: { pipeId: string }) {
-  const { data } = useProfilers({ pipeId })
+  const { serverIndex } = useServerIndex()
+  const { data } = useProfilers({ serverIndex, pipeId })
   const [useSelfTime, setUseSelfTime] = useState(false)
 
   const profilers = data?.profilers || []

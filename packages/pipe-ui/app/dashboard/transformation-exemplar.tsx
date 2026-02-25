@@ -1,8 +1,11 @@
+'use client'
+
 import { useMemo, useState } from 'react'
 
 import { Pause, Play } from 'lucide-react'
 
-import { useTransformationExemplar } from '~/api/metrics'
+import { useTransformationExemplar } from '~/hooks/use-metrics'
+import { useServerIndex } from '~/hooks/use-server-context'
 import { Code } from '~/components/ui/code'
 import { Toggle } from '~/components/ui/toggle'
 
@@ -68,15 +71,11 @@ export function TransformerExample({
 }
 
 export function TransformationExemplar({ pipeId }: { pipeId: string }) {
+  const { serverIndex } = useServerIndex()
   const [enabled, useEnabled] = useState(true)
   const [autoStopped, useAutoStoppedEnabled] = useState(false)
-  const { data } = useTransformationExemplar({ enabled, pipeId })
+  const { data } = useTransformationExemplar({ enabled, serverIndex, pipeId })
 
-  // If the exemplar is opened, and we are enabled, disable it (pause updates).
-  // If the exemplar is closed, and we were auto-stopped, re-enable it (resume updates).
-  // This way, the user can explore the exemplar without it changing under their eyes,
-  // but we also don't forget to resume updates when they are done.
-  // FIXME: if you open multiple exemplars, closing one should not resume updates if another is still open.
   const handleOnClick = (childIsOpen: boolean) => {
     if (childIsOpen && enabled) {
       useEnabled(false)

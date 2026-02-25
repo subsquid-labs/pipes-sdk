@@ -1,7 +1,6 @@
 .DS_Store
-.env
 /node_modules/
 
-# React Router
-/.react-router/
-/build/
+# Next.js
+/.next/
+/dist/

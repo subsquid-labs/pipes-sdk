@@ -1,7 +1,10 @@
+'use client'
+
 import { AlertCircle } from 'lucide-react'
 
-import { ApiStatus, type Pipe, PipeStatus, useStats } from '~/api/metrics'
-import { usePortalStatus } from '~/api/portal'
+import { ApiStatus, type Pipe, PipeStatus, useStats } from '~/hooks/use-metrics'
+import { usePortalStatus } from '~/hooks/use-portal'
+import { useServerIndex } from '~/hooks/use-server-context'
 import { displayEstimatedTime } from '~/dashboard/formatters'
 
 function CircularProgress({ percent }: { percent: number }) {
@@ -137,7 +140,8 @@ export function Sidebar({
   selectedPipeId?: string
   onSelectPipe: (id: string) => void
 }) {
-  const { data } = useStats()
+  const { serverIndex } = useServerIndex()
+  const { data } = useStats(serverIndex)
   const connected = data?.status === ApiStatus.Connected
 
   return (
