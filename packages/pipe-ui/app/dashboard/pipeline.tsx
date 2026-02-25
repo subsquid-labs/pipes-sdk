@@ -84,9 +84,9 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
           </TabsContent>
         </Tabs>
 
-        <div className="flex items-center justify-between font-medium text-foreground/80 text-xs">
+        <div className="flex items-center justify-between font-medium text-foreground/80 text-xxs">
           <div className="flex items-center gap-1">
-            <div className="w-[100px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
+            <div className="w-[90px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
               <Sparklines min={0} data={pipe.history.map((v) => v.blocksPerSecond)} width={100} height={32} margin={0}>
                 <SparklinesLine style={sparklineStyle} color={sparklineColor} />
               </Sparklines>
@@ -97,24 +97,24 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-[100px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
+            <div className="w-[90px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
               <Sparklines min={0} data={pipe.history.map((v) => v.bytesPerSecond)} width={100} height={32} margin={0}>
                 <SparklinesLine style={sparklineStyle} color={sparklineColor} />
               </Sparklines>
             </div>
             <div>
-              <div className="text-xxs font-normal">Download speed</div>
+              <div className="font-normal">Download speed</div>
               <div>{humanBytes(pipe.speed.bytesPerSecond)}/sec</div>
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-[100px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
+            <div className="w-[90px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
               <Sparklines min={0} data={pipe.history.map((v) => v.memory)} width={100} height={32} margin={0}>
                 <SparklinesLine style={sparklineStyle} color={sparklineColor} />
               </Sparklines>
             </div>
             <div>
-              <div className="text-xxs font-normal">Memory</div>
+              <div className="font-normal">Process Memory</div>
               <div>{data?.usage.memory && humanBytes(data.usage.memory)}</div>
             </div>
           </div>

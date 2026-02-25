@@ -1,18 +1,49 @@
 import { event, indexed } from '@subsquid/evm-abi'
 import * as p from '@subsquid/evm-codec'
-import { afterEach, describe, expect, expectTypeOf, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from 'vitest'
 
 import { createMemoryTarget } from '~/targets/memory/memory-target.js'
-import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/testing/index.js'
+import { encodeEvent, evmPortalMockStream, mockBlock, resetMockBlockCounter } from '~/testing/evm/index.js'
+import { MockPortal, closeMockPortal, createMockPortal, readAll } from '~/testing/index.js'
 
 import { FactoryEvent, evmDecoder } from './evm-decoder.js'
 import { evmPortalSource } from './evm-portal-source.js'
 import { Factory, InternalFactoryEvent, factory } from './factory.js'
 import { factorySqliteDatabase } from './factory-adapters/sqlite.js'
 
+const POOL_CREATED_ABI = [
+  {
+    type: 'event' as const,
+    name: 'PoolCreated',
+    inputs: [
+      { name: 'token0', type: 'address', indexed: true },
+      { name: 'token1', type: 'address', indexed: true },
+      { name: 'fee', type: 'uint24', indexed: true },
+      { name: 'tickSpacing', type: 'int24', indexed: false },
+      { name: 'pool', type: 'address', indexed: false },
+    ],
+  },
+] as const
+
+const SWAP_ABI = [
+  {
+    type: 'event' as const,
+    name: 'Swap',
+    inputs: [
+      { name: 'sender', type: 'address', indexed: true },
+      { name: 'recipient', type: 'address', indexed: true },
+      { name: 'amount0', type: 'int256', indexed: false },
+      { name: 'amount1', type: 'int256', indexed: false },
+      { name: 'sqrtPriceX96', type: 'uint160', indexed: false },
+      { name: 'liquidity', type: 'uint128', indexed: false },
+      { name: 'tick', type: 'int24', indexed: false },
+    ],
+  },
+] as const
+
 const factoryAbi = {
   PoolCreated: event(
-    '0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118'.toLowerCase(),
+    '0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118',
     'PoolCreated(address,address,uint24,int24,address)',
     {
       token0: indexed(p.address),
@@ -40,140 +71,84 @@ const poolAbi = {
   ),
 }
 
+// ── Addresses ──
+
+const UNISWAP_FACTORY = '0x1f98431c8ad98523631ae4a59f267346ea31f984' as `0x${string}`
+const WETH = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2' as `0x${string}`
+const USDC = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48' as `0x${string}`
+const USDT = '0xdac17f958d2ee523a2206206994597c13d831ec7' as `0x${string}`
+const WETH_USDC_POOL = '0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8' as `0x${string}`
+const USDT_USDC_POOL = '0x9db9e0e53058c89e5b94e29621a205198648425b' as `0x${string}`
+const UNKNOWN_POOL = '0xaaaaaac3a0ff1de082011efddc58f1908eb6e6d8' as `0x${string}`
+const SENDER = '0xdef1cafe0000000000000000000000000000dead' as `0x${string}`
+const RECIPIENT = '0xbeef0000000000000000000000000000deadbeef' as `0x${string}`
+
+// ── Helpers ──
+
+function encodePoolCreated(pool: `0x${string}`, token0 = WETH, token1 = USDC, fee = 3000, tickSpacing = 10) {
+  return encodeEvent({
+    abi: POOL_CREATED_ABI,
+    eventName: 'PoolCreated',
+    address: UNISWAP_FACTORY,
+    args: { token0, token1, fee, tickSpacing, pool },
+  })
+}
+
+function encodeSwap(address: `0x${string}`) {
+  return encodeEvent({
+    abi: SWAP_ABI,
+    eventName: 'Swap',
+    address,
+    args: { sender: SENDER, recipient: RECIPIENT, amount0: 1n, amount1: 2n, sqrtPriceX96: 3n, liquidity: 4n, tick: 5 },
+  })
+}
+
+/** Block 1: PoolCreated for WETH/USDC pool. Block 2: swap from unknown pool (skipped) + swap from known pool (decoded). */
+async function createSimpleChildPortal() {
+  return evmPortalMockStream({
+    blocks: [
+      mockBlock({
+        number: 1,
+        transactions: [{ logs: [encodePoolCreated(WETH_USDC_POOL)] }],
+      }),
+      mockBlock({
+        number: 2,
+        transactions: [{ logs: [encodeSwap(UNKNOWN_POOL)] }, { logs: [encodeSwap(WETH_USDC_POOL)] }],
+      }),
+    ],
+  })
+}
+
+/** Block 1: two PoolCreated (WETH + USDT). Block 2: swap from WETH pool. Block 3: swap from USDT pool. */
+async function createFilteredFactoryPortal() {
+  return evmPortalMockStream({
+    blocks: [
+      mockBlock({
+        number: 1,
+        transactions: [{ logs: [encodePoolCreated(WETH_USDC_POOL, WETH), encodePoolCreated(USDT_USDC_POOL, USDT)] }],
+      }),
+      mockBlock({
+        number: 2,
+        transactions: [{ logs: [encodeSwap(WETH_USDC_POOL)] }],
+      }),
+      mockBlock({
+        number: 3,
+        transactions: [{ logs: [encodeSwap(USDT_USDC_POOL)] }],
+      }),
+    ],
+  })
+}
+
 describe('Factory', () => {
   let mockPortal: MockPortal
+
+  beforeEach(() => {
+    resetMockBlockCounter()
+  })
 
   afterEach(async () => {
     await closeMockPortal(mockPortal)
   })
-
-  const SIMPLE_CHILD: MockResponse[] = [
-    {
-      statusCode: 200,
-      data: [
-        {
-          header: { number: 1, hash: '0x1', timestamp: 1000 },
-          logs: [
-            {
-              address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
-              topics: [
-                '0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118',
-                '0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-                '0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-                '0x0000000000000000000000000000000000000000000000000000000000000bb8',
-              ],
-              logIndex: 0,
-              transactionIndex: 0,
-              transactionHash: '0xdeadbeef',
-              data: '0x000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000008ad599c3a0ff1de082011efddc58f1908eb6e6d8',
-            },
-          ],
-        },
-        {
-          header: { number: 2, hash: '0x2', timestamp: 2000 },
-          logs: [
-            {
-              address: '0xaaaaaac3a0ff1de082011efddc58f1908eb6e6d8', // should be skipped
-              topics: [
-                '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67',
-                '0x000000000000000000000000def1cafe0000000000000000000000000000dead',
-                '0x000000000000000000000000beef0000000000000000000000000000deadbeef',
-              ],
-              logIndex: 0,
-              transactionIndex: 0,
-              transactionHash: '0xdeadbeef',
-              data: '0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000005',
-            },
-            {
-              address: '0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8', // should be decoded
-              topics: [
-                '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67',
-                '0x000000000000000000000000def1cafe0000000000000000000000000000dead',
-                '0x000000000000000000000000beef0000000000000000000000000000deadbeef',
-              ],
-              logIndex: 1,
-              transactionIndex: 1,
-              transactionHash: '0xdeadbeef',
-              data: '0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000005',
-            },
-          ],
-        },
-      ],
-    },
-  ]
-
-  const FILTERED_FACTORY: MockResponse[] = [
-    {
-      statusCode: 200,
-      data: [
-        {
-          header: { number: 1, hash: '0x1', timestamp: 1000 },
-          logs: [
-            {
-              address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
-              topics: [
-                '0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118',
-                '0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', // token0: WETH
-                '0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', // token1: USDC
-                '0x0000000000000000000000000000000000000000000000000000000000000bb8', // fee: 3000
-              ],
-              logIndex: 0,
-              transactionIndex: 0,
-              transactionHash: '0xdeadbeef',
-              data: '0x000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000008ad599c3a0ff1de082011efddc58f1908eb6e6d8',
-            },
-            {
-              address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
-              topics: [
-                '0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118',
-                '0x000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7', // token0: USDT
-                '0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', // token1: USDC
-                '0x0000000000000000000000000000000000000000000000000000000000000bb8', // fee: 3000
-              ],
-              logIndex: 1,
-              transactionIndex: 1,
-              transactionHash: '0xdeadbeef2',
-              data: '0x000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000009db9e0e53058c89e5b94e29621a205198648425b',
-            },
-          ],
-        },
-        {
-          header: { number: 2, hash: '0x2', timestamp: 2000 },
-          logs: [
-            {
-              address: '0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8', // Should consider this event. Pool created with WETH
-              topics: [
-                '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67',
-                '0x000000000000000000000000def1cafe0000000000000000000000000000dead',
-                '0x000000000000000000000000beef0000000000000000000000000000deadbeef',
-              ],
-              logIndex: 0,
-              transactionIndex: 0,
-              transactionHash: '0xdeadbeef',
-              data: '0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000005',
-            },
-          ],
-        },
-        {
-          header: { number: 3, hash: '0x3', timestamp: 3000 },
-          logs: [
-            {
-              address: '0x9db9e0e53058c89e5b94e29621a205198648425b', // Should skip this event. Token0 is USDT, not WETH
-              topics: [
-                '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67',
-                '0x000000000000000000000000def1cafe0000000000000000000000000000dead',
-                '0x000000000000000000000000beef0000000000000000000000000000deadbeef',
-              ],
-              logIndex: 0,
-              transactionIndex: 0,
-              transactionHash: '0xdeadbeef',
-              data: '0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000005',
-            },
-          ],
-        },
-      ],
-    },
-  ]
 
   it('should support bigint in parent event ', async () => {
     const db = await factorySqliteDatabase({ path: ':memory:' })
@@ -201,19 +176,22 @@ describe('Factory', () => {
   })
 
   it('should decode child event', async () => {
-    mockPortal = await createMockPortal(SIMPLE_CHILD)
+    mockPortal = await createSimpleChildPortal()
 
     const db = await factorySqliteDatabase({ path: ':memory:' })
+
+    const poolFactory = factory({
+      address: UNISWAP_FACTORY,
+      event: factoryAbi.PoolCreated,
+      parameter: 'pool',
+      database: db,
+    })
+
     const stream = evmPortalSource({
       portal: mockPortal.url,
       outputs: evmDecoder({
         range: { from: 1, to: 2 },
-        contracts: factory({
-          address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
-          event: factoryAbi.PoolCreated,
-          parameter: 'pool',
-          database: db,
-        }),
+        contracts: poolFactory,
         events: {
           swaps: poolAbi.Swap,
         },
@@ -225,7 +203,7 @@ describe('Factory', () => {
       [
         {
           "block": {
-            "hash": "0x2",
+            "hash": "0x0000000000000000000000000000000000000000000000000000000000000002",
             "number": 2,
           },
           "contract": "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
@@ -236,7 +214,7 @@ describe('Factory', () => {
             "recipient": "0xbeef0000000000000000000000000000deadbeef",
             "sender": "0xdef1cafe0000000000000000000000000000dead",
             "sqrtPriceX96": 3n,
-            "tick": 0,
+            "tick": 5,
           },
           "factory": {
             "blockNumber": 1,
@@ -251,14 +229,14 @@ describe('Factory', () => {
           },
           "rawEvent": {
             "address": "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
-            "data": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000005",
+            "data": "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000005",
             "logIndex": 1,
             "topics": [
               "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67",
               "0x000000000000000000000000def1cafe0000000000000000000000000000dead",
               "0x000000000000000000000000beef0000000000000000000000000000deadbeef",
             ],
-            "transactionHash": "0xdeadbeef",
+            "transactionHash": "0x934c7927ff44855bb2839a79a5bcd7f5b8241403acd5bebca71470d282b34712",
             "transactionIndex": 1,
           },
           "timestamp": 1970-01-01T00:33:20.000Z,
@@ -288,7 +266,7 @@ describe('Factory', () => {
   })
 
   it('should skip null parameter', async () => {
-    mockPortal = await createMockPortal(SIMPLE_CHILD)
+    mockPortal = await createSimpleChildPortal()
 
     const db = await factorySqliteDatabase({ path: ':memory:' })
     const stream = evmPortalSource({
@@ -296,7 +274,7 @@ describe('Factory', () => {
       outputs: evmDecoder({
         range: { from: 1, to: 2 },
         contracts: factory({
-          address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+          address: UNISWAP_FACTORY,
           event: factoryAbi.PoolCreated,
           parameter: () => null,
           database: db,
@@ -308,14 +286,14 @@ describe('Factory', () => {
     })
 
     const res = await readAll(stream)
-    expect(res).toMatchInlineSnapshot(`[]`)
+    expect(res).toHaveLength(0)
 
     const contracts = await db.all()
-    expect(contracts).toMatchInlineSnapshot(`[]`)
+    expect(contracts).toHaveLength(0)
   })
 
   it('should set event with same topic to correct factory', async () => {
-    mockPortal = await createMockPortal(SIMPLE_CHILD)
+    mockPortal = await createSimpleChildPortal()
 
     const db = await factorySqliteDatabase({ path: ':memory:' })
     const stream = evmPortalSource({
@@ -336,7 +314,7 @@ describe('Factory', () => {
         v2: evmDecoder({
           range: { from: 1, to: 2 },
           contracts: factory({
-            address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+            address: UNISWAP_FACTORY,
             event: factoryAbi.PoolCreated,
             parameter: 'pool',
             database: db,
@@ -360,33 +338,18 @@ describe('Factory', () => {
   })
 
   it('should handle fork', async () => {
+    const FORKED_POOL = '0x8ad599c3a0ff1de082011efddc58f1908eb6e6d7' as const
+
+    const poolCreatedLog = encodePoolCreated(FORKED_POOL)
+    const swapLog = encodeSwap(WETH_USDC_POOL)
+
     mockPortal = await createMockPortal([
       {
         statusCode: 200,
         data: [
-          {
-            header: { number: 1, hash: '0x1', timestamp: 1000 },
-            logs: [],
-          },
+          mockBlock({ number: 1, hash: '0x1' }),
           // this block will be forked
-          {
-            header: { number: 2, hash: '0x2', timestamp: 2000 },
-            logs: [
-              {
-                logIndex: 0,
-                transactionIndex: 0,
-                transactionHash: '0xdeadbeef',
-                address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
-                topics: [
-                  '0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118',
-                  '0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-                  '0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-                  '0x0000000000000000000000000000000000000000000000000000000000000bb8',
-                ],
-                data: '0x000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000008ad599c3a0ff1de082011efddc58f1908eb6e6d7',
-              },
-            ],
-          },
+          mockBlock({ number: 2, hash: '0x2', transactions: [{ logs: [poolCreatedLog] }] }),
         ],
         head: { finalized: { number: 1, hash: '0x1' } },
       },
@@ -396,32 +359,12 @@ describe('Factory', () => {
           previousBlocks: [{ number: 1, hash: '0x1' }],
         },
       },
-
       {
         statusCode: 200,
         data: [
-          {
-            header: { number: 2, hash: '0x2a', timestamp: 3000 },
-            logs: [
-              // this event should not be decoded as the pool address became invalid after the fork
-              {
-                logIndex: 0,
-                transactionIndex: 0,
-                transactionHash: '0xdeadbeef',
-                address: '0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8',
-                topics: [
-                  '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67',
-                  '0x000000000000000000000000def1cafe0000000000000000000000000000dead',
-                  '0x000000000000000000000000beef0000000000000000000000000000deadbeef',
-                ],
-                data: '0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000005',
-              },
-            ],
-          },
-          {
-            header: { number: 3, hash: '0x3a', timestamp: 3000 },
-            logs: [],
-          },
+          // swap from a different pool address than the forked PoolCreated registered
+          mockBlock({ number: 2, hash: '0x2a', transactions: [{ logs: [swapLog] }] }),
+          mockBlock({ number: 3, hash: '0x3a' }),
         ],
         head: { finalized: { number: 3, hash: '0x3a' } },
       },
@@ -439,7 +382,7 @@ describe('Factory', () => {
       outputs: evmDecoder({
         range: { from: 1, to: 3 },
         contracts: factory({
-          address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+          address: UNISWAP_FACTORY,
           event: factoryAbi.PoolCreated,
           parameter: 'pool',
           database: db,
@@ -463,26 +406,25 @@ describe('Factory', () => {
       }),
     )
 
-    expect(res).toMatchInlineSnapshot(`[]`)
+    expect(res).toHaveLength(0)
 
     const contracts = await db.all()
-    expect(contracts).toMatchInlineSnapshot(`[]`)
+    expect(contracts).toHaveLength(0)
   })
 
   it('should filter factory events by indexed parameters', async () => {
-    mockPortal = await createMockPortal(FILTERED_FACTORY)
+    mockPortal = await createFilteredFactoryPortal()
 
-    // const db = factorySqliteDatabase({ path: ':memory:' })
     const stream = evmPortalSource({
       portal: mockPortal.url,
       outputs: evmDecoder({
         range: { from: 1, to: 2 },
         contracts: factory({
-          address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+          address: UNISWAP_FACTORY,
           event: {
             event: factoryAbi.PoolCreated,
             params: {
-              token0: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', // Filter by WETH
+              token0: WETH,
             },
           },
           parameter: 'pool',
@@ -496,10 +438,9 @@ describe('Factory', () => {
 
     const res = await readAll(stream)
 
-    // Should only decode swap from the pool created with WETH (first event)
     expect(res).toHaveLength(1)
-    expect(res[0].contract).toBe('0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8')
-    expect(res[0].factory?.event.token0).toBe('0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
+    expect(res[0].contract).toBe(WETH_USDC_POOL)
+    expect(res[0].factory?.event.token0).toBe(WETH)
   })
 
   /**
@@ -512,20 +453,17 @@ describe('Factory', () => {
    * not whether the correct set of parameters had been used.
    */
   it('should only return events matching new factory parameters after second run with different params', async () => {
-    // For this test is important to have a single instance of the database for both runs
     const db = await factorySqliteDatabase({ path: ':memory:' })
-    const weth = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
-    const usdt = '0xdac17f958d2ee523a2206206994597c13d831ec7'
 
     const getPipeline = async (token0: string) => {
-      mockPortal = await createMockPortal(FILTERED_FACTORY)
+      mockPortal = await createFilteredFactoryPortal()
 
       return evmPortalSource({
         portal: mockPortal.url,
         outputs: evmDecoder({
           range: { from: 1, to: 2 },
           contracts: factory({
-            address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+            address: UNISWAP_FACTORY,
             event: {
               event: factoryAbi.PoolCreated,
               params: {
@@ -542,30 +480,30 @@ describe('Factory', () => {
       })
     }
 
-    const firstRun = await getPipeline(weth)
+    const firstRun = await getPipeline(WETH)
     const firstRunRes = await readAll(firstRun)
     expect(firstRunRes).toHaveLength(1)
-    expect(firstRunRes[0].contract).toBe('0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8')
-    expect(firstRunRes[0].factory?.event.token0).toBe(weth)
+    expect(firstRunRes[0].contract).toBe(WETH_USDC_POOL)
+    expect(firstRunRes[0].factory?.event.token0).toBe(WETH)
 
-    const secondRun = await getPipeline(usdt)
+    const secondRun = await getPipeline(USDT)
     const secondRunRes = await readAll(secondRun)
     expect(secondRunRes).toHaveLength(1)
-    expect(secondRunRes[0].contract).toBe('0x9db9e0e53058c89e5b94e29621a205198648425b')
-    expect(secondRunRes[0].factory?.event.token0).toBe(usdt)
+    expect(secondRunRes[0].contract).toBe(USDT_USDC_POOL)
+    expect(secondRunRes[0].factory?.event.token0).toBe(USDT)
   })
 
   it('normalizes params when reading all contracts from database', async () => {
-    mockPortal = await createMockPortal(SIMPLE_CHILD)
+    mockPortal = await createSimpleChildPortal()
 
     const contractsFactory = factory({
-      address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+      address: UNISWAP_FACTORY,
       event: {
         event: factoryAbi.PoolCreated,
         params: {
           // Parameter in different case than emitted event
-          token0: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'.toUpperCase(),
-          token1: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'.toUpperCase(),
+          token0: WETH.toUpperCase() as `0x${string}`,
+          token1: USDC.toUpperCase() as `0x${string}`,
         },
       },
       parameter: 'pool',
