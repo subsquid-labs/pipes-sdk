@@ -9,32 +9,15 @@ import {
   toHex,
 } from 'viem'
 
-type Hex = `0x${string}`
+import type { Hex } from '~/portal-client/query/common.js'
+import type { BlockHeaderFields, LogFields, TransactionFields } from '~/portal-client/query/evm.js'
 
-type PortalLog = {
-  logIndex: number
-  transactionIndex: number
-  transactionHash: Hex
-  address: Hex
-  data: Hex
-  topics: Hex[]
-}
+type PortalLog = Pick<LogFields, 'logIndex' | 'transactionIndex' | 'transactionHash' | 'address' | 'data' | 'topics'>
 
-type PortalTransaction = {
-  transactionIndex: number
-  hash: Hex
-  from: Hex
-  to?: Hex
-  sighash?: Hex
-}
+type PortalTransaction = Pick<TransactionFields, 'transactionIndex' | 'hash' | 'from' | 'to' | 'sighash'>
 
 export type PortalBlock = {
-  header: {
-    number: number
-    hash: Hex
-    parentHash: Hex
-    timestamp: number
-  }
+  header: Pick<BlockHeaderFields, 'number' | 'hash' | 'parentHash' | 'timestamp'>
   transactions: PortalTransaction[]
   logs: PortalLog[]
 }
