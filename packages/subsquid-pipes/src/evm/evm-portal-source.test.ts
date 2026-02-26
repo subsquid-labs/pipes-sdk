@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { MockPortal, closeMockPortal, createMockPortal } from '../tests/index.js'
+import { MockPortal, createMockPortal } from '../testing/index.js'
 import { evmPortalSource } from './evm-portal-source.js'
 import { evmQuery } from './evm-query-builder.js'
 
@@ -8,7 +8,7 @@ describe('evmPortalSource', () => {
   let mockPortal: MockPortal
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
 
   it('should add default fields', async () => {

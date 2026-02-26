@@ -41,7 +41,11 @@ export type MockResponse =
       validateRequest?: ValidateRequest
     }
 
-export type MockPortal = { server: Server; url: string }
+export type MockPortal = {
+  server: Server
+  url: string
+  close(): Promise<void>
+}
 
 export async function createFinalizedMockPortal(mockResponses: MockResponse[]) {
   return createMockPortal(mockResponses, {
@@ -145,19 +149,19 @@ export async function createMockPortal(
 
   const server = await promise
 
-  return { server, url: getServerAddress(server) }
-}
+  const portal: MockPortal = {
+    server,
+    url: getServerAddress(server),
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((err) => {
+          if (err) return reject(err)
+          resolve()
+        })
+      }),
+  }
 
-export async function closeMockPortal(mockPortal?: MockPortal) {
-  if (!mockPortal) return
-
-  return new Promise((resolve, reject) => {
-    mockPortal.server.close((err) => {
-      if (err) return reject(err)
-
-      resolve(null)
-    })
-  })
+  return portal
 }
 
 function getServerAddress(server: Server): string {
@@ -168,6 +172,9 @@ function getServerAddress(server: Server): string {
   return `http://127.0.0.1:${address.port}`
 }
 
+/**
+ * @internal
+ */
 export async function readAll<T>(stream: AsyncIterable<{ data: T[] }>): Promise<T[]> {
   const res: T[] = []
 
@@ -178,6 +185,9 @@ export async function readAll<T>(stream: AsyncIterable<{ data: T[] }>): Promise<
   return res
 }
 
+/**
+ * @internal
+ */
 export function mockPortalRestApi(overrides: Partial<Portal> = {}): Portal {
   return {
     getHead: async () => ({ number: 1, hash: '0x' }),

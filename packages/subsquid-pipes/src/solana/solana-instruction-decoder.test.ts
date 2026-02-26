@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { solanaInstructionDecoder } from '~/solana/solana-instruction-decoder.js'
 import { solanaPortalSource } from '~/solana/solana-portal-source.js'
-import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/tests/index.js'
+import { MockPortal, MockResponse, createMockPortal, readAll } from '~/testing/index.js'
 
 import * as tokenProgram from './abi/tokenProgram/index.js'
 
@@ -10,7 +10,7 @@ describe('solanaInstructionDecoder transform', () => {
   let mockPortal: MockPortal
 
   beforeEach(async () => {
-    if (mockPortal) closeMockPortal(mockPortal)
+    await mockPortal?.close()
     mockPortal = await createMockPortal(PORTAL_MOCK_RESPONSE)
   })
 

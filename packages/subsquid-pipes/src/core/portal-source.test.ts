@@ -4,17 +4,16 @@ import { evmPortalSource } from '~/evm/index.js'
 import {
   MockPortal,
   blockDecoder,
-  closeMockPortal,
   createFinalizedMockPortal,
   createMockPortal,
   readAll,
-} from '~/tests/index.js'
+} from '~/testing/index.js'
 
 describe('Portal abstract stream', () => {
   let mockPortal: MockPortal
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
 
   describe('common', () => {

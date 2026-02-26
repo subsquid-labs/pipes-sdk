@@ -7,7 +7,6 @@
   "files": [
     "dist",
     "src",
-    "!**/tests",
     "!**/*.test.*",
     "package.json",
     "README.md",
@@ -137,6 +136,16 @@
       "types": "./dist/opentelemetry/index.d.ts",
       "import": "./dist/opentelemetry/index.js",
       "require": "./dist/opentelemetry/index.cjs"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js",
+      "require": "./dist/testing/index.cjs"
+    },
+    "./testing/evm": {
+      "types": "./dist/testing/evm/index.d.ts",
+      "import": "./dist/testing/evm/index.js",
+      "require": "./dist/testing/evm/index.cjs"
     }
   },
   "typesVersions": {
@@ -173,6 +182,12 @@
       ],
       "opentelemetry": [
         "./dist/opentelemetry/index.d.ts"
+      ],
+      "testing": [
+        "./dist/testing/index.d.ts"
+      ],
+      "testing/evm": [
+        "./dist/testing/evm/index.d.ts"
       ]
     }
   }

@@ -2,6 +2,9 @@ import { evmQuery } from '~/evm/evm-query-builder.js'
 
 import { PortalRange } from '../core/index.js'
 
+/**
+ * @internal
+ */
 export function blockDecoder(range: PortalRange) {
   return evmQuery()
     .addRange(range)

@@ -6,11 +6,10 @@ import { PortalRange, QueryAwareTransformer } from '~/core/index.js'
 import {
   MockPortal,
   MockResponse,
-  closeMockPortal,
   createMockPortal,
   createTestLogger,
   readAll,
-} from '~/tests/index.js'
+} from '~/testing/index.js'
 
 import { commonAbis } from './abi/common.js'
 import {
@@ -828,7 +827,7 @@ describe('evmDecoder transform', () => {
   })
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
 
   const PORTAL_MOCK_RESPONSE: MockResponse[] = [

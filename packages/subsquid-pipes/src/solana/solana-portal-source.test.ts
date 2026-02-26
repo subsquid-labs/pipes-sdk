@@ -3,14 +3,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import * as solana from '~/portal-client/query/solana.js'
 import { solanaQuery } from '~/solana/solana-query-builder.js'
 
-import { MockPortal, closeMockPortal, createMockPortal } from '../tests/index.js'
+import { MockPortal, createMockPortal } from '../testing/index.js'
 import { solanaPortalSource } from './solana-portal-source.js'
 
 describe('Portal abstract stream', () => {
   let mockPortal: MockPortal
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
 
   it('should add default fields', async () => {
