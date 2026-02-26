@@ -45,7 +45,7 @@ describe('Pipeline metrics', () => {
     expect(metrics.gauge('sqd_last_block')).toBeDefined()
     expect(metrics.gauge('sqd_progress_ratio')).toBeDefined()
     expect(metrics.gauge('sqd_eta_seconds')).toBeDefined()
-    expect(metrics.gauge('sqd_blocks_per_second')).toBeDefined()
+    expect(metrics.counter('sqd_blocks_processed_total')).toBeDefined()
     expect(metrics.counter('sqd_bytes_downloaded_total')).toBeDefined()
   })
 
@@ -137,7 +137,7 @@ describe('Pipeline metrics', () => {
     expect(metrics.gauge('sqd_last_block').lastValue).toBe(3)
     expect(metrics.gauge('sqd_progress_ratio').lastValue).toBe(1)
     expect(metrics.gauge('sqd_eta_seconds').lastValue).toBe(0)
-    expect(metrics.gauge('sqd_blocks_per_second').lastValue).toBeGreaterThanOrEqual(0)
+    expect(metrics.counter('sqd_blocks_processed_total').total).toBeGreaterThanOrEqual(0)
     expect(metrics.counter('sqd_bytes_downloaded_total').total).toBeGreaterThan(0)
   })
 
