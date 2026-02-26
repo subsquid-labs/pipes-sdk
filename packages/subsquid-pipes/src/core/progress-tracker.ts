@@ -218,6 +218,18 @@ export type ProgressTrackerOptions = {
   interval?: number
 }
 
+const DEFAULT_BLOCKS_BUCKETS = [1, 5, 10, 50, 100, 500, 1000, 2000, 3000, 5000]
+const DEFAULT_BYTES_BUCKETS = [
+  1024, // 1kb
+  10240, // 10kb
+  102400, // 100kb
+  524288, // 512kb
+  1048576, // 1mb
+  5242880, // 5mb
+  10485760, // 10mb
+  11534336, // 11mb
+]
+
 export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: ProgressTrackerOptions) {
   let ticker: NodeJS.Timeout | null = null
   let lastProgress: ProgressEvent['progress'] | null = null
@@ -227,7 +239,7 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
   let lastBlock: Gauge<'id'> | null = null
   let progressRatio: Gauge<'id'> | null = null
   let etaSeconds: Gauge<'id'> | null = null
-  let blocksPerSecond: Gauge<'id'> | null = null
+  let blocksProcessedTotal: Counter<'id'> | null = null
   let bytesDownloaded: Counter<'id'> | null = null
   let reorgsTotal: Counter<'id'> | null = null
   let portalRequestsTotal: Counter<'id' | 'classification' | 'status'> | null = null
@@ -322,10 +334,9 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
         labelNames: ['id'] as const,
       })
 
-      // FIXME should be counter?
-      blocksPerSecond = metrics.gauge({
-        name: 'sqd_blocks_per_second',
-        help: 'Block processing speed',
+      blocksProcessedTotal = metrics.counter({
+        name: 'sqd_blocks_processed_total',
+        help: 'Total number of blocks processed',
         labelNames: ['id'] as const,
       })
 
@@ -353,7 +364,7 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
         labelNames: ['id'] as const,
         // TODO are these buckets good by default?
         // TODO make it configurable!
-        buckets: [1, 5, 10, 50, 100, 500, 1000, 5000, 10000],
+        buckets: DEFAULT_BLOCKS_BUCKETS,
       })
 
       batchSizeBytes = metrics.histogram({
@@ -362,16 +373,7 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
         labelNames: ['id'] as const,
         // TODO are these buckets good by default?
         // TODO make it configurable
-        buckets: [
-          1024, // 1kb
-          10240, // 10kb
-          102400, // 100kb
-          524288, // 512kb
-          1048576, // 1mb
-          5242880, // 5mb
-          10485760, // 10mb
-          52428800, // 50mb
-        ],
+        buckets: DEFAULT_BYTES_BUCKETS,
       })
 
       currentBlock.set({ id }, -1)
@@ -406,7 +408,7 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
       lastBlock?.set({ id: ctx.id }, lastProgress.state.last)
       progressRatio?.set({ id: ctx.id }, lastProgress.state.percent / 100)
       etaSeconds?.set({ id: ctx.id }, lastProgress.state.etaSeconds)
-      blocksPerSecond?.set({ id: ctx.id }, lastProgress.interval.processedBlocks.perSecond)
+      blocksProcessedTotal?.inc({ id: ctx.id }, ctx.meta.blocksCount)
       bytesDownloaded?.inc({ id: ctx.id }, ctx.meta.bytesSize)
 
       ctx.state.progress = lastProgress
