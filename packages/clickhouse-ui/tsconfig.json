@@ -16,7 +16,7 @@
     "types": ["node", "react", "react-dom"],
     "baseUrl": ".",
     "paths": {
-      "~/*": ["./src/*"]
+      "~/*": ["./src/app/*"]
     },
     "incremental": true,
     "plugins": [

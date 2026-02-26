@@ -1,19 +1,15 @@
-import Link from 'next/link'
-import { notFound } from 'next/navigation'
+'use client'
 
+import Link from 'next/link'
+import { useParams } from 'next/navigation'
+
+import { useQueryDetails, useQueryExplain } from '~/api/clickhouse'
 import { SqlHighlight } from '~/components/SqlHighlight/SqlHighlight'
 import { Badge } from '~/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '~/components/ui/tooltip'
-import { fetchExplainPipeline, fetchExplainPlan, fetchLatestQueryByHash } from '~/db/clickhouse'
 import { formatBytes, formatNumber, formatSeconds } from '~/lib/format'
-
-export const dynamic = 'force-dynamic'
-
-type Props = {
-  params: Promise<{ hash: string }>
-}
 
 const PROFILE_EVENT_DESCRIPTIONS: Record<string, string> = {
   NetworkSendElapsedMicroseconds: 'Time spent sending result data to the client (socket backpressure / slow client)',
@@ -67,31 +63,28 @@ const RESOURCE_DESCRIPTIONS: Record<
   memory_usage: 'Peak memory usage of the query',
 }
 
-export default async function QueryDetailsPage({ params }: Props) {
-  const { hash } = await params
-  if (!/^\d+$/.test(hash)) {
-    return notFound()
+export default function QueryDetailsPage() {
+  const params = useParams<{ hash: string }>()
+  const hash = params.hash
+
+  const { data: details, isLoading: detailsLoading } = useQueryDetails(hash)
+  const { data: explain } = useQueryExplain(hash, { enabled: !!details })
+
+  if (detailsLoading) {
+    return (
+      <main className="min-h-screen p-8 bg-[#020617] text-[#e2e8f0]">
+        <div className="mx-auto max-w-[1200px] text-sm text-slate-400">Loading query details...</div>
+      </main>
+    )
   }
 
-  const details = await fetchLatestQueryByHash(hash)
   if (!details) {
-    return notFound()
+    return (
+      <main className="min-h-screen p-8 bg-[#020617] text-[#e2e8f0]">
+        <div className="mx-auto max-w-[1200px] text-sm text-slate-400">Query not found.</div>
+      </main>
+    )
   }
-
-  const [planResult, pipelineResult] = await Promise.allSettled([
-    fetchExplainPlan(details.query),
-    fetchExplainPipeline(details.query),
-  ])
-
-  const explainPlan = planResult.status === 'fulfilled' ? planResult.value : null
-  const explainPlanError =
-    planResult.status === 'rejected' ? String((planResult.reason as any)?.message ?? planResult.reason) : null
-
-  const explainPipeline = pipelineResult.status === 'fulfilled' ? pipelineResult.value : null
-  const explainPipelineError =
-    pipelineResult.status === 'rejected'
-      ? String((pipelineResult.reason as any)?.message ?? pipelineResult.reason)
-      : null
 
   const showRead = details.query_kind === 'Select'
 
@@ -154,11 +147,11 @@ export default async function QueryDetailsPage({ params }: Props) {
                 <h2 className="text-lg font-semibold">EXPLAIN PLAN</h2>
               </div>
               <div className="p-4">
-                {explainPlan ? (
-                  <pre className="whitespace-pre-wrap break-words text-xs text-slate-100">{explainPlan}</pre>
+                {explain?.plan ? (
+                  <pre className="whitespace-pre-wrap break-words text-xs text-slate-100">{explain.plan}</pre>
                 ) : (
                   <div className="text-sm text-slate-400">
-                    Unable to run EXPLAIN PLAN{explainPlanError ? `: ${explainPlanError}` : ''}
+                    Unable to run EXPLAIN PLAN{explain?.planError ? `: ${explain.planError}` : ''}
                   </div>
                 )}
               </div>
@@ -169,11 +162,11 @@ export default async function QueryDetailsPage({ params }: Props) {
                 <h2 className="text-lg font-semibold">EXPLAIN PIPELINE</h2>
               </div>
               <div className="p-4">
-                {explainPipeline ? (
-                  <pre className="whitespace-pre-wrap break-words text-xs text-slate-100">{explainPipeline}</pre>
+                {explain?.pipeline ? (
+                  <pre className="whitespace-pre-wrap break-words text-xs text-slate-100">{explain.pipeline}</pre>
                 ) : (
                   <div className="text-sm text-slate-400">
-                    Unable to run EXPLAIN PIPELINE{explainPipelineError ? `: ${explainPipelineError}` : ''}
+                    Unable to run EXPLAIN PIPELINE{explain?.pipelineError ? `: ${explain.pipelineError}` : ''}
                   </div>
                 )}
               </div>

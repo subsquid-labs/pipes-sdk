@@ -1,33 +1,32 @@
+'use client'
+
 import Link from 'next/link'
+import { Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+
+import { parseQueryLogWindow, queryLogWindowLabel, useRecentQueries } from '~/api/clickhouse'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
-import { fetchRecentQueries, parseQueryLogWindow, type QueryLogRow, queryLogWindowLabel } from '~/db/clickhouse'
 import { formatNumber, formatSeconds } from '~/lib/format'
+
 import { QueryLogWindowSelect } from './QueryLogWindowSelect'
 import { QueryPreview } from './QueryPreview'
 import { type TimeMode, TimeModeToggle } from './TimeModeToggle'
 
-export const dynamic = 'force-dynamic'
-
-type Props = {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>
+export default function QueriesPage() {
+  return (
+    <Suspense>
+      <QueriesContent />
+    </Suspense>
+  )
 }
 
-export default async function QueriesPage({ searchParams }: Props) {
-  const resolvedSearchParams = (await searchParams) ?? {}
-  const window = parseQueryLogWindow(resolvedSearchParams.interval)
-  const windowLabel = queryLogWindowLabel(window)
-  const timeMode: TimeMode = resolvedSearchParams.time === 'total' ? 'total' : 'avg'
+function QueriesContent() {
+  const searchParams = useSearchParams()
+  const interval = parseQueryLogWindow(searchParams.get('interval'))
+  const windowLabel = queryLogWindowLabel(interval)
+  const timeMode: TimeMode = searchParams.get('time') === 'total' ? 'total' : 'avg'
 
-  let queries: QueryLogRow[] = []
-  let error: string | null = null
-
-  try {
-    queries = await fetchRecentQueries(window)
-  } catch (e) {
-    console.error('Error fetching recent queries from ClickHouse:', e)
-    error =
-      'Unable to load recent queries from ClickHouse. Please check that the ClickHouse service is running and the connection settings are correct.'
-  }
+  const { data: queries = [], error } = useRecentQueries(interval)
 
   const totalQueries = queries.reduce((acc, q) => acc + q.count, 0)
 
@@ -61,7 +60,7 @@ export default async function QueriesPage({ searchParams }: Props) {
           <div className="flex flex-wrap items-center gap-3">
             <TimeModeToggle value={timeMode} />
             <span className="text-slate-400">for</span>
-            <QueryLogWindowSelect value={window} />
+            <QueryLogWindowSelect value={interval} />
           </div>
         </div>
 
@@ -77,7 +76,8 @@ export default async function QueriesPage({ searchParams }: Props) {
               fontSize: '0.875rem',
             }}
           >
-            {error}
+            Unable to load recent queries from ClickHouse. Please check that the ClickHouse service is running and the
+            connection settings are correct.
           </div>
         )}
 

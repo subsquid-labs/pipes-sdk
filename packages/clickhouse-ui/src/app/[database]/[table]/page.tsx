@@ -1,32 +1,20 @@
+'use client'
+
 import Link from 'next/link'
+import { useParams } from 'next/navigation'
+
+import { useTableColumns, useTableDefinition } from '~/api/clickhouse'
 import { SqlHighlight } from '~/components/SqlHighlight/SqlHighlight'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
-import { fetchTableColumns, fetchTableDefinition, type TableColumnStat } from '~/db/clickhouse'
 import { formatNumber } from '~/lib/format'
 
-export const dynamic = 'force-dynamic'
+export default function TablePage() {
+  const params = useParams<{ database: string; table: string }>()
+  const database = decodeURIComponent(params.database)
+  const table = decodeURIComponent(params.table)
 
-type PageProps = {
-  params: Promise<{
-    database: string
-    table: string
-  }>
-}
-
-export default async function TablePage({ params }: PageProps) {
-  const { database, table } = await params
-  let columns: TableColumnStat[] = []
-  let error: string | null = null
-  let definition: string | null = null
-
-  try {
-    columns = await fetchTableColumns(database, table)
-    definition = await fetchTableDefinition(database, table)
-  } catch (e) {
-    console.error(`Error fetching column stats from ClickHouse for ${database}.${table}:`, e)
-    error =
-      'Unable to load column statistics from ClickHouse. Please check that the ClickHouse service is running and the connection settings are correct.'
-  }
+  const { data: columns = [], isLoading, error } = useTableColumns(database, table)
+  const { data: definition } = useTableDefinition(database, table)
 
   return (
     <main
@@ -45,7 +33,6 @@ export default async function TablePage({ params }: PageProps) {
       >
         <div
           style={{
-            // display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             marginBottom: '1.5rem',
@@ -70,6 +57,8 @@ export default async function TablePage({ params }: PageProps) {
           </div>
         </div>
 
+        {isLoading && <div className="text-sm text-slate-400 mb-4">Loading column stats...</div>}
+
         {error && (
           <div
             style={{
@@ -82,7 +71,8 @@ export default async function TablePage({ params }: PageProps) {
               fontSize: '0.875rem',
             }}
           >
-            {error}
+            Unable to load column statistics from ClickHouse. Please check that the ClickHouse service is running and
+            the connection settings are correct.
           </div>
         )}
 
@@ -121,7 +111,7 @@ export default async function TablePage({ params }: PageProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {columns.map((c, idx) => (
+              {columns.map((c) => (
                 <TableRow key={c.column}>
                   <TableCell className="font-mono text-sm">{c.column}</TableCell>
                   <TableCell className="text-right">{c.compressed_size}</TableCell>
@@ -136,7 +126,7 @@ export default async function TablePage({ params }: PageProps) {
                   </TableCell>
                 </TableRow>
               ))}
-              {columns.length === 0 && !error && (
+              {columns.length === 0 && !error && !isLoading && (
                 <TableRow>
                   <TableCell colSpan={6} className="py-4 text-center text-slate-500">
                     No column stats found for this table.

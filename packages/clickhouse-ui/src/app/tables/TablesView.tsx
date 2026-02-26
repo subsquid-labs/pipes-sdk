@@ -2,9 +2,10 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
+
+import type { ClickhouseTableRow } from '~/api/clickhouse'
 import { Button } from '~/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
-import type { ClickhouseTableRow } from '~/db/clickhouse'
 import { formatNumber } from '~/lib/format'
 
 type Props = {

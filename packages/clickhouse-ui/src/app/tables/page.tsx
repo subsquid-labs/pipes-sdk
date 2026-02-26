@@ -1,20 +1,12 @@
+'use client'
+
+import { useTables } from '~/api/clickhouse'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
-import { type ClickhouseTableRow, fetchClickhouseTables } from '~/db/clickhouse'
+
 import { TablesView } from './TablesView'
 
-export const dynamic = 'force-dynamic'
-
-export default async function HomePage() {
-  let tables: ClickhouseTableRow[] = []
-  let error: string | null = null
-
-  try {
-    tables = await fetchClickhouseTables()
-  } catch (e) {
-    console.error('Error fetching tables from ClickHouse:', e)
-    error =
-      'Unable to connect to ClickHouse. Please check that the ClickHouse service is running and the connection settings are correct.'
-  }
+export default function TablesPage() {
+  const { data: tables, isLoading, error } = useTables()
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -24,14 +16,19 @@ export default async function HomePage() {
           <p className="text-sm text-slate-400">Showing all tables ordered by disk usage.</p>
         </div>
 
-        {error ? (
+        {isLoading && <div className="text-sm text-slate-400">Loading tables...</div>}
+
+        {error && (
           <Alert variant="destructive">
             <AlertTitle>Connection error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>
+              Unable to connect to ClickHouse. Please check that the ClickHouse service is running and the connection
+              settings are correct.
+            </AlertDescription>
           </Alert>
-        ) : (
-          <TablesView tables={tables} />
         )}
+
+        {tables && <TablesView tables={tables} />}
       </div>
     </main>
   )
