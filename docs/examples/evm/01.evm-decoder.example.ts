@@ -14,10 +14,10 @@ async function cli() {
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     outputs: evmDecoder({
       range: {
-        // from: 'latest',
+        from: 'latest',
         // from: '1,000,000',
         // from: startOfDay(new Date())
-        from: '2024-01-01',
+        // from: '2024-01-01',
       },
       events: {
         transfers: commonAbis.erc20.events.Transfer,

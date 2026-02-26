@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 
+import { PanelLoading } from '~/dashboard/panel-loading'
 import { type ApiProfilerResult, useProfilers } from '~/hooks/use-metrics'
 import { useServerIndex } from '~/hooks/use-server-context'
 
@@ -98,22 +99,26 @@ export function ProfilerResult({ profiler, useSelfTime }: { profiler: ProfilerRe
 
 export function Profiler({ pipeId }: { pipeId: string }) {
   const { serverIndex } = useServerIndex()
-  const { data } = useProfilers({ serverIndex, pipeId })
+  const { data, isLoading } = useProfilers({ serverIndex, pipeId })
   const [useSelfTime, setUseSelfTime] = useState(false)
 
-  const profilers = data?.profilers || []
+  if (isLoading || !data?.profilers.length) {
+    return <PanelLoading message="Waiting for data samples..." />
+  }
+
+  const profilers = data.profilers || []
   const totalSpentTime = profilers.reduce((a, b) => a + b.totalTime, 0)
 
   const res = calcStats({
     acc: [],
-    profilers: data?.profilers || [],
+    profilers: data.profilers || [],
     percentage: {
       totalSpentTime,
       useSelfTime,
     },
   })
 
-  const totalSamples = (data?.profilers || []).length
+  const totalSamples = profilers.length
 
   return (
     <div>
@@ -121,10 +126,10 @@ export function Profiler({ pipeId }: { pipeId: string }) {
         {res.map((profiler) => (
           <ProfilerResult key={profiler.name} profiler={profiler} useSelfTime={useSelfTime} />
         ))}
-      </div>
 
-      <div className="text-xxs font-normal mt-1 flex justify-end">
-        <div className="text-muted">{totalSamples} samples</div>
+        <div className="text-xxs font-normal mt-1 flex justify-end">
+          <div className="text-muted">{totalSamples} samples</div>
+        </div>
       </div>
     </div>
   )

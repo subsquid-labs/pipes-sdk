@@ -6,6 +6,7 @@ import { Maximize2, Minimize2, Pause, Play } from 'lucide-react'
 
 import { Code } from '~/components/ui/code'
 import { Toggle } from '~/components/ui/toggle'
+import { PanelLoading } from '~/dashboard/panel-loading'
 import { useTransformationExemplar } from '~/hooks/use-metrics'
 import { useServerIndex } from '~/hooks/use-server-context'
 
@@ -75,7 +76,7 @@ export function TransformationExemplar({ pipeId }: { pipeId: string }) {
   const [enabled, useEnabled] = useState(true)
   const [autoStopped, useAutoStoppedEnabled] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
-  const { data } = useTransformationExemplar({ enabled, serverIndex, pipeId })
+  const { data, isLoading } = useTransformationExemplar({ enabled, serverIndex, pipeId })
 
   const handleOnClick = (childIsOpen: boolean) => {
     if (childIsOpen && enabled) {
@@ -100,7 +101,9 @@ export function TransformationExemplar({ pipeId }: { pipeId: string }) {
           {fullscreen ? <Minimize2 /> : <Maximize2 />}
         </Toggle>
       </div>
-      {data?.transformation ? (
+      {isLoading || !data?.transformation ? (
+        <PanelLoading message="Waiting for data samples..." />
+      ) : data.transformation ? (
         <div
           className={`overflow-auto border rounded-md px-1 pb-1 dotted-background ${fullscreen ? 'h-full' : 'h-[400px]'}`}
         >
