@@ -193,7 +193,50 @@ Supported `from` / `to` formats:
 
 Date-only strings (e.g. `'2024-01-01'`) are treated as UTC midnight. Identical timestamps across multiple ranges are deduplicated into a single portal API call.
 
-### 2. Testing utilities — `@subsquid/pipes/testing`
+### 2. `defineAbi` — use standard JSON ABIs without code generation
+
+`defineAbi()` converts a standard JSON ABI (Solidity compiler output, Hardhat/Foundry artifact) into subsquid decoder objects at runtime — no `squid-evm-typegen` step required. Uses `@subsquid/evm-codec` under the hood for 10x faster decoding compared to viem.
+
+```ts
+import erc20Json from './erc20.json'
+import { defineAbi } from '@subsquid/pipes'
+
+const erc20 = defineAbi(erc20Json)
+
+evmDecoder({
+  range: { from: 'latest' },
+  events: {
+    transfers: erc20.events.Transfer,
+    approvals: erc20.events.Approval,
+  },
+})
+```
+
+Accepts a plain ABI array, an `as const` literal for full type inference, or a Hardhat/Foundry artifact with an `abi` field:
+
+```ts
+// Inline with `as const` — fully typed decode results
+const erc20 = defineAbi([
+  {
+    type: 'event',
+    name: 'Transfer',
+    inputs: [
+      { indexed: true, name: 'from', type: 'address' },
+      { indexed: true, name: 'to', type: 'address' },
+      { indexed: false, name: 'value', type: 'uint256' },
+    ],
+  },
+] as const)
+// erc20.events.Transfer.decode() returns { from: string, to: string, value: bigint }
+
+// From Hardhat artifact
+import artifact from './artifacts/MyContract.json'
+const myContract = defineAbi(artifact)
+```
+
+The returned object has `.events` and `.functions` maps that work directly with `evmDecoder()`, `evmQuery()`, and `factory()`.
+
+### 3. Testing utilities — `@subsquid/pipes/testing`
 
 A new public entry point with helpers for writing unit and integration tests against portal streams. Create mock portals, test loggers, mock metrics, and read stream output — without hitting real infrastructure.
 
@@ -227,7 +270,7 @@ await portal.close()
 | `createTestLogger()` | Creates a pino logger configured for test output |
 | `createMockMetricServer()` | Creates mock counter, gauge, and histogram metrics |
 
-### 3. EVM testing utilities — `@subsquid/pipes/testing/evm`
+### 4. EVM testing utilities — `@subsquid/pipes/testing/evm`
 
 A new public entry point with helpers for writing tests against EVM portal streams. Encode events with full type inference from viem ABIs, build mock blocks with auto-generated metadata, and spin up a mock portal server — all in a few lines.
 
@@ -253,7 +296,7 @@ const portal = await evmPortalMockStream({
 
 Works end-to-end with `evmDecoder` and `factory()` for testing Uniswap-style factory/child event patterns. Requires `viem` as an optional peer dependency.
 
-### 4. OpenTelemetry integration — `@subsquid/pipes/opentelemetry`
+### 5. OpenTelemetry integration — `@subsquid/pipes/opentelemetry`
 
 Export profiler spans to Jaeger, Tempo, or any OTEL-compatible backend:
 
@@ -269,7 +312,7 @@ evmPortalSource({
 
 Requires `@opentelemetry/api` (optional peer dependency) plus an OTEL SDK in the app.
 
-### 5. Runner — multi-pipe management (local development only)
+### 6. Runner — multi-pipe management (local development only)
 
 Define your pipe logic once, then run it against multiple datasets concurrently with shared metrics and automatic retries:
 
@@ -309,7 +352,7 @@ All pipes run concurrently in a single process, share a Prometheus metrics serve
 and each gets its own scoped logger and cursor persistence keyed by `id`.
 
 
-### 6. Typed error system with documentation links
+### 7. Typed error system with documentation links
 
 All framework errors extend `PipeError` and carry a unique code linking to the docs (`https://docs.sqd.dev/errors/<code>`).
 
@@ -321,7 +364,7 @@ All framework errors extend `PipeError` and carry a unique code linking to the d
 | `ForkCursorMissingError` | E1003 | Target `fork()` returned `null` |
 
 
-### 7. New Prometheus metrics
+### 8. New Prometheus metrics
 
 The following metrics are now collected automatically for every source:
 
