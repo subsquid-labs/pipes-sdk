@@ -4,7 +4,7 @@ import { commonAbis } from '~/evm/abi/common.js'
 import { evmDecoder } from '~/evm/evm-decoder.js'
 import { evmPortalSource } from '~/evm/evm-portal-source.js'
 
-import { MockPortal, closeMockPortal, readAll } from '../index.js'
+import { MockPortal, readAll } from '../index.js'
 import { evmPortalMockStream } from './evm-portal-mock-stream.js'
 import { encodeEvent, mockBlock, resetMockBlockCounter } from './mock-block.js'
 
@@ -41,7 +41,7 @@ describe('test-evm-data helpers', () => {
   })
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
 
   describe('encodeEvent', () => {

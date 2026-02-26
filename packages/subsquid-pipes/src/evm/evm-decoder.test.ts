@@ -6,7 +6,6 @@ import { PortalRange, QueryAwareTransformer } from '~/core/index.js'
 import {
   MockPortal,
   MockResponse,
-  closeMockPortal,
   createMockPortal,
   createTestLogger,
   readAll,
@@ -828,7 +827,7 @@ describe('evmDecoder transform', () => {
   })
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
 
   const PORTAL_MOCK_RESPONSE: MockResponse[] = [

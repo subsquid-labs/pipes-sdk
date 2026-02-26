@@ -5,7 +5,7 @@ import { Pool, QueryResultRow } from 'pg'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { evmPortalSource } from '~/evm/index.js'
-import { MockPortal, MockResponse, blockDecoder, closeMockPortal, createMockPortal } from '~/testing/index.js'
+import { MockPortal, MockResponse, blockDecoder, createMockPortal } from '~/testing/index.js'
 
 import { drizzleTarget } from './index.js'
 
@@ -33,7 +33,7 @@ describe('Drizzle target', () => {
   const db = drizzle(pool)
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
   afterAll(async () => {
     await pool.end()

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from 'vites
 
 import { createMemoryTarget } from '~/targets/memory/memory-target.js'
 import { encodeEvent, evmPortalMockStream, mockBlock, resetMockBlockCounter } from '~/testing/evm/index.js'
-import { MockPortal, closeMockPortal, createMockPortal, readAll } from '~/testing/index.js'
+import { MockPortal, createMockPortal, readAll } from '~/testing/index.js'
 
 import { FactoryEvent, evmDecoder } from './evm-decoder.js'
 import { evmPortalSource } from './evm-portal-source.js'
@@ -147,7 +147,7 @@ describe('Factory', () => {
   })
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
 
   it('should support bigint in parent event ', async () => {

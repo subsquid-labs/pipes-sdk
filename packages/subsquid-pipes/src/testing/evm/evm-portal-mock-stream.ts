@@ -1,6 +1,8 @@
 import { type MockPortal, type MockResponse, createMockPortal } from '../test-portal.js'
 import { type PortalBlock } from './mock-block.js'
 
+export { type MockPortal } from '../test-portal.js'
+
 /**
  * Creates a mock portal HTTP server that serves the given blocks as a stream response.
  *

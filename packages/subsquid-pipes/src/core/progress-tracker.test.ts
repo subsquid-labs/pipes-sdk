@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { evmQuery } from '~/evm/evm-query-builder.js'
 import { evmPortalSource } from '~/evm/index.js'
-import { MockPortal, closeMockPortal, createMockMetricServer, createMockPortal } from '~/testing/index.js'
+import { MockPortal, createMockMetricServer, createMockPortal } from '~/testing/index.js'
 
 function blockOutputs(range: { from: number; to: number }) {
   return evmQuery()
@@ -14,7 +14,7 @@ describe('Pipeline metrics', () => {
   let mockPortal: MockPortal
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
 
   it('should register all expected progress-tracker metrics', async () => {

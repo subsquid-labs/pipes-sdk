@@ -198,13 +198,7 @@ Date-only strings (e.g. `'2024-01-01'`) are treated as UTC midnight. Identical t
 A new public entry point with helpers for writing unit and integration tests against portal streams. Create mock portals, test loggers, mock metrics, and read stream output — without hitting real infrastructure.
 
 ```ts
-import {
-  createMockPortal,
-  closeMockPortal,
-  readAll,
-  createTestLogger,
-  createMockMetricServer,
-} from '@subsquid/pipes/testing'
+import { createMockPortal, createTestLogger, createMockMetricServer } from '@subsquid/pipes/testing'
 
 // Spin up a mock portal HTTP server with canned responses
 const portal = await createMockPortal(mockResponses)
@@ -218,22 +212,20 @@ const stream = evmPortalSource({
   outputs: evmDecoder({ ... }),
 })
 
-// Collect all output from the stream
-const results = await readAll(stream)
+for await (const { data } of stream) {
+  // process data
+}
 
-await closeMockPortal(portal)
+// Clean up
+await portal.close()
 ```
 
 | Utility | Description |
 |---|---|
-| `createMockPortal(responses, options?)` | Starts a local HTTP server that serves canned portal responses |
+| `createMockPortal(responses, options?)` | Starts a local HTTP server that serves canned portal responses. Returns a `MockPortal` with `.url` and `.close()` |
 | `createFinalizedMockPortal(responses)` | Same as above but marks all blocks as finalized |
-| `closeMockPortal(portal)` | Shuts down a mock portal server |
-| `readAll(stream)` | Collects all items from an async iterable into an array |
-| `mockPortalRestApi(overrides?)` | Creates a mock Portal REST API object for direct injection |
 | `createTestLogger()` | Creates a pino logger configured for test output |
 | `createMockMetricServer()` | Creates mock counter, gauge, and histogram metrics |
-| `blockDecoder(range)` | Creates a block decoder with auto-generated metadata for testing |
 
 ### 3. EVM testing utilities — `@subsquid/pipes/testing/evm`
 
