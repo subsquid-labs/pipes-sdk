@@ -193,7 +193,49 @@ Supported `from` / `to` formats:
 
 Date-only strings (e.g. `'2024-01-01'`) are treated as UTC midnight. Identical timestamps across multiple ranges are deduplicated into a single portal API call.
 
-### 2. EVM testing utilities — `@subsquid/pipes/testing/evm`
+### 2. Testing utilities — `@subsquid/pipes/testing`
+
+A new public entry point with helpers for writing unit and integration tests against portal streams. Create mock portals, test loggers, mock metrics, and read stream output — without hitting real infrastructure.
+
+```ts
+import {
+  createMockPortal,
+  closeMockPortal,
+  readAll,
+  createTestLogger,
+  createMockMetricServer,
+} from '@subsquid/pipes/testing'
+
+// Spin up a mock portal HTTP server with canned responses
+const portal = await createMockPortal(mockResponses)
+
+// Use portal.url with any portal source in your test
+const stream = evmPortalSource({
+  id: 'test',
+  portal: portal.url,
+  logger: createTestLogger(),
+  metrics: createMockMetricServer(),
+  outputs: evmDecoder({ ... }),
+})
+
+// Collect all output from the stream
+const results = await readAll(stream)
+
+await closeMockPortal(portal)
+```
+
+| Utility | Description |
+|---|---|
+| `createMockPortal(responses, options?)` | Starts a local HTTP server that serves canned portal responses |
+| `createFinalizedMockPortal(responses)` | Same as above but marks all blocks as finalized |
+| `closeMockPortal(portal)` | Shuts down a mock portal server |
+| `readAll(stream)` | Collects all items from an async iterable into an array |
+| `mockPortalRestApi(overrides?)` | Creates a mock Portal REST API object for direct injection |
+| `createTestLogger()` | Creates a pino logger configured for test output |
+| `createMockMetricServer()` | Creates mock counter, gauge, and histogram metrics |
+| `blockDecoder(range)` | Creates a block decoder with auto-generated metadata for testing |
+
+### 3. EVM testing utilities — `@subsquid/pipes/testing/evm`
 
 A new public entry point with helpers for writing tests against EVM portal streams. Encode events with full type inference from viem ABIs, build mock blocks with auto-generated metadata, and spin up a mock portal server — all in a few lines.
 
@@ -219,7 +261,7 @@ const portal = await evmPortalMockStream({
 
 Works end-to-end with `evmDecoder` and `factory()` for testing Uniswap-style factory/child event patterns. Requires `viem` as an optional peer dependency.
 
-### 3. OpenTelemetry integration — `@subsquid/pipes/opentelemetry`
+### 4. OpenTelemetry integration — `@subsquid/pipes/opentelemetry`
 
 Export profiler spans to Jaeger, Tempo, or any OTEL-compatible backend:
 
@@ -235,7 +277,7 @@ evmPortalSource({
 
 Requires `@opentelemetry/api` (optional peer dependency) plus an OTEL SDK in the app.
 
-### 4. Runner — multi-pipe management (local development only)
+### 5. Runner — multi-pipe management (local development only)
 
 Define your pipe logic once, then run it against multiple datasets concurrently with shared metrics and automatic retries:
 
@@ -275,7 +317,7 @@ All pipes run concurrently in a single process, share a Prometheus metrics serve
 and each gets its own scoped logger and cursor persistence keyed by `id`.
 
 
-### 5. Typed error system with documentation links
+### 6. Typed error system with documentation links
 
 All framework errors extend `PipeError` and carry a unique code linking to the docs (`https://docs.sqd.dev/errors/<code>`).
 
@@ -287,7 +329,7 @@ All framework errors extend `PipeError` and carry a unique code linking to the d
 | `ForkCursorMissingError` | E1003 | Target `fork()` returned `null` |
 
 
-### 6. New Prometheus metrics
+### 7. New Prometheus metrics
 
 The following metrics are now collected automatically for every source:
 
