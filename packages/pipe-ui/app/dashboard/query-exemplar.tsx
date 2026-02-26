@@ -2,9 +2,9 @@
 
 import { useMemo } from 'react'
 
+import { Code } from '~/components/ui/code'
 import { usePipe } from '~/hooks/use-metrics'
 import { useServerIndex } from '~/hooks/use-server-context'
-import { Code } from '~/components/ui/code'
 
 export function QueryExemplar({ pipeId }: { pipeId: string }) {
   const { serverIndex } = useServerIndex()

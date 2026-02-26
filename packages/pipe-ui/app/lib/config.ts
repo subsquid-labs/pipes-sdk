@@ -1,9 +1,11 @@
 import fs from 'fs'
 import path from 'path'
+
 import yaml from 'js-yaml'
 
 type MetricsServerEntry = {
   url: string
+  name?: string
 }
 
 type Config = {

@@ -2,10 +2,12 @@
 
 import { AlertCircle } from 'lucide-react'
 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import { displayEstimatedTime } from '~/dashboard/formatters'
 import { ApiStatus, type Pipe, PipeStatus, useStats } from '~/hooks/use-metrics'
 import { usePortalStatus } from '~/hooks/use-portal'
 import { useServerIndex } from '~/hooks/use-server-context'
+import { type Server, useServers } from '~/hooks/use-servers'
 
 function CircularProgress({ percent }: { percent: number }) {
   const r = 6
@@ -138,6 +140,28 @@ function PipeSelector({
   )
 }
 
+function ServerSelect({ servers }: { servers: Server[] }) {
+  const { serverIndex, setServerIndex } = useServerIndex()
+
+  return (
+    <div>
+      <div className="text-xs font-normal text-muted-foreground mb-1 w-[60px]">Server</div>
+      <Select value={String(serverIndex)} onValueChange={(v: string) => setServerIndex(Number(v))}>
+        <SelectTrigger className="w-full h-8 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {servers.map((server, index) => (
+            <SelectItem key={server.url} value={String(index)}>
+              {server.name || server.url}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
 export function Sidebar({
   pipes,
   selectedPipeId,
@@ -149,12 +173,20 @@ export function Sidebar({
 }) {
   const { serverIndex } = useServerIndex()
   const { data } = useStats(serverIndex)
+  const { data: servers } = useServers()
   const connected = data?.status === ApiStatus.Connected
 
   return (
     <div className="flex-[0_250px]">
       <div className="w-full mb-2">
         <h1 className="text-2xl font-normal mb-2">Pipes SDK</h1>
+
+        {servers && (
+          <div className="mt-2 mb-3">
+            <ServerSelect servers={servers} />
+          </div>
+        )}
+
         <div className="w-full flex flex-col items-start text-xs gap-2">
           <div className="flex items-center gap-2">
             <div className="text-xs font-normal text-muted-foreground w-[60px]">Status</div>
@@ -179,6 +211,7 @@ export function Sidebar({
         </div>
       </div>
       {/*<PortalStatus url={data?.pipes[0]?.portal.url} />*/}
+
       <div className="mt-2">
         <PipeSelector pipes={pipes} selectedPipeId={selectedPipeId} onSelectPipe={onSelectPipe} />
       </div>

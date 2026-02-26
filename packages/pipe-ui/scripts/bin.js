@@ -1,8 +1,14 @@
 #!/usr/bin/env node
 
 import { execSync } from 'node:child_process'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import cfonts from 'cfonts'
 import open from 'open'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const args = process.argv.slice(2)
 
@@ -20,7 +26,10 @@ async function main() {
     setTimeout(() => open(`http://localhost:${port}`), 2000)
   }
 
-  execSync(`npx next start -p ${port}`, { stdio: 'inherit' })
+  execSync(`node ${path.join(__dirname, 'server.js')}`, {
+    stdio: 'inherit',
+    env: { ...process.env, PORT: String(port), HOSTNAME: '0.0.0.0' },
+  })
 }
 
 main()

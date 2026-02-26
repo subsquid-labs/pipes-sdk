@@ -8,7 +8,6 @@ import { Button } from '~/components/ui/button'
 import { Logo } from '~/components/ui/logo'
 import { DashboardSkeleton } from '~/dashboard/dashboard-skeleton'
 import { Pipeline } from '~/dashboard/pipeline'
-import { ServerSelector } from '~/dashboard/server-selector'
 import { Sidebar } from '~/dashboard/sidebar'
 import { useStats } from '~/hooks/use-metrics'
 import { ServerContext } from '~/hooks/use-server-context'
@@ -29,9 +28,6 @@ export function Dashboard() {
               <Logo />
             </div>
             <div className="flex items-center gap-3 mb-8">
-              {servers && servers.length > 1 && (
-                <ServerSelector servers={servers} serverIndex={serverIndex} onSelect={setServerIndex} />
-              )}
               <Button asChild variant="outline">
                 <a href={`${DOCS_URL}/en/sdk/pipes-sdk/quickstart`} target="_blank">
                   Documentation
