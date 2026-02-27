@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import { client, getUrl } from '~/api/client'
 
 type ApiPortalStatus = {
   peer_id: string
@@ -21,17 +20,18 @@ type ApiPortalStatus = {
 }
 
 export function usePortalStatus(host?: string) {
-  const url = getUrl(host || '', '/status')
-
   return useQuery({
     enabled: !!host,
-    queryKey: ['portal/status'],
+    queryKey: ['portal/status', host],
     queryFn: async () => {
       try {
-        const res = await client.get<ApiPortalStatus>(url)
+        const res = await fetch(`/api/portal?host=${encodeURIComponent(host!)}`)
 
-        return res.data
-      } catch (error) {
+        if (!res.ok) return null
+
+        const data: ApiPortalStatus = await res.json()
+        return data
+      } catch {
         return null
       }
     },

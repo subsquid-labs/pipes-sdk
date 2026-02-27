@@ -170,7 +170,7 @@ button {
 }
 
 .dotted-background {
-  background-image: radial-gradient(circle at center, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-image: radial-gradient(circle at center, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
   background-size: 20px 20px; /* Controls the spacing between dots */
   background-repeat: repeat; /* Ensures the pattern repeats */
 }
@@ -206,11 +206,18 @@ button {
   height: 20px;
 }
 
+.tree-sm:before  {
+  left: -7px;
+}
+.tree-sm:after  {
+  left: -6px;
+  width: 6px;
+}
+
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-.skeleton-fade-in {
+}.skeleton-fade-in {
   animation: fade-in 500ms ease-in 400ms both;
 }
 .content-fade-in {

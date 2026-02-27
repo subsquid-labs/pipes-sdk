@@ -1,3 +1,5 @@
+'use client'
+
 import { useMemo } from 'react'
 
 import NumberFlow from '@number-flow/react'
@@ -5,7 +7,8 @@ import { Terminal } from 'lucide-react'
 // @ts-ignore
 import { Sparklines, SparklinesLine } from 'react-sparklines'
 
-import { PipeStatus, useStats } from '~/api/metrics'
+import { PipeStatus, useStats } from '~/hooks/use-metrics'
+import { useServerIndex } from '~/hooks/use-server-context'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { humanBytes } from '~/dashboard/formatters'
@@ -18,7 +21,8 @@ const sparklineStyle = { fill: '#d0a9e2' }
 const sparklineColor = 'rgb(170, 140, 235)'
 
 export function Pipeline({ pipeId }: { pipeId: string }) {
-  const { data, isError } = useStats()
+  const { serverIndex } = useServerIndex()
+  const { data, isError } = useStats(serverIndex)
 
   const pipe = data?.pipes.find((pipe) => pipe.id === pipeId)
 
