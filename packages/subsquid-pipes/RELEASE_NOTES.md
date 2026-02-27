@@ -374,7 +374,7 @@ The following metrics are now collected automatically for every source:
 | `sqd_last_block{id}` | gauge | Last known block number in the chain |
 | `sqd_progress_ratio{id}` | gauge | Indexing progress as a ratio from 0 to 1 |
 | `sqd_eta_seconds{id}` | gauge | Estimated time to full sync in seconds |
-| `sqd_blocks_per_second{id}` | gauge | Block processing speed |
+| `sqd_blocks_processed_total{id}` | counter | Total number of blocks processed |
 | `sqd_bytes_downloaded_total{id}` | counter | Total bytes downloaded from portal |
 | `sqd_forks_total{id}` | counter | Chain reorganizations detected |
 | `sqd_portal_requests_total{id, classification, status}` | counter | HTTP requests to the portal by status code |
