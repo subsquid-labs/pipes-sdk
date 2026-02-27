@@ -58,14 +58,14 @@ export function QueryExemplar({ pipeId }: { pipeId: string }) {
 
       {view === 'json' ? (
         query ? (
-          <Code language="json" className="text-xxs max-h-[400px] overflow-auto px-1">
+          <Code language="json" className="text-xxs max-h-[306px] overflow-auto px-1">
             {query}
           </Code>
         ) : (
           <div>No data</div>
         )
       ) : (
-        <Code language="bash" className="text-xxs max-h-[400px] overflow-auto px-1">
+        <Code language="bash" className="text-xxs max-h-[306px] overflow-auto px-1">
           {curl}
         </Code>
       )}

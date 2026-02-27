@@ -203,15 +203,24 @@ export function TransformationExemplar({ pipeId }: { pipeId: string }) {
       <div
         className={`absolute left-1 right-1 top-1 z-10 bg-background rounded-md flex items-center justify-between px-1 ${fullscreen ? 'fixed left-7 right-7 top-7' : ''}`}
       >
-        {activeBatch && (
-          <span
-            className={`text-xxs leading-none tabular-nums px-1 cursor-pointer select-none ${isLatest ? 'text-muted-foreground' : 'text-yellow-400'}`}
-            title={isLatest ? 'Click to freeze snapshot' : 'Click to resume auto-play'}
-            onClick={toggleFreeze}
-          >
-            Blocks {activeBatch.from.toLocaleString()} – {activeBatch.to.toLocaleString()}
-          </span>
-        )}
+        <span className="inline-flex items-center gap-0.5">
+          <Toggle size="sm" title={isLatest ? 'Pause' : 'Resume'} pressed={!isLatest} onClick={toggleFreeze}>
+            {isLatest ? (
+              <span className="size-3 rounded-full bg-red-500 animate-pulse ring-1 ring-red-500/50 ring-offset-2 ring-offset-transparent" />
+            ) : (
+              <span className="size-3 rounded-full bg-white/20 ring-2 ring-white/10" />
+            )}
+          </Toggle>
+          {activeBatch && (
+            <span
+              className={`text-xxs leading-none tabular-nums cursor-pointer select-none ${isLatest ? 'text-muted-foreground' : 'text-yellow-400'}`}
+              title={isLatest ? 'Click to freeze snapshot' : 'Click to resume auto-play'}
+              onClick={toggleFreeze}
+            >
+              Blocks {activeBatch.from.toLocaleString()} – {activeBatch.to.toLocaleString()}
+            </span>
+          )}
+        </span>
         <div className="rounded-md flex items-center">
           <span className="inline-flex items-center gap-0.5">
             <Toggle size="sm" title="Previous snapshot" onClick={goPrev} pressed={false} disabled={!hasPrev}>

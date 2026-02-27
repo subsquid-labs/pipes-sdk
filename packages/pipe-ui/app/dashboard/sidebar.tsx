@@ -41,35 +41,33 @@ function CircularProgress({ percent }: { percent: number }) {
   )
 }
 
-export function PortalStatus({ url }: { url?: string }) {
-  const host = url ? new URL(url).origin : ''
-
-  const { data } = usePortalStatus(host)
-  if (!data) return
-
-  return (
-    <div>
-      <div className="w-full">
-        <div className="mb-2">
-          <h1 className="text-md font-bold mb-2">Portal</h1>
-          <div className="text-secondary-foreground text-xxs">{host}</div>
-        </div>
-        <div className="flex flex-col items-start text-xs gap-2">
-          {data.portal_version && (
-            <div className="flex items-center gap-2">
-              <div className="text-muted-foreground w-[60px]">Version</div>
-              <div className=" flex items-center gap-1">{data.portal_version}</div>
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <div className="text-muted-foreground w-[60px]">Workers</div>
-            <div className=" flex items-center gap-1">{data.workers.active_count}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
+// export function PortalStatus({ url }: { url?: string }) {
+//   const host = url ? new URL(url).origin : ''
+//
+//   const { data } = usePortalStatus(host)
+//   if (!data) return
+//
+//   return (
+//     <div>
+//       <div className="w-full">
+//         <div className="mb-2">
+//           <h1 className="text-md font-bold mb-2">Portal</h1>
+//           <div className="text-secondary-foreground text-xxs">{host}</div>
+//         </div>
+//         <div className="flex flex-col items-start text-xs gap-2">
+//           <div className={`flex items-center gap-2 ${data.portal_version ? 'hidden' : ''}`}>
+//             <div className="text-muted-foreground w-[60px]">Version</div>
+//             <div className=" flex items-center gap-1">{data.portal_version}</div>
+//           </div>
+//           <div className="flex items-center gap-2">
+//             <div className="text-muted-foreground w-[60px]">Workers</div>
+//             <div className=" flex items-center gap-1">{data.workers.active_count}</div>
+//           </div>
+//         </div>
+//       </div>
+//     </div>
+//   )
+// }
 
 function PipeSelector({
   description,
@@ -93,46 +91,40 @@ function PipeSelector({
           <button
             key={pipe.id}
             onClick={() => onSelectPipe(pipe.id)}
-            className={`px-2 py-2 text-xs rounded-md border transition-colors ${
+            className={`px-2 py-1.5 text-xs rounded-md border transition-colors text-xxs ${
               pipe.id === selectedPipeId
                 ? 'bg-primary text-primary-foreground border-primary'
                 : 'bg-secondary/50 text-muted-foreground border-border hover:bg-secondary'
             }`}
           >
-            <div className="flex items-center gap-2">
-              <div className="flex flex-[0_32px] items-center justify-center">
-                {pipe.status === PipeStatus.Disconnected ? (
-                  <AlertCircle size={20} className="text-destructive opacity-75 shrink-0" />
-                ) : (
-                  <CircularProgress percent={pipe.progress.percent} />
-                )}
-              </div>
-              <div className="text-left w-full">
-                <div className="text-sm flex items-center gap-1.5 mb-1.5">
-                  {pipe.dataset?.metadata?.logo_url && (
-                    <img src={pipe.dataset.metadata.logo_url} alt="" className="w-4 h-4" />
-                  )}
-                  <span className="flex-1">{pipe.id}</span>
-                  {/*<span className="text-muted-foreground text-xxs">{pipe.dataset?.metadata?.display_name}</span>*/}
-                </div>
+            <div className="flex items-center gap-1.5 mb-1.5 h-[26px]">
+              {pipe.dataset?.metadata?.logo_url && (
+                <img src={pipe.dataset.metadata.logo_url} alt="" className="w-4 h-4" />
+              )}
+              <span className="text-sm flex-1 text-left">{pipe.id}</span>
+              {/*<span className="text-muted-foreground text-xxs">{pipe.dataset?.metadata?.display_name}</span>*/}
 
-                {pipe.status === PipeStatus.Calculating ? (
-                  <div className="flex w-full font-thin justify-between text-xxs animate-pulse">Calculating...</div>
-                ) : pipe.status === PipeStatus.Disconnected ? (
-                  <div className="flex w-full font-thin justify-between text-xxs text-destructive">Disconnected</div>
-                ) : (
-                  <div
-                    className={
-                      'flex w-full font-thin justify-between text-xxs' +
-                      (pipe.status === PipeStatus.Syncing ? ' animate-pulse' : '')
-                    }
-                  >
-                    <div>{pipe.progress.percent.toFixed(2)}%</div>
-                    <div>{displayEstimatedTime(pipe, { etaLabel: '≈' })}</div>
-                  </div>
-                )}
-              </div>
+              {pipe.status === PipeStatus.Disconnected ? (
+                <AlertCircle size={22} className="text-destructive opacity-75 shrink-0" />
+              ) : pipe.status === PipeStatus.Syncing ? (
+                <CircularProgress percent={pipe.progress.percent} />
+              ) : null}
             </div>
+
+            {pipe.status === PipeStatus.Calculating ? (
+              <div className="flex w-full font-thin justify-between animate-pulse">Calculating...</div>
+            ) : pipe.status === PipeStatus.Disconnected ? (
+              <div className="flex w-full font-thin justify-between text-destructive">Disconnected</div>
+            ) : (
+              <div
+                className={
+                  'flex w-full font-thin justify-between' + (pipe.status === PipeStatus.Syncing ? ' animate-pulse' : '')
+                }
+              >
+                <div>{pipe.progress.percent.toFixed(2)}%</div>
+                <div>{displayEstimatedTime(pipe, { etaLabel: '≈' })}</div>
+              </div>
+            )}
           </button>
         ))}
       </div>
@@ -202,13 +194,10 @@ export function Sidebar({
               </div>
             </div>
           </div>
-
-          {connected && data ? (
-            <div className="flex items-center gap-2">
-              <div className="text-xs font-normal text-muted-foreground w-[60px]">Version</div>
-              <div className=" flex items-center gap-1">{data.sdk.version}</div>
-            </div>
-          ) : null}
+          <div className={`flex items-center gap-2 ${data?.sdk?.version ? 'invisible' : ''}`}>
+            <div className="text-xs font-normal text-muted-foreground w-[60px]">Version</div>
+            <div className=" flex items-center gap-1">{data?.sdk?.version}</div>
+          </div>
         </div>
       </div>
       {/*<PortalStatus url={data?.pipes[0]?.portal.url} />*/}
