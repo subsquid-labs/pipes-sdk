@@ -31,10 +31,7 @@ export interface GaugeConfiguration<T extends string> extends MetricConfiguratio
 
 export interface Histogram<T extends string = string> {
   observe(value: number): void
-}
-export interface HistogramConfiguration<T extends string> extends MetricConfiguration<T> {
-  buckets?: number[]
-  collect?: CollectFunction<Histogram<T>>
+  observe(labels: LabelValues<T>, value: number): void
 }
 export interface HistogramConfiguration<T extends string> extends MetricConfiguration<T> {
   buckets?: number[]
@@ -64,8 +61,8 @@ export type Metrics = {
 export type MetricsServer = {
   start(): void
   stop(): Promise<void>
-  addBatchContext(ctx: BatchCtx): void
-  setLogger?(logger: any, override?: boolean): void
+  registerPipe(id: string): void
+  batchProcessed(ctx: BatchCtx): void
   metrics: Metrics
 }
 
@@ -83,23 +80,26 @@ class NoopSummary<T extends string> implements Summary<T> {
 }
 
 export function noopMetricsServer(): MetricsServer {
+  const metrics = {
+    counter<T extends string>(_options: CounterConfiguration<T>): Counter<T> {
+      return new NoopCounter()
+    },
+    gauge<T extends string>(_options: GaugeConfiguration<T>): Gauge<T> {
+      return new GaugeNoop()
+    },
+    histogram<T extends string>(options: HistogramConfiguration<T>): Histogram<T> {
+      return new HistogramNoop()
+    },
+    summary<T extends string>(_options: SummaryConfiguration<T>): Summary<T> {
+      return new NoopSummary()
+    },
+  }
+
   return {
     start() {},
     async stop() {},
-    addBatchContext(_ctx: BatchCtx) {},
-    metrics: {
-      counter<T extends string>(_options: CounterConfiguration<T>): Counter<T> {
-        return new NoopCounter()
-      },
-      gauge<T extends string>(_options: GaugeConfiguration<T>): Gauge<T> {
-        return new GaugeNoop()
-      },
-      histogram<T extends string>(options: HistogramConfiguration<T>): Histogram<T> {
-        return new HistogramNoop()
-      },
-      summary<T extends string>(_options: SummaryConfiguration<T>): Summary<T> {
-        return new NoopSummary()
-      },
-    },
+    registerPipe: () => {},
+    batchProcessed() {},
+    metrics,
   }
 }

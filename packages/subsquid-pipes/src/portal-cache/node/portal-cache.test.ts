@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PortalBatch } from '~/core/index.js'
 import { evmPortalSource } from '~/evm/index.js'
 import { portalSqliteCache } from '~/portal-cache/node/node-sqlite-cache-adapter.js'
-import { MockPortal, blockQuery, blockTransformer, closeMockPortal, createMockPortal } from '~/tests/index.js'
+import { MockPortal, blockDecoder, createMockPortal } from '~/testing/index.js'
 
 // Transform batch to only include data and meta without any functions or complex objects
 const transformBatch = ({
@@ -62,7 +62,7 @@ describe('Portal cache', () => {
   let mockPortal: MockPortal
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
 
   beforeEach(async () => {
@@ -92,9 +92,9 @@ describe('Portal cache', () => {
 
       const stream = evmPortalSource({
         portal: mockPortal.url,
-        query: blockQuery({ from: 0, to: 5 }),
+        outputs: blockDecoder({ from: 0, to: 5 }),
         cache,
-      }).pipe(blockTransformer())
+      })
 
       const res1 = (await readAllChunks(stream)).map(transformBatch)
       const res2 = (await readAllChunks(stream)).map(transformBatch)
@@ -142,7 +142,7 @@ describe('Portal cache', () => {
                 "bytesSize": 265,
               },
               "query": {
-                "hash": "8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b",
+                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
                 "raw": {
                   "fields": {
                     "block": {
@@ -152,8 +152,12 @@ describe('Portal cache', () => {
                     },
                   },
                   "fromBlock": 0,
+                  "logs": undefined,
                   "parentBlockHash": undefined,
+                  "stateDiffs": undefined,
                   "toBlock": 5,
+                  "traces": undefined,
+                  "transactions": undefined,
                   "type": "evm",
                 },
               },
@@ -175,7 +179,7 @@ describe('Portal cache', () => {
       // check stored rows by query hash
       const rows = await readAllChunks(
         cache.stream({
-          queryHash: '8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b',
+          queryHash: '1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5',
           fromBlock: 0,
         }),
       )
@@ -219,18 +223,18 @@ describe('Portal cache', () => {
 
       const stream = evmPortalSource({
         portal: mockPortal.url,
-        query: blockQuery({ from: 6, to: 10 }),
+        outputs: blockDecoder({ from: 6, to: 10 }),
         cache,
-      }).pipe(blockTransformer())
+      })
 
       await readAllChunks(stream) // first pass to store data
 
       // now request from 0 to 5, should not reuse data from 6 to 10
       const stream2 = evmPortalSource({
         portal: mockPortal.url,
-        query: blockQuery({ from: 0, to: 5 }),
+        outputs: blockDecoder({ from: 0, to: 5 }),
         cache,
-      }).pipe(blockTransformer())
+      })
 
       const res2 = (await readAllChunks(stream2)).map(transformBatch)
 
@@ -276,7 +280,7 @@ describe('Portal cache', () => {
                 "bytesSize": 265,
               },
               "query": {
-                "hash": "8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b",
+                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
                 "raw": {
                   "fields": {
                     "block": {
@@ -309,7 +313,7 @@ describe('Portal cache', () => {
       // check stored rows by query hash
       const rows = await readAllChunks(
         cache.stream({
-          queryHash: '8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b',
+          queryHash: '1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5',
           fromBlock: 0,
         }),
       )
@@ -351,9 +355,9 @@ describe('Portal cache', () => {
 
       const stream = evmPortalSource({
         portal: mockPortal.url,
-        query: blockQuery({ from: 0, to: 5 }),
+        outputs: blockDecoder({ from: 0, to: 5 }),
         cache,
-      }).pipe(blockTransformer())
+      })
 
       const res1 = (await readAllChunks(stream)).map(transformBatch)
       const res2 = (await readAllChunks(stream)).map(transformBatch)
@@ -390,7 +394,7 @@ describe('Portal cache', () => {
                 "bytesSize": 159,
               },
               "query": {
-                "hash": "8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b",
+                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
                 "raw": {
                   "fields": {
                     "block": {
@@ -443,7 +447,7 @@ describe('Portal cache', () => {
                 "bytesSize": 53,
               },
               "query": {
-                "hash": "8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b",
+                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
                 "raw": {
                   "fields": {
                     "block": {
@@ -496,7 +500,7 @@ describe('Portal cache', () => {
                 "bytesSize": 53,
               },
               "query": {
-                "hash": "8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b",
+                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
                 "raw": {
                   "fields": {
                     "block": {
@@ -558,7 +562,7 @@ describe('Portal cache', () => {
                 "bytesSize": 159,
               },
               "query": {
-                "hash": "8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b",
+                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
                 "raw": {
                   "fields": {
                     "block": {
@@ -568,8 +572,12 @@ describe('Portal cache', () => {
                     },
                   },
                   "fromBlock": 0,
+                  "logs": undefined,
                   "parentBlockHash": undefined,
+                  "stateDiffs": undefined,
                   "toBlock": 5,
+                  "traces": undefined,
+                  "transactions": undefined,
                   "type": "evm",
                 },
               },
@@ -615,7 +623,7 @@ describe('Portal cache', () => {
                 "bytesSize": 159,
               },
               "query": {
-                "hash": "8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b",
+                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
                 "raw": {
                   "fields": {
                     "block": {
@@ -625,8 +633,12 @@ describe('Portal cache', () => {
                     },
                   },
                   "fromBlock": 0,
+                  "logs": undefined,
                   "parentBlockHash": undefined,
+                  "stateDiffs": undefined,
                   "toBlock": 5,
+                  "traces": undefined,
+                  "transactions": undefined,
                   "type": "evm",
                 },
               },
@@ -648,7 +660,7 @@ describe('Portal cache', () => {
       // check stored rows by query hash
       const rows = await readAllChunks(
         cache.stream({
-          queryHash: '8a25fdd5bc0512cc5476ef532e2dbfb72f4800e18873d8fc500cee9ec1d0f15b',
+          queryHash: '1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5',
           fromBlock: 0,
         }),
       )

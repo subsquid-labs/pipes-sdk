@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { mockPortalRestApi } from '~/testing/index.js'
+
 import { SolanaQueryBuilder } from './solana-query-builder.js'
 
 describe('SolanaQueryBuilder', () => {
@@ -9,7 +11,9 @@ describe('SolanaQueryBuilder', () => {
       builder.addRange({ from: 'latest' })
 
       const { bounded } = await builder.calculateRanges({
-        portal: { getHead: async () => ({ number: 15, hash: '0x' }) },
+        portal: mockPortalRestApi({
+          getHead: async () => ({ number: 15, hash: '0x' }),
+        }),
       })
 
       expect(bounded).toMatchInlineSnapshot(`
@@ -29,7 +33,9 @@ describe('SolanaQueryBuilder', () => {
       builder.addRange({ from: 'latest' })
 
       const { bounded } = await builder.calculateRanges({
-        portal: { getHead: async () => ({ number: 15, hash: '0x' }) },
+        portal: mockPortalRestApi({
+          getHead: async () => ({ number: 15, hash: '0x' }),
+        }),
         bound: { from: 10 },
       })
 

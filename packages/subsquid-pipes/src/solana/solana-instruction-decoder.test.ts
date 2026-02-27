@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { solanaInstructionDecoder } from '~/solana/solana-instruction-decoder.js'
 import { solanaPortalSource } from '~/solana/solana-portal-source.js'
-import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/tests/test-server.js'
+import { MockPortal, MockResponse, createMockPortal, readAll } from '~/testing/index.js'
 
 import * as tokenProgram from './abi/tokenProgram/index.js'
 
@@ -10,7 +10,7 @@ describe('solanaInstructionDecoder transform', () => {
   let mockPortal: MockPortal
 
   beforeEach(async () => {
-    if (mockPortal) closeMockPortal(mockPortal)
+    await mockPortal?.close()
     mockPortal = await createMockPortal(PORTAL_MOCK_RESPONSE)
   })
 
@@ -42,17 +42,14 @@ describe('solanaInstructionDecoder transform', () => {
     const stream = solanaPortalSource({
       portal: mockPortal.url,
       logger: false,
+      outputs: solanaInstructionDecoder({
+        range: { from: 0, to: 1 },
+        programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+        instructions: {
+          transfers: tokenProgram.instructions.transfer,
+        },
+      }).pipe((e) => e.transfers),
     })
-      .pipe(
-        solanaInstructionDecoder({
-          range: { from: 0, to: 1 },
-          programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-          instructions: {
-            transfers: tokenProgram.instructions.transfer,
-          },
-        }),
-      )
-      .pipe((e) => e.transfers)
 
     const res = await readAll(stream)
 
@@ -76,21 +73,22 @@ describe('solanaInstructionDecoder transform', () => {
     const stream = solanaPortalSource({
       portal: mockPortal.url,
       logger: false,
-    }).pipeComposite({
-      validProgramId: solanaInstructionDecoder({
-        range: { from: 0, to: 1 },
-        programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-        instructions: {
-          transfers: tokenProgram.instructions.transfer,
-        },
-      }),
-      unknownProgramId: solanaInstructionDecoder({
-        range: { from: 0, to: 1 },
-        programId: 'xxxx',
-        instructions: {
-          transfers: tokenProgram.instructions.transfer,
-        },
-      }),
+      outputs: {
+        validProgramId: solanaInstructionDecoder({
+          range: { from: 0, to: 1 },
+          programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+          instructions: {
+            transfers: tokenProgram.instructions.transfer,
+          },
+        }),
+        unknownProgramId: solanaInstructionDecoder({
+          range: { from: 0, to: 1 },
+          programId: 'xxxx',
+          instructions: {
+            transfers: tokenProgram.instructions.transfer,
+          },
+        }),
+      },
     })
 
     const valid = []

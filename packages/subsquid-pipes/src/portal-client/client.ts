@@ -16,6 +16,22 @@ import { npmVersion } from '~/version.js'
 import { ForkException } from './fork-exception.js'
 import { GetBlock, PortalQuery, Query } from './query/index.js'
 
+export type ApiDataset = {
+  dataset: string
+  aliases: string[]
+  real_time: boolean
+  start_block: number
+  metadata?: {
+    kind: string
+    display_name?: string
+    logo_url?: string
+    type?: string
+    evm?: {
+      chain_id: number
+    }
+  }
+}
+
 const USER_AGENT = `@subsquid/pipes:${npmVersion}`
 
 export interface PortalClientOptions {
@@ -143,15 +159,21 @@ export class PortalClient {
     return u.toString()
   }
 
-  async getMetadata(options?: PortalRequestOptions): Promise<{
-    dataset: string
-    aliases: string[]
-    real_time: boolean
-    start_block: number
-  }> {
-    const res = await this.request('GET', this.getDatasetUrl('metadata'), options)
+  async getMetadata(options?: PortalRequestOptions): Promise<ApiDataset> {
+    const url = this.getDatasetUrl('metadata') + '?expand[]=metadata'
+    const res = await this.request('GET', url, options)
 
     return res.body
+  }
+
+  async resolveTimestamp(seconds: number, options?: PortalRequestOptions): Promise<number> {
+    const res = await this.request<{ block_number: number }>(
+      'GET',
+      this.getDatasetUrl(`timestamps/${seconds}/block`),
+      options,
+    )
+
+    return res.body.block_number
   }
 
   async getHead(options?: PortalRequestOptions & { finalized: boolean }): Promise<BlockRef | undefined> {

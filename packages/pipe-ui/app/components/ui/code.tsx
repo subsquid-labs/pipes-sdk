@@ -1,3 +1,5 @@
+'use client'
+
 import React, { memo } from 'react'
 
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter'

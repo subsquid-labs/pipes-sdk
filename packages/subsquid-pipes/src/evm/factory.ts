@@ -1,9 +1,9 @@
 import { AbiEvent } from '@subsquid/evm-abi'
 import type { Codec } from '@subsquid/evm-codec'
 
-import { BlockCursor, Logger, PortalRange, createTarget, parsePortalRange } from '~/core/index.js'
+import { BlockCursor, Logger, PortalRange, createDefaultLogger, createTarget, parsePortalRange } from '~/core/index.js'
 import { arrayify } from '~/internal/array.js'
-import { PortalClient } from '~/portal-client/client.js'
+import { PortalClient, PortalClientOptions } from '~/portal-client/client.js'
 import { Log, LogRequest } from '~/portal-client/query/evm.js'
 
 import {
@@ -13,8 +13,8 @@ import {
   IndexedParams,
   buildEventTopics,
   evmDecoder,
-  isEventWithArgs,
   getNormalizedEventParams,
+  isEventWithArgs,
 } from './evm-decoder.js'
 import { evmPortalSource } from './evm-portal-source.js'
 
@@ -46,11 +46,14 @@ export type DecodedAbiEvent<T extends EventArgs> = ReturnType<AbiEvent<T>['decod
 export type FactoryOptions<T extends EventArgs> = {
   address: string | string[]
   event: AbiEvent<T> | EventWithArgsInput<AbiEvent<T>>
-  _experimental_preindex?: { from: number | string; to: number | string }
   parameter: keyof T | ((data: DecodedAbiEvent<T>) => string | null)
+  /** 
+   * It is safe to use `any` here because the FactoryPersistentAdapter generic argument
+   * will be inferred in the constructor of `Factory`
+   */
   database:
-    | FactoryPersistentAdapter<InternalFactoryEvent<T>>
-    | Promise<FactoryPersistentAdapter<InternalFactoryEvent<T>>>
+    | FactoryPersistentAdapter<InternalFactoryEvent<any>>
+    | Promise<FactoryPersistentAdapter<InternalFactoryEvent<any>>>
 }
 
 export class Factory<T extends EventArgs> {
@@ -59,6 +62,8 @@ export class Factory<T extends EventArgs> {
   readonly #addresses: Set<string>
   readonly #event: AbiEvent<T>
   readonly #params: IndexedParams<AbiEvent<T>>
+
+  #preIndexRange?: { from: number; to: number }
 
   constructor(private options: FactoryOptions<T>) {
     this.#addresses = new Set(arrayify(this.options.address).map((a) => a.toLowerCase()))
@@ -183,68 +188,69 @@ export class Factory<T extends EventArgs> {
     return true
   }
 
-  preIndexRange() {
-    return this.options._experimental_preindex
-      ? (parsePortalRange(this.options._experimental_preindex) as { from: number; to: number })
-      : undefined
+  isPreIndexed() {
+    return this.#preIndexRange !== undefined
   }
 
-  async startPreIndex({
+  async preindex({
     name,
     logger,
     portal,
     range,
   }: {
-    name: string
-    range: PortalRange
-    logger: Logger
-    portal: PortalClient
+    name?: string
+    range: { from: string; to: string }
+    logger?: Logger
+    portal: PortalClient | PortalClientOptions | string
   }) {
+    name = name || `factory preindexing ${this.factoryAddress().join(', ')}`
+
+    this.#preIndexRange = parsePortalRange(range) as { from: number; to: number }
+
+    logger = logger || createDefaultLogger()
+
     logger.info(`Starting ${name}`)
 
     await evmPortalSource({
       portal,
       logger,
-    })
-      .pipe(
-        evmDecoder({
-          profiler: { id: name },
-          contracts: this.factoryAddress(),
-          range,
-          events: {
-            factory: Object.keys(this.#params).length > 0 ? { event: this.#event, params: this.#params } : this.#event,
-          },
-        }),
-      )
-      .pipeTo(
-        createTarget({
-          write: async ({ read }) => {
-            for await (const { data } of read()) {
-              const res: InternalFactoryEvent<T>[] = []
+      outputs: evmDecoder({
+        profiler: { name: name || `preindex` },
+        contracts: this.factoryAddress(),
+        range,
+        events: {
+          factory: Object.keys(this.#params).length > 0 ? { event: this.#event, params: this.#params } : this.#event,
+        },
+      }),
+    }).pipeTo(
+      createTarget({
+        write: async ({ read }) => {
+          for await (const { data } of read()) {
+            const res: InternalFactoryEvent<T>[] = []
 
-              for (const event of data.factory) {
-                const contract =
-                  typeof this.options.parameter === 'function'
-                    ? this.options.parameter(event.event)
-                    : String(event.event[this.options.parameter])
+            for (const event of data.factory) {
+              const contract =
+                typeof this.options.parameter === 'function'
+                  ? this.options.parameter(event.event)
+                  : String(event.event[this.options.parameter])
 
-                if (!contract) continue
+              if (!contract) continue
 
-                res.push({
-                  childAddress: contract,
-                  factoryAddress: event.contract,
-                  blockNumber: event.block.number,
-                  transactionIndex: event.rawEvent.transactionIndex,
-                  logIndex: event.rawEvent.logIndex,
-                  event: event.event,
-                })
-              }
-
-              await this.assertDb().save(res)
+              res.push({
+                childAddress: contract,
+                factoryAddress: event.contract,
+                blockNumber: event.block.number,
+                transactionIndex: event.rawEvent.transactionIndex,
+                logIndex: event.rawEvent.logIndex,
+                event: event.event,
+              })
             }
-          },
-        }),
-      )
+
+            await this.assertDb().save(res)
+          }
+        },
+      }),
+    )
 
     logger.info(`Finished ${name}`)
   }

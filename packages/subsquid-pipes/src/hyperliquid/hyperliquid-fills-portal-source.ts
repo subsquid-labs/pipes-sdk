@@ -1,69 +1,97 @@
 import { cast } from '@subsquid/util-internal-validation'
+
 import { MetricsServer } from '~/core/metrics-server.js'
 import { ProgressTrackerOptions, progressTracker } from '~/core/progress-tracker.js'
+import * as hl from '~/portal-client/query/hyperliquid-fills.js'
+
 import {
-  createDefaultLogger,
-  createTransformer,
-  Logger,
   LogLevel,
+  Logger,
+  Outputs,
   PortalCache,
-  PortalRange,
   PortalSource,
+  SpanHooks,
   Transformer,
+  createTransformer,
+  mergeOutputs,
 } from '../core/index.js'
-import { getBlockSchema, hyperliquidFills, PortalClientOptions } from '../portal-client/index.js'
-import { HyperliquidFillsQueryBuilder } from './hyperliquid-fills-query-builder.js'
+import { PortalClientOptions, getBlockSchema } from '../portal-client/index.js'
+import { HyperliquidFillsPortalData, HyperliquidFillsQueryBuilder } from './hyperliquid-fills-query-builder.js'
 
-export type HyperliquidFillsTransformer<In, Out> = Transformer<In, Out, HyperliquidFillsQueryBuilder>
+export type HyperliquidFillsFieldSelection = hl.FieldSelection
 
-export type HyperliquidFillsPortalData<F extends hyperliquidFills.FieldSelection> = {
-  blocks: hyperliquidFills.Block<F>[]
-}
+export * as api from '../portal-client/query/hyperliquid-fills.js'
 
-export function hyperliquidFillsPortalSource<F extends hyperliquidFills.FieldSelection = any>({
+export type HyperliquidFillsOutputs = Outputs<hl.FieldSelection, HyperliquidFillsQueryBuilder<any>>
+
+type HyperliquidFillsPortalStream<T extends HyperliquidFillsOutputs> =
+  T extends HyperliquidFillsQueryBuilder<infer Q>
+    ? HyperliquidFillsPortalData<Q>
+    : T extends Transformer<any, infer O>
+      ? O
+      : T extends Record<string, Transformer<any, any> | HyperliquidFillsQueryBuilder<any>>
+        ? {
+            [K in keyof T]: T[K] extends Transformer<any, infer O>
+              ? O
+              : T[K] extends HyperliquidFillsQueryBuilder<infer Q>
+                ? HyperliquidFillsPortalData<Q>
+                : never
+          }
+        : never
+
+export function hyperliquidFillsPortalSource<Out extends HyperliquidFillsOutputs>({
+  id,
   portal,
-  query,
+  outputs,
   cache,
   logger,
   metrics,
+  profiler,
   progress,
 }: {
+  /**
+   * Globally unique, stable identifier for this pipe.
+   * Targets use it as a cursor key to persist progress — two pipes with the
+   * same `id` will share (and overwrite) each other's cursor.
+   * Required when calling `.pipeTo()`.
+   */
+  id?: string
   portal: string | PortalClientOptions
-  query?: PortalRange | HyperliquidFillsQueryBuilder<F>
+  outputs: Out
   cache?: PortalCache
   metrics?: MetricsServer
   logger?: Logger | LogLevel
+  profiler?: boolean | SpanHooks
   progress?: ProgressTrackerOptions
 }) {
-  logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ level: logger })
+  type F = { block: { hash: true; number: true } }
+  const query = new HyperliquidFillsQueryBuilder<F>().addFields({
+    block: { hash: true, number: true },
+  })
 
-  return new PortalSource<HyperliquidFillsQueryBuilder<F>, HyperliquidFillsPortalData<F>>({
+  return new PortalSource<HyperliquidFillsQueryBuilder<F>, HyperliquidFillsPortalStream<Out>>({
+    id,
     portal,
-    query: !query
-      ? new HyperliquidFillsQueryBuilder<F>()
-      : query instanceof HyperliquidFillsQueryBuilder
-        ? query
-        : new HyperliquidFillsQueryBuilder<F>().addRange(query),
+    query,
     cache,
     logger,
     metrics,
+    profiler,
     transformers: [
       progressTracker({
-        logger,
         interval: progress?.interval,
         onStart: progress?.onStart,
         onProgress: progress?.onProgress,
       }),
       createTransformer<HyperliquidFillsPortalData<F>, HyperliquidFillsPortalData<F>>({
-        profiler: { id: 'normalize data' },
+        profiler: { name: 'normalize data' },
         transform: (data, ctx) => {
-          const schema = getBlockSchema<hyperliquidFills.Block<F>>(ctx.query.raw)
+          const schema = getBlockSchema<hl.Block<F>>(ctx.query.raw)
 
-          data.blocks = data.blocks.map((b) => cast(schema, b))
-
-          return data
+          return data.map((b) => cast(schema, b))
         },
       }),
+      mergeOutputs(outputs),
     ],
   })
 }

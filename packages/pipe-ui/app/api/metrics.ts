@@ -1,14 +1,14 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+
 import { client, getUrl } from '~/api/client'
 
 type HttpResponse<T> = {
   payload: T
 }
 
-export type Stats = {
-  sdk: {
-    version: string
-  }
+type ApiPipe = {
+  id: string
+
   portal: {
     url: string
     query: any
@@ -24,52 +24,137 @@ export type Stats = {
     blocksPerSecond: number
     bytesPerSecond: number
   }
-  usage: {
-    memory: number
-  }
 }
 
-const MAX_HISTORY = 30
-let history: {
+type PipeHistory = {
   blocksPerSecond: number
   bytesPerSecond: number
   memory: number
-}[] = new Array(MAX_HISTORY).fill({
-  blocksPerSecond: 0,
-  bytesPerSecond: 0,
-  memory: 0,
-})
+}
+
+export enum ApiStatus {
+  Connected = 'Connected',
+  Disconnected = 'Disconnected',
+}
+
+export enum PipeStatus {
+  Calculating = 'Calculating',
+  Syncing = 'Syncing',
+  Synced = 'Synced',
+  Disconnected = 'Disconnected',
+}
+
+export type Pipe = ApiPipe & {
+  status: PipeStatus
+  history: PipeHistory[]
+}
+
+export type ApiStats = {
+  sdk: {
+    version: string
+  }
+  code?: {
+    filename: string
+  }
+  usage: {
+    memory: number
+  }
+  pipes: ApiPipe[]
+}
+
+const MAX_HISTORY = 30
+
+const histories = new Map<string, PipeHistory[]>()
+
+function getHistory(pipeId: string) {
+  let history = histories.get(pipeId)
+  if (!history) {
+    history = new Array(MAX_HISTORY).fill({
+      blocksPerSecond: 0,
+      bytesPerSecond: 0,
+      memory: 0,
+    })
+    histories.set(pipeId, history)
+  }
+  return history
+}
+
+const BASE_URL = 'http://127.0.0.1:9090'
+
+type StatsResult = Omit<ApiStats, 'pipes'> & {
+  status: ApiStatus
+  pipes: Pipe[]
+}
 
 export function useStats() {
-  const url = getUrl('http://127.0.0.1:9090', '/stats')
+  const url = getUrl(BASE_URL, `/stats`)
+  const queryClient = useQueryClient()
 
   return useQuery({
     queryKey: ['pipe/stats'],
-    queryFn: async () => {
+    queryFn: async (): Promise<StatsResult> => {
       try {
-        const res = await client<HttpResponse<Stats>>(url, {
-          withCredentials: true,
-        })
-
-        history.push({
-          bytesPerSecond: res.data.payload.speed.bytesPerSecond,
-          blocksPerSecond: res.data.payload.speed.blocksPerSecond,
-          memory: res.data.payload.usage.memory,
-        })
-
-        history = history.slice(-MAX_HISTORY)
+        const res = await client<HttpResponse<ApiStats>>(url)
 
         return {
           ...res.data.payload,
-          history,
+          status: ApiStatus.Connected,
+          pipes: res.data.payload.pipes.map((pipe): Pipe => {
+            let history = getHistory(pipe.id)
+
+            history.push({
+              bytesPerSecond: pipe.speed.bytesPerSecond,
+              blocksPerSecond: pipe.speed.blocksPerSecond,
+              memory: res.data.payload.usage.memory,
+            })
+
+            history = history.slice(-MAX_HISTORY)
+            histories.set(pipe.id, history)
+
+            let status = PipeStatus.Syncing
+            if (pipe.progress.percent === 0) {
+              status = PipeStatus.Calculating
+            } else if (pipe.progress.etaSeconds < 1) {
+              status = PipeStatus.Synced
+            }
+
+            return {
+              ...pipe,
+              status,
+              history,
+            }
+          }),
         }
       } catch (error) {
-        return null
+        const prev = queryClient.getQueryData<StatsResult>(['pipe/stats'])
+        if (prev) {
+          return {
+            ...prev,
+            status: ApiStatus.Disconnected,
+            pipes: prev.pipes.map((pipe) => ({ ...pipe, status: PipeStatus.Disconnected })),
+          }
+        }
+        return {
+          status: ApiStatus.Disconnected,
+          sdk: { version: '' },
+          usage: { memory: 0 },
+          pipes: [],
+        }
       }
     },
 
+    // No retry — refetchInterval already handles re-polling, and retries would delay showing the disconnected state
+    retry: false,
     refetchInterval: 1000,
   })
+}
+
+export function usePipe(id: string) {
+  const { data: stats } = useStats()
+
+  const data = stats?.pipes.find((pipe) => pipe.id === id)
+
+  return data
 }
 
 export type ApiProfilerResult = {
@@ -78,28 +163,26 @@ export type ApiProfilerResult = {
   children: ApiProfilerResult[]
 }
 
-export function useProfilers({ enabled = true }: { enabled?: boolean } = {}) {
-  const url = getUrl('http://127.0.0.1:9090', '/profiler')
+export function useProfilers({ enabled = true, pipeId }: { enabled?: boolean; pipeId: string }) {
+  const url = getUrl(BASE_URL, `/profiler?id=${pipeId}`)
 
   return useQuery({
-    queryKey: ['pipe/profiler'],
+    queryKey: ['pipe/profiler', pipeId],
     queryFn: async () => {
-      try {
-        const res = await client<
-          HttpResponse<{
-            enabled: boolean
-            profilers: ApiProfilerResult[]
-          }>
-        >(url, {
-          withCredentials: true,
-        })
+      const res = await client<
+        HttpResponse<{
+          enabled: boolean
+          profilers: ApiProfilerResult[]
+        }>
+      >(url, {
+        withCredentials: true,
+      })
 
-        return res.data.payload
-      } catch (error) {
-        return null
-      }
+      return res.data.payload
     },
     enabled,
+    // No retry — refetchInterval already handles re-polling, and retries would delay showing the disconnected state
+    retry: false,
     refetchInterval: 2000,
   })
 }
@@ -110,27 +193,25 @@ export type ApiExemplarResult = {
   children: ApiExemplarResult[]
 }
 
-export function useTransformationExemplar({ enabled = true }: { enabled?: boolean } = {}) {
-  const url = getUrl('http://127.0.0.1:9090', '/exemplars/transformation')
+export function useTransformationExemplar({ enabled = true, pipeId }: { enabled?: boolean; pipeId: string }) {
+  const url = getUrl(BASE_URL, `/exemplars/transformation?id=${pipeId}`)
 
   return useQuery({
-    queryKey: ['pipe/exemplars/transformation'],
+    queryKey: ['pipe/exemplars/transformation', pipeId],
     queryFn: async () => {
-      try {
-        const res = await client<
-          HttpResponse<{
-            transformation: ApiExemplarResult
-          }>
-        >(url, {
-          withCredentials: true,
-        })
+      const res = await client<
+        HttpResponse<{
+          transformation: ApiExemplarResult
+        }>
+      >(url, {
+        withCredentials: true,
+      })
 
-        return res.data.payload
-      } catch (error) {
-        return null
-      }
+      return res.data.payload
     },
     enabled,
+    // No retry — refetchInterval already handles re-polling, and retries would delay showing the disconnected state
+    retry: false,
     refetchInterval: 1500,
   })
 }

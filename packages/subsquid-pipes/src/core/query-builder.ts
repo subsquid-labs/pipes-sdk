@@ -1,6 +1,8 @@
-import { PortalRange, parsePortalRange } from '~/core/portal-range.js'
 import { Query } from '~/portal-client/index.js'
+
 import { Heap } from '../internal/heap.js'
+import { PortalRange, parsePortalRange } from './portal-range.js'
+import { QueryAwareTransformer, SetupQueryFn, TransformerArgs } from './transformer.js'
 
 /**
  * A range of blocks with inclusive boundaries
@@ -10,7 +12,7 @@ export type Range = {
   to?: number
 }
 
-export type NaturalRange = Range | { from: 'latest'; to?: number }
+export type NaturalRange = { from: number | 'latest' | Date; to?: number | Date }
 
 export interface RangeRequest<Req, R = Range> {
   range: R
@@ -22,8 +24,8 @@ export type RequestOptions<R> = {
   request: R
 }
 
-export type Subset<T, U> = {
-  [K in keyof T]: K extends keyof U ? T[K] : never
+export type QueryTransformerOpts<In, Out, Query extends QueryBuilder<any>> = TransformerArgs<In, Out> & {
+  setupQuery?: SetupQueryFn<Query>
 }
 
 export abstract class QueryBuilder<F extends {}, R = any> {
@@ -33,6 +35,7 @@ export abstract class QueryBuilder<F extends {}, R = any> {
   abstract getType(): string
   abstract mergeDataRequests(...requests: R[]): R
   abstract addFields(fields: F): QueryBuilder<F, R>
+  abstract build(opts?: { setupQuery?: SetupQueryFn<any> }): QueryAwareTransformer<any, any, any>
 
   getRequests() {
     return this.requests
@@ -65,6 +68,8 @@ export abstract class QueryBuilder<F extends {}, R = any> {
   }): Promise<{ bounded: RangeRequest<R>[]; raw: RangeRequest<R>[] }> {
     const latest = this.requests.some((r) => r.range.from === 'latest') ? await portal.getHead() : undefined
 
+    const resolvedTimestamps = await this.resolveTimestamps(portal)
+
     const ranges = mergeRangeRequests(
       this.requests.map((r) => ({
         range:
@@ -72,7 +77,10 @@ export abstract class QueryBuilder<F extends {}, R = any> {
             ? {
                 from: Math.min(latest?.number || 0, bound?.from || Infinity),
               }
-            : r.range,
+            : {
+                from: resolveRangeValue(r.range.from, resolvedTimestamps),
+                to: resolveRangeValue(r.range.to, resolvedTimestamps),
+              },
         request: r.request || ({} as R),
       })),
       this.mergeDataRequests,
@@ -91,10 +99,51 @@ export abstract class QueryBuilder<F extends {}, R = any> {
       bounded: applyRangeBound(ranges, bound),
     }
   }
+
+  private async resolveTimestamps(portal: Portal): Promise<Map<number, number>> {
+    const timestamps = new Set<number>()
+
+    for (const r of this.requests) {
+      if (r.range.from instanceof Date) {
+        timestamps.add(dateToSeconds(r.range.from))
+      }
+      if (r.range.to instanceof Date) {
+        timestamps.add(dateToSeconds(r.range.to))
+      }
+    }
+
+    if (timestamps.size === 0) return new Map()
+
+    const resolved = new Map<number, number>()
+    await Promise.all(
+      [...timestamps].map(async (ts) => {
+        resolved.set(ts, await portal.resolveTimestamp(ts))
+      }),
+    )
+
+    return resolved
+  }
 }
 
 export interface Portal {
   getHead(): Promise<{ number: number; hash: string } | undefined>
+  resolveTimestamp(seconds: number): Promise<number>
+}
+
+function dateToSeconds(date: Date): number {
+  return Math.floor(date.getTime() / 1000)
+}
+
+function resolveRangeValue(value: number | Date, resolved: Map<number, number>): number
+function resolveRangeValue(value: number | Date | undefined, resolved: Map<number, number>): number | undefined
+function resolveRangeValue(value: number | Date | undefined, resolved: Map<number, number>): number | undefined {
+  if (value instanceof Date) {
+    return resolved.get(dateToSeconds(value))
+  } else if (typeof value === 'number') {
+    return value
+  }
+
+  return
 }
 
 // TODO generate unit tests for this

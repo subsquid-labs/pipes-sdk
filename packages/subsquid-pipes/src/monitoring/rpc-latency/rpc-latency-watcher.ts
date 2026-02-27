@@ -1,6 +1,7 @@
 import { createTransformer } from '~/core/index.js'
 import { arrayify, last } from '~/internal/array.js'
-import { WebSocketListener } from '~/monitoring/rpc-latency/ws-client.js'
+
+import { WebSocketListener } from './ws-client.js'
 
 type RpcHead = { number: number; timestamp: Date; receivedAt: Date }
 
@@ -76,31 +77,18 @@ type Latency = {
   }[]
 }
 
-export function rpcLatencyWatcher(watcher: RpcLatencyWatcher) {
+export function rpcLatencyWatcher({ watcher }: { watcher: RpcLatencyWatcher }) {
   return createTransformer<
     {
-      blocks: {
-        header: {
-          number: number
-          timestamp: number
-        }
-      }[]
-    },
+      header: { number: number; timestamp: number }
+    }[],
     Latency | null
   >({
-    profiler: { id: 'rpc latency' },
-    query: ({ queryBuilder }) => {
-      queryBuilder.addFields({
-        block: {
-          number: true,
-          timestamp: true,
-        },
-      })
-    },
+    profiler: { name: 'rpc latency' },
     transform: (data, ctx): Latency | null => {
       const receivedAt = ctx.meta.lastBlockReceivedAt
 
-      const block = last(data.blocks)
+      const block = last(data)
       if (!block) return null
 
       const lookup = watcher.lookup(block.header.number)

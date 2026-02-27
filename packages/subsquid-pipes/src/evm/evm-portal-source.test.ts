@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { EvmQueryBuilder } from '~/evm/evm-query-builder.js'
-import { closeMockPortal, createMockPortal, MockPortal } from '../tests/index.js'
-import { EvmPortalData, evmPortalSource } from './evm-portal-source.js'
+
+import { MockPortal, createMockPortal } from '../testing/index.js'
+import { evmPortalSource } from './evm-portal-source.js'
+import { evmQuery } from './evm-query-builder.js'
 
 describe('evmPortalSource', () => {
   let mockPortal: MockPortal
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
 
   it('should add default fields', async () => {
@@ -27,19 +28,15 @@ describe('evmPortalSource', () => {
       transaction: { from: true, to: true, hash: true },
       stateDiff: { address: true, key: true },
       trace: { error: true },
-    } as const
+    }
 
     const stream = evmPortalSource({
       portal: mockPortal.url,
-      query: new EvmQueryBuilder().addFields(fields).addRange({ from: 0, to: 2 }),
-    }).pipe({
-      transform: (data: EvmPortalData<typeof fields>) => {
-        return data
-      },
+      outputs: evmQuery().addFields(fields).addRange({ from: 0, to: 2 }),
     })
 
     for await (const { data } of stream) {
-      const [block] = data.blocks
+      const [block] = data
 
       expect(block.logs).toBeInstanceOf(Array)
       expect(block.traces).toBeInstanceOf(Array)

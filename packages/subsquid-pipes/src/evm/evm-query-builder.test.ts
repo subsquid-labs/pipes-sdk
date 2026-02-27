@@ -1,15 +1,88 @@
 import { describe, expect, it } from 'vitest'
-import { EvmQueryBuilder } from '~/evm/evm-query-builder.js'
 
-describe('EvmQueryBuilder', () => {
+import { mockPortalRestApi } from '~/testing/index.js'
+
+import { EvmQueryBuilder } from './evm-query-builder.js'
+
+describe('EvmQuery', () => {
   describe('calculateRanges', () => {
     it('should add default range', async () => {
       const qb = new EvmQueryBuilder()
-      const { bounded } = await qb.calculateRanges({
-        portal: { getHead: async () => ({ number: 15, hash: '0x' }) },
-      })
+      const { bounded } = await qb.calculateRanges({ portal: mockPortalRestApi() })
 
       expect(bounded).toEqual([{ range: { from: 0 } }])
+    })
+  })
+
+  describe('from: timestamp', () => {
+    it('should resolve a Date to a block number', async () => {
+      const builder = new EvmQueryBuilder()
+      builder.addRange({ from: new Date('2024-01-01T00:00:00Z') })
+
+      const { bounded } = await builder.calculateRanges({
+        portal: mockPortalRestApi({
+          resolveTimestamp: async (ts) => {
+            expect(ts).toBe(1704067200)
+            return 18908900
+          },
+        }),
+      })
+
+      expect(bounded).toEqual([{ range: { from: 18908900 }, request: {} }])
+    })
+
+    it('should resolve a date string to a block number', async () => {
+      const builder = new EvmQueryBuilder()
+      builder.addRange({ from: '2024-01-01' })
+
+      const { bounded } = await builder.calculateRanges({
+        portal: mockPortalRestApi({
+          resolveTimestamp: async (ts) => {
+            expect(ts).toBe(1704067200)
+            return 18908900
+          },
+        }),
+      })
+
+      expect(bounded).toEqual([{ range: { from: 18908900 }, request: {} }])
+    })
+
+    it('should resolve both from and to timestamps', async () => {
+      const builder = new EvmQueryBuilder()
+      builder.addRange({
+        from: '2024-01-01',
+        to: new Date('2024-02-01T00:00:00Z'),
+      })
+
+      const resolved = new Map([
+        [1704067200, 18908900],
+        [1706745600, 19145700],
+      ])
+
+      const { bounded } = await builder.calculateRanges({
+        portal: mockPortalRestApi({ resolveTimestamp: async (ts) => resolved.get(ts)! }),
+      })
+
+      expect(bounded).toEqual([{ range: { from: 18908900, to: 19145700 }, request: {} }])
+    })
+
+    it('should deduplicate identical timestamps', async () => {
+      const builder = new EvmQueryBuilder()
+      const date = new Date('2024-01-01T00:00:00Z')
+      builder.addRange({ from: date })
+      builder.addRange({ from: date })
+
+      let callCount = 0
+      const { bounded } = await builder.calculateRanges({
+        portal: mockPortalRestApi({
+          resolveTimestamp: async () => {
+            callCount++
+            return 18908900
+          },
+        }),
+      })
+
+      expect(callCount).toBe(1)
     })
   })
 
@@ -19,7 +92,9 @@ describe('EvmQueryBuilder', () => {
       builder.addRange({ from: 'latest' })
 
       const { bounded } = await builder.calculateRanges({
-        portal: { getHead: async () => ({ number: 15, hash: '0x' }) },
+        portal: mockPortalRestApi({
+          getHead: async () => ({ number: 15, hash: '0x' }),
+        }),
       })
 
       expect(bounded).toMatchInlineSnapshot(`
@@ -39,7 +114,9 @@ describe('EvmQueryBuilder', () => {
       builder.addRange({ from: 'latest' })
 
       const { bounded } = await builder.calculateRanges({
-        portal: { getHead: async () => ({ number: 15, hash: '0x' }) },
+        portal: mockPortalRestApi({
+          getHead: async () => ({ number: 15, hash: '0x' }),
+        }),
         bound: { from: 10 },
       })
 

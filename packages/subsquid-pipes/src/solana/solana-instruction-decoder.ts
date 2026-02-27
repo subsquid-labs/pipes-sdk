@@ -1,8 +1,9 @@
-import { BatchCtx, PortalRange, ProfilerOptions, createTransformer, parsePortalRange } from '~/core/index.js'
+import { BatchCtx, PortalRange, ProfilerOptions, parsePortalRange } from '~/core/index.js'
 import { arrayify } from '~/internal/array.js'
-import { Instruction, TokenBalance, Transaction } from '~/portal-client/query/solana.js'
-import { SolanaPortalData, SolanaTransformer, createSolanaPortalSource } from '~/solana/solana-portal-source.js'
-import { getInstructionD1, getInstructionD2, getInstructionD4, getInstructionD8 } from '~/solana/types.js'
+import { FieldSelection, Instruction, TokenBalance, Transaction } from '~/portal-client/query/solana.js'
+
+import { solanaQuery } from './solana-query-builder.js'
+import { getInstructionD1, getInstructionD2, getInstructionD4, getInstructionD8 } from './types.js'
 
 const decodedEventFields = {
   block: {
@@ -32,9 +33,9 @@ const decodedEventFields = {
     postAmount: true,
     postDecimals: true,
   },
-} as const
+} satisfies FieldSelection
 
-type SelectedFields = Required<typeof decodedEventFields>
+type SelectedFields = typeof decodedEventFields
 
 export type DecodedInstruction<D> = {
   instruction: D
@@ -80,119 +81,115 @@ type DecodedEventPipeArgs<T extends Instructions> = {
   onError?: (ctx: BatchCtx, error: any) => unknown | Promise<unknown>
 }
 
-export function solanaInstructionDecoder<T extends Instructions>(
-  opts: DecodedEventPipeArgs<T>,
-): SolanaTransformer<SolanaPortalData<typeof decodedEventFields>, EventResponse<T>> {
+export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEventPipeArgs<T>) {
   const range = parsePortalRange(opts.range)
   const programId = arrayify(opts.programId)
   const onError = opts.onError || defaultError
 
-  return createTransformer({
-    profiler: opts.profiler || { id: 'instruction decoder' },
-    query: async ({ queryBuilder }) => {
-      queryBuilder.addFields(decodedEventFields)
+  const query = solanaQuery().addFields(decodedEventFields)
 
-      const d1: string[] = []
-      const d2: string[] = []
-      const d4: string[] = []
-      const d8: string[] = []
-      for (const name in opts.instructions) {
-        const i = opts.instructions[name]
+  const d1: string[] = []
+  const d2: string[] = []
+  const d4: string[] = []
+  const d8: string[] = []
+  for (const name in opts.instructions) {
+    const i = opts.instructions[name]
 
-        if (i.d1) d1.push(i.d1)
-        if (i.d2) d2.push(i.d2)
-        if (i.d4) d4.push(i.d4)
-        if (i.d8) d8.push(i.d8)
-      }
+    if (i.d1) d1.push(i.d1)
+    if (i.d2) d2.push(i.d2)
+    if (i.d4) d4.push(i.d4)
+    if (i.d8) d8.push(i.d8)
+  }
 
-      if (!d1.length && !d2.length && !d4.length && !d8.length) {
-        throw new Error(
-          [
-            'No valid instruction discriminators found. It looks like one or more instructions in your ABI are missing their decoder configuration.',
-            'This usually happens when you accidentally pass an event instead of an instruction, or when your ABI instruction definitions are incomplete.',
-            'Please check that you are passing correct instruction definitions to "solanaInstructionDecoder":',
-            '--------------------------------------------------',
-            'Example',
-            '',
+  if (!d1.length && !d2.length && !d4.length && !d8.length) {
+    throw new Error(
+      [
+        'No valid instruction discriminators found. It looks like one or more instructions in your ABI are missing their decoder configuration.',
+        'This usually happens when you accidentally pass an event instead of an instruction, or when your ABI instruction definitions are incomplete.',
+        'Please check that you are passing correct instruction definitions to "solanaInstructionDecoder":',
+        '--------------------------------------------------',
+        'Example',
+        '',
 
-            'import { events as orcaWhirlpool } from "./orca_abi";',
+        'import { events as orcaWhirlpool } from "./orca_abi";',
 
-            '',
-            ' // ... omitted logic ....',
-            '',
+        '',
+        ' // ... omitted logic ....',
+        '',
 
-            'solanaInstructionDecoder({',
-            '  range: { from: 371602677 },',
-            '  programId: orcaWhirlpool.programId,',
-            '  instructions: {',
-            '    initializeConfig: abi.instructions.InitializeConfig,',
-            '    swap: abi.instructions.Swap,',
-            '  },',
-            '})',
-            // TODO add docs link
-          ].join('\n'),
-        )
-      }
+        'solanaInstructionDecoder({',
+        '  range: { from: 371602677 },',
+        '  programId: orcaWhirlpool.programId,',
+        '  instructions: {',
+        '    initializeConfig: abi.instructions.InitializeConfig,',
+        '    swap: abi.instructions.Swap,',
+        '  },',
+        '})',
+        // TODO add docs link
+      ].join('\n'),
+    )
+  }
 
-      if (d1.length) {
-        queryBuilder.addInstruction({
-          range,
-          request: {
-            programId,
-            d1,
-            isCommitted: true,
-            innerInstructions: true,
-            transaction: true,
-            transactionTokenBalances: true,
-          },
-        })
-      } else if (d2.length) {
-        queryBuilder.addInstruction({
-          range,
-          request: {
-            programId,
-            d2,
-            isCommitted: true,
-            innerInstructions: true,
-            transaction: true,
-            transactionTokenBalances: true,
-          },
-        })
-      } else if (d4.length) {
-        queryBuilder.addInstruction({
-          range,
-          request: {
-            programId,
-            d4,
-            isCommitted: true,
-            innerInstructions: true,
-            transaction: true,
-            transactionTokenBalances: true,
-          },
-        })
-      } else if (d8.length) {
-        queryBuilder.addInstruction({
-          range,
-          request: {
-            programId,
-            d8,
-            isCommitted: true,
-            innerInstructions: true,
-            transaction: true,
-            transactionTokenBalances: true,
-          },
-        })
-      }
-    },
+  if (d1.length) {
+    query.addInstruction({
+      range,
+      request: {
+        programId,
+        d1,
+        isCommitted: true,
+        innerInstructions: true,
+        transaction: true,
+        transactionTokenBalances: true,
+      },
+    })
+  } else if (d2.length) {
+    query.addInstruction({
+      range,
+      request: {
+        programId,
+        d2,
+        isCommitted: true,
+        innerInstructions: true,
+        transaction: true,
+        transactionTokenBalances: true,
+      },
+    })
+  } else if (d4.length) {
+    query.addInstruction({
+      range,
+      request: {
+        programId,
+        d4,
+        isCommitted: true,
+        innerInstructions: true,
+        transaction: true,
+        transactionTokenBalances: true,
+      },
+    })
+  } else if (d8.length) {
+    query.addInstruction({
+      range,
+      request: {
+        programId,
+        d8,
+        isCommitted: true,
+        innerInstructions: true,
+        transaction: true,
+        transactionTokenBalances: true,
+      },
+    })
+  }
+
+  return query.build().pipe({
+    profiler: opts.profiler || { name: 'instruction decoder' },
+
     transform: async (data, ctx) => {
       const result = {} as EventResponse<T>
       for (const insName in opts.instructions) {
         ;(result[insName as keyof T] as ReturnType<T[keyof T]['decode']>[]) = []
       }
 
-      for (const block of data.blocks) {
-        if (!block.instructions) continue
-
+      for (const block of data) {
         for (const instruction of block.instructions) {
           for (const eventName in opts.instructions) {
             const instructionAbi = opts.instructions[eventName]
@@ -238,8 +235,3 @@ export function solanaInstructionDecoder<T extends Instructions>(
     },
   })
 }
-
-/**
- *  @deprecated Use `solanaInstructionDecoder`
- */
-export const createSolanaInstructionDecoder = solanaInstructionDecoder

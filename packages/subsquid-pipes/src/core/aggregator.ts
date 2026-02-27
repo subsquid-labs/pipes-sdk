@@ -162,7 +162,7 @@ export function createAggregator<
   let storage: Storage
 
   return createTransformer<T[], Record<string, Out>>({
-    profiler: { id: 'aggregator' },
+    profiler: { name: 'aggregator' },
     start: async () => {
       storage = new Storage({ path: dbPath })
       await storage.init()
