@@ -203,7 +203,7 @@ export function Sidebar({
             </div>
           </div>
 
-          {data ? (
+          {connected && data ? (
             <div className="flex items-center gap-2">
               <div className="text-xs font-normal text-muted-foreground w-[60px]">Version</div>
               <div className=" flex items-center gap-1">{data.sdk.version}</div>

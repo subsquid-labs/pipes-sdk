@@ -228,6 +228,7 @@ export function useTransformationExemplar({ enabled = true, serverIndex, pipeId 
 
       const data: HttpResponse<{
         transformation: ApiExemplarResult
+        batch?: { from: number; to: number; blocksCount: number }
       }> = await res.json()
 
       return data.payload

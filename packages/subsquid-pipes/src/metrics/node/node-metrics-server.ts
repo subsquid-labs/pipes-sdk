@@ -294,10 +294,20 @@ class ExpressMetricServer implements MetricsServer {
 
     this.#app.get('/exemplars/transformation', async (req, res) => {
       const pipeData = this.getPipe(req.query['id'] as string | undefined)
+      const lastBatch = pipeData?.lastBatch
 
       return res.json({
         payload: {
           transformation: pipeData?.transformationExemplar,
+          batch: lastBatch
+            ? {
+                from: lastBatch.meta.blocksCount > 0
+                  ? lastBatch.state.current.number - lastBatch.meta.blocksCount + 1
+                  : lastBatch.state.current.number,
+                to: lastBatch.state.current.number,
+                blocksCount: lastBatch.meta.blocksCount,
+              }
+            : undefined,
         },
       })
     })
