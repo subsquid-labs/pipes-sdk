@@ -112,7 +112,8 @@ function PipeSelector({
                   {pipe.dataset?.metadata?.logo_url && (
                     <img src={pipe.dataset.metadata.logo_url} alt="" className="w-4 h-4" />
                   )}
-                  <span>{pipe.dataset?.metadata?.display_name || pipe.id}</span>
+                  <span className="flex-1">{pipe.id}</span>
+                  {/*<span className="text-muted-foreground text-xxs">{pipe.dataset?.metadata?.display_name}</span>*/}
                 </div>
 
                 {pipe.status === PipeStatus.Calculating ? (
