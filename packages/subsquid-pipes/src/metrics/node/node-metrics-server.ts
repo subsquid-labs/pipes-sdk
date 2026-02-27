@@ -34,6 +34,7 @@ export type Stats = {
   }
   pipes: {
     id: string
+    dataset: BatchCtx['dataset'] | null
     portal: {
       url: string
       query: any
@@ -254,6 +255,7 @@ class ExpressMetricServer implements MetricsServer {
 
           return {
             id,
+            dataset: lastBatch?.dataset || null,
             portal: {
               url: lastBatch?.query.url || '',
               query: lastBatch?.query.raw || {},

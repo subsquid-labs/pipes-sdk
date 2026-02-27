@@ -1,4 +1,5 @@
 import {
+  ApiDataset,
   GetBlock,
   PortalClient,
   PortalClientOptions,
@@ -45,6 +46,7 @@ export interface PortalCache {
 
 export type BatchCtx = {
   id: string
+  dataset: ApiDataset
   head: {
     finalized?: BlockCursor
     latest?: BlockCursor
@@ -189,9 +191,9 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     await this.start({ initial, current: cursor })
 
-    const metadata = await this.#portal.getMetadata()
-    if (!metadata.real_time) {
-      this.#logger.warn(NOT_REAL_TIME_WARNING(metadata.dataset))
+    const datasetMetadata = await this.#portal.getMetadata()
+    if (!datasetMetadata.real_time) {
+      this.#logger.warn(NOT_REAL_TIME_WARNING(datasetMetadata.dataset))
     }
 
     for (const { range, request } of bounded) {
@@ -232,6 +234,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
           const ctx: BatchCtx = {
             // Batch metadata
             id: this.#id,
+            dataset: datasetMetadata,
             meta: {
               blocksCount: batch.blocks.length,
               bytesSize: batch.meta.bytes,

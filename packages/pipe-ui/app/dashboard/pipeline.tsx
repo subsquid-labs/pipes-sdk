@@ -22,9 +22,13 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
 
   const pipe = data?.pipes.find((pipe) => pipe.id === pipeId)
 
-  const dataset = useMemo(() => {
-    return pipe?.portal.url.replace(/^[\w.\/:]+datasets\//, '')
-  }, [pipe?.portal.url])
+  const datasetLabel = useMemo(() => {
+    return (
+      pipe?.dataset?.metadata?.display_name ||
+      pipe?.dataset?.dataset ||
+      pipe?.portal.url.replace(/^[\w.\/:]+datasets\//, '')
+    )
+  }, [pipe?.dataset, pipe?.portal.url])
 
   if (!pipe) return <PipelineDisconnected />
 
@@ -61,7 +65,15 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
         </div>
 
         <div className="flex justify-between mb-3 text-muted-foreground text-xs">
-          <div>{dataset}</div>
+          <div className="flex items-center gap-1.5">
+            {pipe.dataset?.metadata?.logo_url && (
+              <img src={pipe.dataset.metadata.logo_url} alt="" className="w-4 h-4" />
+            )}
+            <span>{datasetLabel}</span>
+            {pipe.dataset?.metadata?.evm?.chain_id != null && (
+              <span className="text-muted-foreground/60">{pipe.dataset.metadata.evm.chain_id}</span>
+            )}
+          </div>
           <div>{pipe.progress.percent.toFixed(2)}%</div>
         </div>
 

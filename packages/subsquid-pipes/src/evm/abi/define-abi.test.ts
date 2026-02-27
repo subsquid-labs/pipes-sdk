@@ -2,7 +2,7 @@ import { event, indexed } from '@subsquid/evm-abi'
 import * as p from '@subsquid/evm-codec'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from 'vitest'
 
-import { MockPortal, MockResponse, closeMockPortal, createMockPortal, readAll } from '~/tests/index.js'
+import { MockPortal, MockResponse, createMockPortal, readAll } from '~/testing/index.js'
 
 import { evmDecoder } from '../evm-decoder.js'
 import { evmPortalSource } from '../evm-portal-source.js'
@@ -760,7 +760,7 @@ describe('defineAbi', () => {
     })
 
     afterEach(async () => {
-      await closeMockPortal(mockPortal)
+      await mockPortal?.close()
     })
 
     it('should decode events through evmDecoder with defineAbi events', async () => {
@@ -952,7 +952,7 @@ describe('defineAbi', () => {
         }),
       }).pipe((e) => [...e.transfers, ...e.approvals])
       const res1 = await readAll(stream1)
-      await closeMockPortal(mockPortal1)
+      await mockPortal1?.close()
 
       // Run with generated code events
       const mockPortal2 = await createMockPortal(PORTAL_MOCK_RESPONSE)
@@ -967,7 +967,7 @@ describe('defineAbi', () => {
         }),
       }).pipe((e) => [...e.transfers, ...e.approvals])
       const res2 = await readAll(stream2)
-      await closeMockPortal(mockPortal2)
+      await mockPortal2?.close()
 
       // Results should be identical
       expect(res1).toEqual(res2)

@@ -43,10 +43,12 @@ export function PortalStatus({ url }: { url?: string }) {
           <div className="text-secondary-foreground text-xxs">{host}</div>
         </div>
         <div className="flex flex-col items-start text-xs gap-2">
-          <div className="flex items-center gap-2">
-            <div className="text-muted-foreground w-[60px]">Version</div>
-            <div className=" flex items-center gap-1">{data.portal_version}</div>
-          </div>
+          {data.portal_version && (
+            <div className="flex items-center gap-2">
+              <div className="text-muted-foreground w-[60px]">Version</div>
+              <div className=" flex items-center gap-1">{data.portal_version}</div>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <div className="text-muted-foreground w-[60px]">Workers</div>
             <div className=" flex items-center gap-1">{data.workers.active_count}</div>
@@ -94,7 +96,12 @@ function PipeSelector({
                 )}
               </div>
               <div className="text-left w-full">
-                <div className="text-sm">{pipe.id}</div>
+                <div className="text-sm flex items-center gap-1.5 mb-1.5">
+                  {pipe.dataset?.metadata?.logo_url && (
+                    <img src={pipe.dataset.metadata.logo_url} alt="" className="w-4 h-4" />
+                  )}
+                  <span>{pipe.dataset?.metadata?.display_name || pipe.id}</span>
+                </div>
 
                 {pipe.status === PipeStatus.Calculating ? (
                   <div className="flex w-full font-thin justify-between text-xxs animate-pulse">Calculating...</div>

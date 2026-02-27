@@ -6,8 +6,25 @@ type HttpResponse<T> = {
   payload: T
 }
 
+type ApiDataset = {
+  dataset: string
+  aliases: string[]
+  real_time: boolean
+  start_block: number
+  metadata?: {
+    kind: string
+    display_name?: string
+    logo_url?: string
+    type?: string
+    evm?: {
+      chain_id: number
+    }
+  }
+}
+
 type ApiPipe = {
   id: string
+  dataset: ApiDataset | null
 
   portal: {
     url: string
