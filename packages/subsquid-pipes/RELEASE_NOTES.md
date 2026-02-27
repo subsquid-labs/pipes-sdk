@@ -385,6 +385,26 @@ All metrics are labelled with the pipe `id`.
 
 ---
 
+### 9. `profiler.id` renamed to `profiler.name`
+
+The `id` property in `ProfilerOptions` and `Profiler` has been renamed to `name` to avoid confusion with the pipe `id`.
+
+```ts
+// before
+evmDecoder({
+  profiler: { id: 'ERC20 transfers' },
+  ...
+})
+
+// after
+evmDecoder({
+  profiler: { name: 'ERC20 transfers' },
+  ...
+})
+```
+
+---
+
 ## Removals
 
 - `CompositeTransformer` / `compositeTransformer` / `composite-transformer.ts` removed — use named `outputs`

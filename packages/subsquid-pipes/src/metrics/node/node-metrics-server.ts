@@ -79,7 +79,7 @@ type ProfilerResult = {
 
 function transformProfiler(profiler: Profiler): ProfilerResult {
   return profiler.transform((span, children) => ({
-    name: span.id,
+    name: span.name,
     totalTime: span.elapsed,
     children,
   }))
@@ -122,7 +122,7 @@ function packExemplar(value: any): any {
 
 function transformExemplar(profiler: Profiler): TransformationResult {
   return profiler.transform((span, children) => ({
-    name: span.id,
+    name: span.name,
     data: JSON.stringify(packExemplar(span.data), (k: string, v: any) => {
       if (typeof v === 'bigint') {
         return v.toString() + 'n'

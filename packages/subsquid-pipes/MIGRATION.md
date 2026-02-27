@@ -112,7 +112,7 @@ If you wrote a custom transformer that accesses `data.blocks`, remove the `.bloc
 ```ts
 // before
 source.pipe({
-  profiler: { id: 'my transformer' },
+  profiler: { name: 'my transformer' },
   transform: (data, ctx) => {
     return data.blocks.map((block) => ({
       number: block.header.number,
@@ -123,7 +123,7 @@ source.pipe({
 
 // after
 source.pipe({
-  profiler: { id: 'my transformer' },
+  profiler: { name: 'my transformer' },
   transform: (data, ctx) => {
     return data.map((block) => ({
       number: block.header.number,
@@ -145,7 +145,7 @@ const decoder = evmQuery()
   .addFields(myFields)
   .build({
     setupQuery: ({ query }) => query.merge(extraQuery),
-    profiler: { id: 'my-decoder' },
+    profiler: { name: 'my-decoder' },
     transform: (data, ctx) => data.blocks.map(decode),
     fork: async (cursor, ctx) => { /* rollback state */ },
   })
@@ -155,7 +155,7 @@ const decoder = evmQuery()
   .addFields(myFields)
   .build({ setupQuery: ({ query }) => query.merge(extraQuery) })
   .pipe({
-    profiler: { id: 'my-decoder' },
+    profiler: { name: 'my-decoder' },
     transform: (data, ctx) => data.map(decode),
     fork: async (cursor, ctx) => { /* rollback state */ },
   })

@@ -181,7 +181,7 @@ export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEv
   }
 
   return query.build().pipe({
-    profiler: opts.profiler || { id: 'instruction decoder' },
+    profiler: opts.profiler || { name: 'instruction decoder' },
 
     transform: async (data, ctx) => {
       const result = {} as EventResponse<T>

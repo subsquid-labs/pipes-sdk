@@ -296,7 +296,7 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
   }
 
   return createTransformer<T, T>({
-    profiler: { id: 'track progress' },
+    profiler: { name: 'track progress' },
     start: ({ id, metrics, state, logger }) => {
       pipeId = id
 

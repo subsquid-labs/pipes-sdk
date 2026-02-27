@@ -85,7 +85,7 @@ export function solanaPortalSource<Out extends SolanaOutputs>({
         onProgress: progress?.onProgress,
       }),
       createTransformer<SolanaPortalData<F>, SolanaPortalData<F>>({
-        profiler: { id: 'normalize data' },
+        profiler: { name: 'normalize data' },
         transform: (data, ctx) => {
           const schema = getBlockSchema<solana.Block<F>>(ctx.query.raw)
 

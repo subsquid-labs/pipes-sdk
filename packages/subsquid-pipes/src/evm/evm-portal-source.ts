@@ -84,7 +84,7 @@ export function evmPortalSource<Out extends EvmOutputs>({
         onProgress: progress?.onProgress,
       }),
       createTransformer<EvmPortalData<F>, EvmPortalData<F>>({
-        profiler: { id: 'normalize data' },
+        profiler: { name: 'normalize data' },
         transform: (data, ctx) => {
           const schema = getBlockSchema<evm.Block<F>>(ctx.query.raw)
 

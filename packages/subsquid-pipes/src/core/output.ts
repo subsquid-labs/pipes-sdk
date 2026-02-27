@@ -75,7 +75,7 @@ export function mergeOutputs<F extends {}, Q extends QueryBuilder<F>>(input: Out
       await Promise.all(Object.values(output).map((e) => e.setupQuery(ctx)))
     },
     {
-      profiler: { id: 'outputs' },
+      profiler: { name: 'outputs' },
       start: async (ctx) => {
         await Promise.all(Object.values(output).map((e) => e.start?.(ctx)))
       },

@@ -215,7 +215,7 @@ export class Factory<T extends EventArgs> {
       portal,
       logger,
       outputs: evmDecoder({
-        profiler: { id: name || `preindex` },
+        profiler: { name: name || `preindex` },
         contracts: this.factoryAddress(),
         range,
         events: {

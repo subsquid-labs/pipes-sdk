@@ -44,7 +44,7 @@ export class Transformer<In, Out> {
    * @internal
    */
   id() {
-    return this.options.profiler?.id || 'anonymous'
+    return this.options.profiler?.name || 'anonymous'
   }
 
   /**
@@ -52,7 +52,7 @@ export class Transformer<In, Out> {
    */
   setId(profilerId: string) {
     this.options.profiler = {
-      id: profilerId,
+      name: profilerId,
       hidden: this.options.profiler?.hidden,
     }
   }

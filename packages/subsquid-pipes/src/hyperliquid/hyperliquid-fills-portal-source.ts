@@ -84,7 +84,7 @@ export function hyperliquidFillsPortalSource<Out extends HyperliquidFillsOutputs
         onProgress: progress?.onProgress,
       }),
       createTransformer<HyperliquidFillsPortalData<F>, HyperliquidFillsPortalData<F>>({
-        profiler: { id: 'normalize data' },
+        profiler: { name: 'normalize data' },
         transform: (data, ctx) => {
           const schema = getBlockSchema<hl.Block<F>>(ctx.query.raw)
 

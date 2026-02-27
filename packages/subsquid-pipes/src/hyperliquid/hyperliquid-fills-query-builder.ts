@@ -59,7 +59,7 @@ export class HyperliquidFillsQueryBuilder<F extends api.FieldSelection = {}> ext
   }): HyperliquidFillsTransformerOut<F> {
     const setupQuery = opts?.setupQuery ?? (({ query }) => query.merge(this))
     return new QueryAwareTransformer(setupQuery, {
-      profiler: { id: 'query builder', hidden: true },
+      profiler: { name: 'query builder', hidden: true },
       transform: (data) => data,
     })
   }
