@@ -12,7 +12,7 @@ export type Range = {
   to?: number
 }
 
-export type NaturalRange = { from: number | 'latest' | Date; to?: number | Date }
+export type NaturalRange = { from: number | Date; to?: number | Date } | { from: 'latest'; to?: number }
 
 export interface RangeRequest<Req, R = Range> {
   range: R
@@ -75,6 +75,7 @@ export abstract class QueryBuilder<F extends {}, R = any> {
         r.range.from === 'latest'
           ? {
               from: Math.min(latest?.number || 0, bound?.from || Infinity),
+              ...(r.range.to ? { to: r.range.to } : {}),
             }
           : {
               from: resolveRangeValue(r.range.from, resolvedTimestamps),
@@ -84,7 +85,8 @@ export abstract class QueryBuilder<F extends {}, R = any> {
     }))
 
     for (const r of resolvedRequests) {
-      if (r.range.to && r.range.to < r.range.from) {
+      // non-strict comparison on purpose. `to` can be zero
+      if (r.range.to != null && r.range.to < r.range.from) {
         throw new Error(
           `Invalid block range: 'from' (${r.range.from}) must be less than or equal to 'to' (${r.range.to})`,
         )
@@ -124,7 +126,15 @@ export abstract class QueryBuilder<F extends {}, R = any> {
     const resolved = new Map<number, number>()
     await Promise.all(
       [...timestamps].map(async (ts) => {
-        resolved.set(ts, await portal.resolveTimestamp(ts))
+        try {
+          resolved.set(ts, await portal.resolveTimestamp(ts))
+        } catch (error) {
+          if (error instanceof Error && error.message.includes('No chunk found for timestamp')) {
+            const date = new Date(ts * 1000).toISOString()
+            throw new Error(`Failed to resolve timestamp ${date} to a block number. The block for this timestamp may not have been produced yet.`)
+          }
+          throw error
+        }
       }),
     )
 
