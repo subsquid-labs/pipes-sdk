@@ -70,21 +70,28 @@ export abstract class QueryBuilder<F extends {}, R = any> {
 
     const resolvedTimestamps = await this.resolveTimestamps(portal)
 
-    const ranges = mergeRangeRequests(
-      this.requests.map((r) => ({
-        range:
-          r.range.from === 'latest'
-            ? {
-                from: Math.min(latest?.number || 0, bound?.from || Infinity),
-              }
-            : {
-                from: resolveRangeValue(r.range.from, resolvedTimestamps),
-                to: resolveRangeValue(r.range.to, resolvedTimestamps),
-              },
-        request: r.request || ({} as R),
-      })),
-      this.mergeDataRequests,
-    )
+    const resolvedRequests = this.requests.map((r) => ({
+      range:
+        r.range.from === 'latest'
+          ? {
+              from: Math.min(latest?.number || 0, bound?.from || Infinity),
+            }
+          : {
+              from: resolveRangeValue(r.range.from, resolvedTimestamps),
+              to: resolveRangeValue(r.range.to, resolvedTimestamps),
+            },
+      request: r.request || ({} as R),
+    }))
+
+    for (const r of resolvedRequests) {
+      if (r.range.to && r.range.to < r.range.from) {
+        throw new Error(
+          `Invalid block range: 'from' (${r.range.from}) must be less than or equal to 'to' (${r.range.to})`,
+        )
+      }
+    }
+
+    const ranges = mergeRangeRequests(resolvedRequests, this.mergeDataRequests)
 
     if (!ranges.length) {
       // FIXME request should be optional

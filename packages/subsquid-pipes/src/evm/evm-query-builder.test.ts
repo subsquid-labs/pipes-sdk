@@ -12,6 +12,15 @@ describe('EvmQuery', () => {
 
       expect(bounded).toEqual([{ range: { from: 0 } }])
     })
+
+    it('should throw if to < from', async () => {
+      const qb = new EvmQueryBuilder()
+      qb.addRange({ from: 2, to: 1 })
+
+      await expect(qb.calculateRanges({ portal: mockPortalRestApi() })).rejects.toThrow(
+        "Invalid block range: 'from' (2) must be less than or equal to 'to' (1)",
+      )
+    })
   })
 
   describe('from: timestamp', () => {
