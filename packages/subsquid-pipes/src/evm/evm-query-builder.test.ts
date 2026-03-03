@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { BlockRangeConfigurationError } from '~/core/errors.js'
 import { mockPortalRestApi } from '~/testing/index.js'
 
 import { EvmQueryBuilder } from './evm-query-builder.js'
@@ -17,6 +18,7 @@ describe('EvmQuery', () => {
       const qb = new EvmQueryBuilder()
       qb.addRange({ from: 2, to: new Date('2026-10-01') })
 
+      await expect(qb.calculateRanges({ portal: mockPortalRestApi() })).rejects.toThrow(BlockRangeConfigurationError)
       await expect(qb.calculateRanges({ portal: mockPortalRestApi() })).rejects.toThrow(
         "Invalid block range: 'from' (2) must be less than or equal to 'to' (0)",
       )
@@ -79,6 +81,15 @@ describe('EvmQuery', () => {
       const builder = new EvmQueryBuilder()
       builder.addRange({ from: new Date('2030-01-01T00:00:00Z') })
 
+      await expect(
+        builder.calculateRanges({
+          portal: mockPortalRestApi({
+            resolveTimestamp: async () => {
+              throw new Error('No chunk found for timestamp')
+            },
+          }),
+        }),
+      ).rejects.toThrow(BlockRangeConfigurationError)
       await expect(
         builder.calculateRanges({
           portal: mockPortalRestApi({

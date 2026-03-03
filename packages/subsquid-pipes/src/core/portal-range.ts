@@ -1,3 +1,4 @@
+import { BlockRangeConfigurationError } from './errors.js'
 import { NaturalRange } from './query-builder.js'
 
 export function parseBlockFormatting(block: string | number) {
@@ -55,7 +56,7 @@ export function parsePortalRange(range: PortalRange, defaultValue?: PortalRange)
 
   if (range.from === 'latest') {
     if (range.to instanceof Date || (typeof range.to === 'string' && isDateString(range.to))) {
-      throw new Error(
+      throw new BlockRangeConfigurationError(
         "Cannot use a Date for 'to' when 'from' is 'latest'. The portal cannot resolve a timestamp to a block number for blocks that have not been produced yet. Use a block number instead.",
       )
     }

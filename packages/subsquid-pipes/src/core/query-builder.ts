@@ -1,6 +1,7 @@
 import { Query } from '~/portal-client/index.js'
 
 import { Heap } from '../internal/heap.js'
+import { BlockRangeConfigurationError } from './errors.js'
 import { PortalRange, parsePortalRange } from './portal-range.js'
 import { QueryAwareTransformer, SetupQueryFn, TransformerArgs } from './transformer.js'
 
@@ -87,7 +88,7 @@ export abstract class QueryBuilder<F extends {}, R = any> {
     for (const r of resolvedRequests) {
       // non-strict comparison on purpose. `to` can be zero
       if (r.range.to != null && r.range.to < r.range.from) {
-        throw new Error(
+        throw new BlockRangeConfigurationError(
           `Invalid block range: 'from' (${r.range.from}) must be less than or equal to 'to' (${r.range.to})`,
         )
       }
@@ -131,7 +132,7 @@ export abstract class QueryBuilder<F extends {}, R = any> {
         } catch (error) {
           if (error instanceof Error && error.message.includes('No chunk found for timestamp')) {
             const date = new Date(ts * 1000).toISOString()
-            throw new Error(`Failed to resolve timestamp ${date} to a block number. The block for this timestamp may not have been produced yet.`)
+            throw new BlockRangeConfigurationError(`Failed to resolve timestamp ${date} to a block number. The block for this timestamp may not have been produced yet.`)
           }
           throw error
         }

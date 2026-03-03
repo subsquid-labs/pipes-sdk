@@ -36,6 +36,15 @@ export class DefaultPipeIdError extends PipeError {
   }
 }
 
+/**
+ * E0002: Thrown when a block range is misconfigured (inverted range, invalid date usage, unresolvable timestamp, etc.).
+ */
+export class BlockRangeConfigurationError extends PipeError {
+  constructor(message: string | string[]) {
+    super('E0002', SdkError.PipeConfiguration, message)
+  }
+}
+
 // ─── Target errors (E1xxx) ────────────────────────────────────────────────────
 
 /**
