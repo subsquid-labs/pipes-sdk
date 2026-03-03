@@ -1,8 +1,7 @@
-import { createPublicClient, erc20Abi, formatUnits, http } from 'viem'
-import { mainnet } from 'viem/chains'
-
 import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
 import { metricsServer } from '@subsquid/pipes/metrics/node'
+import { createPublicClient, erc20Abi, formatUnits, http } from 'viem'
+import { mainnet } from 'viem/chains'
 
 /**
  * Using viem RPC calls inside a Pipes pipeline.
@@ -74,11 +73,14 @@ async function fetchTokenMetadataBatch(addresses: `0x${string}`[]) {
   for (let start = 0; start < addresses.length; start += MULTICALL_CHUNK_SIZE) {
     const chunk = addresses.slice(start, start + MULTICALL_CHUNK_SIZE)
 
-    const contracts = chunk.flatMap((address) => [
-      { address, abi: erc20Abi, functionName: 'name' },
-      { address, abi: erc20Abi, functionName: 'symbol' },
-      { address, abi: erc20Abi, functionName: 'decimals' },
-    ] as const)
+    const contracts = chunk.flatMap(
+      (address) =>
+        [
+          { address, abi: erc20Abi, functionName: 'name' },
+          { address, abi: erc20Abi, functionName: 'symbol' },
+          { address, abi: erc20Abi, functionName: 'decimals' },
+        ] as const,
+    )
 
     const results = await client.multicall({ contracts, allowFailure: true })
 
@@ -123,7 +125,9 @@ async function enrichmentExample() {
 
   for await (const { data } of stream) {
     for (const t of data) {
-      console.log(`#${t.block} ${t.token?.symbol ?? '???'}: ${t.from} → ${t.to} (${formatUnits(t.value, t.token.decimals)})`)
+      console.log(
+        `#${t.block} ${t.token?.symbol ?? '???'}: ${t.from} → ${t.to} (${formatUnits(t.value, t.token.decimals)})`,
+      )
     }
   }
 }
@@ -168,8 +172,9 @@ async function multicallExample() {
     }),
     metrics: metricsServer(),
   }).pipe(async (data) => {
-    const uncached = [...new Set(data.transfers.map((t) => t.contract))]
-      .filter((addr) => !tokenCache.has(addr)) as `0x${string}`[]
+    const uncached = [...new Set(data.transfers.map((t) => t.contract))].filter(
+      (addr) => !tokenCache.has(addr),
+    ) as `0x${string}`[]
 
     if (uncached.length > 0) {
       await fetchTokenMetadataBatch(uncached)
