@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from 'vites
 import { MockPortal, MockResponse, createMockPortal, readAll } from '~/testing/index.js'
 
 import { evmDecoder } from '../evm-decoder.js'
-import { evmPortalSource } from '../evm-portal-source.js'
+import { evmPortalStream } from '../evm-portal-source.js'
 import { commonAbis } from './common.js'
 import { defineAbi } from './define-abi.js'
 
@@ -715,7 +715,7 @@ describe('defineAbi', () => {
     })
   })
 
-  describe('end-to-end with evmDecoder + evmPortalSource', () => {
+  describe('end-to-end with evmDecoder + evmPortalStream', () => {
     let mockPortal: MockPortal
 
     const PORTAL_MOCK_RESPONSE: MockResponse[] = [
@@ -766,7 +766,8 @@ describe('defineAbi', () => {
     it('should decode events through evmDecoder with defineAbi events', async () => {
       const abi = defineAbi(erc20JsonAbi)
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: evmDecoder({
           range: { from: 0, to: 1 },
@@ -813,7 +814,8 @@ describe('defineAbi', () => {
     it('should decode mixed events (defineAbi + generated) through evmDecoder', async () => {
       const abi = defineAbi(erc20JsonAbi)
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: evmDecoder({
           range: { from: 0, to: 1 },
@@ -887,7 +889,8 @@ describe('defineAbi', () => {
     it('should support filtering by indexed params with defineAbi events', async () => {
       const abi = defineAbi(erc20JsonAbi)
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: evmDecoder({
           range: { from: 0, to: 1 },
@@ -941,7 +944,8 @@ describe('defineAbi', () => {
 
       // Run with defineAbi events
       const mockPortal1 = await createMockPortal(PORTAL_MOCK_RESPONSE)
-      const stream1 = evmPortalSource({
+      const stream1 = evmPortalStream({
+        id: 'test',
         portal: mockPortal1.url,
         outputs: evmDecoder({
           range: { from: 0, to: 1 },
@@ -956,7 +960,8 @@ describe('defineAbi', () => {
 
       // Run with generated code events
       const mockPortal2 = await createMockPortal(PORTAL_MOCK_RESPONSE)
-      const stream2 = evmPortalSource({
+      const stream2 = evmPortalStream({
+        id: 'test',
         portal: mockPortal2.url,
         outputs: evmDecoder({
           range: { from: 0, to: 1 },

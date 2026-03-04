@@ -19,23 +19,6 @@ export class PipeError extends Error {
   }
 }
 
-// ─── Source errors (E0xxx) ────────────────────────────────────────────────────
-
-/**
- * E0001: Thrown when a pipe with the default ID is connected to a target.
- * Targets need a stable, unique ID to persist cursor state across restarts.
- */
-export class DefaultPipeIdError extends PipeError {
-  constructor() {
-    super('E0001', SdkError.PipeConfiguration, [
-      'Pipe requires a non-default ID when used with targets.',
-      'Set a unique id in your pipe source options:',
-      '',
-      '  evmPortalSource({ portal: "...", id: "my-pipe", outputs })',
-    ])
-  }
-}
-
 // ─── Target errors (E1xxx) ────────────────────────────────────────────────────
 
 /**

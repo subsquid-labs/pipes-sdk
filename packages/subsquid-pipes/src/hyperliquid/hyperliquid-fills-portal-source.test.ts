@@ -23,6 +23,7 @@ describe('Portal abstract stream', () => {
     ])
 
     const stream = hyperliquidFillsPortalSource({
+      id: 'test',
       portal: mockPortal.url,
       outputs: new HyperliquidFillsQueryBuilder()
         .addFields({

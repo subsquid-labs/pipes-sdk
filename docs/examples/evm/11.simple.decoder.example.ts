@@ -1,5 +1,5 @@
-import { ResultOf, Transformer, TransformerFn, createTransformer } from '@subsquid/pipes'
-import { evmPortalSource, evmQuery } from '@subsquid/pipes/evm'
+import { OutputOf, Transformer, createTransformer } from '@subsquid/pipes'
+import { evmPortalStream, evmQuery } from '@subsquid/pipes/evm'
 
 function myDecoder() {
   return evmQuery()
@@ -16,23 +16,23 @@ function myDecoder() {
     })
 }
 
-type MyDecoderOut = ResultOf<typeof myDecoder>
+type MyDecoderOut = OutputOf<typeof myDecoder>
 
-function myTransformation(): TransformerFn<MyDecoderOut, { block_number_renamed: number }[]> {
+function myTransformation(): (data: MyDecoderOut, ctx: any) => { block_number_renamed: number }[] {
   return (data) =>
     data.map((i) => ({
       block_number_renamed: i.block_number,
     }))
 }
 
-type MyTransformationOut = ResultOf<typeof myTransformation> // { block_number_renamed: number }[]
+type MyTransformationOut = OutputOf<typeof myTransformation> // { block_number_renamed: number }[]
 
 const outputs = {
   v1: myDecoder(),
   v2: myDecoder().pipe(myTransformation()),
 }
 
-type FullOutputs = ResultOf<typeof outputs> // { v1: { block_number: number }[], v2: { block_number_renamed: number }[] }
+type FullOutputs = OutputOf<typeof outputs> // { v1: { block_number: number }[], v2: { block_number_renamed: number }[] }
 
 function wholePipeTransform(): Transformer<FullOutputs, FullOutputs> {
   return createTransformer({
@@ -41,7 +41,8 @@ function wholePipeTransform(): Transformer<FullOutputs, FullOutputs> {
 }
 
 async function cli() {
-  const stream = evmPortalSource({
+  const stream = evmPortalStream({
+    id: 'simple-decoder',
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     outputs,
   }).pipe(wholePipeTransform())

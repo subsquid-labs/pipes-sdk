@@ -1,7 +1,7 @@
 import { createClient } from '@clickhouse/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { evmPortalSource } from '~/evm/index.js'
+import { evmPortalStream } from '~/evm/index.js'
 import { MockPortal, blockDecoder, createMockPortal } from '~/testing/index.js'
 
 import { clickhouseTarget } from './clickouse-target.js'
@@ -53,7 +53,7 @@ describe('Clickhouse state', () => {
         },
       ])
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
@@ -116,7 +116,7 @@ describe('Clickhouse state', () => {
         },
       ])
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: {
           url: mockPortal.url,
@@ -171,7 +171,7 @@ describe('Clickhouse state', () => {
         { statusCode: 200, data: [{ header: { number: 3, hash: '0x3', timestamp: 3000 } }] },
       ])
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 3 }),
@@ -208,7 +208,7 @@ describe('Clickhouse state', () => {
         },
       ])
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
@@ -254,7 +254,7 @@ describe('Clickhouse state', () => {
         },
       ])
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
@@ -265,7 +265,7 @@ describe('Clickhouse state', () => {
         }),
       )
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 1, to: 2 }),
@@ -379,7 +379,7 @@ describe('Clickhouse state', () => {
       ])
 
       let rollbackCalls = 0
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
@@ -571,7 +571,7 @@ describe('Clickhouse state', () => {
 
       let rollbackCalls = 0
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
@@ -706,7 +706,7 @@ describe('Clickhouse state', () => {
 
       while (!finished) {
         try {
-          await evmPortalSource({
+          await evmPortalStream({
             id: 'test',
             portal: mockPortal.url,
             outputs: blockDecoder({ from: 0, to: 7 }),
@@ -913,7 +913,7 @@ describe('Clickhouse state', () => {
 
       let rollbackCalls = 0
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),

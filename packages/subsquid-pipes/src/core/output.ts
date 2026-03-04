@@ -16,10 +16,29 @@ import { QueryAwareTransformer, Transformer } from './transformer.js'
 //   }
 // }
 
+/**
+ * A single decoder or query builder used as the sole output of a portal stream.
+ *
+ * When a `SingleOutput` is passed to `outputs`, the stream yields the decoder's
+ * output type directly — e.g., `PortalBatch<DecodedEvent[]>`.
+ */
+export type SingleOutput<F extends {}, QB extends QueryBuilder<F>> = QB | QueryAwareTransformer<any, any, QB>
+
+/**
+ * A record of named decoders or query builders. Each key becomes a property on the
+ * stream's output object.
+ *
+ * When a `MultiOutput` is passed to `outputs`, the stream yields an object whose
+ * keys match the record — e.g., `PortalBatch<{ transfers: DecodedEvent[], swaps: DecodedEvent[] }>`.
+ */
+export type MultiOutput<F extends {}, QB extends QueryBuilder<F>> = Record<
+  string,
+  QueryAwareTransformer<any, any, QB> | QB
+>
+
 export type Outputs<F extends {}, QB extends QueryBuilder<F>> =
-  | QB
-  | QueryAwareTransformer<any, any, QB>
-  | Record<string, QueryAwareTransformer<any, any, QB> | QB>
+  | SingleOutput<F, QB>
+  | MultiOutput<F, QB>
 
 /**
  * @internal

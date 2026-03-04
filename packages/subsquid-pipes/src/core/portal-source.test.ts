@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { evmPortalSource } from '~/evm/index.js'
+import { evmPortalStream } from '~/evm/index.js'
 import {
   MockPortal,
   blockDecoder,
@@ -29,7 +29,8 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 2 }),
       })
@@ -37,8 +38,8 @@ describe('Portal abstract stream', () => {
       let firstCtx
       for await (const { ctx } of stream) {
         firstCtx = {
-          head: ctx.head,
-          progress_state: ctx.state.progress?.state,
+          head: ctx.internals.head,
+          progress_state: ctx.internals.state.progress?.state,
         }
       }
 
@@ -76,7 +77,8 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 2 }),
       })
@@ -84,8 +86,8 @@ describe('Portal abstract stream', () => {
       let firstCtx
       for await (const { ctx } of stream) {
         firstCtx = {
-          head: ctx.head,
-          progress_state: ctx.state.progress?.state,
+          head: ctx.internals.head,
+          progress_state: ctx.internals.state.progress?.state,
         }
       }
 
@@ -128,7 +130,8 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
       })
@@ -154,7 +157,8 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 2 }),
       })
@@ -190,7 +194,8 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: {
           url: mockPortal.url,
           http: { retrySchedule: [0] },
@@ -225,7 +230,8 @@ describe('Portal abstract stream', () => {
         ...new Array(2).fill({ statusCode: 503 }),
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: {
           url: mockPortal.url,
           http: {
@@ -278,7 +284,8 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: {
           url: mockPortal.url,
           http: { retryAttempts: 0, retrySchedule: [0] },
@@ -309,7 +316,8 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: {
           url: mockPortal.url,
           finalized: true,

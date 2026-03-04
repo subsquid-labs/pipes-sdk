@@ -9,7 +9,7 @@ import {
   Summary,
   SummaryConfiguration,
 } from '~/core/metrics-server.js'
-import { BatchCtx } from '~/core/portal-source.js'
+import { BatchContext } from '~/core/portal-source.js'
 
 type MetricCall = { labels?: Record<string, string | number>; value: number }
 
@@ -107,7 +107,7 @@ export function createMockMetricServer() {
     start() {},
     async stop() {},
     registerPipe() {},
-    batchProcessed(_ctx: BatchCtx) {},
+    batchProcessed(_ctx: BatchContext) {},
     metrics,
   }
 

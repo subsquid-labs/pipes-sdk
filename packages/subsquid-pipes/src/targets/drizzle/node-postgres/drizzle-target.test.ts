@@ -4,7 +4,7 @@ import { integer, pgTable, varchar } from 'drizzle-orm/pg-core'
 import { Pool, QueryResultRow } from 'pg'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { evmPortalSource } from '~/evm/index.js'
+import { evmPortalStream } from '~/evm/index.js'
 import { MockPortal, MockResponse, blockDecoder, createMockPortal } from '~/testing/index.js'
 
 import { drizzleTarget } from './index.js'
@@ -67,7 +67,7 @@ describe('Drizzle target', () => {
       ])
 
       await expect(async () => {
-        await evmPortalSource({
+        await evmPortalStream({
           id: 'test',
           portal: mockPortal.url,
           outputs: blockDecoder({ from: 0, to: 5 }),
@@ -107,7 +107,7 @@ describe('Drizzle target', () => {
         },
       ])
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
@@ -198,7 +198,7 @@ describe('Drizzle target', () => {
         },
       ])
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
@@ -213,7 +213,7 @@ describe('Drizzle target', () => {
         }),
       )
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 1, to: 2 }),
@@ -333,7 +333,7 @@ describe('Drizzle target', () => {
         },
       ])
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
@@ -438,7 +438,7 @@ describe('Drizzle target', () => {
 
       let callCount = 0
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
@@ -530,7 +530,7 @@ describe('Drizzle target', () => {
       ])
 
       let callCount = 0
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
@@ -658,7 +658,7 @@ describe('Drizzle target', () => {
 
       let callCount = 0
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),

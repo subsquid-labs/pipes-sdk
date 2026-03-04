@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { evmQuery } from '~/evm/evm-query-builder.js'
-import { evmPortalSource } from '~/evm/index.js'
+import { evmPortalStream } from '~/evm/index.js'
 import { MockPortal, createMockMetricServer, createMockPortal } from '~/testing/index.js'
 
 function blockOutputs(range: { from: number; to: number }) {
@@ -31,7 +31,8 @@ describe('Pipeline metrics', () => {
 
     const metrics = createMockMetricServer()
 
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: blockOutputs({ from: 0, to: 3 }),
       metrics: metrics.server,
@@ -59,7 +60,8 @@ describe('Pipeline metrics', () => {
 
     const metrics = createMockMetricServer()
 
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: blockOutputs({ from: 0, to: 1 }),
       metrics: metrics.server,
@@ -88,7 +90,8 @@ describe('Pipeline metrics', () => {
 
     const metrics = createMockMetricServer()
 
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: blockOutputs({ from: 0, to: 2 }),
       metrics: metrics.server,
@@ -123,7 +126,8 @@ describe('Pipeline metrics', () => {
 
     const metrics = createMockMetricServer()
 
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: blockOutputs({ from: 0, to: 3 }),
       metrics: metrics.server,
@@ -155,7 +159,8 @@ describe('Pipeline metrics', () => {
 
     const metrics = createMockMetricServer()
 
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: blockOutputs({ from: 0, to: 3 }),
       metrics: metrics.server,

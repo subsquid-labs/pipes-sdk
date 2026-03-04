@@ -35,6 +35,7 @@ describe('Portal abstract stream', () => {
     } satisfies solana.FieldSelection
 
     const stream = solanaPortalSource({
+      id: 'test',
       portal: mockPortal.url,
       outputs: solanaQuery().addFields(fields).addRange({ from: 0, to: 2 }),
     })

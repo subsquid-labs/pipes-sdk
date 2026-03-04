@@ -1,4 +1,4 @@
-import { BatchCtx, BlockCursor, RollbackRecord, resolveForkCursor } from '~/core/index.js'
+import { BatchContext, BlockCursor, RollbackRecord, resolveForkCursor } from '~/core/index.js'
 
 import { ClickhouseStore } from './clickhouse-store.js'
 
@@ -81,7 +81,7 @@ export class ClickhouseState {
     return JSON.parse(cursor)
   }
 
-  async saveCursor({ state: { current, rollbackChain }, head }: BatchCtx) {
+  async saveCursor({ internals: { state: { current, rollbackChain }, head } }: BatchContext) {
     const timestamp = Date.now()
 
     await this.store.insert({

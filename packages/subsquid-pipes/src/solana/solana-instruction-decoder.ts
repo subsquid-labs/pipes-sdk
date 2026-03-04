@@ -1,4 +1,4 @@
-import { BatchCtx, PortalRange, ProfilerOptions, parsePortalRange } from '~/core/index.js'
+import { BatchContext, PortalRange, ProfilerOptions, parsePortalRange } from '~/core/index.js'
 import { arrayify } from '~/internal/array.js'
 import { FieldSelection, Instruction, TokenBalance, Transaction } from '~/portal-client/query/solana.js'
 
@@ -69,7 +69,7 @@ export type EventResponse<T extends Instructions> = {
   [K in keyof T]: AbiDecodeInstruction<T[K]>[]
 }
 
-const defaultError = (ctx: BatchCtx, error: any) => {
+const defaultError = (ctx: BatchContext, error: any) => {
   throw error
 }
 
@@ -78,7 +78,7 @@ type DecodedEventPipeArgs<T extends Instructions> = {
   programId: string | string[]
   instructions: InstructionsArgs<T>
   profiler?: ProfilerOptions
-  onError?: (ctx: BatchCtx, error: any) => unknown | Promise<unknown>
+  onError?: (ctx: BatchContext, error: any) => unknown | Promise<unknown>
 }
 
 export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEventPipeArgs<T>) {

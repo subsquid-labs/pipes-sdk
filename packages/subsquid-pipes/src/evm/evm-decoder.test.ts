@@ -22,10 +22,10 @@ import {
   IndexedParamsInput,
   evmDecoder,
 } from './evm-decoder.js'
-import { evmPortalSource } from './evm-portal-source.js'
+import { evmPortalStream } from './evm-portal-source.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
-import { factory } from './factory.js'
-import { factorySqliteDatabase } from './factory-adapters/sqlite.js'
+import { contractFactory } from './factory.js'
+import { contractFactoryStore } from './factory-adapters/sqlite.js'
 
 async function captureQueryBuilder(
   decoder: QueryAwareTransformer<any, any, EvmQueryBuilder<any>>,
@@ -249,7 +249,7 @@ describe('evmDecoder queries', () => {
 
     const decoder = evmDecoder({
       range,
-      contracts,
+      contractFactory: contracts,
       events: {
         Transfer: commonAbis.erc20.events.Transfer,
       },
@@ -297,7 +297,7 @@ describe('evmDecoder queries', () => {
 
     const decoder = evmDecoder({
       range,
-      contracts,
+      contractFactory: contracts,
       events: {
         Transfer: commonAbis.erc20.events.Transfer,
         Approval: commonAbis.erc20.events.Approval,
@@ -350,7 +350,7 @@ describe('evmDecoder queries', () => {
     // `from` is topic1 on ERC20 Transfer event
     const fromParamDecoder = evmDecoder({
       range,
-      contracts,
+      contractFactory: contracts,
       events: {
         Transfer: {
           event: commonAbis.erc20.events.Transfer,
@@ -372,7 +372,7 @@ describe('evmDecoder queries', () => {
     // `from` is topic2 on ERC20 Transfer event
     const toParamDecoder = evmDecoder({
       range,
-      contracts,
+      contractFactory: contracts,
       events: {
         Transfer: {
           event: commonAbis.erc20.events.Transfer,
@@ -398,7 +398,7 @@ describe('evmDecoder queries', () => {
 
     const decoder = evmDecoder({
       range,
-      contracts,
+      contractFactory: contracts,
       events: {
         Transfer: {
           event: commonAbis.erc20.events.Transfer,
@@ -456,7 +456,7 @@ describe('evmDecoder queries', () => {
 
     const decoder = evmDecoder({
       range,
-      contracts,
+      contractFactory: contracts,
       events: {
         Transfer: {
           event: commonAbis.erc20.events.Transfer,
@@ -489,7 +489,7 @@ describe('evmDecoder queries', () => {
 
     const decoder = evmDecoder({
       range,
-      contracts,
+      contractFactory: contracts,
       events: {
         Transfer: commonAbis.erc20.events.Transfer,
         Approval: {
@@ -558,7 +558,7 @@ describe('evmDecoder queries', () => {
 
     const decoder = evmDecoder({
       range,
-      contracts,
+      contractFactory: contracts,
       events: {
         Transfer: {
           event: commonAbis.erc20.events.Transfer,
@@ -642,7 +642,7 @@ describe('evmDecoder queries', () => {
 
     const decoder = evmDecoder({
       range: { from: 0, to: 100 },
-      contracts: ['0x123'],
+      contractFactory: ['0x123'],
       events: {
         Transfer: {
           event: abi.CustomTransfer,
@@ -678,7 +678,7 @@ describe('evmDecoder queries', () => {
       const duplicateEvent = commonAbis.erc20.events.Transfer
       const decoder = evmDecoder({
         range: { from: 0, to: 100 },
-        contracts: ['0x123'],
+        contractFactory: ['0x123'],
         events: {
           transfers1: duplicateEvent,
           transfers2: duplicateEvent,
@@ -703,7 +703,7 @@ describe('evmDecoder queries', () => {
       const duplicateEvent = commonAbis.erc20.events.Transfer
       const decoder = evmDecoder({
         range: { from: 0, to: 100 },
-        contracts: ['0x123'],
+        contractFactory: ['0x123'],
         events: {
           transfers1: duplicateEvent,
           transfers2: {
@@ -735,7 +735,7 @@ describe('evmDecoder queries', () => {
 
       const decoder = evmDecoder({
         range: { from: 0, to: 100 },
-        contracts: ['0x123'],
+        contractFactory: ['0x123'],
         events: {
           transfers: commonAbis.erc20.events.Transfer,
           approvals: commonAbis.erc20.events.Approval,
@@ -751,12 +751,12 @@ describe('evmDecoder queries', () => {
   })
 
   it('should build query for Factory with params', async () => {
-    const db = await factorySqliteDatabase({ path: ':memory:' })
+    const db = await contractFactoryStore({ path: ':memory:' })
     const range = { from: 0, to: 100 }
 
     const decoder = evmDecoder({
       range,
-      contracts: factory({
+      contractFactory: contractFactory({
         address: FACTORY_ADDRESS,
         event: {
           event: factoryAbi.PoolCreated,
@@ -765,7 +765,7 @@ describe('evmDecoder queries', () => {
             token1: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
           },
         },
-        parameter: 'pool',
+        childAddressField: 'pool',
         database: db,
       }),
       events: {
@@ -790,15 +790,15 @@ describe('evmDecoder queries', () => {
   })
 
   it('should build query for Factory without params', async () => {
-    const db = await factorySqliteDatabase({ path: ':memory:' })
+    const db = await contractFactoryStore({ path: ':memory:' })
     const range = { from: 0, to: 100 }
 
     const decoder = evmDecoder({
       range,
-      contracts: factory({
+      contractFactory: contractFactory({
         address: FACTORY_ADDRESS,
         event: factoryAbi.PoolCreated,
-        parameter: 'pool',
+        childAddressField: 'pool',
         database: db,
       }),
       events: {
@@ -880,7 +880,8 @@ describe('evmDecoder transform', () => {
   ]
 
   it('should decode the events when passed AbiEvent', async () => {
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: evmDecoder({
         range: { from: 0, to: 1 },
@@ -957,11 +958,12 @@ describe('evmDecoder transform', () => {
     { contracts: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'], expected: 2 },
     { contracts: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'.toUpperCase()], expected: 2 },
   ])(`should filter events by specified contracts $contracts -> $expected`, async ({ contracts, expected }) => {
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: evmDecoder({
         range: { from: 0, to: 1 },
-        contracts, // No contracts should filter out all events
+        contractFactory: contracts, // No contracts should filter out all events
         events: {
           transfers: commonAbis.erc20.events.Transfer,
         },
@@ -974,7 +976,8 @@ describe('evmDecoder transform', () => {
   })
 
   it('should decode the events when passed an EventWithArgs', async () => {
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: evmDecoder({
         range: { from: 0, to: 1 },
@@ -1049,7 +1052,8 @@ describe('evmDecoder transform', () => {
   })
 
   it('should decode the events when mixed EventWithArgs and AbiEvent', async () => {
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: evmDecoder({
         range: { from: 0, to: 1 },

@@ -54,9 +54,8 @@ export function solanaPortalSource<Out extends SolanaOutputs>({
    * Globally unique, stable identifier for this pipe.
    * Targets use it as a cursor key to persist progress — two pipes with the
    * same `id` will share (and overwrite) each other's cursor.
-   * Required when calling `.pipeTo()`.
    */
-  id?: string
+  id: string
   portal: string | PortalClientOptions
   outputs: Out
   cache?: PortalCache
@@ -87,7 +86,7 @@ export function solanaPortalSource<Out extends SolanaOutputs>({
       createTransformer<SolanaPortalData<F>, SolanaPortalData<F>>({
         profiler: { name: 'normalize data' },
         transform: (data, ctx) => {
-          const schema = getBlockSchema<solana.Block<F>>(ctx.query.raw)
+          const schema = getBlockSchema<solana.Block<F>>(ctx.internals.query.raw)
 
           return data.map((b) => cast(schema, b))
         },

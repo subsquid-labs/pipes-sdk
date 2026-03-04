@@ -11,6 +11,7 @@ const from = '340,000,000'
 
 async function cli() {
   const stream = solanaPortalSource({
+    id: 'solana-swaps',
     portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
     outputs: {
       orcaWhirlpool: solanaInstructionDecoder({

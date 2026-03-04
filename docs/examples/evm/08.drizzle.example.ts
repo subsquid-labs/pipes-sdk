@@ -38,9 +38,9 @@
 
 import { ApolloServer } from '@apollo/server'
 import { startStandaloneServer } from '@apollo/server/standalone'
-import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
+import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 import { metricsServer } from '@subsquid/pipes/metrics/node'
-import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
+import { batchForInsert, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
 import { buildSchema } from 'drizzle-graphql'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { integer, numeric, pgTable, primaryKey, timestamp, varchar } from 'drizzle-orm/pg-core'
@@ -69,7 +69,8 @@ const DB_URL = 'postgresql://postgres:postgres@localhost:5432/postgres'
 
 async function main() {
   // Configure Portal API source to fetch data from Ethereum mainnet
-  await evmPortalSource({
+  await evmPortalStream({
+    id: 'drizzle',
     portal: {
       url: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     },
@@ -113,7 +114,7 @@ async function main() {
       onData: async ({ tx, data, ctx }) => {
         ctx.logger.debug(`Processing batch with ${data.transfers.length} transfer events...`)
 
-        for (const values of chunk(data.transfers)) {
+        for (const values of batchForInsert(data.transfers)) {
           ctx.logger.debug(`Inserting ${values.length} transfer events...`)
 
           await tx.insert(transfersTable).values(

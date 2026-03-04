@@ -40,6 +40,7 @@ describe('solanaInstructionDecoder transform', () => {
 
   it('should decode the events', async () => {
     const stream = solanaPortalSource({
+      id: 'test',
       portal: mockPortal.url,
       logger: false,
       outputs: solanaInstructionDecoder({
@@ -71,6 +72,7 @@ describe('solanaInstructionDecoder transform', () => {
 
   it('should filter events by programId across multiple decoders', async () => {
     const stream = solanaPortalSource({
+      id: 'test',
       portal: mockPortal.url,
       logger: false,
       outputs: {

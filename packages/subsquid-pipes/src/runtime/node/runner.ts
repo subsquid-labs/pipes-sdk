@@ -19,9 +19,9 @@ type Config = {
 type SerializableObject = Record<string, string | number | Date | boolean>
 
 /**
- * Context passed to each pipe's `stream` function at runtime.
+ * Context passed to each pipe's `handler` function at runtime.
  */
-export type RunConfig<T extends SerializableObject> = {
+export type PipeContext<T extends SerializableObject> = {
   /** Stable ID for this pipe, used for cursor persistence and log prefixing. */
   id: string
   /** Params supplied in the pipe declaration. */
@@ -35,10 +35,10 @@ export type RunConfig<T extends SerializableObject> = {
 type StreamConfig<T extends SerializableObject> = {
   /** Stable, unique identifier for this pipe. */
   id: string
-  /** Arbitrary params forwarded to the `stream` function. */
+  /** Arbitrary params forwarded to the `handler` function. */
   params: T
   /** Async function that runs the pipe to completion. */
-  stream: string | ((ctx: RunConfig<T>) => Promise<unknown>)
+  handler: string | ((ctx: PipeContext<T>) => Promise<unknown>)
 }
 
 class Runner<T extends SerializableObject = any> {
@@ -61,7 +61,7 @@ class Runner<T extends SerializableObject = any> {
 
     await Promise.all(
       this.pipes.map(async (pipe) => {
-        const stream = pipe.stream
+        const handler = pipe.handler
 
         const maxAttempts = this.config.retry || 5
         let attempts = 0
@@ -75,9 +75,9 @@ class Runner<T extends SerializableObject = any> {
 
         while (true) {
           try {
-            if (typeof stream === 'function') {
+            if (typeof handler === 'function') {
               await runWithContext(ctx, async () => {
-                await stream({
+                await handler({
                   id: pipe.id,
                   params: pipe.params,
                   metrics,
@@ -147,8 +147,8 @@ class Runner<T extends SerializableObject = any> {
  *   {
  *     id: 'transfers',
  *     params: { portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet' },
- *     stream: async ({ id, params, logger, metrics }) => {
- *       const stream = evmPortalSource({ id, portal: params.portal, outputs: evmDecoder({ ... }) })
+ *     handler: async ({ id, params, logger, metrics }) => {
+ *       const stream = evmPortalStream({ id, portal: params.portal, outputs: evmDecoder({ ... }) })
  *       for await (const { data } of stream) { ... }
  *     },
  *   },

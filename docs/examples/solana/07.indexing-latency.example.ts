@@ -21,6 +21,7 @@ import { solanaPortalSource, solanaRpcLatencyWatcher } from '@subsquid/pipes/sol
 async function main() {
   // Create a stream of new blocks from the Base mainnet portal
   const stream = solanaPortalSource({
+    id: 'solana-latency',
     portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
     outputs: solanaRpcLatencyWatcher({
       rpcUrl: ['https://api.mainnet-beta.solana.com'], // RPC endpoints to monitor

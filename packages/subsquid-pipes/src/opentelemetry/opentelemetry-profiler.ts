@@ -33,11 +33,11 @@ function makeHooks(spanCtx: Context): SpanHooks {
  *
  * @example
  * // basic usage
- * evmPortalSource({ profiler: opentelemetryProfiler(), ... })
+ * evmPortalStream({ profiler: opentelemetryProfiler(), ... })
  *
  * @example
  * // attach to an existing distributed trace (e.g. from an HTTP request)
- * evmPortalSource({ profiler: opentelemetryProfiler(requestContext), ... })
+ * evmPortalStream({ profiler: opentelemetryProfiler(requestContext), ... })
  */
 export function opentelemetryProfiler(parentCtx?: Context): SpanHooks {
   return makeHooks(parentCtx ?? context.active())

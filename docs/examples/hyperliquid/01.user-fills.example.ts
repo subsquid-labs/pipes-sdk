@@ -5,6 +5,7 @@ import { HyperliquidFillsQueryBuilder, hyperliquidFillsPortalSource } from '@sub
  */
 async function cli() {
   const stream = hyperliquidFillsPortalSource({
+    id: 'user-fills',
     portal: process.env['PORTAL_URL'] || 'https://portal.sqd.dev/datasets/hl-node-fills',
     outputs: new HyperliquidFillsQueryBuilder()
       .addFields({
