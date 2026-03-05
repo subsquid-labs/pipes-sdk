@@ -551,6 +551,70 @@ describe('Factory', () => {
   })
 })
 
+describe('Factory declarative preindex', () => {
+  it('should not run preindex when preindex is false/undefined', () => {
+    const pool = contractFactory({
+      address: UNISWAP_FACTORY,
+      event: factoryAbi.PoolCreated,
+      childAddressField: 'pool',
+      database: contractFactoryStore({ path: ':memory:' }),
+    })
+
+    expect(pool.shouldPreindex()).toBe(false)
+  })
+
+  it('should not run preindex when preindex is explicitly false', () => {
+    const pool = contractFactory({
+      address: UNISWAP_FACTORY,
+      event: factoryAbi.PoolCreated,
+      childAddressField: 'pool',
+      preindex: false,
+      database: contractFactoryStore({ path: ':memory:' }),
+    })
+
+    expect(pool.shouldPreindex()).toBe(false)
+  })
+
+  it('should run preindex when preindex is true', () => {
+    const pool = contractFactory({
+      address: UNISWAP_FACTORY,
+      event: factoryAbi.PoolCreated,
+      childAddressField: 'pool',
+      preindex: true,
+      database: contractFactoryStore({ path: ':memory:' }),
+    })
+
+    expect(pool.shouldPreindex()).toBe(true)
+  })
+
+  it('shouldPreindex is consistent with config options', () => {
+    const withTrue = contractFactory({
+      address: UNISWAP_FACTORY,
+      event: factoryAbi.PoolCreated,
+      childAddressField: 'pool',
+      preindex: true,
+      database: contractFactoryStore({ path: ':memory:' }),
+    })
+    const withFalse = contractFactory({
+      address: UNISWAP_FACTORY,
+      event: factoryAbi.PoolCreated,
+      childAddressField: 'pool',
+      preindex: false,
+      database: contractFactoryStore({ path: ':memory:' }),
+    })
+    const withUndefined = contractFactory({
+      address: UNISWAP_FACTORY,
+      event: factoryAbi.PoolCreated,
+      childAddressField: 'pool',
+      database: contractFactoryStore({ path: ':memory:' }),
+    })
+
+    expect(withTrue.shouldPreindex()).toBe(true)
+    expect(withFalse.shouldPreindex()).toBe(false)
+    expect(withUndefined.shouldPreindex()).toBe(false)
+  })
+})
+
 describe('Factory types', () => {
   const args = {
     token0: indexed(p.address),

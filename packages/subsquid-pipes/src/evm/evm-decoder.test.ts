@@ -14,6 +14,7 @@ import {
 import { commonAbis } from './abi/common.js'
 import {
   DecodedEventPipeArgs,
+  EventFilter,
   EventWithArgs,
   EventWithArgsInput,
   EventsMap,
@@ -239,6 +240,27 @@ describe('evmDecoder types', () => {
             }
       }
     }>()
+  })
+})
+
+describe('EventFilter type', () => {
+  it('accepts a simple AbiEvent', () => {
+    const filter: EventFilter<typeof commonAbis.erc20.events.Transfer> = commonAbis.erc20.events.Transfer
+    expectTypeOf(filter).toMatchTypeOf<EventFilter<typeof commonAbis.erc20.events.Transfer>>()
+  })
+
+  it('accepts the filtered form with event and params', () => {
+    const filter: EventFilter<typeof commonAbis.erc20.events.Transfer> = {
+      event: commonAbis.erc20.events.Transfer,
+      params: { from: '0x1' },
+    }
+    expectTypeOf(filter).toMatchTypeOf<EventFilter<typeof commonAbis.erc20.events.Transfer>>()
+  })
+
+  it('EventFilter is a union of AbiEvent and EventWithArgsInput', () => {
+    type Result = EventFilter<typeof commonAbis.erc20.events.Transfer>
+    expectTypeOf<typeof commonAbis.erc20.events.Transfer>().toMatchTypeOf<Result>()
+    expectTypeOf<EventWithArgsInput<typeof commonAbis.erc20.events.Transfer>>().toMatchTypeOf<Result>()
   })
 })
 

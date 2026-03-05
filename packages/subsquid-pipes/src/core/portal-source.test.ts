@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { createTarget } from '~/core/target.js'
 import { evmPortalStream } from '~/evm/index.js'
 import {
   MockPortal,
@@ -304,6 +305,88 @@ describe('Portal abstract stream', () => {
           `Please refer to the documentation on how to handle forks.`,
         ].join('\n'),
       )
+    })
+  })
+
+  describe('pipe/pipeTo guards', () => {
+    it('should throw when a target adapter is passed to .pipe()', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
+        },
+      ])
+
+      const stream = evmPortalStream({
+        id: 'test',
+        portal: mockPortal.url,
+        outputs: blockDecoder({ from: 0, to: 1 }),
+      })
+
+      const target = createTarget({
+        write: async () => {},
+      })
+
+      expect(() => stream.pipe(target as any)).toThrow(
+        'Did you mean `.pipeTo()`? `.pipe()` is for transformations, `.pipeTo()` is for terminal sinks.',
+      )
+    })
+
+    it('should throw when a plain function is passed to .pipeTo()', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
+        },
+      ])
+
+      const stream = evmPortalStream({
+        id: 'test',
+        portal: mockPortal.url,
+        outputs: blockDecoder({ from: 0, to: 1 }),
+      })
+
+      expect(() => stream.pipeTo(((data: any) => data) as any)).toThrow(
+        'Did you mean `.pipe()`? `.pipeTo()` connects to a terminal sink, `.pipe()` chains transformations.',
+      )
+    })
+
+    it('should not throw when a transform function is passed to .pipe()', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
+        },
+      ])
+
+      const stream = evmPortalStream({
+        id: 'test',
+        portal: mockPortal.url,
+        outputs: blockDecoder({ from: 0, to: 1 }),
+      })
+
+      expect(() => stream.pipe((data: any) => data)).not.toThrow()
+    })
+
+    it('should not throw when a target is passed to .pipeTo()', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
+        },
+      ])
+
+      const stream = evmPortalStream({
+        id: 'test',
+        portal: mockPortal.url,
+        outputs: blockDecoder({ from: 0, to: 1 }),
+      })
+
+      const target = createTarget({
+        write: async () => {},
+      })
+
+      expect(() => stream.pipeTo(target as any)).not.toThrow()
     })
   })
 
