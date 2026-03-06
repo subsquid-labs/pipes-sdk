@@ -215,7 +215,7 @@ export class Factory<T extends EventArgs> {
       logger,
       outputs: evmDecoder({
         profiler: { name },
-        contractFactory: this.factoryAddress(),
+        contracts: this.factoryAddress(),
         range,
         events: {
           factory: Object.keys(this.#params).length > 0 ? { event: this.#event, params: this.#params } : this.#event,
@@ -291,7 +291,7 @@ export class Factory<T extends EventArgs> {
  * @param options.preindex - When `true`, the factory automatically pre-indexes factory events before the main stream begins.
  *   The portal client and block range are resolved from the source configuration at stream startup.
  * @param options.database - Database adapter for storing and querying factory events. Can be a {@link FactoryPersistentAdapter} instance or a Promise that resolves to one
- * @returns A {@link Factory} instance that can be used as the `contractFactory` parameter in {@link evmDecoder}
+ * @returns A {@link Factory} instance that can be used as the `contracts` parameter in {@link evmDecoder}
  *
  * @example
  * ```ts
@@ -322,3 +322,6 @@ export class Factory<T extends EventArgs> {
 export function contractFactory<T extends EventArgs>(options: ContractFactoryOptions<T>) {
   return new Factory(options)
 }
+
+/** @deprecated Use {@link contractFactory} instead. */
+export const factory = contractFactory

@@ -70,7 +70,7 @@ const DB_URL = 'postgresql://postgres:postgres@localhost:5432/postgres'
 async function main() {
   // Configure Portal API source to fetch data from Ethereum mainnet
   await evmPortalStream({
-    id: 'drizzle',
+    id: 'ethereum-transfers',
     portal: {
       url: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     },

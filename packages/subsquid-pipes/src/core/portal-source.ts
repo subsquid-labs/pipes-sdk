@@ -42,7 +42,7 @@ export interface PortalCache {
   getStream<Q extends Query>(options: { portal: PortalClient; query: Q; logger: Logger }): PortalStream<GetBlock<Q>>
 }
 
-export type BatchContextInternals = {
+export type BatchStreamContext = {
   dataset: ApiDataset
   head: {
     finalized?: BlockCursor
@@ -58,20 +58,16 @@ export type BatchContextInternals = {
      * and enabling rollback to a valid chain state when a fork is detected.
      */
     rollbackChain: BlockCursor[]
-    /**
-     * Current progress state of batch processing. Contains information about
-     * the completion percentage, processed blocks count, and other metrics
-     * that help track the indexing progress.
-     */
-    progress?: ProgressEvent['progress']
   }
-  meta: {
-    blocksCount: number
-    bytesSize: number
-    requests: Record<number, number>
-    lastBlockReceivedAt: Date
-  }
+  progress?: ProgressEvent['progress']
   query: { url: string; hash: string; raw: any }
+}
+
+export type BatchMetadata = {
+  blocksCount: number
+  bytesSize: number
+  requests: Record<number, number>
+  lastBlockReceivedAt: Date
 }
 
 export type BatchContext = {
@@ -79,7 +75,8 @@ export type BatchContext = {
   profiler: Profiler
   metrics: Metrics
   logger: Logger
-  internals: BatchContextInternals
+  stream: BatchStreamContext
+  batch: BatchMetadata
 }
 
 export type PortalBatch<T = any> = { data: T; ctx: BatchContext }
@@ -235,14 +232,8 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             profiler: batchSpan,
             metrics: this.#metricServer.metrics,
             logger: this.#logger,
-            internals: {
+            stream: {
               dataset: datasetMetadata,
-              meta: {
-                blocksCount: batch.blocks.length,
-                bytesSize: batch.meta.bytes,
-                requests: batch.meta.requests,
-                lastBlockReceivedAt: batch.meta.lastBlockReceivedAt,
-              },
               head: {
                 finalized: batch.head.finalized,
                 latest: batch.head.latest,
@@ -262,6 +253,12 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
                 }),
               },
             },
+            batch: {
+              blocksCount: batch.blocks.length,
+              bytesSize: batch.meta.bytes,
+              requests: batch.meta.requests,
+              lastBlockReceivedAt: batch.meta.lastBlockReceivedAt,
+            },
           }
 
           const data = await this.applyTransformers(ctx, batch.blocks as T)
@@ -279,12 +276,6 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
   pipe<Out>(options: TransformerArgs<T, Out>): PortalSource<Q, Out> {
     if (this.#started) throw new Error('Source is closed')
-
-    if (options && typeof options === 'object' && 'write' in options && typeof (options as any).write === 'function') {
-      throw new Error(
-        'Did you mean `.pipeTo()`? `.pipe()` is for transformations, `.pipeTo()` is for terminal sinks.',
-      )
-    }
 
     const transformer = options instanceof Transformer ? options : new Transformer(options)
 
@@ -398,12 +389,6 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   }
 
   pipeTo(target: Target<T>) {
-    if (typeof target === 'function') {
-      throw new Error(
-        'Did you mean `.pipe()`? `.pipeTo()` connects to a terminal sink, `.pipe()` chains transformations.',
-      )
-    }
-
     const self = this
 
     return target.write({

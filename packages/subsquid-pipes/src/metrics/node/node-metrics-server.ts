@@ -34,7 +34,7 @@ export type Stats = {
   }
   pipes: {
     id: string
-    dataset: BatchContext['internals']['dataset'] | null
+    dataset: BatchContext['stream']['dataset'] | null
     portal: {
       url: string
       query: any
@@ -255,21 +255,21 @@ class ExpressMetricServer implements MetricsServer {
 
           return {
             id,
-            dataset: lastBatch?.internals.dataset || null,
+            dataset: lastBatch?.stream.dataset || null,
             portal: {
-              url: lastBatch?.internals.query.url || '',
-              query: lastBatch?.internals.query.raw || {},
+              url: lastBatch?.stream.query.url || '',
+              query: lastBatch?.stream.query.raw || {},
             },
             progress: {
-              from: lastBatch?.internals.state.initial || 0,
-              current: lastBatch?.internals.state.current.number || 0,
-              to: lastBatch?.internals.state.last || 0,
-              percent: lastBatch?.internals.state.progress?.state.percent || 0,
-              etaSeconds: lastBatch?.internals.state.progress?.state.etaSeconds || 0,
+              from: lastBatch?.stream.state.initial || 0,
+              current: lastBatch?.stream.state.current.number || 0,
+              to: lastBatch?.stream.state.last || 0,
+              percent: lastBatch?.stream.progress?.state.percent || 0,
+              etaSeconds: lastBatch?.stream.progress?.state.etaSeconds || 0,
             },
             speed: {
-              blocksPerSecond: lastBatch?.internals.state.progress?.interval.processedBlocks.perSecond || 0,
-              bytesPerSecond: lastBatch?.internals.state.progress?.interval.bytesDownloaded.perSecond || 0,
+              blocksPerSecond: lastBatch?.stream.progress?.interval.processedBlocks.perSecond || 0,
+              bytesPerSecond: lastBatch?.stream.progress?.interval.bytesDownloaded.perSecond || 0,
             },
           }
         }),
@@ -301,11 +301,11 @@ class ExpressMetricServer implements MetricsServer {
           transformation: pipeData?.transformationExemplar,
           batch: lastBatch
             ? {
-                from: lastBatch.internals.meta.blocksCount > 0
-                  ? lastBatch.internals.state.current.number - lastBatch.internals.meta.blocksCount + 1
-                  : lastBatch.internals.state.current.number,
-                to: lastBatch.internals.state.current.number,
-                blocksCount: lastBatch.internals.meta.blocksCount,
+                from: lastBatch.batch.blocksCount > 0
+                  ? lastBatch.stream.state.current.number - lastBatch.batch.blocksCount + 1
+                  : lastBatch.stream.state.current.number,
+                to: lastBatch.stream.state.current.number,
+                blocksCount: lastBatch.batch.blocksCount,
               }
             : undefined,
         },

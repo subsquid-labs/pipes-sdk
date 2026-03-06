@@ -11,23 +11,21 @@ import { MockPortal, blockDecoder, createMockPortal } from '~/testing/index.js'
 const transformBatch = ({
   data,
   ctx: {
-    internals: {
+    stream: {
       head,
       query: {
         // exclude another dynamic, i.e. URL
         url,
         ...query
       },
-      meta: {
-        bytesSize,
-        // exclude other dynamic meta fields
-        ...meta
-      },
-      state: {
-        progress,
-        // exclude progress as it contains timers and dynamic data
-        ...state
-      },
+      progress,
+      // exclude progress as it contains timers and dynamic data
+      ...streamRest
+    },
+    batch: {
+      bytesSize,
+      // exclude other dynamic meta fields
+      ...batchRest
     },
   },
 }: PortalBatch) => ({
@@ -38,7 +36,7 @@ const transformBatch = ({
     meta: {
       bytesSize,
     },
-    state,
+    state: streamRest.state,
   },
 })
 

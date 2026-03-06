@@ -1,4 +1,4 @@
-import { evmPortalStream, contractFactoryStore } from '@subsquid/pipes/evm'
+import { contractFactoryStore, evmPortalStream } from '@subsquid/pipes/evm'
 
 import { erc20Transfers, uniswapV3, uniswapV3Decoder } from './decoders'
 

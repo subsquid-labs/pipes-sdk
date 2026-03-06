@@ -81,7 +81,7 @@ export class ClickhouseState {
     return JSON.parse(cursor)
   }
 
-  async saveCursor({ internals: { state: { current, rollbackChain }, head } }: BatchContext) {
+  async saveCursor({ stream: { state: { current, rollbackChain }, head } }: BatchContext) {
     const timestamp = Date.now()
 
     await this.store.insert({

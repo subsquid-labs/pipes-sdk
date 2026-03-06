@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, expectTypeOf, it } from 'vitest'
 
 import { createTarget } from '~/core/target.js'
+import { Target } from '~/core/target.js'
+import { TransformerArgs } from '~/core/transformer.js'
 import { evmPortalStream } from '~/evm/index.js'
 import {
   MockPortal,
@@ -39,8 +41,8 @@ describe('Portal abstract stream', () => {
       let firstCtx
       for await (const { ctx } of stream) {
         firstCtx = {
-          head: ctx.internals.head,
-          progress_state: ctx.internals.state.progress?.state,
+          head: ctx.stream.head,
+          progress_state: ctx.stream.progress?.state,
         }
       }
 
@@ -87,8 +89,8 @@ describe('Portal abstract stream', () => {
       let firstCtx
       for await (const { ctx } of stream) {
         firstCtx = {
-          head: ctx.internals.head,
-          progress_state: ctx.internals.state.progress?.state,
+          head: ctx.stream.head,
+          progress_state: ctx.stream.progress?.state,
         }
       }
 
@@ -308,49 +310,7 @@ describe('Portal abstract stream', () => {
     })
   })
 
-  describe('pipe/pipeTo guards', () => {
-    it('should throw when a target adapter is passed to .pipe()', async () => {
-      mockPortal = await createMockPortal([
-        {
-          statusCode: 200,
-          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
-        },
-      ])
-
-      const stream = evmPortalStream({
-        id: 'test',
-        portal: mockPortal.url,
-        outputs: blockDecoder({ from: 0, to: 1 }),
-      })
-
-      const target = createTarget({
-        write: async () => {},
-      })
-
-      expect(() => stream.pipe(target as any)).toThrow(
-        'Did you mean `.pipeTo()`? `.pipe()` is for transformations, `.pipeTo()` is for terminal sinks.',
-      )
-    })
-
-    it('should throw when a plain function is passed to .pipeTo()', async () => {
-      mockPortal = await createMockPortal([
-        {
-          statusCode: 200,
-          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
-        },
-      ])
-
-      const stream = evmPortalStream({
-        id: 'test',
-        portal: mockPortal.url,
-        outputs: blockDecoder({ from: 0, to: 1 }),
-      })
-
-      expect(() => stream.pipeTo(((data: any) => data) as any)).toThrow(
-        'Did you mean `.pipe()`? `.pipeTo()` connects to a terminal sink, `.pipe()` chains transformations.',
-      )
-    })
-
+  describe('pipe/pipeTo', () => {
     it('should not throw when a transform function is passed to .pipe()', async () => {
       mockPortal = await createMockPortal([
         {
@@ -425,5 +385,17 @@ describe('Portal abstract stream', () => {
         ]
       `)
     })
+  })
+})
+
+describe('pipe/pipeTo type guards', () => {
+  it('pipe() should not accept objects with a write() method (Target)', () => {
+    type SinkLike = { write: () => void }
+    expectTypeOf<SinkLike>().not.toMatchTypeOf<TransformerArgs<any, any>>()
+  })
+
+  it('pipeTo() should not accept plain functions', () => {
+    type Fn = (data: any) => any
+    expectTypeOf<Fn>().not.toMatchTypeOf<Target<any>>()
   })
 })

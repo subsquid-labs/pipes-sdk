@@ -32,3 +32,6 @@ export function* batchForInsert<T>(data: readonly T[], size?: number) {
     yield data.slice(i, i + size)
   }
 }
+
+/** @deprecated Use {@link batchForInsert} instead. */
+export const chunk = batchForInsert

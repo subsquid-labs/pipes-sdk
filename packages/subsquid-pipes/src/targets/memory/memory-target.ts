@@ -31,8 +31,8 @@ export function createMemoryTarget<T extends { blockNumber: number }[]>({
   return createTarget<T>({
     write: async ({ read }) => {
       for await (const batch of read()) {
-        recentUnfinalizedBlocks.push(...batch.ctx.internals.state.rollbackChain)
-        finalizedHead = batch.ctx.internals.head.finalized
+        recentUnfinalizedBlocks.push(...batch.ctx.stream.state.rollbackChain)
+        finalizedHead = batch.ctx.stream.head.finalized
 
         const finalizedNumber = finalizedHead?.number || Infinity
 

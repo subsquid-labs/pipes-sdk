@@ -18,7 +18,7 @@ function myDecoder() {
 
 type MyDecoderOut = OutputOf<typeof myDecoder>
 
-function myTransformation(): (data: MyDecoderOut, ctx: any) => { block_number_renamed: number }[] {
+function myTransformation(): (data: MyDecoderOut) => { block_number_renamed: number }[] {
   return (data) =>
     data.map((i) => ({
       block_number_renamed: i.block_number,

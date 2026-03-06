@@ -17,7 +17,7 @@ async function cli() {
   })
 
   await evmPortalStream({
-    id: 'clickhouse',
+    id: 'base-erc20-transfers',
     portal: 'https://portal.sqd.dev/datasets/base-mainnet',
     outputs: evmDecoder({
       range: { from: 'latest' },

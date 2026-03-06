@@ -124,7 +124,8 @@ type Contracts = Factory<any> | string[]
 
 export type DecodedEventPipeArgs<T extends Events, C extends Contracts> = {
   range: PortalRange
-  contractFactory?: C
+  /** Optional contract addresses to filter events from. Can be a {@link Factory} instance or an array of addresses. */
+  contracts?: C
   events: EventsMap<T>
   profiler?: ProfilerOptions
   onError?: (ctx: BatchContext, error: any) => unknown | Promise<unknown>
@@ -286,7 +287,7 @@ function getDuplicateEvents<T extends Events>(events: T, duplicates: string[]) {
  *
  * @param args - Configuration object for the decoder
  * @param args.range - Block range to query. See {@link PortalRange} for format details.
- * @param args.contractFactory - Optional contract addresses to filter events from. Can be a {@link Factory} instance or an array of addresses
+ * @param args.contracts - Optional contract addresses to filter events from. Can be a {@link Factory} instance or an array of addresses
  * @param args.events - Map of event names to event definitions. Each entry can be:
  *   - An {@link AbiEvent} instance to capture all instances of that event
  *   - An {@link EventWithArgs} object with `event` and `params` to filter by indexed parameters
@@ -317,7 +318,7 @@ function getDuplicateEvents<T extends Events>(events: T, duplicates: string[]) {
  */
 export function evmDecoder<T extends Events, C extends Contracts>({
   range,
-  contractFactory: contracts,
+  contracts,
   events,
   profiler,
   onError,

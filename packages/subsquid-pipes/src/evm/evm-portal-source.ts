@@ -85,7 +85,7 @@ export function evmPortalStream<Out extends EvmOutputs>({
       createTransformer<EvmPortalData<F>, EvmPortalData<F>>({
         profiler: { name: 'normalize data' },
         transform: (data, ctx) => {
-          const schema = getBlockSchema<evm.Block<F>>(ctx.internals.query.raw)
+          const schema = getBlockSchema<evm.Block<F>>(ctx.stream.query.raw)
 
           return data.map((b) => cast(schema, b))
         },
@@ -94,3 +94,6 @@ export function evmPortalStream<Out extends EvmOutputs>({
     ],
   })
 }
+
+/** @deprecated Use {@link evmPortalStream} instead. */
+export const evmPortalSource = evmPortalStream

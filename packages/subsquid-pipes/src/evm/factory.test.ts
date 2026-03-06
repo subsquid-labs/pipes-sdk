@@ -192,7 +192,7 @@ describe('Factory', () => {
       portal: mockPortal.url,
       outputs: evmDecoder({
         range: { from: 1, to: 2 },
-        contractFactory: poolFactory,
+        contracts: poolFactory,
         events: {
           swaps: poolAbi.Swap,
         },
@@ -275,7 +275,7 @@ describe('Factory', () => {
       portal: mockPortal.url,
       outputs: evmDecoder({
         range: { from: 1, to: 2 },
-        contractFactory: contractFactory({
+        contracts: contractFactory({
           address: UNISWAP_FACTORY,
           event: factoryAbi.PoolCreated,
           childAddressField: () => null,
@@ -304,7 +304,7 @@ describe('Factory', () => {
       outputs: {
         v1: evmDecoder({
           range: { from: 1, to: 2 },
-          contractFactory: contractFactory({
+          contracts: contractFactory({
             address: '0x00000000000000000000000000000000000000000',
             event: factoryAbi.PoolCreated,
             childAddressField: 'pool',
@@ -316,7 +316,7 @@ describe('Factory', () => {
         }),
         v2: evmDecoder({
           range: { from: 1, to: 2 },
-          contractFactory: contractFactory({
+          contracts: contractFactory({
             address: UNISWAP_FACTORY,
             event: factoryAbi.PoolCreated,
             childAddressField: 'pool',
@@ -384,7 +384,7 @@ describe('Factory', () => {
       },
       outputs: evmDecoder({
         range: { from: 1, to: 3 },
-        contractFactory: contractFactory({
+        contracts: contractFactory({
           address: UNISWAP_FACTORY,
           event: factoryAbi.PoolCreated,
           childAddressField: 'pool',
@@ -423,7 +423,7 @@ describe('Factory', () => {
       portal: mockPortal.url,
       outputs: evmDecoder({
         range: { from: 1, to: 2 },
-        contractFactory: contractFactory({
+        contracts: contractFactory({
           address: UNISWAP_FACTORY,
           event: {
             event: factoryAbi.PoolCreated,
@@ -467,7 +467,7 @@ describe('Factory', () => {
         portal: mockPortal.url,
         outputs: evmDecoder({
           range: { from: 1, to: 2 },
-          contractFactory: contractFactory({
+          contracts: contractFactory({
             address: UNISWAP_FACTORY,
             event: {
               event: factoryAbi.PoolCreated,
@@ -520,7 +520,7 @@ describe('Factory', () => {
       portal: mockPortal.url,
       outputs: evmDecoder({
         range: { from: 1, to: 2 },
-        contractFactory: contractsFactory,
+        contracts: contractsFactory,
         events: {
           swaps: poolAbi.Swap,
         },

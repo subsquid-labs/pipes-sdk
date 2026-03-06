@@ -109,7 +109,7 @@ export class PostgresState {
     )
   }
 
-  async saveCursor(tx: Transaction, { internals: { state: { current, rollbackChain }, head }, logger }: BatchContext) {
+  async saveCursor(tx: Transaction, { stream: { state: { current, rollbackChain }, head }, logger }: BatchContext) {
     const finalizedBlock = head.finalized?.number
 
     logger.debug(`Saving cursor at block ${current.number} for ${this.options.id} row...`)
