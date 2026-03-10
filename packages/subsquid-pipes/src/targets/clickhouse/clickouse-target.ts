@@ -1,6 +1,7 @@
 import type { ClickHouseClient } from '@clickhouse/client'
 
-import { BlockCursor, Ctx, createTarget, Logger } from '~/core/index.js'
+import { BlockCursor, Ctx, Logger, createTarget } from '~/core/index.js'
+
 import { ClickhouseState } from './clickhouse-state.js'
 import { ClickhouseStore } from './clickhouse-store.js'
 

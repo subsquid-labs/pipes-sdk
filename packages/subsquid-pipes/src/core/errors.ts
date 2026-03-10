@@ -26,9 +26,11 @@ export class PipeError extends Error {
  * Targets need a stable, unique ID to persist cursor state across restarts.
  */
 export class DefaultPipeIdError extends PipeError {
-  constructor() {
+  constructor(id: string) {
     super('E0001', SdkError.PipeConfiguration, [
       'Pipe requires a non-default ID when used with targets.',
+      `Current id: "${id}"`,
+      'Targets persist cursor state across restarts and need a stable, unique ID to do so.',
       'Set a unique id in your pipe source options:',
       '',
       '  evmPortalStream({ portal: "...", id: "my-pipe", outputs })',
