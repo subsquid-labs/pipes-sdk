@@ -97,7 +97,7 @@ function PipeSelector({
                 : 'bg-secondary/50 text-muted-foreground border-border hover:bg-secondary'
             }`}
           >
-            <div className="flex items-center gap-1.5 mb-1.5 h-[26px]">
+            <div className="flex items-center gap-1.5 mb-1.5">
               {pipe.dataset?.metadata?.logo_url && (
                 <img src={pipe.dataset.metadata.logo_url} alt="" className="w-4 h-4" />
               )}
@@ -105,7 +105,7 @@ function PipeSelector({
               {/*<span className="text-muted-foreground text-xxs">{pipe.dataset?.metadata?.display_name}</span>*/}
 
               {pipe.status === PipeStatus.Disconnected ? (
-                <AlertCircle size={22} className="text-destructive opacity-75 shrink-0" />
+                <AlertCircle size={20} className="text-destructive opacity-75 shrink-0" />
               ) : pipe.status === PipeStatus.Syncing ? (
                 <CircularProgress percent={pipe.progress.percent} />
               ) : null}
@@ -133,15 +133,21 @@ function PipeSelector({
   )
 }
 
-function ServerSelect({ servers }: { servers: Server[] }) {
+function ServerSelect({ servers, connected, version }: { servers: Server[]; connected: boolean; version?: string }) {
   const { serverIndex, setServerIndex } = useServerIndex()
 
   return (
     <div>
       <div className="text-xs font-normal text-muted-foreground mb-1 w-[60px]">Server</div>
       <Select value={String(serverIndex)} onValueChange={(v: string) => setServerIndex(Number(v))}>
-        <SelectTrigger className="w-full h-8 text-xs">
-          <SelectValue />
+        <SelectTrigger className="w-full h-auto py-1.5 text-sm">
+          <div className="flex flex-col items-start gap-0.5 w-full">
+            <SelectValue />
+            <div className="flex items-center gap-1.5 text-muted-foreground w-full">
+              <div className={`w-[6px] h-[6px] rounded-full shrink-0 ${connected ? 'bg-teal-400' : 'bg-gray-500'}`} />
+              {version && <span className="text-[10px]">{version}</span>}
+            </div>
+          </div>
         </SelectTrigger>
         <SelectContent>
           {servers.map((server, index) => (
@@ -176,29 +182,9 @@ export function Sidebar({
 
         {servers && (
           <div className="mt-2 mb-3">
-            <ServerSelect servers={servers} />
+            <ServerSelect servers={servers} connected={connected} version={data?.sdk?.version} />
           </div>
         )}
-
-        <div className="w-full flex flex-col items-start text-xs gap-2">
-          <div className="flex items-center gap-2">
-            <div className="text-xs font-normal text-muted-foreground w-[60px]">Status</div>
-            <div className="font-medium text-foreground flex items-center gap-1">
-              <div className="flex items-center gap-2">
-                {connected ? (
-                  <div className="w-[8px] h-[8px] rounded-full bg-teal-400" />
-                ) : (
-                  <div className="w-[8px] h-[8px] rounded-full bg-gray-500" />
-                )}
-                <div>{connected ? 'Connected' : 'Disconnected'}</div>
-              </div>
-            </div>
-          </div>
-          <div className={`flex items-center gap-2 ${data?.sdk?.version ? 'invisible' : ''}`}>
-            <div className="text-xs font-normal text-muted-foreground w-[60px]">Version</div>
-            <div className=" flex items-center gap-1">{data?.sdk?.version}</div>
-          </div>
-        </div>
       </div>
       {/*<PortalStatus url={data?.pipes[0]?.portal.url} />*/}
 
