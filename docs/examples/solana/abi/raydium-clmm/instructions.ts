@@ -1,4 +1,5 @@
-import { address, array, bool, i32, option, struct, u8, u16, u32, u64, u128, unit } from '@subsquid/borsh'
+import { address, array, bool, i32, option, struct, u128, u16, u32, u64, u8, unit } from '@subsquid/borsh'
+
 import { instruction } from '../abi.support.js'
 import { InitializeRewardParam } from './types.js'
 

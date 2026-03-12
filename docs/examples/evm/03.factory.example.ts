@@ -1,4 +1,4 @@
-import { DecodedEvent, evmDecoder, evmPortalSource, factory, factorySqliteDatabase } from '@subsquid/pipes/evm'
+import { DecodedEvent, contractFactory, contractFactoryStore, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 
 import { events as factoryAbi } from './abi/uniswap.v3/factory'
 import { events as swapsAbi } from './abi/uniswap.v3/swaps'
@@ -18,16 +18,16 @@ export function transform<T, F>(event: DecodedEvent<T, F>) {
 }
 
 async function cli() {
-  const stream = evmPortalSource({
+  const stream = evmPortalStream({
+    id: 'uniswap-v3-pools',
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-  }).pipe(
-    evmDecoder({
+    outputs: evmDecoder({
       range: { from: '12,369,621' },
-      contracts: factory({
+      contracts: contractFactory({
         address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
         event: factoryAbi.PoolCreated,
-        parameter: 'pool',
-        database: factorySqliteDatabase({
+        childAddressField: 'pool',
+        database: contractFactoryStore({
           path: './uniswap3-eth-pools.sqlite',
         }),
       }),
@@ -36,7 +36,7 @@ async function cli() {
         fees: swapsAbi.SetFeeProtocol,
       },
     }),
-  )
+  })
 
   for await (const { data } of stream) {
     console.log(`parsed ${data.swaps.length} swaps and ${data.fees.length} fees`)

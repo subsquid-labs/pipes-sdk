@@ -1,5 +1,5 @@
 import { formatBlock } from '@subsquid/pipes'
-import { solanaPortalSource, solanaRpcLatencyWatcher } from '@subsquid/pipes/solana'
+import { solanaPortalStream, solanaRpcLatencyWatcher } from '@subsquid/pipes/solana'
 
 /**
  * This example demonstrates how to track and compare block indexing latency
@@ -20,14 +20,13 @@ import { solanaPortalSource, solanaRpcLatencyWatcher } from '@subsquid/pipes/sol
 
 async function main() {
   // Create a stream of new blocks from the Base mainnet portal
-  const stream = solanaPortalSource({
+  const stream = solanaPortalStream({
+    id: 'solana-latency',
     portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
-    query: { from: 'latest' }, // Start from the latest block
-  }).pipe(
-    solanaRpcLatencyWatcher({
+    outputs: solanaRpcLatencyWatcher({
       rpcUrl: ['https://api.mainnet-beta.solana.com'], // RPC endpoints to monitor
     }).pipe({
-      profiler: { id: 'expose metrics' },
+      profiler: { name: 'expose metrics' },
       transform: (data, { metrics }) => {
         if (!data) return // Skip if no latency data
 
@@ -45,7 +44,7 @@ async function main() {
         return data
       },
     }),
-  )
+  })
 
   // Iterate over the stream, logging block and RPC latency data
   for await (const { data } of stream) {

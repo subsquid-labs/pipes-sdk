@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm'
 
-import { BatchCtx, BlockCursor, Logger, RollbackRecord, resolveForkCursor } from '~/core/index.js'
+import { BatchContext, BlockCursor, Logger, RollbackRecord, resolveForkCursor } from '~/core/index.js'
 import { doWithRetry } from '~/internal/function.js'
 import { parseNumber } from '~/internal/number.js'
 import { Transaction } from '~/targets/drizzle/node-postgres/drizzle-target.js'
@@ -109,7 +109,7 @@ export class PostgresState {
     )
   }
 
-  async saveCursor(tx: Transaction, { state: { current, rollbackChain }, head, logger }: BatchCtx) {
+  async saveCursor(tx: Transaction, { stream: { state: { current, rollbackChain }, head }, logger }: BatchContext) {
     const finalizedBlock = head.finalized?.number
 
     logger.debug(`Saving cursor at block ${current.number} for ${this.options.id} row...`)

@@ -1,3 +1,4 @@
+import { BlockRangeConfigurationError } from './errors.js'
 import { NaturalRange } from './query-builder.js'
 
 export function parseBlockFormatting(block: string | number) {
@@ -27,20 +28,49 @@ function parseBlock(block: string | number, offset?: number) {
   return parseBlockFormatting(block)
 }
 
+/**
+ * Checks if a string looks like an ISO date (e.g., "2024-01-01", "2024-01-01T00:00:00Z")
+ */
+function isDateString(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}/.test(value)
+}
+
+function toDate(value: string): Date {
+  // Treat date-only strings as UTC (e.g., "2024-01-01" → "2024-01-01T00:00:00Z")
+  const date = new Date(value.includes('T') ? value : `${value}T00:00:00Z`)
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid date value: "${value}"`)
+  }
+  return date
+}
+
+function parseBlockOrTimestamp(value: number | string | Date, offset?: number): number | Date {
+  if (value instanceof Date) return value
+  if (typeof value === 'string' && isDateString(value)) return toDate(value)
+
+  return parseBlock(value, offset)
+}
+
 export function parsePortalRange(range: PortalRange, defaultValue?: PortalRange): NaturalRange {
   range = range || defaultValue
 
   if (range.from === 'latest') {
-    return { from: 'latest', to: range.to ? parseBlock(range.to) : undefined }
+    if (range.to instanceof Date || (typeof range.to === 'string' && isDateString(range.to))) {
+      throw new BlockRangeConfigurationError(
+        "Cannot use a Date for 'to' when 'from' is 'latest'. The portal cannot resolve a timestamp to a block number for blocks that have not been produced yet. Use a block number instead.",
+      )
+    }
+    const to = range.to ? parseBlock(range.to) : undefined
+    return { from: 'latest', to }
   }
 
-  const from = parseBlock(range.from || '0')
-
-  const to = range.to ? parseBlock(range.to, from) : undefined
+  const from = range.from ? parseBlockOrTimestamp(range.from) : 0
+  const to = range.to ? parseBlockOrTimestamp(range.to, typeof from === 'number' ? from : undefined) : undefined
 
   return { from, to }
 }
+
 export type PortalRange = {
-  from?: number | string | 'latest'
-  to?: number | string
+  from?: number | string | 'latest' | Date
+  to?: number | string | Date
 }

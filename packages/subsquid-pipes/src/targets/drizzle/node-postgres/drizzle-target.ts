@@ -106,7 +106,7 @@ export function drizzleTarget<T>({
             db.transaction(async (tx) => {
               await state.acquireLock(tx)
               const snapshotEnabled =
-                ctx.head.finalized?.number && ctx.state.current.number >= ctx.head.finalized.number ? 'true' : 'false'
+                ctx.stream.head.finalized?.number && ctx.stream.state.current.number >= ctx.stream.head.finalized.number ? 'true' : 'false'
 
               /*
                * Enable snapshotting for this transaction
@@ -117,7 +117,7 @@ export function drizzleTarget<T>({
                */
               await tx.execute(`
                 SET LOCAL sqd.snapshot_enabled = ${snapshotEnabled};
-                SET LOCAL sqd.snapshot_block_number = ${ctx.state.current.number};
+                SET LOCAL sqd.snapshot_block_number = ${ctx.stream.state.current.number};
               `)
 
               await ctx.profiler.measure('db data handler', async (profiler) => {
