@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { MockPortal, createMockPortal } from '../testing/index.js'
-import { hyperliquidFillsPortalSource } from './hyperliquid-fills-portal-source.js'
+import { hyperliquidFillsPortalStream } from './hyperliquid-fills-portal-source.js'
 import { HyperliquidFillsQueryBuilder } from './hyperliquid-fills-query-builder.js'
 
 describe('Portal abstract stream', () => {
@@ -22,7 +22,7 @@ describe('Portal abstract stream', () => {
       },
     ])
 
-    const stream = hyperliquidFillsPortalSource({
+    const stream = hyperliquidFillsPortalStream({
       id: 'test',
       portal: mockPortal.url,
       outputs: new HyperliquidFillsQueryBuilder()

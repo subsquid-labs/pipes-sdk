@@ -11,7 +11,7 @@ and how to initially transform it.
 An output is built with the `query().build().pipe()` chain:
 
 ```ts
-evmPortalSource({
+evmPortalStream({
   portal: '...',
   outputs: evmQuery()
     .addLog({ topic0: [erc20.events.Transfer.topic] })
@@ -30,7 +30,7 @@ They are also chainable:
 
 ```ts
 // decoder is a shorthand for query().build().pipe()
-evmPortalSource({
+evmPortalStream({
   portal: '...',
   outputs: evmDecoder({
     range: { from: 'latest' },
@@ -50,7 +50,7 @@ evmPortalSource({ portal: '...' })
   })
 
 // after
-evmPortalSource({
+evmPortalStream({
   portal: '...',
   outputs: {
     transfers: erc20Transfers({ range }),
@@ -59,7 +59,7 @@ evmPortalSource({
 })
 ```
 
-The same change applies to every portal source (`solanaPortalSource`, `hyperliquidFillsPortalSource`, etc.).
+The same change applies to every portal stream (`solanaPortalStream`, `hyperliquidFillsPortalStream`, etc.).
 
 ### 2. Raw outputs are now plain block arrays
 
@@ -77,7 +77,7 @@ for await (const { data } of stream) {
 }
 
 // after
-const stream = evmPortalSource({
+const stream = evmPortalStream({
   portal: '...',
   // evmQuery() is a shorthand for new EvmQueryBuilder()
   outputs: evmQuery().addLog({ topic0: [erc20.events.Transfer.topic] }).build(),
@@ -96,11 +96,11 @@ Query builder constructors now have shorthand factory functions:
 | `new SolanaQueryBuilder()` | `solanaQuery()` |
 | `new HyperliquidFillsQueryBuilder()` | `hyperliquidFillsQuery()` |
 
-### 3. Pipe `id` on all portal sources
+### 3. Pipe `id` is now required on all portal sources
 
-Every portal source now accepts an `id`. It must be **globally unique and stable** — targets use it as a cursor key to persist progress. Two pipes that share the same `id` will overwrite each other's cursor. The `id` is also used to scope log lines and Prometheus metric labels.
+Every portal source now requires an `id`. It must be **globally unique and stable** — targets use it as a cursor key to persist progress. Two pipes that share the same `id` will overwrite each other's cursor. The `id` is also used to scope log lines and Prometheus metric labels.
 
-Required when calling `.pipeTo()` (throws `DefaultPipeIdError` / E0001 otherwise).
+Calling `.pipeTo()` without an `id` throws `DefaultPipeIdError` (E0001).
 
 ```ts
 // before — id was optional
@@ -108,25 +108,86 @@ evmPortalSource({ portal: '...' })
   .pipe(evmDecoder({ ... }))
   .pipeTo(myTarget)
 
-// after — id is required for .pipeTo()
-evmPortalSource({ id: 'eth-transfers', portal: '...', outputs: evmDecoder({ ... }) })
+// after — id is required
+evmPortalStream({ id: 'eth-transfers', portal: '...', outputs: evmDecoder({ ... }) })
   .pipeTo(myTarget) // cursor stored under key "eth-transfers"
 
-solanaPortalSource({ id: 'sol-swaps', portal: '...', outputs: solanaInstructionDecoder({ ... }) })
+solanaPortalStream({ id: 'sol-swaps', portal: '...', outputs: solanaInstructionDecoder({ ... }) })
   .pipeTo(myTarget) // cursor stored under key "sol-swaps"
 ```
 
-### 4. `create` prefix dropped from factory functions
+### 4. Renamed functions and types
 
-The `create` prefix has been dropped from all factory functions. The old exports are removed with no deprecation aliases.
+Functions and types have been renamed for clarity and consistency. Old names are available as deprecated aliases.
+
+**Functions:**
 
 | Before | After |
 |---|---|
-| `createEvmPortalSource` | `evmPortalSource` |
-| `createSolanaPortalSource` | `solanaPortalSource` |
-| `createSolanaInstructionDecoder` | `solanaInstructionDecoder` |
+| `createEvmPortalSource` / `evmPortalSource` | `evmPortalStream` |
+| `solanaPortalSource` | `solanaPortalStream` |
+| `hyperliquidFillsPortalSource` | `hyperliquidFillsPortalStream` |
+| `factory` | `contractFactory` |
+| `factorySqliteDatabase` | `contractFactoryStore` |
+| `chunk` | `batchForInsert` |
 
-### 5. Progress tracker event types renamed and restructured
+**Types:**
+
+| Before | After |
+|---|---|
+| `ResultOf<T>` | `OutputOf<T>` |
+| `BatchCtx` | `BatchContext` |
+| `RunConfig` | `PipeContext` |
+| `FactoryOptions` | `ContractFactoryOptions` |
+
+**New types:** `SingleOutput`, `MultiOutput`, `EventFilter<T>`
+
+### 5. Factory option `parameter` renamed to `childAddressField`
+
+The `parameter` field in factory options is now `childAddressField`. It also accepts a function for custom extraction logic:
+
+```ts
+// before
+factory({
+  event: factoryAbi.PoolCreated,
+  parameter: 'pool',
+  database: factorySqliteDatabase({ ... }),
+})
+
+// after
+contractFactory({
+  event: factoryAbi.PoolCreated,
+  childAddressField: 'pool',
+  database: contractFactoryStore({ ... }),
+})
+
+// new — function extractor
+contractFactory({
+  event: factoryAbi.PoolCreated,
+  childAddressField: (decoded) => decoded.pool,
+  database: contractFactoryStore({ ... }),
+})
+```
+
+### 6. Runner `stream` field renamed to `handler`, `RunConfig` to `PipeContext`
+
+```ts
+// before
+const runner = createDevRunner([
+  { id: 'eth', params: { portal: '...' }, stream: indexTransfers },
+])
+
+async function indexTransfers({ id, params }: RunConfig<{ portal: string }>) { ... }
+
+// after
+const runner = createDevRunner([
+  { id: 'eth', params: { portal: '...' }, handler: indexTransfers },
+])
+
+async function indexTransfers({ id, params }: PipeContext<{ portal: string }>) { ... }
+```
+
+### 7. Progress tracker event types renamed and restructured
 
 | Before | After |
 |---|---|
@@ -145,7 +206,7 @@ evmPortalSource({
 })
 
 // after
-evmPortalSource({
+evmPortalStream({
   progress: {
     onStart:    (e: StartEvent)    => console.log(e.state.initial),
     onProgress: (e: ProgressEvent) => console.log(e.progress.state.current),
@@ -163,7 +224,7 @@ evmPortalSource({
 Ranges now accept ISO date strings and `Date` objects in addition to block numbers. Dates are automatically resolved to the corresponding block numbers via the portal API.
 
 ```ts
-evmPortalSource({
+evmPortalStream({
   portal: '...',
   outputs: evmDecoder({
     range: { from: '2024-01-01' },              // date string
@@ -192,6 +253,42 @@ Supported `from` / `to` formats:
 | Latest block | `'latest'` (only `from`) |
 
 Date-only strings (e.g. `'2024-01-01'`) are treated as UTC midnight. Identical timestamps across multiple ranges are deduplicated into a single portal API call.
+
+#### `NaturalRange` type refinement
+
+`NaturalRange` is now a discriminated union. When `from` is `'latest'`, `to` only accepts a block number — `Date` and date strings are no longer allowed because the portal cannot resolve timestamps for blocks that have not been produced yet.
+
+```ts
+// before — single object type
+type NaturalRange = { from: number | 'latest' | Date; to?: number | Date }
+
+// after — discriminated union
+type NaturalRange =
+  | { from: number | Date; to?: number | Date }
+  | { from: 'latest'; to?: number }
+```
+
+`from: 'latest'` with a numeric `to` now correctly preserves both values in the resolved range. Previously, `to` was silently dropped.
+
+```ts
+// ✅ Valid — block number as `to`
+evmDecoder({ range: { from: 'latest', to: 20_000_000 }, ... })
+
+// ❌ Throws BlockRangeConfigurationError
+evmDecoder({ range: { from: 'latest', to: new Date('2025-01-01') }, ... })
+```
+
+#### Range validation
+
+Block ranges are validated after timestamp resolution. The following conditions throw a `BlockRangeConfigurationError` (E0002):
+
+| Condition | Example | Error |
+|---|---|---|
+| Inverted range (`from` > `to`) | `{ from: 1000, to: 500 }` | `Invalid block range: 'from' (1000) must be less than or equal to 'to' (500)` |
+| `Date` for `to` with `from: 'latest'` | `{ from: 'latest', to: new Date(...) }` | `Cannot use a Date for 'to' when 'from' is 'latest'…` |
+| Unresolvable timestamp (e.g. future date) | `{ from: new Date('2030-01-01') }` | `Failed to resolve timestamp 2030-01-01T00:00:00.000Z to a block number…` |
+
+The portal's `No chunk found for timestamp` error is now wrapped with context identifying which timestamp failed and why.
 
 ### 2. `defineAbi` — use standard JSON ABIs without code generation
 
@@ -234,7 +331,7 @@ import artifact from './artifacts/MyContract.json'
 const myContract = defineAbi(artifact)
 ```
 
-The returned object has `.events` and `.functions` maps that work directly with `evmDecoder()`, `evmQuery()`, and `factory()`.
+The returned object has `.events` and `.functions` maps that work directly with `evmDecoder()`, `evmQuery()`, and `contractFactory()`.
 
 ### 3. Testing utilities — `@subsquid/pipes/testing`
 
@@ -246,8 +343,8 @@ import { createMockPortal, createTestLogger, createMockMetricServer } from '@sub
 // Spin up a mock portal HTTP server with canned responses
 const portal = await createMockPortal(mockResponses)
 
-// Use portal.url with any portal source in your test
-const stream = evmPortalSource({
+// Use portal.url with any portal stream in your test
+const stream = evmPortalStream({
   id: 'test',
   portal: portal.url,
   logger: createTestLogger(),
@@ -291,10 +388,10 @@ const portal = await evmPortalMockStream({
   ],
 })
 
-// Use portal.url with evmPortalSource in your test
+// Use portal.url with evmPortalStream in your test
 ```
 
-Works end-to-end with `evmDecoder` and `factory()` for testing Uniswap-style factory/child event patterns. Requires `viem` as an optional peer dependency.
+Works end-to-end with `evmDecoder` and `contractFactory()` for testing Uniswap-style factory/child event patterns. Requires `viem` as an optional peer dependency.
 
 ### 5. OpenTelemetry integration — `@subsquid/pipes/opentelemetry`
 
@@ -303,7 +400,7 @@ Export profiler spans to Jaeger, Tempo, or any OTEL-compatible backend:
 ```ts
 import { opentelemetryProfiler } from '@subsquid/pipes/opentelemetry'
 
-evmPortalSource({
+evmPortalStream({
   portal: '...',
   profiler: opentelemetryProfiler(), // drop-in for profiler: true
   outputs: evmDecoder({ ... }),
@@ -320,8 +417,8 @@ Define your pipe logic once, then run it against multiple datasets concurrently 
 import { createDevRunner } from '@subsquid/pipes/runtime/node'
 
 // one pipe function, reused across chains
-async function indexTransfers({ id, params, logger, metrics }: RunConfig<{ portal: string }>) {
-  const stream = evmPortalSource({
+async function indexTransfers({ id, params, logger, metrics }: PipeContext<{ portal: string }>) {
+  const stream = evmPortalStream({
     id,
     portal: params.portal,
     logger,
@@ -339,8 +436,8 @@ async function indexTransfers({ id, params, logger, metrics }: RunConfig<{ porta
 
 const runner = createDevRunner(
   [
-    { id: 'eth-transfers',  params: { portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet' },  stream: indexTransfers },
-    { id: 'base-transfers', params: { portal: 'https://portal.sqd.dev/datasets/base-mainnet' },      stream: indexTransfers },
+    { id: 'eth-transfers',  params: { portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet' },  handler: indexTransfers },
+    { id: 'base-transfers', params: { portal: 'https://portal.sqd.dev/datasets/base-mainnet' },      handler: indexTransfers },
   ],
   { retry: 5, metrics: { port: 9090 } },
 )
@@ -359,6 +456,7 @@ All framework errors extend `PipeError` and carry a unique code linking to the d
 | Error | Code | Thrown when |
 |---|---|---|
 | `DefaultPipeIdError` | E0001 | `.pipeTo()` called without a pipe `id` |
+| `BlockRangeConfigurationError` | E0002 | Block range is misconfigured (inverted range, invalid date with `'latest'`, unresolvable timestamp) |
 | `TargetForkNotSupportedError` | E1001 | Fork detected but target has no `fork()` method |
 | `ForkNoPreviousBlocksError` | E1002 | Fork exception carried no previous blocks |
 | `ForkCursorMissingError` | E1003 | Target `fork()` returned `null` |
@@ -409,8 +507,23 @@ evmDecoder({
 
 - `CompositeTransformer` / `compositeTransformer` / `composite-transformer.ts` removed — use named `outputs`
 - `.pipeComposite()` removed from `PortalSource` — use named `outputs`
-- `query` option removed from `evmPortalSource` and `solanaPortalSource`
-- `createEvmPortalSource` alias removed — use `evmPortalSource`
-- `createSolanaPortalSource` alias removed — use `solanaPortalSource`
+- `query` option removed from `evmPortalStream` and `solanaPortalSource`
+- `createEvmPortalSource` alias removed — use `evmPortalStream`
+- `createSolanaPortalSource` alias removed — use `solanaPortalStream`
 - `createSolanaInstructionDecoder` removed — use `solanaInstructionDecoder`
+- `ResultOf<T>` removed — use `OutputOf<T>`
+- `TransformerFn` removed from public exports
 - `Subset<T, U>` removed from `query-builder.ts` exports — now a recursive type in `types.ts`
+
+## Deprecated aliases
+
+The following old names are still exported but marked `@deprecated` and will be removed in a future version:
+
+| Deprecated | Use instead |
+|---|---|
+| `evmPortalSource` | `evmPortalStream` |
+| `solanaPortalSource` | `solanaPortalStream` |
+| `hyperliquidFillsPortalSource` | `hyperliquidFillsPortalStream` |
+| `factory` | `contractFactory` |
+| `factorySqliteDatabase` | `contractFactoryStore` |
+| `chunk` | `batchForInsert` |

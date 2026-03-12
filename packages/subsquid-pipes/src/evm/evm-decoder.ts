@@ -368,14 +368,6 @@ export function evmDecoder<T extends Events, C extends Contracts>({
       start: async (ctx) => {
         if (Factory.isFactory(contracts)) {
           await contracts.migrate()
-
-          if (contracts.shouldPreindex()) {
-            await contracts.runPreindex({
-              portal: ctx.portal,
-              range,
-              logger: ctx.logger,
-            })
-          }
         }
       },
       transform: async (data, ctx): Promise<EventResponse<T, C>> => {

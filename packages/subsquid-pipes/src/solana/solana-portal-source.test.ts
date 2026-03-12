@@ -4,7 +4,7 @@ import * as solana from '~/portal-client/query/solana.js'
 import { solanaQuery } from '~/solana/solana-query-builder.js'
 
 import { MockPortal, createMockPortal } from '../testing/index.js'
-import { solanaPortalSource } from './solana-portal-source.js'
+import { solanaPortalStream } from './solana-portal-source.js'
 
 describe('Portal abstract stream', () => {
   let mockPortal: MockPortal
@@ -34,7 +34,7 @@ describe('Portal abstract stream', () => {
       reward: { lamports: true },
     } satisfies solana.FieldSelection
 
-    const stream = solanaPortalSource({
+    const stream = solanaPortalStream({
       id: 'test',
       portal: mockPortal.url,
       outputs: solanaQuery().addFields(fields).addRange({ from: 0, to: 2 }),

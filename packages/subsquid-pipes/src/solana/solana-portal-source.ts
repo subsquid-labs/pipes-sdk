@@ -40,7 +40,7 @@ type SolanaPortalStream<T extends SolanaOutputs> =
           }
         : never
 
-export function solanaPortalSource<Out extends SolanaOutputs>({
+export function solanaPortalStream<Out extends SolanaOutputs>({
   id,
   portal,
   outputs,
@@ -95,3 +95,6 @@ export function solanaPortalSource<Out extends SolanaOutputs>({
     ],
   })
 }
+
+/** @deprecated Use {@link solanaPortalStream} instead. */
+export const solanaPortalSource = solanaPortalStream

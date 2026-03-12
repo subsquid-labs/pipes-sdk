@@ -39,7 +39,7 @@ type HyperliquidFillsPortalStream<T extends HyperliquidFillsOutputs> =
           }
         : never
 
-export function hyperliquidFillsPortalSource<Out extends HyperliquidFillsOutputs>({
+export function hyperliquidFillsPortalStream<Out extends HyperliquidFillsOutputs>({
   id,
   portal,
   outputs,
@@ -94,3 +94,6 @@ export function hyperliquidFillsPortalSource<Out extends HyperliquidFillsOutputs
     ],
   })
 }
+
+/** @deprecated Use {@link hyperliquidFillsPortalStream} instead. */
+export const hyperliquidFillsPortalSource = hyperliquidFillsPortalStream

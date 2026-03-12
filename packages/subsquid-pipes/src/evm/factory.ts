@@ -48,11 +48,6 @@ export type ContractFactoryOptions<T extends EventArgs> = {
   event: AbiEvent<T> | EventWithArgsInput<AbiEvent<T>>
   childAddressField: keyof T | ((data: DecodedAbiEvent<T>) => string | null)
   /**
-   * When `true`, the factory automatically pre-indexes factory events before the main stream begins.
-   * The portal client and block range are resolved from the source configuration at stream startup.
-   */
-  preindex?: boolean
-  /**
    * It is safe to use `any` here because the FactoryPersistentAdapter generic argument
    * will be inferred in the constructor of `Factory`
    */
@@ -191,10 +186,6 @@ export class Factory<T extends EventArgs> {
     return true
   }
 
-  shouldPreindex() {
-    return this.options.preindex === true
-  }
-
   /** @internal */
   async runPreindex({
     portal,
@@ -288,8 +279,6 @@ export class Factory<T extends EventArgs> {
  * @param options.childAddressField - Field name or function to extract the child contract address from the decoded factory event.
  *   - If a string, it should be a key from the event's decoded data
  *   - If a function, it receives the decoded event data and should return the contract address or null
- * @param options.preindex - When `true`, the factory automatically pre-indexes factory events before the main stream begins.
- *   The portal client and block range are resolved from the source configuration at stream startup.
  * @param options.database - Database adapter for storing and querying factory events. Can be a {@link FactoryPersistentAdapter} instance or a Promise that resolves to one
  * @returns A {@link Factory} instance that can be used as the `contracts` parameter in {@link evmDecoder}
  *
@@ -305,19 +294,6 @@ export class Factory<T extends EventArgs> {
  * })
  * ```
  *
- * @example
- * ```ts
- * // Enable declarative pre-indexing
- * contractFactory({
- *   address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
- *   event: factoryAbi.PoolCreated,
- *   childAddressField: 'pool',
- *   preindex: true,
- *   database: contractFactoryStore({
- *     path: './uniswap3-eth-pools.sqlite',
- *   }),
- * })
- * ```
  */
 export function contractFactory<T extends EventArgs>(options: ContractFactoryOptions<T>) {
   return new Factory(options)
