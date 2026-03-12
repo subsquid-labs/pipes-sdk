@@ -1,6 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, expectTypeOf, it } from 'vitest'
 
-import { evmPortalSource } from '~/evm/index.js'
+import { createTarget } from '~/core/target.js'
+import { Target } from '~/core/target.js'
+import { TransformerArgs } from '~/core/transformer.js'
+import { evmPortalStream } from '~/evm/index.js'
 import {
   MockPortal,
   blockDecoder,
@@ -29,7 +32,8 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 2 }),
       })
@@ -37,8 +41,8 @@ describe('Portal abstract stream', () => {
       let firstCtx
       for await (const { ctx } of stream) {
         firstCtx = {
-          head: ctx.head,
-          progress_state: ctx.state.progress?.state,
+          head: ctx.stream.head,
+          progress_state: ctx.stream.progress?.state,
         }
       }
 
@@ -76,7 +80,8 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 2 }),
       })
@@ -84,8 +89,8 @@ describe('Portal abstract stream', () => {
       let firstCtx
       for await (const { ctx } of stream) {
         firstCtx = {
-          head: ctx.head,
-          progress_state: ctx.state.progress?.state,
+          head: ctx.stream.head,
+          progress_state: ctx.stream.progress?.state,
         }
       }
 
@@ -128,7 +133,8 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
       })
@@ -154,7 +160,8 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 2 }),
       })
@@ -190,7 +197,8 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: {
           url: mockPortal.url,
           http: { retrySchedule: [0] },
@@ -225,7 +233,8 @@ describe('Portal abstract stream', () => {
         ...new Array(2).fill({ statusCode: 503 }),
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: {
           url: mockPortal.url,
           http: {
@@ -278,7 +287,8 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: {
           url: mockPortal.url,
           http: { retryAttempts: 0, retrySchedule: [0] },
@@ -300,6 +310,46 @@ describe('Portal abstract stream', () => {
     })
   })
 
+  describe('pipe/pipeTo', () => {
+    it('should not throw when a transform function is passed to .pipe()', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
+        },
+      ])
+
+      const stream = evmPortalStream({
+        id: 'test',
+        portal: mockPortal.url,
+        outputs: blockDecoder({ from: 0, to: 1 }),
+      })
+
+      expect(() => stream.pipe((data: any) => data)).not.toThrow()
+    })
+
+    it('should not throw when a target is passed to .pipeTo()', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
+        },
+      ])
+
+      const stream = evmPortalStream({
+        id: 'test',
+        portal: mockPortal.url,
+        outputs: blockDecoder({ from: 0, to: 1 }),
+      })
+
+      const target = createTarget({
+        write: async () => {},
+      })
+
+      expect(() => stream.pipeTo(target as any)).not.toThrow()
+    })
+  })
+
   describe('finalized', () => {
     it('should receive all finalized data and stop', async () => {
       mockPortal = await createFinalizedMockPortal([
@@ -309,7 +359,8 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: {
           url: mockPortal.url,
           finalized: true,
@@ -334,5 +385,17 @@ describe('Portal abstract stream', () => {
         ]
       `)
     })
+  })
+})
+
+describe('pipe/pipeTo type guards', () => {
+  it('pipe() should not accept objects with a write() method (Target)', () => {
+    type SinkLike = { write: () => void }
+    expectTypeOf<SinkLike>().not.toMatchTypeOf<TransformerArgs<any, any>>()
+  })
+
+  it('pipeTo() should not accept plain functions', () => {
+    type Fn = (data: any) => any
+    expectTypeOf<Fn>().not.toMatchTypeOf<Target<any>>()
   })
 })

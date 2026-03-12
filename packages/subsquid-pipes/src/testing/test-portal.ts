@@ -177,9 +177,7 @@ function getServerAddress(server: Server): string {
   return `http://127.0.0.1:${address.port}`
 }
 
-/**
- * @internal
- */
+/** @internal */
 export async function readAll<T>(stream: AsyncIterable<{ data: T[] }>): Promise<T[]> {
   const res: T[] = []
 

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from 'vites
 
 import { commonAbis } from '~/evm/abi/common.js'
 import { evmDecoder } from '~/evm/evm-decoder.js'
-import { evmPortalSource } from '~/evm/evm-portal-source.js'
+import { evmPortalStream } from '~/evm/evm-portal-source.js'
 
 import { MockPortal, readAll } from '../index.js'
 import { evmPortalMockStream } from './evm-portal-mock-stream.js'
@@ -161,7 +161,8 @@ describe('test-evm-data helpers', () => {
         ],
       })
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: evmDecoder({
           range: { from: 0, to: 2 },
@@ -204,7 +205,8 @@ describe('test-evm-data helpers', () => {
         ],
       })
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: evmDecoder({
           range: { from: 0, to: 1 },
@@ -244,7 +246,8 @@ describe('test-evm-data helpers', () => {
         ],
       })
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: evmDecoder({
           range: { from: 0, to: 1 },

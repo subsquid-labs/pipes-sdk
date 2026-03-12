@@ -380,15 +380,15 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
     },
     transform: async (data, ctx) => {
       history.addState({
-        state: ctx.state,
-        bytes: ctx.meta.bytesSize,
-        requests: ctx.meta.requests,
+        state: ctx.stream.state,
+        bytes: ctx.batch.bytesSize,
+        requests: ctx.batch.requests,
       })
 
-      batchSizeBlocks?.observe({ id: ctx.id }, ctx.meta.blocksCount)
-      batchSizeBytes?.observe({ id: ctx.id }, ctx.meta.bytesSize)
+      batchSizeBlocks?.observe({ id: ctx.id }, ctx.batch.blocksCount)
+      batchSizeBytes?.observe({ id: ctx.id }, ctx.batch.bytesSize)
 
-      for (const [statusCode, count] of Object.entries(ctx.meta.requests)) {
+      for (const [statusCode, count] of Object.entries(ctx.batch.requests)) {
         portalRequestsTotal?.inc(
           {
             id: ctx.id,
@@ -399,8 +399,8 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
         )
       }
 
-      if (ctx.state.current?.number) {
-        currentBlock?.set({ id: ctx.id }, ctx.state.current.number)
+      if (ctx.stream.state.current?.number) {
+        currentBlock?.set({ id: ctx.id }, ctx.stream.state.current.number)
       }
 
       lastProgress = history.calculate()
@@ -408,10 +408,10 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
       lastBlock?.set({ id: ctx.id }, lastProgress.state.last)
       progressRatio?.set({ id: ctx.id }, lastProgress.state.percent / 100)
       etaSeconds?.set({ id: ctx.id }, lastProgress.state.etaSeconds)
-      blocksProcessedTotal?.inc({ id: ctx.id }, ctx.meta.blocksCount)
-      bytesDownloaded?.inc({ id: ctx.id }, ctx.meta.bytesSize)
+      blocksProcessedTotal?.inc({ id: ctx.id }, ctx.batch.blocksCount)
+      bytesDownloaded?.inc({ id: ctx.id }, ctx.batch.bytesSize)
 
-      ctx.state.progress = lastProgress
+      ctx.stream.progress = lastProgress
 
       return data
     },

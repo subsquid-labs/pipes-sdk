@@ -39,7 +39,7 @@ type EvmPortalStream<T extends EvmOutputs> =
           }
         : never
 
-export function evmPortalSource<Out extends EvmOutputs>({
+export function evmPortalStream<Out extends EvmOutputs>({
   id,
   portal,
   outputs,
@@ -53,9 +53,8 @@ export function evmPortalSource<Out extends EvmOutputs>({
    * Globally unique, stable identifier for this pipe.
    * Targets use it as a cursor key to persist progress — two pipes with the
    * same `id` will share (and overwrite) each other's cursor.
-   * Required when calling `.pipeTo()`.
    */
-  id?: string
+  id: string
   portal: string | PortalClientOptions | PortalClient
   outputs: Out
   cache?: PortalCache
@@ -86,7 +85,7 @@ export function evmPortalSource<Out extends EvmOutputs>({
       createTransformer<EvmPortalData<F>, EvmPortalData<F>>({
         profiler: { name: 'normalize data' },
         transform: (data, ctx) => {
-          const schema = getBlockSchema<evm.Block<F>>(ctx.query.raw)
+          const schema = getBlockSchema<evm.Block<F>>(ctx.stream.query.raw)
 
           return data.map((b) => cast(schema, b))
         },
@@ -95,3 +94,6 @@ export function evmPortalSource<Out extends EvmOutputs>({
     ],
   })
 }
+
+/** @deprecated Use {@link evmPortalStream} instead. */
+export const evmPortalSource = evmPortalStream

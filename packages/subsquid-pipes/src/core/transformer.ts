@@ -1,7 +1,8 @@
 import { Metrics } from '~/core/metrics-server.js'
+import { PortalClient } from '~/portal-client/client.js'
 
 import { Logger } from './logger.js'
-import { BatchCtx } from './portal-source.js'
+import { BatchContext } from './portal-source.js'
 import { ProfilerOptions } from './profiling.js'
 import { QueryBuilder } from './query-builder.js'
 import { BlockCursor, Ctx } from './types.js'
@@ -11,11 +12,12 @@ export type StartCtx = {
   state: { current?: BlockCursor; initial: number }
   logger: Logger
   metrics: Metrics
+  portal: PortalClient
 }
 
 export type StopCtx = { logger: Logger }
 
-export type TransformerFn<In, Out> = (data: In, ctx: BatchCtx) => Promise<Out> | Out
+type TransformerFn<In, Out> = (data: In, ctx: BatchContext) => Promise<Out> | Out
 
 export type TransformerOptions<In, Out> = {
   profiler?: ProfilerOptions
@@ -90,7 +92,7 @@ export class Transformer<In, Out> {
   /**
    * @internal
    */
-  async run(data: In, ctx: BatchCtx): Promise<Out> {
+  async run(data: In, ctx: BatchContext): Promise<Out> {
     const span = ctx.profiler.start(this.options.profiler)
     let res = await this.options.transform(data, { ...ctx, profiler: span })
     span.data = res

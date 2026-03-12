@@ -10,7 +10,6 @@ import {
 
 import { last } from '../internal/array.js'
 import {
-  DefaultPipeIdError,
   ForkCursorMissingError,
   ForkNoPreviousBlocksError,
   TargetForkNotSupportedError,
@@ -25,7 +24,6 @@ import {
   QueryAwareTransformer,
   Transformer,
   TransformerArgs,
-  TransformerFn,
   TransformerOptions,
 } from './transformer.js'
 import { BlockCursor, Ctx } from './types.js'
@@ -44,8 +42,7 @@ export interface PortalCache {
   getStream<Q extends Query>(options: { portal: PortalClient; query: Q; logger: Logger }): PortalStream<GetBlock<Q>>
 }
 
-export type BatchCtx = {
-  id: string
+export type BatchStreamContext = {
   dataset: ApiDataset
   head: {
     finalized?: BlockCursor
@@ -61,26 +58,28 @@ export type BatchCtx = {
      * and enabling rollback to a valid chain state when a fork is detected.
      */
     rollbackChain: BlockCursor[]
-    /**
-     * Current progress state of batch processing. Contains information about
-     * the completion percentage, processed blocks count, and other metrics
-     * that help track the indexing progress.
-     */
-    progress?: ProgressEvent['progress']
   }
-  meta: {
-    blocksCount: number
-    bytesSize: number
-    requests: Record<number, number>
-    lastBlockReceivedAt: Date
-  }
+  progress?: ProgressEvent['progress']
   query: { url: string; hash: string; raw: any }
+}
+
+export type BatchMetadata = {
+  blocksCount: number
+  bytesSize: number
+  requests: Record<number, number>
+  lastBlockReceivedAt: Date
+}
+
+export type BatchContext = {
+  id: string
   profiler: Profiler
   metrics: Metrics
   logger: Logger
+  stream: BatchStreamContext
+  batch: BatchMetadata
 }
 
-export type PortalBatch<T = any> = { data: T; ctx: BatchCtx }
+export type PortalBatch<T = any> = { data: T; ctx: BatchContext }
 
 type PartialBlock = { header: { number: number; hash: string; timestamp?: number } }
 
@@ -105,9 +104,8 @@ export type PortalSourceOptions<Query> = {
    * Globally unique, stable identifier for this pipe.
    * Targets use it as a cursor key to persist progress — two pipes with the
    * same `id` will share (and overwrite) each other's cursor.
-   * Required when calling `.pipeTo()`.
    */
-  id?: string
+  id: string
   portal: string | PortalClientOptions | PortalClient
   query: Query
   logger?: Logger | LogLevel
@@ -121,8 +119,6 @@ export type PortalSourceOptions<Query> = {
     onProgress?: (progress: ProgressEvent) => void
   }
 }
-
-export const DEFAULT_PIPE_NAME = 'stream'
 
 export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   readonly #id: string
@@ -138,7 +134,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   #started = false
 
   constructor({ portal, id, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
-    this.#id = id || DEFAULT_PIPE_NAME
+    this.#id = id
     this.#logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ id: this.#id, level: logger })
 
     this.#portal =
@@ -231,41 +227,38 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             lastBatchBlock.header?.number || -Infinity,
           )
 
-          const ctx: BatchCtx = {
-            // Batch metadata
+          const ctx: BatchContext = {
             id: this.#id,
-            dataset: datasetMetadata,
-            meta: {
+            profiler: batchSpan,
+            metrics: this.#metricServer.metrics,
+            logger: this.#logger,
+            stream: {
+              dataset: datasetMetadata,
+              head: {
+                finalized: batch.head.finalized,
+                latest: batch.head.latest,
+              },
+              query: {
+                url: this.#portal.getUrl(),
+                hash: await hashQuery(query),
+                raw: query,
+              },
+              state: {
+                initial,
+                current: cursorFromHeader(lastBatchBlock as any),
+                last: lastBlockNumber,
+                rollbackChain: extractRollbackChain({
+                  blocks: batch.blocks,
+                  head: batch.head.finalized,
+                }),
+              },
+            },
+            batch: {
               blocksCount: batch.blocks.length,
               bytesSize: batch.meta.bytes,
               requests: batch.meta.requests,
               lastBlockReceivedAt: batch.meta.lastBlockReceivedAt,
             },
-            head: {
-              finalized: batch.head.finalized,
-              latest: batch.head.latest,
-            },
-            query: {
-              url: this.#portal.getUrl(),
-              hash: await hashQuery(query),
-              raw: query,
-            },
-
-            // State of the stream at the moment of this batch processing
-            state: {
-              initial,
-              current: cursorFromHeader(lastBatchBlock as any),
-              last: lastBlockNumber,
-              rollbackChain: extractRollbackChain({
-                blocks: batch.blocks,
-                head: batch.head.finalized,
-              }),
-            },
-
-            // Context for transformers
-            profiler: batchSpan,
-            metrics: this.#metricServer.metrics,
-            logger: this.#logger,
           }
 
           const data = await this.applyTransformers(ctx, batch.blocks as T)
@@ -297,6 +290,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     }
 
     return new PortalSource<Q, Out>({
+      id: this.#id,
       portal: this.#portal,
       query: this.#queryBuilder,
       logger: this.#logger,
@@ -307,7 +301,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     })
   }
 
-  private async applyTransformers(ctx: BatchCtx, data: T) {
+  private async applyTransformers(ctx: BatchContext, data: T) {
     const span = ctx.profiler.start('apply transformers')
 
     for (const transformer of this.#transformers) {
@@ -365,6 +359,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       id: this.#id,
       metrics: this.#metricServer.metrics,
       state,
+      portal: this.#portal,
     })
     await Promise.all(this.#transformers.map((t) => t.start(ctx)))
     span.end()
@@ -394,10 +389,6 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   }
 
   pipeTo(target: Target<T>) {
-    if (this.#id === DEFAULT_PIPE_NAME) {
-      throw new DefaultPipeIdError()
-    }
-
     const self = this
 
     return target.write({
@@ -444,7 +435,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     })
   }
 
-  private batchEnd(ctx: BatchCtx) {
+  private batchEnd(ctx: BatchContext) {
     ctx.profiler.end()
     this.#metricServer.batchProcessed(ctx)
   }

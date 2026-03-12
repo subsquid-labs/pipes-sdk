@@ -39,7 +39,7 @@ type HyperliquidFillsPortalStream<T extends HyperliquidFillsOutputs> =
           }
         : never
 
-export function hyperliquidFillsPortalSource<Out extends HyperliquidFillsOutputs>({
+export function hyperliquidFillsPortalStream<Out extends HyperliquidFillsOutputs>({
   id,
   portal,
   outputs,
@@ -53,9 +53,8 @@ export function hyperliquidFillsPortalSource<Out extends HyperliquidFillsOutputs
    * Globally unique, stable identifier for this pipe.
    * Targets use it as a cursor key to persist progress — two pipes with the
    * same `id` will share (and overwrite) each other's cursor.
-   * Required when calling `.pipeTo()`.
    */
-  id?: string
+  id: string
   portal: string | PortalClientOptions
   outputs: Out
   cache?: PortalCache
@@ -86,7 +85,7 @@ export function hyperliquidFillsPortalSource<Out extends HyperliquidFillsOutputs
       createTransformer<HyperliquidFillsPortalData<F>, HyperliquidFillsPortalData<F>>({
         profiler: { name: 'normalize data' },
         transform: (data, ctx) => {
-          const schema = getBlockSchema<hl.Block<F>>(ctx.query.raw)
+          const schema = getBlockSchema<hl.Block<F>>(ctx.stream.query.raw)
 
           return data.map((b) => cast(schema, b))
         },
@@ -95,3 +94,6 @@ export function hyperliquidFillsPortalSource<Out extends HyperliquidFillsOutputs
     ],
   })
 }
+
+/** @deprecated Use {@link hyperliquidFillsPortalStream} instead. */
+export const hyperliquidFillsPortalSource = hyperliquidFillsPortalStream

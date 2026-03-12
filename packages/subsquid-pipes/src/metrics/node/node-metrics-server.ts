@@ -15,7 +15,7 @@ import {
   Summary,
   SummaryConfiguration,
 } from '~/core/metrics-server.js'
-import { BatchCtx } from '~/core/portal-source.js'
+import { BatchContext } from '~/core/portal-source.js'
 import { Profiler } from '~/core/profiling.js'
 import { npmVersion } from '~/version.js'
 
@@ -34,7 +34,7 @@ export type Stats = {
   }
   pipes: {
     id: string
-    dataset: BatchCtx['dataset'] | null
+    dataset: BatchContext['stream']['dataset'] | null
     portal: {
       url: string
       query: any
@@ -142,7 +142,7 @@ const MAX_HISTORY = 50
 const DEFAULT_PORT = 9090
 
 type PipeData = {
-  lastBatch?: BatchCtx
+  lastBatch?: BatchContext
   profilers: { profiler: ProfilerResult; collectedAt: Date }[]
   transformationExemplar?: TransformationResult
 }
@@ -255,21 +255,21 @@ class ExpressMetricServer implements MetricsServer {
 
           return {
             id,
-            dataset: lastBatch?.dataset || null,
+            dataset: lastBatch?.stream.dataset || null,
             portal: {
-              url: lastBatch?.query.url || '',
-              query: lastBatch?.query.raw || {},
+              url: lastBatch?.stream.query.url || '',
+              query: lastBatch?.stream.query.raw || {},
             },
             progress: {
-              from: lastBatch?.state.initial || 0,
-              current: lastBatch?.state.current.number || 0,
-              to: lastBatch?.state.last || 0,
-              percent: lastBatch?.state.progress?.state.percent || 0,
-              etaSeconds: lastBatch?.state.progress?.state.etaSeconds || 0,
+              from: lastBatch?.stream.state.initial || 0,
+              current: lastBatch?.stream.state.current.number || 0,
+              to: lastBatch?.stream.state.last || 0,
+              percent: lastBatch?.stream.progress?.state.percent || 0,
+              etaSeconds: lastBatch?.stream.progress?.state.etaSeconds || 0,
             },
             speed: {
-              blocksPerSecond: lastBatch?.state.progress?.interval.processedBlocks.perSecond || 0,
-              bytesPerSecond: lastBatch?.state.progress?.interval.bytesDownloaded.perSecond || 0,
+              blocksPerSecond: lastBatch?.stream.progress?.interval.processedBlocks.perSecond || 0,
+              bytesPerSecond: lastBatch?.stream.progress?.interval.bytesDownloaded.perSecond || 0,
             },
           }
         }),
@@ -301,11 +301,11 @@ class ExpressMetricServer implements MetricsServer {
           transformation: pipeData?.transformationExemplar,
           batch: lastBatch
             ? {
-                from: lastBatch.meta.blocksCount > 0
-                  ? lastBatch.state.current.number - lastBatch.meta.blocksCount + 1
-                  : lastBatch.state.current.number,
-                to: lastBatch.state.current.number,
-                blocksCount: lastBatch.meta.blocksCount,
+                from: lastBatch.batch.blocksCount > 0
+                  ? lastBatch.stream.state.current.number - lastBatch.batch.blocksCount + 1
+                  : lastBatch.stream.state.current.number,
+                to: lastBatch.stream.state.current.number,
+                blocksCount: lastBatch.batch.blocksCount,
               }
             : undefined,
         },
@@ -359,7 +359,7 @@ class ExpressMetricServer implements MetricsServer {
     return data
   }
 
-  batchProcessed(ctx: BatchCtx) {
+  batchProcessed(ctx: BatchContext) {
     const span = ctx.profiler.start('metrics processing')
     const data = this.registerPipe(ctx.id)
 

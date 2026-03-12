@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { PortalBatch } from '~/core/index.js'
-import { evmPortalSource } from '~/evm/index.js'
+import { evmPortalStream } from '~/evm/index.js'
 import { portalSqliteCache } from '~/portal-cache/node/node-sqlite-cache-adapter.js'
 import { MockPortal, blockDecoder, createMockPortal } from '~/testing/index.js'
 
@@ -11,28 +11,22 @@ import { MockPortal, blockDecoder, createMockPortal } from '~/testing/index.js'
 const transformBatch = ({
   data,
   ctx: {
-    head,
-    query: {
-      // exclude another dynamic, i.e. URL
-      url,
-      ...query
-    },
-    meta: {
-      bytesSize,
-      // exclude other dynamic meta fields
-      ...meta
-    },
-
-    state: {
+    stream: {
+      head,
+      query: {
+        // exclude another dynamic, i.e. URL
+        url,
+        ...query
+      },
       progress,
       // exclude progress as it contains timers and dynamic data
-      ...state
+      ...streamRest
     },
-
-    // do not include it in the test
-    metrics,
-    logger,
-    profiler,
+    batch: {
+      bytesSize,
+      // exclude other dynamic meta fields
+      ...batchRest
+    },
   },
 }: PortalBatch) => ({
   data,
@@ -42,7 +36,7 @@ const transformBatch = ({
     meta: {
       bytesSize,
     },
-    state,
+    state: streamRest.state,
   },
 })
 
@@ -90,7 +84,8 @@ describe('Portal cache', () => {
 
       const cache = portalSqliteCache({ path: DB_PATH })
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
         cache,
@@ -221,7 +216,8 @@ describe('Portal cache', () => {
 
       const cache = portalSqliteCache({ path: DB_PATH })
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 6, to: 10 }),
         cache,
@@ -230,7 +226,8 @@ describe('Portal cache', () => {
       await readAllChunks(stream) // first pass to store data
 
       // now request from 0 to 5, should not reuse data from 6 to 10
-      const stream2 = evmPortalSource({
+      const stream2 = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
         cache,
@@ -353,7 +350,8 @@ describe('Portal cache', () => {
 
       const cache = portalSqliteCache({ path: DB_PATH })
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
         cache,

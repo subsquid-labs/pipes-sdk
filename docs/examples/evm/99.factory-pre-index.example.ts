@@ -1,41 +1,31 @@
-import { evmDecoder, evmPortalSource, factory, factorySqliteDatabase } from '@subsquid/pipes/evm'
+import { contractFactory, contractFactoryStore, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 
 import { events as factoryAbi } from './abi/uniswap.v3/factory'
 import { events as swapsAbi } from './abi/uniswap.v3/swaps'
 
 /**
- THIS IS FOR TESTING ONLY!
-
- Example of using Factory with pre-indexing to decode Uniswap V3 swaps
- from pools created between blocks 12,369,621 and 12,400,000.
-
-- The Factory will pre-index the PoolCreated events in the specified block range
-- The Factory will store the created pool addresses in an SQLite database
-- The EVM Decoder will decode Swap events from the pools created by the Factory
-- The EVM Portal Source will stream blocks from the specified portal
+ * Example: Declarative factory pre-indexing
+ *
+ * Setting `preindex: true` causes the factory to automatically
+ * index all PoolCreated events before the main stream begins.
+ * The portal client and range are resolved from the source configuration.
  */
 
-//FIXME STREAMS check if it still works
 async function cli() {
-  const portal = 'https://portal.sqd.dev/datasets/ethereum-mainnet'
-
-  const poolsFactory = factory({
-    address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
-    event: factoryAbi.PoolCreated,
-    parameter: 'pool',
-    database: factorySqliteDatabase({ path: './uniswap3-eth-pools.sqlite' }),
-  })
-
-  await poolsFactory.preindex({
-    portal,
-    range: { from: '12,369,621', to: '12,400,000' },
-  })
-
-  const stream = evmPortalSource({
-    portal,
+  const stream = evmPortalStream({
+    id: 'factory-pre-index',
+    portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     outputs: evmDecoder({
-      range: { from: '12,369,621', to: '12,410,000' },
-      contracts: poolsFactory,
+      range: { from: '12,369,621' },
+      contracts: contractFactory({
+        address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+        event: factoryAbi.PoolCreated,
+        childAddressField: 'pool',
+        preindex: true,
+        database: contractFactoryStore({
+          path: './uniswap3-eth-pools.sqlite',
+        }),
+      }),
       events: {
         swaps: swapsAbi.Swap,
       },
@@ -43,9 +33,7 @@ async function cli() {
   })
 
   for await (const { data } of stream) {
-    // console.log('-------------------------------------')
     console.log(`parsed ${data.swaps.length} swaps`)
-    // console.log('-------------------------------------')
   }
 }
 

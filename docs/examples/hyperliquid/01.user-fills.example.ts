@@ -1,10 +1,11 @@
-import { HyperliquidFillsQueryBuilder, hyperliquidFillsPortalSource } from '@subsquid/pipes/hyperliquid'
+import { HyperliquidFillsQueryBuilder, hyperliquidFillsPortalStream } from '@subsquid/pipes/hyperliquid'
 
 /**
  * Basic example demonstrating how to fetch hyperliquid fills for a specific user.
  */
 async function cli() {
-  const stream = hyperliquidFillsPortalSource({
+  const stream = hyperliquidFillsPortalStream({
+    id: 'user-fills',
     portal: process.env['PORTAL_URL'] || 'https://portal.sqd.dev/datasets/hl-node-fills',
     outputs: new HyperliquidFillsQueryBuilder()
       .addFields({

@@ -1,7 +1,7 @@
 import type { AbiEvent, EventParams } from '@subsquid/evm-abi'
 import { Codec, Sink } from '@subsquid/evm-codec'
 
-import { BatchCtx, PortalRange, ProfilerOptions, Transformer, formatWarning, parsePortalRange } from '~/core/index.js'
+import { BatchContext, PortalRange, ProfilerOptions, Transformer, formatWarning, parsePortalRange } from '~/core/index.js'
 import { arrayify, findDuplicates } from '~/internal/array.js'
 import { Log, LogRequest } from '~/portal-client/query/evm.js'
 
@@ -33,7 +33,27 @@ export type DecodedEvent<D = object, F = unknown> = {
   }>
 }
 
-export type Events = Record<string, AbiEvent<any> | EventWithArgsInput<AbiEvent<any>>>
+/**
+ * Defines how to capture an event — either all instances or filtered by indexed parameters.
+ *
+ * @example Simple form — capture all emitted instances:
+ * ```ts
+ * events: { transfers: commonAbis.erc20.events.Transfer }
+ * ```
+ *
+ * @example Filtered form — match specific indexed parameter values:
+ * ```ts
+ * events: {
+ *   transfers: {
+ *     event: commonAbis.erc20.events.Transfer,
+ *     params: { from: '0x...' },
+ *   },
+ * }
+ * ```
+ */
+export type EventFilter<T extends AbiEvent<any> = AbiEvent<any>> = T | EventWithArgsInput<T>
+
+export type Events = Record<string, EventFilter>
 
 export type DecodeEventsFunctions<T extends Events> = ReturnType<ExtractEventType<EventsMap<T>[keyof T]>['decode']>
 
@@ -104,10 +124,11 @@ type Contracts = Factory<any> | string[]
 
 export type DecodedEventPipeArgs<T extends Events, C extends Contracts> = {
   range: PortalRange
+  /** Optional contract addresses to filter events from. Can be a {@link Factory} instance or an array of addresses. */
   contracts?: C
   events: EventsMap<T>
   profiler?: ProfilerOptions
-  onError?: (ctx: BatchCtx, error: any) => unknown | Promise<unknown>
+  onError?: (ctx: BatchContext, error: any) => unknown | Promise<unknown>
 }
 
 const decodedEventFields = {
@@ -271,7 +292,7 @@ function getDuplicateEvents<T extends Events>(events: T, duplicates: string[]) {
  *   - An {@link AbiEvent} instance to capture all instances of that event
  *   - An {@link EventWithArgs} object with `event` and `params` to filter by indexed parameters
  * @param args.profiler - Optional {@link ProfilerOptions} configuration for performance monitoring
- * @param args.onError - Optional error handler callback that receives {@link BatchCtx} and error
+ * @param args.onError - Optional error handler callback that receives {@link BatchContext} and error
  * @returns A {@link Transformer} that processes EVM portal data and returns {@link EventResponse} with decoded events
  *
  * @example
@@ -344,7 +365,7 @@ export function evmDecoder<T extends Events, C extends Contracts>({
     })
     .pipe({
       profiler: profiler ?? { name: 'EVM decoder' },
-      start: async () => {
+      start: async (ctx) => {
         if (Factory.isFactory(contracts)) {
           await contracts.migrate()
         }

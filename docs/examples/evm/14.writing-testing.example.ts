@@ -1,4 +1,4 @@
-import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
+import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 import {
   type MockPortal,
   encodeEvent,
@@ -93,7 +93,8 @@ describe('EVM pipe testing example', () => {
     })
 
     // 3. Create the pipe exactly as you would in production, but with the mock portal URL
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: portal.url,
       outputs: evmDecoder({
         range: { from: 0, to: 2 },
@@ -140,7 +141,8 @@ describe('EVM pipe testing example', () => {
       ],
     })
 
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: portal.url,
       outputs: evmDecoder({
         range: { from: 0, to: 1 },
@@ -174,7 +176,8 @@ describe('EVM pipe testing example', () => {
     })
 
     // Test a custom transformation pipeline
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: portal.url,
       outputs: evmDecoder({
         range: { from: 0, to: 1 },

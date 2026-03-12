@@ -1,9 +1,9 @@
 import { AbiEvent } from '@subsquid/evm-abi'
 import type { Codec } from '@subsquid/evm-codec'
 
-import { BlockCursor, Logger, PortalRange, createDefaultLogger, createTarget, parsePortalRange } from '~/core/index.js'
+import { BlockCursor, Logger, PortalRange, createTarget } from '~/core/index.js'
 import { arrayify } from '~/internal/array.js'
-import { PortalClient, PortalClientOptions } from '~/portal-client/client.js'
+import { PortalClient } from '~/portal-client/client.js'
 import { Log, LogRequest } from '~/portal-client/query/evm.js'
 
 import {
@@ -16,7 +16,7 @@ import {
   getNormalizedEventParams,
   isEventWithArgs,
 } from './evm-decoder.js'
-import { evmPortalSource } from './evm-portal-source.js'
+import { evmPortalStream } from './evm-portal-source.js'
 
 export type EventArgs = {
   [key: string]: Codec<any> & { indexed?: boolean }
@@ -43,11 +43,11 @@ export interface FactoryPersistentAdapter<T extends InternalFactoryEvent<any>> {
 
 export type DecodedAbiEvent<T extends EventArgs> = ReturnType<AbiEvent<T>['decode']>
 
-export type FactoryOptions<T extends EventArgs> = {
+export type ContractFactoryOptions<T extends EventArgs> = {
   address: string | string[]
   event: AbiEvent<T> | EventWithArgsInput<AbiEvent<T>>
-  parameter: keyof T | ((data: DecodedAbiEvent<T>) => string | null)
-  /** 
+  childAddressField: keyof T | ((data: DecodedAbiEvent<T>) => string | null)
+  /**
    * It is safe to use `any` here because the FactoryPersistentAdapter generic argument
    * will be inferred in the constructor of `Factory`
    */
@@ -63,9 +63,7 @@ export class Factory<T extends EventArgs> {
   readonly #event: AbiEvent<T>
   readonly #params: IndexedParams<AbiEvent<T>>
 
-  #preIndexRange?: { from: number; to: number }
-
-  constructor(private options: FactoryOptions<T>) {
+  constructor(private options: ContractFactoryOptions<T>) {
     this.#addresses = new Set(arrayify(this.options.address).map((a) => a.toLowerCase()))
 
     if (isEventWithArgs(this.options.event)) {
@@ -130,9 +128,9 @@ export class Factory<T extends EventArgs> {
   async decode(log: Log, blockNumber: number) {
     const decoded = this.#event.decode(log)
     const contract =
-      typeof this.options.parameter === 'function'
-        ? this.options.parameter(decoded)
-        : String(decoded[this.options.parameter])
+      typeof this.options.childAddressField === 'function'
+        ? this.options.childAddressField(decoded)
+        : String(decoded[this.options.childAddressField])
 
     if (!contract) return
 
@@ -188,34 +186,26 @@ export class Factory<T extends EventArgs> {
     return true
   }
 
-  isPreIndexed() {
-    return this.#preIndexRange !== undefined
-  }
-
-  async preindex({
-    name,
-    logger,
+  /** @internal */
+  async runPreindex({
     portal,
     range,
+    logger,
   }: {
-    name?: string
-    range: { from: string; to: string }
-    logger?: Logger
-    portal: PortalClient | PortalClientOptions | string
+    portal: PortalClient
+    range: PortalRange
+    logger: Logger
   }) {
-    name = name || `factory preindexing ${this.factoryAddress().join(', ')}`
-
-    this.#preIndexRange = parsePortalRange(range) as { from: number; to: number }
-
-    logger = logger || createDefaultLogger()
+    const name = `factory preindexing ${this.factoryAddress().join(', ')}`
 
     logger.info(`Starting ${name}`)
 
-    await evmPortalSource({
+    await evmPortalStream({
+      id: name,
       portal,
       logger,
       outputs: evmDecoder({
-        profiler: { name: name || `preindex` },
+        profiler: { name },
         contracts: this.factoryAddress(),
         range,
         events: {
@@ -230,9 +220,9 @@ export class Factory<T extends EventArgs> {
 
             for (const event of data.factory) {
               const contract =
-                typeof this.options.parameter === 'function'
-                  ? this.options.parameter(event.event)
-                  : String(event.event[this.options.parameter])
+                typeof this.options.childAddressField === 'function'
+                  ? this.options.childAddressField(event.event)
+                  : String(event.event[this.options.childAddressField])
 
               if (!contract) continue
 
@@ -286,44 +276,28 @@ export class Factory<T extends EventArgs> {
  * @param options.event - The factory event that signals contract creation. Can be:
  *   - An {@link AbiEvent} instance to capture all creation events
  *   - An {@link EventWithArgs} object with `event` and `params` to filter by indexed parameters
- * @param options.parameter - Field name or function to extract the child contract address from the decoded factory event.
+ * @param options.childAddressField - Field name or function to extract the child contract address from the decoded factory event.
  *   - If a string, it should be a key from the event's decoded data
  *   - If a function, it receives the decoded event data and should return the contract address or null
  * @param options.database - Database adapter for storing and querying factory events. Can be a {@link FactoryPersistentAdapter} instance or a Promise that resolves to one
- * @param options._experimental_preindex - Optional block range for pre-indexing factory events. When provided, factory events in this range are indexed before processing, improving performance for large ranges
  * @returns A {@link Factory} instance that can be used as the `contracts` parameter in {@link evmDecoder}
  *
  * @example
  * ```ts
- * factory({
+ * contractFactory({
  *   address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
  *   event: factoryAbi.PoolCreated,
- *   parameter: 'pool',
- *   database: factorySqliteDatabase({
+ *   childAddressField: 'pool',
+ *   database: contractFactoryStore({
  *     path: './uniswap3-eth-pools.sqlite',
  *   }),
  * })
  * ```
  *
- * @example
- * ```ts
- * // Filter factory events by indexed parameters
- * // You can also pass an array of values to match multiple token0 values
- * factory({
- *   address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
- *   event: {
- *     event: factoryAbi.PoolCreated,
- *     params: {
- *       token0: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', // WETH
- *     },
- *   },
- *   parameter: 'pool',
- *   database: factorySqliteDatabase({
- *     path: './uniswap3-eth-pools.sqlite',
- *   }),
- * })
- * ```
  */
-export function factory<T extends EventArgs>(options: FactoryOptions<T>) {
+export function contractFactory<T extends EventArgs>(options: ContractFactoryOptions<T>) {
   return new Factory(options)
 }
+
+/** @deprecated Use {@link contractFactory} instead. */
+export const factory = contractFactory
