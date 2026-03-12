@@ -193,6 +193,42 @@ Supported `from` / `to` formats:
 
 Date-only strings (e.g. `'2024-01-01'`) are treated as UTC midnight. Identical timestamps across multiple ranges are deduplicated into a single portal API call.
 
+#### `NaturalRange` type refinement
+
+`NaturalRange` is now a discriminated union. When `from` is `'latest'`, `to` only accepts a block number — `Date` and date strings are no longer allowed because the portal cannot resolve timestamps for blocks that have not been produced yet.
+
+```ts
+// before — single object type
+type NaturalRange = { from: number | 'latest' | Date; to?: number | Date }
+
+// after — discriminated union
+type NaturalRange =
+  | { from: number | Date; to?: number | Date }
+  | { from: 'latest'; to?: number }
+```
+
+`from: 'latest'` with a numeric `to` now correctly preserves both values in the resolved range. Previously, `to` was silently dropped.
+
+```ts
+// ✅ Valid — block number as `to`
+evmDecoder({ range: { from: 'latest', to: 20_000_000 }, ... })
+
+// ❌ Throws BlockRangeConfigurationError
+evmDecoder({ range: { from: 'latest', to: new Date('2025-01-01') }, ... })
+```
+
+#### Range validation
+
+Block ranges are validated after timestamp resolution. The following conditions throw a `BlockRangeConfigurationError` (E0002):
+
+| Condition | Example | Error |
+|---|---|---|
+| Inverted range (`from` > `to`) | `{ from: 1000, to: 500 }` | `Invalid block range: 'from' (1000) must be less than or equal to 'to' (500)` |
+| `Date` for `to` with `from: 'latest'` | `{ from: 'latest', to: new Date(...) }` | `Cannot use a Date for 'to' when 'from' is 'latest'…` |
+| Unresolvable timestamp (e.g. future date) | `{ from: new Date('2030-01-01') }` | `Failed to resolve timestamp 2030-01-01T00:00:00.000Z to a block number…` |
+
+The portal's `No chunk found for timestamp` error is now wrapped with context identifying which timestamp failed and why.
+
 ### 2. `defineAbi` — use standard JSON ABIs without code generation
 
 `defineAbi()` converts a standard JSON ABI (Solidity compiler output, Hardhat/Foundry artifact) into subsquid decoder objects at runtime — no `squid-evm-typegen` step required. Uses `@subsquid/evm-codec` under the hood for 10x faster decoding compared to viem.
@@ -359,6 +395,7 @@ All framework errors extend `PipeError` and carry a unique code linking to the d
 | Error | Code | Thrown when |
 |---|---|---|
 | `DefaultPipeIdError` | E0001 | `.pipeTo()` called without a pipe `id` |
+| `BlockRangeConfigurationError` | E0002 | Block range is misconfigured (inverted range, invalid date with `'latest'`, unresolvable timestamp) |
 | `TargetForkNotSupportedError` | E1001 | Fork detected but target has no `fork()` method |
 | `ForkNoPreviousBlocksError` | E1002 | Fork exception carried no previous blocks |
 | `ForkCursorMissingError` | E1003 | Target `fork()` returned `null` |
