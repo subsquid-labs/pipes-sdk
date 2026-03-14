@@ -80,6 +80,9 @@ importers:
       pg:
         specifier: ^8.16.3
         version: 8.16.3
+      pino-pretty:
+        specifier: 13.1.1
+        version: 13.1.1
       viem:
         specifier: ^2.45.1
         version: 2.46.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)
@@ -202,6 +205,9 @@ importers:
       '@opentelemetry/api':
         specifier: ^1.9.0
         version: 1.9.0
+      '@sqd-pipes/delta-db':
+        specifier: 0.0.1-alpha.7
+        version: 0.0.1-alpha.7
       '@subsquid/evm-abi':
         specifier: 0.3.1
         version: 0.3.1
@@ -1139,6 +1145,10 @@ packages:
   '@js-sdsl/ordered-map@4.4.2':
     resolution: {integrity: sha512-iUKgm52T8HOE/makSxjqoWhe95ZJA1/G1sYsGev2JDKUSS14KAgg1LHb+Ba+IPow0xflbnSkOsZcO08C7w1gYw==}
 
+  '@msgpack/msgpack@3.1.3':
+    resolution: {integrity: sha512-47XIizs9XZXvuJgoaJUIE2lFoID8ugvc0jzSHP+Ptfk8nTbnR8g788wv48N03Kx0UkAv559HWRQ3yzOgzlRNUA==}
+    engines: {node: '>= 18'}
+
   '@next/env@15.5.12':
     resolution: {integrity: sha512-pUvdJN1on574wQHjaBfNGDt9Mz5utDSZFsIIQkMzPgNS8ZvT4H2mwOrOIClwsQOb6EGx5M76/CZr6G8i6pSpLg==}
 
@@ -1877,6 +1887,9 @@ packages:
   '@sindresorhus/merge-streams@4.0.0':
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
     engines: {node: '>=18'}
+
+  '@sqd-pipes/delta-db@0.0.1-alpha.7':
+    resolution: {integrity: sha512-esk7mt+tDILTZVZc+wflSnwCBC3mEEnT8y5/DQc2tK/PmigXuquoaUImNBuvnzvqBwOXvgIHZSIwdepz+xBDdg==}
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -5175,6 +5188,8 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
+  '@msgpack/msgpack@3.1.3': {}
+
   '@next/env@15.5.12': {}
 
   '@next/swc-darwin-arm64@15.5.12':
@@ -5868,6 +5883,10 @@ snapshots:
       '@scure/base': 1.2.6
 
   '@sindresorhus/merge-streams@4.0.0': {}
+
+  '@sqd-pipes/delta-db@0.0.1-alpha.7':
+    dependencies:
+      '@msgpack/msgpack': 3.1.3
 
   '@standard-schema/spec@1.1.0': {}
 

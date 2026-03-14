@@ -46,7 +46,7 @@ export type BatchStreamContext = {
   dataset: ApiDataset
   head: {
     finalized?: BlockCursor
-    latest?: BlockCursor
+    latest?: { number: number }
   }
   state: {
     initial: number
