@@ -1,7 +1,7 @@
 import { promisify } from 'node:util'
 import zlib from 'node:zlib'
 
-import { BlockCursor, cursorFromHeader, Logger, PortalCache } from '~/core/index.js'
+import { BlockCursor, Logger, PortalCache, cursorFromHeader } from '~/core/index.js'
 import { hashQuery } from '~/core/query-builder.js'
 import { last } from '~/internal/array.js'
 import { GetBlock, PortalClient, PortalStream, PortalStreamData, Query } from '~/portal-client/index.js'
@@ -73,7 +73,7 @@ export abstract class PortalCacheNodeJs<ImplOptions> implements PortalCache {
 
     await this.ensureInitialized()
 
-    let cursor: BlockCursor = {
+    let cursor = {
       number: query.fromBlock,
       hash: query.parentBlockHash,
     }
