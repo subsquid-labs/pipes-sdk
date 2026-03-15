@@ -4,28 +4,15 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  /*"IBM Plex Mono", !**! */
-
   --font-sans:
-    "JetBrains Mono", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
-    "Noto Color Emoji";
-
-  /*--font-sans:*/
-  /*  "Anonymous Pro", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",*/
-  /*  "Noto Color Emoji";*/
-
-  /*--font-sans:*/
-  /*  "Share Tech Mono", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",*/
-  /*  "Noto Color Emoji";*/
-
-  /*--font-sans:*/
-  /*  "Fira Code", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",*/
-  /*  "Noto Color Emoji";*/
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
+  @apply dark:bg-gray-950;
 
   min-height: 100vh;
 
@@ -143,7 +130,7 @@ body {
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring/50 font-thin;
   }
   body {
     @apply bg-background text-foreground;
@@ -157,6 +144,10 @@ body {
 }
 .gradient-primary {
   background: linear-gradient(#d0a9e2, transparent 85%), linear-gradient(90deg, #433485, #b53cdd);
+}
+
+button {
+  cursor: pointer;
 }
 
 .test {
@@ -179,7 +170,7 @@ body {
 }
 
 .dotted-background {
-  background-image: radial-gradient(circle at center, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-image: radial-gradient(circle at center, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
   background-size: 20px 20px; /* Controls the spacing between dots */
   background-repeat: repeat; /* Ensures the pattern repeats */
 }
@@ -213,4 +204,22 @@ body {
 
 .tree:last-child:before {
   height: 20px;
+}
+
+.tree-sm:before  {
+  left: -7px;
+}
+.tree-sm:after  {
+  left: -6px;
+  width: 6px;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}.skeleton-fade-in {
+  animation: fade-in 500ms ease-in 400ms both;
+}
+.content-fade-in {
+  animation: fade-in 300ms ease-out 150ms both;
 }

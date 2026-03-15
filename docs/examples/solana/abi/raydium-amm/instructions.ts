@@ -1,4 +1,5 @@
-import { address, option, struct, u8, u16, u64, unit } from '@subsquid/borsh'
+import { address, option, struct, u16, u64, u8, unit } from '@subsquid/borsh'
+
 import { instruction } from '../abi.support.js'
 import { Fees, LastOrderDistance, NeedTake, SwapInstructionBaseIn, SwapInstructionBaseOut } from './types.js'
 

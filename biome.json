@@ -16,7 +16,7 @@
           "options": {
             "identifierOrder": "lexicographic",
             "groups": [
-              [":NODE:", "react"],
+              [":NODE:", "$context", "react"],
               ":BLANK_LINE:",
               [":PACKAGE:", ":PACKAGE_WITH_PROTOCOL:"],
               ":BLANK_LINE:",
@@ -53,7 +53,18 @@
         "noNegationElse": "off",
         "useAsConstAssertion": "error",
         "useBlockStatements": "off",
-        "useConsistentArrayType": "warn"
+        "useConsistentArrayType": "warn",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["~/runtime/context/*", "../**/runtime/context", "../**/runtime/context/*"],
+                "message": "Use $runtime/context instead. This module is platform-specific and is loaded via conditional exports to avoid pulling the Node-only async_hooks dependency into browser builds."
+              }
+            ]
+          }
+        }
       },
       "suspicious": {
         "noDoubleEquals": "error",

@@ -43,14 +43,14 @@ npm install @subsquid/pipes
 Example: consume events from an EVM chain and write them into ClickHouse.
 
 ```ts
-import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
+import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 
 async function cli() {
-  const stream = evmPortalSource({
+  const stream = evmPortalStream({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
   }).pipe(
     evmDecoder({
-      profiler: { id: 'ERC20 transfers' },
+      profiler: { name: 'ERC20 transfers' },
       range: { from: '12,000,000' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,

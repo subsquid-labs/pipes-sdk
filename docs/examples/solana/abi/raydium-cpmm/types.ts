@@ -1,4 +1,4 @@
-import { address, bool, Codec, fixedArray, struct, sum, u8, u16, u64, u128, unit } from '@subsquid/borsh'
+import { Codec, address, bool, fixedArray, struct, sum, u128, u16, u64, u8, unit } from '@subsquid/borsh'
 
 export interface Observation {
   /**

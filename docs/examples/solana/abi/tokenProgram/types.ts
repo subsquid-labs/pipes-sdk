@@ -1,30 +1,30 @@
-import { Codec, unit, sum, struct, address, u64, u8, bool, ref, fixedArray } from '@subsquid/borsh';
+import { Codec, address, bool, fixedArray, ref, struct, sum, u64, u8, unit } from '@subsquid/borsh'
 
-export type AccountState_Uninitialized = undefined;
+export type AccountState_Uninitialized = undefined
 
-export const AccountState_Uninitialized = unit;
+export const AccountState_Uninitialized = unit
 
-export type AccountState_Initialized = undefined;
+export type AccountState_Initialized = undefined
 
-export const AccountState_Initialized = unit;
+export const AccountState_Initialized = unit
 
-export type AccountState_Frozen = undefined;
+export type AccountState_Frozen = undefined
 
-export const AccountState_Frozen = unit;
+export const AccountState_Frozen = unit
 
 export type AccountState =
   | {
-      kind: 'Uninitialized';
-      value?: AccountState_Uninitialized;
+      kind: 'Uninitialized'
+      value?: AccountState_Uninitialized
     }
   | {
-      kind: 'Initialized';
-      value?: AccountState_Initialized;
+      kind: 'Initialized'
+      value?: AccountState_Initialized
     }
   | {
-      kind: 'Frozen';
-      value?: AccountState_Frozen;
-    };
+      kind: 'Frozen'
+      value?: AccountState_Frozen
+    }
 
 export const AccountState: Codec<AccountState> = sum(1, {
   Uninitialized: {
@@ -39,41 +39,41 @@ export const AccountState: Codec<AccountState> = sum(1, {
     discriminator: 2,
     value: AccountState_Frozen,
   },
-});
+})
 
-export type AuthorityType_MintTokens = undefined;
+export type AuthorityType_MintTokens = undefined
 
-export const AuthorityType_MintTokens = unit;
+export const AuthorityType_MintTokens = unit
 
-export type AuthorityType_FreezeAccount = undefined;
+export type AuthorityType_FreezeAccount = undefined
 
-export const AuthorityType_FreezeAccount = unit;
+export const AuthorityType_FreezeAccount = unit
 
-export type AuthorityType_AccountOwner = undefined;
+export type AuthorityType_AccountOwner = undefined
 
-export const AuthorityType_AccountOwner = unit;
+export const AuthorityType_AccountOwner = unit
 
-export type AuthorityType_CloseAccount = undefined;
+export type AuthorityType_CloseAccount = undefined
 
-export const AuthorityType_CloseAccount = unit;
+export const AuthorityType_CloseAccount = unit
 
 export type AuthorityType =
   | {
-      kind: 'MintTokens';
-      value?: AuthorityType_MintTokens;
+      kind: 'MintTokens'
+      value?: AuthorityType_MintTokens
     }
   | {
-      kind: 'FreezeAccount';
-      value?: AuthorityType_FreezeAccount;
+      kind: 'FreezeAccount'
+      value?: AuthorityType_FreezeAccount
     }
   | {
-      kind: 'AccountOwner';
-      value?: AuthorityType_AccountOwner;
+      kind: 'AccountOwner'
+      value?: AuthorityType_AccountOwner
     }
   | {
-      kind: 'CloseAccount';
-      value?: AuthorityType_CloseAccount;
-    };
+      kind: 'CloseAccount'
+      value?: AuthorityType_CloseAccount
+    }
 
 export const AuthorityType: Codec<AuthorityType> = sum(1, {
   MintTokens: {
@@ -92,30 +92,30 @@ export const AuthorityType: Codec<AuthorityType> = sum(1, {
     discriminator: 3,
     value: AuthorityType_CloseAccount,
   },
-});
+})
 
 export interface MintAccount {
   mintAuthority:
     | {
-        kind: 'None';
-        value?: undefined;
+        kind: 'None'
+        value?: undefined
       }
     | {
-        kind: 'Some';
-        value: string;
-      };
-  supply: bigint;
-  decimals: number;
-  isInitialized: boolean;
+        kind: 'Some'
+        value: string
+      }
+  supply: bigint
+  decimals: number
+  isInitialized: boolean
   freezeAuthority:
     | {
-        kind: 'None';
-        value?: undefined;
+        kind: 'None'
+        value?: undefined
       }
     | {
-        kind: 'Some';
-        value: string;
-      };
+        kind: 'Some'
+        value: string
+      }
 }
 
 export const MintAccount: Codec<MintAccount> = struct({
@@ -142,41 +142,41 @@ export const MintAccount: Codec<MintAccount> = struct({
       value: address,
     },
   }),
-});
+})
 
 export interface TokenAccount {
-  mint: string;
-  owner: string;
-  amount: bigint;
+  mint: string
+  owner: string
+  amount: bigint
   delegate:
     | {
-        kind: 'None';
-        value?: undefined;
+        kind: 'None'
+        value?: undefined
       }
     | {
-        kind: 'Some';
-        value: string;
-      };
-  state: AccountState;
+        kind: 'Some'
+        value: string
+      }
+  state: AccountState
   isNative:
     | {
-        kind: 'None';
-        value?: undefined;
+        kind: 'None'
+        value?: undefined
       }
     | {
-        kind: 'Some';
-        value: bigint;
-      };
-  delegatedAmount: bigint;
+        kind: 'Some'
+        value: bigint
+      }
+  delegatedAmount: bigint
   closeAuthority:
     | {
-        kind: 'None';
-        value?: undefined;
+        kind: 'None'
+        value?: undefined
       }
     | {
-        kind: 'Some';
-        value: string;
-      };
+        kind: 'Some'
+        value: string
+      }
 }
 
 export const TokenAccount: Codec<TokenAccount> = struct({
@@ -215,13 +215,13 @@ export const TokenAccount: Codec<TokenAccount> = struct({
       value: address,
     },
   }),
-});
+})
 
 export interface MultisigAccount {
-  numOfSignersRequired: number;
-  numOfValidSignersRequired: number;
-  isInitialized: boolean;
-  signers: Array<string>;
+  numOfSignersRequired: number
+  numOfValidSignersRequired: number
+  isInitialized: boolean
+  signers: Array<string>
 }
 
 export const MultisigAccount: Codec<MultisigAccount> = struct({
@@ -229,4 +229,4 @@ export const MultisigAccount: Codec<MultisigAccount> = struct({
   numOfValidSignersRequired: u8,
   isInitialized: bool,
   signers: fixedArray(address, 11),
-});
+})
