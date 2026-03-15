@@ -51,14 +51,8 @@ export interface PortalClientOptions {
   http?: HttpClient | HttpClientOptions
 
   /**
-   * Minimum number of bytes to return.
+   * Maximum number of bytes to buffer before flushing.
    * @default 10_485_760 (10MB)
-   */
-  minBytes?: number
-
-  /**
-   * Maximum number of bytes to return.
-   * @default minBytes
    */
   maxBytes?: number
 
@@ -88,7 +82,6 @@ export type PortalRequestOptions = Pick<
 
 export interface PortalStreamOptions {
   request?: PortalRequestOptions
-  minBytes?: number
   maxBytes?: number
   maxIdleTime?: number
   maxWaitTime?: number
@@ -138,8 +131,7 @@ export class PortalClient {
     this.#options = {
       finalized: options.finalized ?? false,
       headPollInterval: options.headPollInterval ?? 0,
-      minBytes: options.minBytes ?? 10 * 1024 * 1024,
-      maxBytes: options.maxBytes ?? options.minBytes ?? 10 * 1024 * 1024,
+      maxBytes: options.maxBytes ?? 10 * 1024 * 1024,
       maxIdleTime: options.maxIdleTime ?? 300,
       maxWaitTime: options.maxWaitTime ?? 5_000,
     }
@@ -385,16 +377,16 @@ class PortalStreamBuffer<B> {
   private state: 'pending' | 'ready' | 'failed' | 'closed' = 'pending'
   private error: unknown
 
-  private readyFuture: Future<void> = createFuture()
-  // Signals that data has been taken and more can be put
-  private takeFuture: Future<void> = createFuture()
-  // Signals that data has been put and can be taken
-  private putFuture: Future<void> = createFuture()
+  // Signals that buffer is ready to be consumed (threshold hit or timeout)
+  private flushSignal: Future<void> = createFuture()
+  // Signals that consumer has taken the buffer (backpressure)
+  private consumedSignal: Future<void> = createFuture()
+  // Signals that at least one put() has been called
+  private hasDataSignal: Future<void> = createFuture()
 
   private idleTimeout: ReturnType<typeof setTimeout> | undefined
   private waitTimeout: ReturnType<typeof setTimeout> | undefined
 
-  private minBytes: number
   private maxBytes: number
   private maxIdleTime: number
   private maxWaitTime: number
@@ -409,11 +401,9 @@ class PortalStreamBuffer<B> {
     maxWaitTime: number
     maxBytes: number
     maxIdleTime: number
-    minBytes: number
   }) {
     this.maxWaitTime = options.maxWaitTime
-    this.minBytes = options.minBytes
-    this.maxBytes = Math.max(options.maxBytes, options.minBytes)
+    this.maxBytes = options.maxBytes
     this.maxIdleTime = options.maxIdleTime
   }
 
@@ -422,7 +412,7 @@ class PortalStreamBuffer<B> {
       this.waitTimeout = setTimeout(() => this._ready(), this.maxWaitTime)
     }
 
-    await Promise.all([this.readyFuture.promise(), this.putFuture.promise()])
+    await Promise.all([this.flushSignal.promise(), this.hasDataSignal.promise()])
 
     if (this.waitTimeout != null) {
       clearTimeout(this.waitTimeout)
@@ -442,7 +432,7 @@ class PortalStreamBuffer<B> {
         if (result == null) {
           throw new Error('Buffer is empty')
         }
-        this.takeFuture.resolve()
+        this.consumedSignal.resolve()
         this._reset()
         return result
     }
@@ -478,14 +468,11 @@ class PortalStreamBuffer<B> {
     this.buffer.meta.requestedFromBlock = Math.min(this.buffer.meta.requestedFromBlock, data.meta.requestedFromBlock)
     this.buffer.meta.lastBlockReceivedAt = data.meta.lastBlockReceivedAt
 
-    this.putFuture.resolve()
-
-    if (flushImmediate || this.buffer.meta.bytes >= this.minBytes) {
-      this.readyFuture.resolve()
-    }
+    this.hasDataSignal.resolve()
 
     if (flushImmediate || this.buffer.meta.bytes >= this.maxBytes) {
-      await this.takeFuture.promise()
+      this.flushSignal.resolve()
+      await this.consumedSignal.promise()
     }
 
     if (this.state === 'pending') {
@@ -536,16 +523,16 @@ class PortalStreamBuffer<B> {
   }
 
   private _reset() {
-    this.readyFuture = createFuture()
-    this.putFuture = createFuture()
-    this.takeFuture = createFuture()
+    this.flushSignal = createFuture()
+    this.hasDataSignal = createFuture()
+    this.consumedSignal = createFuture()
     this.state = 'pending'
   }
 
   private _ready() {
     if (this.state === 'pending') {
       this.state = 'ready'
-      this.readyFuture.resolve()
+      this.flushSignal.resolve()
     }
     if (this.idleTimeout != null) {
       clearTimeout(this.idleTimeout)
@@ -566,9 +553,9 @@ class PortalStreamBuffer<B> {
       clearTimeout(this.waitTimeout)
       this.waitTimeout = undefined
     }
-    this.readyFuture.resolve()
-    this.putFuture.resolve()
-    this.takeFuture.resolve()
+    this.flushSignal.resolve()
+    this.hasDataSignal.resolve()
+    this.consumedSignal.resolve()
     this.abortController.abort()
   }
 }
