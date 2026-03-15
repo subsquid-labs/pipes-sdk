@@ -122,8 +122,8 @@ describe('Clickhouse state', () => {
           url: mockPortal.url,
           // we need to save each response separately
           // to create multiple rows in the status table,
-          // so, we set minBytes to 1 to avoid batching
-          minBytes: 1,
+          // so, we set maxBytes to 1 to avoid batching
+          maxBytes: 1,
         },
         outputs: blockDecoder({ from: 0, to: 3 }),
       }).pipeTo(
