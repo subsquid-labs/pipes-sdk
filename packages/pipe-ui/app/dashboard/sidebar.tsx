@@ -145,7 +145,11 @@ function ServerSelect({ servers, connected, version }: { servers: Server[]; conn
             <SelectValue />
             <div className="flex items-center gap-1.5 text-muted-foreground w-full">
               <div className={`w-[6px] h-[6px] rounded-full shrink-0 ${connected ? 'bg-teal-400' : 'bg-gray-500'}`} />
-              {version && <span className="text-[10px]">{version}</span>}
+              {connected ? (
+                version && <span className="text-[10px]">{version}</span>
+              ) : (
+                <span className="text-[10px]">Disconnected</span>
+              )}
             </div>
           </div>
         </SelectTrigger>

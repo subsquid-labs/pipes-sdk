@@ -29,13 +29,16 @@ if (fs.existsSync(configPath)) {
   fs.copyFileSync(configPath, path.join(dist, 'config.yaml'))
 }
 
-fs.copyFileSync(path.join(__dirname, 'bin.js'), path.join(dist, 'bin.js'))
+fs.copyFileSync(path.join(__dirname, 'bin.js'), path.join(dist, 'cli.js'))
 
 // Prepare package.json for publishing
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json')).toString('utf8'))
 
-pkg.bin = { 'pipe-ui': './bin.js' }
+pkg.bin = { 'pipes-ui': 'cli.js' }
 pkg.dependencies = {
+  next: pkg.dependencies['next'],
+  react: pkg.dependencies['react'],
+  'react-dom': pkg.dependencies['react-dom'],
   'js-yaml': pkg.dependencies['js-yaml'],
   cfonts: '2.4.8',
   open: '10.2.0',
@@ -43,6 +46,6 @@ pkg.dependencies = {
 delete pkg.devDependencies
 delete pkg.scripts
 
-pkg.files = ['.next', 'public', 'config.yaml', 'package.json', 'bin.js', 'server.js', 'node_modules']
+pkg.files = ['.next', 'public', 'config.yaml', 'package.json', 'cli.js', 'server.js']
 
 fs.writeFileSync(path.join(dist, 'package.json'), JSON.stringify(pkg, null, 2))

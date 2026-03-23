@@ -1,5 +1,3 @@
-import { Logo } from '~/components/ui/logo'
-
 function Bone({ className }: { className?: string }) {
   return <div className={`bg-muted/50 rounded animate-pulse ${className ?? ''}`} />
 }
@@ -81,19 +79,9 @@ function PipelineSkeleton() {
 
 export function DashboardSkeleton() {
   return (
-    <div className="flex flex-col items-center pt-16 pb-4 gap-10 skeleton-fade-in">
-      <div className="max-w-[1000px] w-full">
-        <div className="flex justify-between">
-          <div className="flex self-start mb-8">
-            <Logo />
-          </div>
-          <Bone className="h-9 w-[130px] rounded-md" />
-        </div>
-        <div className="flex gap-10">
-          <SidebarSkeleton />
-          <PipelineSkeleton />
-        </div>
-      </div>
+    <div className="flex gap-10 skeleton-fade-in">
+      <SidebarSkeleton />
+      <PipelineSkeleton />
     </div>
   )
 }
