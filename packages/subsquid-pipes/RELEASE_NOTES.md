@@ -214,6 +214,10 @@ evmPortalStream({
 })
 ```
 
+### 8. `TransactionFields.nonce` is now `bigint`
+
+The `nonce` field in EVM `TransactionFields` changed from `number` to `bigint` to support values exceeding `Number.MAX_SAFE_INTEGER`. The validator now accepts both numeric and string inputs from the Portal API.
+
 ---
 
 ## New features
