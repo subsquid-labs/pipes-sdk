@@ -4,7 +4,7 @@ import zlib from 'node:zlib'
 import { BlockCursor, cursorFromHeader, Logger, PortalCache } from '~/core/index.js'
 import { hashQuery } from '~/core/query-builder.js'
 import { last } from '~/internal/array.js'
-import { GetBlock, PortalClient, PortalStream, PortalStreamData, Query } from '~/portal-client/index.js'
+import { GetBlock, PortalClient, PortalStream, StreamData, Query } from '~/portal-client/index.js'
 
 // @ts-ignore
 const compressAsync = promisify('zstdCompress' in zlib ? (zlib.zstdCompress as any) : zlib.gzip)
@@ -83,7 +83,7 @@ export abstract class PortalCacheNodeJs<ImplOptions> implements PortalCache {
       fromBlock: cursor.number,
       queryHash,
     })) {
-      const decoded: PortalStreamData<GetBlock<Q>> = JSON.parse(await this.decompress(message))
+      const decoded: StreamData<GetBlock<Q>> = JSON.parse(await this.decompress(message))
 
       yield decoded
 

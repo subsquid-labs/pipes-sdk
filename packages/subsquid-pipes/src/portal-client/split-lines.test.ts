@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { splitLines } from './client.js'
+
+import { splitLines } from './split-lines.js'
 
 async function* toChunks(parts: string[]) {
   const encoder = new TextEncoder()
