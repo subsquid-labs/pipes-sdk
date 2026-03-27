@@ -3,13 +3,8 @@ import * as p from '@subsquid/evm-codec'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import { PortalRange, QueryAwareTransformer } from '~/core/index.js'
-import {
-  MockPortal,
-  MockResponse,
-  createMockPortal,
-  createTestLogger,
-  readAll,
-} from '~/testing/index.js'
+import { encodeEvent, evmPortalMockStream, mockBlock, resetMockBlockCounter } from '~/testing/evm/index.js'
+import { MockPortal, MockResponse, createMockPortal, createTestLogger, readAll } from '~/testing/index.js'
 
 import { commonAbis } from './abi/common.js'
 import {
@@ -217,6 +212,7 @@ describe('evmDecoder types', () => {
 
   it('type DecodedEventPipeArgs should receive both types of event definition', () => {
     type Result = DecodedEventPipeArgs<typeof commonAbis.erc20.events, string[]>
+
     expectTypeOf<Result>().toExtend<{
       range: PortalRange
       events: {
@@ -1175,5 +1171,106 @@ describe('evmDecoder transform', () => {
         },
       ]
     `)
+  })
+})
+
+describe('evmDecoder multi-output isolation', () => {
+  const CONTRACT_A = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as const
+  const CONTRACT_B = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as const
+
+  const ERC20_ABI = [
+    {
+      type: 'event' as const,
+      name: 'Transfer',
+      inputs: [
+        { name: 'from', type: 'address', indexed: true },
+        { name: 'to', type: 'address', indexed: true },
+        { name: 'value', type: 'uint256', indexed: false },
+      ],
+    },
+  ] as const
+
+  let portal: MockPortal
+
+  beforeEach(async () => {
+    resetMockBlockCounter()
+
+    portal = await createMockPortal([
+      {
+        statusCode: 200,
+        data: [
+          mockBlock({
+            transactions: [
+              {
+                logs: [
+                  encodeEvent({
+                    abi: ERC20_ABI,
+                    eventName: 'Transfer',
+                    address: CONTRACT_A,
+                    args: {
+                      from: '0x0000000000000000000000000000000000000001',
+                      to: '0x0000000000000000000000000000000000000002',
+                      value: 100n,
+                    },
+                  }),
+                ],
+              },
+              {
+                logs: [
+                  encodeEvent({
+                    abi: ERC20_ABI,
+                    eventName: 'Transfer',
+                    address: CONTRACT_B,
+                    args: {
+                      from: '0x0000000000000000000000000000000000000003',
+                      to: '0x0000000000000000000000000000000000000004',
+                      value: 200n,
+                    },
+                  }),
+                ],
+              },
+            ],
+          }),
+        ],
+      },
+    ])
+  })
+
+  afterEach(async () => {
+    await portal?.close()
+  })
+
+  it('should isolate events between two evmDecoders with different contracts', async () => {
+    const results: { decoderA: { transfers: any[] }; decoderB: { transfers: any[] } }[] = []
+
+    for await (const batch of evmPortalStream({
+      id: 'test',
+      portal: portal.url,
+      outputs: {
+        decoderA: evmDecoder({
+          range: { from: 0, to: 1 },
+          contracts: [CONTRACT_A],
+          events: { transfers: commonAbis.erc20.events.Transfer },
+        }),
+        decoderB: evmDecoder({
+          range: { from: 0, to: 1 },
+          contracts: [CONTRACT_B],
+          events: { transfers: commonAbis.erc20.events.Transfer },
+        }),
+      },
+    })) {
+      results.push(batch.data)
+    }
+
+    const decoderA = results.flatMap((r) => r.decoderA.transfers)
+    const decoderB = results.flatMap((r) => r.decoderB.transfers)
+
+    expect(decoderA).toHaveLength(1)
+    expect(decoderA[0].contract).toBe(CONTRACT_A)
+    expect(decoderA[0].event.value).toBe(100n)
+
+    expect(decoderB).toHaveLength(1)
+    expect(decoderB[0].contract).toBe(CONTRACT_B)
+    expect(decoderB[0].event.value).toBe(200n)
   })
 })
