@@ -7,6 +7,7 @@ import type { PgTransactionConfig } from 'drizzle-orm/pg-core/session'
 import { BlockCursor, Ctx, createTarget } from '~/core/index.js'
 import { nonNullable } from '~/internal/array.js'
 import { doWithRetry } from '~/internal/function.js'
+
 import { DrizzleTracker } from './drizzle-tracker.js'
 import { PostgresState, StateOptions } from './postgres-state.js'
 import { orderTablesForDelete } from './rollback.js'
@@ -106,7 +107,9 @@ export function drizzleTarget<T>({
             db.transaction(async (tx) => {
               await state.acquireLock(tx)
               const snapshotEnabled =
-                ctx.stream.head.finalized?.number && ctx.stream.state.current.number >= ctx.stream.head.finalized.number ? 'true' : 'false'
+                ctx.stream.head.finalized?.number && ctx.stream.state.current.number >= ctx.stream.head.finalized.number
+                  ? 'true'
+                  : 'false'
 
               /*
                * Enable snapshotting for this transaction
@@ -158,7 +161,7 @@ export function drizzleTarget<T>({
         await onBeforeRollback?.({ tx, cursor })
         await tracker.fork(tx, cursor)
         await onAfterRollback?.({ tx, cursor })
-      })
+      }, config)
 
       return cursor
     },
