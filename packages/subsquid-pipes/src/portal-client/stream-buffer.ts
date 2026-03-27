@@ -124,7 +124,7 @@ export class StreamBuffer<B> {
       await this.consumedSignal.promise()
     }
 
-    if (this.state === 'pending') {
+    if (this.state === 'pending' && this.buffer != null) {
       this.idleTimeout = setTimeout(() => this._ready(), this.maxIdleTime)
     }
   }

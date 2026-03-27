@@ -19,7 +19,7 @@ class LineSplitter {
   private line = ''
 
   push(data: Uint8Array): string[] {
-    let s = this.decoder.decode(data)
+    let s = this.decoder.decode(data, { stream: true })
     if (!s) return []
 
     let lines = s.split('\n')
@@ -36,6 +36,10 @@ class LineSplitter {
   }
 
   end(): string | undefined {
+    // Flush any remaining bytes from the streaming decoder
+    const remaining = this.decoder.decode()
+    this.line += remaining
+
     if (this.line) return this.line
 
     return
