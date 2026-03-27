@@ -1,6 +1,9 @@
-import { PortalRange, parsePortalRange } from '~/core/portal-range.js'
 import { Query } from '~/portal-client/index.js'
+
 import { Heap } from '../internal/heap.js'
+import { BlockRangeConfigurationError } from './errors.js'
+import { PortalRange, parsePortalRange } from './portal-range.js'
+import { QueryAwareTransformer, SetupQueryFn, TransformerArgs } from './transformer.js'
 
 /**
  * A range of blocks with inclusive boundaries
@@ -10,8 +13,13 @@ export type Range = {
   to?: number
 }
 
-export type NaturalRange = Range | { from: 'latest'; to?: number }
+/**
+ * A range whose boundaries can be block numbers, `Date` timestamps, or the special `'latest'` token.
+ * Dates are resolved to block numbers via the portal before use.
+ */
+export type NaturalRange = { from: number | Date; to?: number | Date } | { from: 'latest'; to?: number }
 
+/** A data request scoped to a specific block range. */
 export interface RangeRequest<Req, R = Range> {
   range: R
   request: Req
@@ -22,8 +30,8 @@ export type RequestOptions<R> = {
   request: R
 }
 
-export type Subset<T, U> = {
-  [K in keyof T]: K extends keyof U ? T[K] : never
+export type QueryTransformerOpts<In, Out, Query extends QueryBuilder<any>> = TransformerArgs<In, Out> & {
+  setupQuery?: SetupQueryFn<Query>
 }
 
 export abstract class QueryBuilder<F extends {}, R = any> {
@@ -33,20 +41,25 @@ export abstract class QueryBuilder<F extends {}, R = any> {
   abstract getType(): string
   abstract mergeDataRequests(...requests: R[]): R
   abstract addFields(fields: F): QueryBuilder<F, R>
+  abstract build(opts?: { setupQuery?: SetupQueryFn<any> }): QueryAwareTransformer<any, any, any>
 
+  /** Returns the registered range requests. */
   getRequests() {
     return this.requests
   }
 
+  /** Returns the current field selection. */
   getFields() {
     return this.fields
   }
 
+  /** Adds a block range (without a data request) to the query. */
   addRange(range: PortalRange): this {
     this.requests.push({ range: parsePortalRange(range) } as any)
     return this
   }
 
+  /** Merges another query builder's requests and fields into this one. */
   merge(query?: QueryBuilder<F, R>) {
     if (!query) return this
 
@@ -56,6 +69,15 @@ export abstract class QueryBuilder<F extends {}, R = any> {
     return this
   }
 
+  /**
+   * Resolves all registered requests into concrete block ranges.
+   *
+   * - Resolves `'latest'` to the current head block number via the portal.
+   * - Resolves `Date` values to block numbers via `portal.resolveTimestamp`.
+   * - Merges overlapping ranges and applies an optional `bound` to clip results.
+   *
+   * @returns `raw` — the full merged ranges; `bounded` — ranges clipped to `bound`.
+   */
   async calculateRanges({
     portal,
     bound,
@@ -65,18 +87,32 @@ export abstract class QueryBuilder<F extends {}, R = any> {
   }): Promise<{ bounded: RangeRequest<R>[]; raw: RangeRequest<R>[] }> {
     const latest = this.requests.some((r) => r.range.from === 'latest') ? await portal.getHead() : undefined
 
-    const ranges = mergeRangeRequests(
-      this.requests.map((r) => ({
-        range:
-          r.range.from === 'latest'
-            ? {
-                from: Math.min(latest?.number || 0, bound?.from || Infinity),
-              }
-            : r.range,
-        request: r.request || ({} as R),
-      })),
-      this.mergeDataRequests,
-    )
+    const resolvedTimestamps = await this.resolveTimestamps(portal)
+
+    const resolvedRequests = this.requests.map((r) => ({
+      range:
+        r.range.from === 'latest'
+          ? {
+              from: Math.min(latest?.number || 0, bound?.from || Infinity),
+              ...(r.range.to ? { to: r.range.to } : {}),
+            }
+          : {
+              from: resolveRangeValue(r.range.from, resolvedTimestamps),
+              to: resolveRangeValue(r.range.to, resolvedTimestamps),
+            },
+      request: r.request || ({} as R),
+    }))
+
+    for (const r of resolvedRequests) {
+      // non-strict comparison on purpose. `to` can be zero
+      if (r.range.to != null && r.range.to < r.range.from) {
+        throw new BlockRangeConfigurationError(
+          `Invalid block range: 'from' (${r.range.from}) must be less than or equal to 'to' (${r.range.to})`,
+        )
+      }
+    }
+
+    const ranges = mergeRangeRequests(resolvedRequests, this.mergeDataRequests)
 
     if (!ranges.length) {
       // FIXME request should be optional
@@ -91,13 +127,61 @@ export abstract class QueryBuilder<F extends {}, R = any> {
       bounded: applyRangeBound(ranges, bound),
     }
   }
+
+  private async resolveTimestamps(portal: Portal): Promise<Map<number, number>> {
+    const timestamps = new Set<number>()
+
+    for (const r of this.requests) {
+      if (r.range.from instanceof Date) {
+        timestamps.add(dateToSeconds(r.range.from))
+      }
+      if (r.range.to instanceof Date) {
+        timestamps.add(dateToSeconds(r.range.to))
+      }
+    }
+
+    if (timestamps.size === 0) return new Map()
+
+    const resolved = new Map<number, number>()
+    await Promise.all(
+      [...timestamps].map(async (ts) => {
+        try {
+          resolved.set(ts, await portal.resolveTimestamp(ts))
+        } catch (error) {
+          if (error instanceof Error && error.message.toLowerCase().includes('no chunk found for timestamp')) {
+            const date = new Date(ts * 1000).toISOString()
+            throw new BlockRangeConfigurationError(`Failed to resolve timestamp ${date} to a block number. The block for this timestamp may not have been produced yet.`)
+          }
+          throw error
+        }
+      }),
+    )
+
+    return resolved
+  }
 }
 
+/** Minimal portal interface needed by `QueryBuilder.calculateRanges` to resolve head and timestamps. */
 export interface Portal {
   getHead(): Promise<{ number: number; hash: string } | undefined>
+  resolveTimestamp(seconds: number): Promise<number>
 }
 
-// TODO generate unit tests for this
+function dateToSeconds(date: Date): number {
+  return Math.floor(date.getTime() / 1000)
+}
+
+function resolveRangeValue(value: number | Date, resolved: Map<number, number>): number
+function resolveRangeValue(value: number | Date | undefined, resolved: Map<number, number>): number | undefined
+function resolveRangeValue(value: number | Date | undefined, resolved: Map<number, number>): number | undefined {
+  if (value instanceof Date) {
+    return resolved.get(dateToSeconds(value))
+  } else if (typeof value === 'number') {
+    return value
+  }
+
+  return
+}
 
 /**
  * Merges overlapping range requests into a sorted list of non-overlapping ranges.
@@ -315,22 +399,27 @@ export function rangeDifference(a: Range, b: Range): Range[] {
   return result
 }
 
+/**
+ * Returns the upper bound of a range, or `+Infinity` if the range is open-ended.
+ */
 export function rangeEnd(range: Range): number {
   return range.to ?? Number.POSITIVE_INFINITY
 }
 
+/**
+ * Concatenates two optional arrays of query items. Returns `undefined` when both are empty/absent.
+ */
 export function concatQueryLists<T extends object>(a?: T[], b?: T[]): T[] | undefined {
   let result = [...(a || []), ...(b || [])]
   return result.length ? result : undefined
 }
 
+/**
+ * Returns a hex-encoded SHA-256 hash of the query, excluding positional fields
+ * (`fromBlock`, `toBlock`, `parentBlockHash`). Used as a cache key so that
+ * identical queries over different block ranges share the same cache bucket.
+ */
 export async function hashQuery(query: Query): Promise<string> {
-  /**
-   *  We use a hash of the query (excluding fromBlock and toBlock) as a unique identifier
-   *  to store and retrieve cached data.
-   *  This ensures that different queries are cached separately
-   *  and can be efficiently retrieved based on their specific parameters.
-   */
   const { fromBlock, toBlock, parentBlockHash, ...unique } = query
 
   return await sha256Hex(JSON.stringify(unique))

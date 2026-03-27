@@ -162,7 +162,7 @@ export function createAggregator<
   let storage: Storage
 
   return createTransformer<T[], Record<string, Out>>({
-    profiler: { id: 'aggregator' },
+    profiler: { name: 'aggregator' },
     start: async () => {
       storage = new Storage({ path: dbPath })
       await storage.init()
@@ -190,7 +190,7 @@ export function createAggregator<
       for (const item of data) {
         const id = getId({ group: groupBy(item), window: window?.(item) })
         for (const key in aggregate) {
-          const finalized = ctx.head.finalized ? item.blockNumber <= ctx.head.finalized?.number : true
+          const finalized = ctx.stream.head.finalized ? item.blockNumber <= ctx.stream.head.finalized?.number : true
 
           aggregators[id][key].aggregate(item, finalized)
 
