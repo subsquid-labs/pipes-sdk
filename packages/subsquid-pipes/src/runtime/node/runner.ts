@@ -2,8 +2,6 @@ import { Logger, createDefaultLogger } from '~/core/logger.js'
 import { MetricsServer, noopMetricsServer } from '~/core/metrics-server.js'
 import { MetricsServerOptions, metricsServer } from '~/metrics/node/index.js'
 
-import { RuntimeContext, runWithContext } from './context.js'
-
 type Config = {
   /**
    * Maximum number of restart attempts per pipe before the runner gives up and
@@ -67,22 +65,15 @@ class Runner<T extends SerializableObject = any> {
         let attempts = 0
 
         const logger = this.#logger.child({ id: pipe.id })
-        const ctx: RuntimeContext = {
-          id: pipe.id,
-          logger,
-          metrics,
-        }
 
         while (true) {
           try {
             if (typeof handler === 'function') {
-              await runWithContext(ctx, async () => {
-                await handler({
-                  id: pipe.id,
-                  params: pipe.params,
-                  metrics,
-                  logger,
-                })
+              await handler({
+                id: pipe.id,
+                params: pipe.params,
+                metrics,
+                logger,
               })
             } else {
               const worker = new Worker(new URL('worker.ts', import.meta.url).href, {
