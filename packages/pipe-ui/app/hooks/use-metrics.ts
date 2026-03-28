@@ -215,6 +215,9 @@ export function useProfilers({ enabled = true, serverIndex, pipeId }: { enabled?
 export type ApiExemplarResult = {
   name: string
   data: any
+  elapsed?: number
+  dataSize?: number
+  labels?: string[]
   children: ApiExemplarResult[]
 }
 
@@ -228,7 +231,7 @@ export function useTransformationExemplar({ enabled = true, serverIndex, pipeId 
 
       const data: HttpResponse<{
         transformation: ApiExemplarResult
-        batch?: { from: number; to: number; blocksCount: number }
+        batch?: { from: number; to: number; blocksCount: number; bytesSize?: number }
       }> = await res.json()
 
       return data.payload

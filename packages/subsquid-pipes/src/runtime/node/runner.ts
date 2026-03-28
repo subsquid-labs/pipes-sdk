@@ -1,5 +1,6 @@
 import { Logger, createDefaultLogger } from '~/core/logger.js'
 import { MetricsServer, noopMetricsServer } from '~/core/metrics-server.js'
+import { Worker } from 'node:worker_threads'
 import { MetricsServerOptions, metricsServer } from '~/metrics/node/index.js'
 
 type Config = {
