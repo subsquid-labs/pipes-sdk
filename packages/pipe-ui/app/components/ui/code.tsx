@@ -6,8 +6,18 @@ import { Light as SyntaxHighlighter } from 'react-syntax-highlighter'
 import bash from 'react-syntax-highlighter/dist/esm/languages/hljs/bash'
 import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json'
 import typescript from 'react-syntax-highlighter/dist/esm/languages/hljs/typescript'
-import theme from 'react-syntax-highlighter/dist/esm/styles/hljs/hybrid'
 import { CopyButton } from '~/components/ui/copy-button'
+
+const theme: Record<string, React.CSSProperties> = {
+  'hljs': { background: 'transparent', color: 'rgba(255,255,255,0.4)' },
+  'hljs-string': { color: '#7ec89e' },
+  'hljs-number': { color: '#6eb3d4' },
+  'hljs-literal': { color: '#6eb3d4' },
+  'hljs-keyword': { color: '#7ec89e' },
+  'hljs-attr': { color: '#9d8abf' },
+  'hljs-punctuation': { color: 'rgba(255,255,255,0.3)' },
+  'hljs-comment': { color: 'rgba(255,255,255,0.2)' },
+}
 import { cn } from '~/lib/utils'
 
 export type Lang = 'typescript' | 'bash' | 'json'

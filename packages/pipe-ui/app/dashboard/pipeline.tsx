@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 import NumberFlow from '@number-flow/react'
 import { Terminal } from 'lucide-react'
@@ -20,9 +20,25 @@ import { TransformationExemplar } from '~/dashboard/transformation-exemplar'
 const sparklineStyle = { fill: '#d0a9e2' }
 const sparklineColor = 'rgb(170, 140, 235)'
 
+const VALID_TABS = ['profiler', 'data-flow', 'query']
+
+function getInitialTab(): string {
+  if (typeof window === 'undefined') return 'profiler'
+  const param = new URLSearchParams(window.location.search).get('tab')
+  return param && VALID_TABS.includes(param) ? param : 'profiler'
+}
+
 export function Pipeline({ pipeId }: { pipeId: string }) {
   const { serverIndex } = useServerIndex()
   const { data, isError } = useStats(serverIndex)
+
+  const [tab, setTabState] = useState(getInitialTab)
+  const setTab = useCallback((value: string) => {
+    setTabState(value)
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', value)
+    window.history.replaceState({}, '', url.toString())
+  }, [])
 
   const pipe = data?.pipes.find((pipe) => pipe.id === pipeId)
 
@@ -81,7 +97,11 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
           <div>{pipe.progress.percent.toFixed(2)}%</div>
         </div>
 
-        <Tabs className="mt-4 mb-6" defaultValue="profiler">
+        <Tabs
+          className="mt-4 mb-6"
+          value={tab}
+          onValueChange={setTab}
+        >
           <TabsList className="bg-gray-950">
             <TabsTrigger className="" value="profiler">
               Profiler
