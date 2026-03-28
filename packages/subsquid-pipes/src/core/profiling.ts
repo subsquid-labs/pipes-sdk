@@ -21,6 +21,7 @@ export interface Profiler {
   name: string
   elapsed: number
   hidden: boolean
+  labels: string[]
   children: Profiler[]
   data?: any
 
@@ -165,6 +166,7 @@ export class DummyProfiler implements Profiler {
   name: string = ''
   elapsed: number = 0
   hidden: boolean = false
+  labels: string[] = []
   children: DummyProfiler[] = []
 
   start(options?: string | ProfilerOptions) {

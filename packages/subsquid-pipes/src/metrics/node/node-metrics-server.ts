@@ -89,6 +89,9 @@ function transformProfiler(profiler: Profiler): ProfilerResult {
 type TransformationResult = {
   name: string
   data: any
+  elapsed?: number
+  dataSize?: number
+  labels?: string[]
   children: TransformationResult[]
 }
 
@@ -122,20 +125,24 @@ function packExemplar(value: any): any {
 }
 
 function transformExemplar(profiler: Profiler): TransformationResult {
-  return profiler.transform((span, children) => ({
-    name: span.name,
-    data: JSON.stringify(packExemplar(span.data), (k: string, v: any) => {
-      if (typeof v === 'bigint') {
-        return v.toString() + 'n'
-      }
-      if (v instanceof Date) {
-        return v.toISOString()
-      }
+  return profiler.transform((span, children) => {
+    const data = span.data != null
+      ? JSON.stringify(packExemplar(span.data), (k: string, v: any) => {
+          if (typeof v === 'bigint') return v.toString() + 'n'
+          if (v instanceof Date) return v.toISOString()
+          return v
+        })
+      : null
 
-      return v
-    }),
-    children,
-  }))
+    return {
+      name: span.name,
+      data,
+      elapsed: span.elapsed || undefined,
+      dataSize: data ? data.length : undefined,
+      labels: span.labels.length > 0 ? span.labels : undefined,
+      children,
+    }
+  })
 }
 
 const MAX_HISTORY = 50
@@ -306,6 +313,7 @@ class ExpressMetricServer implements MetricsServer {
                   : lastBatch.stream.state.current.number,
                 to: lastBatch.stream.state.current.number,
                 blocksCount: lastBatch.batch.blocksCount,
+                bytesSize: lastBatch.batch.bytesSize,
               }
             : undefined,
         },
@@ -360,7 +368,7 @@ class ExpressMetricServer implements MetricsServer {
   }
 
   batchProcessed(ctx: BatchContext) {
-    const span = ctx.profiler.start('metrics processing')
+    const span = ctx.profiler.start('metrics processing').addLabels('core')
     const data = this.registerPipe(ctx.id)
 
     data.lastBatch = ctx
