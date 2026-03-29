@@ -4,7 +4,7 @@ function Bone({ className }: { className?: string }) {
 
 function SidebarSkeleton() {
   return (
-    <div className="flex-[0_250px]">
+    <div className="flex-[0_220px]">
       <div className="w-full mb-2">
         <Bone className="h-8 w-[140px] mb-2" />
         <div className="w-full flex flex-col items-start text-xs gap-2">

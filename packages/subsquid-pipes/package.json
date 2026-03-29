@@ -126,12 +126,6 @@
       "import": "./dist/runtime/node/index.js",
       "require": "./dist/runtime/node/index.cjs"
     },
-    "./runtime/node/context": {
-      "browser": "./dist/runtime/node/browser_context.js",
-      "types": "./dist/runtime/node/context.d.ts",
-      "import": "./dist/runtime/node/context.js",
-      "require": "./dist/runtime/node/context.cjs"
-    },
     "./opentelemetry": {
       "types": "./dist/opentelemetry/index.d.ts",
       "import": "./dist/opentelemetry/index.js",

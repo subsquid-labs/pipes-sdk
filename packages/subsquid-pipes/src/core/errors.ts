@@ -31,7 +31,7 @@ export class DefaultPipeIdError extends PipeError {
       'Pipe requires a non-default ID when used with targets.',
       'Set a unique id in your pipe source options:',
       '',
-      '  evmPortalSource({ portal: "...", id: "my-pipe", outputs })',
+      '  evmPortalStream({ portal: "...", id: "my-pipe", outputs })',
     ])
   }
 }

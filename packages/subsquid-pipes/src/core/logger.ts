@@ -15,7 +15,7 @@ export function createDefaultLogger({ id, level }: { level?: LogLevel; id?: stri
   const pretty = process.stdout?.isTTY && !isEnvFalse('LOG_PRETTY')
 
   return pino({
-    base: id ? { id } : undefined,
+    base: id ? { id } : null,
     messageKey: 'message',
     level: baseLevel ?? (process.env['LOG_LEVEL'] || 'info'),
     formatters: {

@@ -211,8 +211,8 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
           })
         : this.#portal.getStream(query)
 
-      let batchSpan = Span.root('batch', this.#options.profiler)
-      let readSpan = batchSpan.start('fetch data')
+      let batchSpan = Span.root('batch', this.#options.profiler).addLabels('core')
+      let readSpan = batchSpan.start('fetch data').addLabels('core')
       for await (const batch of source) {
         readSpan.end()
 
@@ -266,8 +266,8 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
           yield { data, ctx }
         }
 
-        batchSpan = Span.root('batch', this.#options.profiler)
-        readSpan = batchSpan.start('fetch data')
+        batchSpan = Span.root('batch', this.#options.profiler).addLabels('core')
+        readSpan = batchSpan.start('fetch data').addLabels('core')
       }
     }
 
@@ -302,7 +302,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   }
 
   private async applyTransformers(ctx: BatchContext, data: T) {
-    const span = ctx.profiler.start('apply transformers')
+    const span = ctx.profiler.start('apply transformers').addLabels('core')
 
     for (const transformer of this.#transformers) {
       data = await transformer.run(data, {

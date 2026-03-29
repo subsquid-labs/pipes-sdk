@@ -150,7 +150,9 @@ export abstract class QueryBuilder<F extends {}, R = any> {
         } catch (error) {
           if (error instanceof Error && error.message.toLowerCase().includes('no chunk found for timestamp')) {
             const date = new Date(ts * 1000).toISOString()
-            throw new BlockRangeConfigurationError(`Failed to resolve timestamp ${date} to a block number. The block for this timestamp may not have been produced yet.`)
+            throw new BlockRangeConfigurationError(
+              `Failed to resolve timestamp ${date} to a block number. The block for this timestamp may not have been produced yet.`,
+            )
           }
           throw error
         }
@@ -425,7 +427,10 @@ export async function hashQuery(query: Query): Promise<string> {
   return await sha256Hex(JSON.stringify(unique))
 }
 
-/** UTF-8 encode a JS string to ArrayBuffer. */
+/**
+ * UTF-8 encode a JS string to ArrayBuffer.
+ * @internal
+ */
 export function stringToArrayBuffer(str: string): Uint8Array {
   if (typeof TextEncoder !== 'undefined') {
     return new TextEncoder().encode(str)

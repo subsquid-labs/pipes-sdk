@@ -5,7 +5,6 @@ import { AlertCircle } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import { displayEstimatedTime } from '~/dashboard/formatters'
 import { ApiStatus, type Pipe, PipeStatus, useStats } from '~/hooks/use-metrics'
-import { usePortalStatus } from '~/hooks/use-portal'
 import { useServerIndex } from '~/hooks/use-server-context'
 import { type Server, useServers } from '~/hooks/use-servers'
 
@@ -180,7 +179,7 @@ export function Sidebar({
   const connected = data?.status === ApiStatus.Connected
 
   return (
-    <div className="flex-[0_250px]">
+    <div className="flex-[0_220px]">
       <div className="w-full mb-2">
         <h1 className="text-2xl font-normal mb-2">Pipes SDK</h1>
 

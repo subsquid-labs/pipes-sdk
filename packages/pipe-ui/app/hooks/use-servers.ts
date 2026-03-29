@@ -14,6 +14,7 @@ export function useServers() {
     queryKey: ['servers'],
     queryFn: async (): Promise<Server[]> => {
       const res = await fetch('/api/servers')
+      if (!res.ok) throw new Error(`Failed to fetch servers: ${res.status}`)
       const data: ServersResponse = await res.json()
 
       return data.servers
