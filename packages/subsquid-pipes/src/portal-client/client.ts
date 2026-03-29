@@ -91,6 +91,13 @@ export interface PortalStreamOptions {
   maxWaitTime?: number
   headPollInterval?: number
   finalized?: boolean
+  /**
+   * When true, unfinalized blocks are buffered together with finalized blocks
+   * instead of being flushed one-by-one. This improves throughput for targets
+   * that benefit from processing multiple unfinalized blocks per transaction
+   * (e.g. drizzle-target), at the cost of slightly higher latency per batch.
+   */
+  batchUnfinalized?: boolean
 }
 
 export interface PortalStream<B> extends AsyncIterable<StreamData<B>> {}
@@ -163,6 +170,7 @@ export class PortalClient {
   getStream<Q extends Query>(query: Q, options?: PortalStreamOptions): PortalStream<GetBlock<Q>> {
     const settings = {
       request: {},
+      batchUnfinalized: true,
       ...this.#options,
       ...options,
     }
@@ -227,7 +235,7 @@ function createPortalStream<Q extends Query>(
     stream?: AsyncIterable<string[]> | null | undefined
   }>,
 ): PortalStream<GetBlock<Q>> {
-  const { headPollInterval, request, ...bufferOptions } = options
+  const { headPollInterval, request, batchUnfinalized, ...bufferOptions } = options
   const buffer = new StreamBuffer<GetBlock<Q>>(bufferOptions)
 
   let { fromBlock = 0, toBlock, parentBlockHash } = query
@@ -332,9 +340,15 @@ function createPortalStream<Q extends Query>(
                   requests: finalizedBlocks.length > 0 ? {} : requests,
                 },
               },
-              true,
+              !batchUnfinalized,
             )
           }
+
+          // Flush after each streaming chunk so unfinalized blocks are not held
+          // in the buffer across chunks. This ensures each portal response is
+          // delivered to the consumer immediately without waiting for the next
+          // finalized batch or stream end.
+          buffer.flush()
 
           requests = {}
         }
