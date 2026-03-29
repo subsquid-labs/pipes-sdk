@@ -75,6 +75,7 @@ function parseDate(date: any): Date | null {
 type ProfilerResult = {
   name: string
   totalTime: number
+  labels?: string[]
   children: ProfilerResult[]
 }
 
@@ -82,6 +83,7 @@ function transformProfiler(profiler: Profiler): ProfilerResult {
   return profiler.transform((span, children) => ({
     name: span.name,
     totalTime: span.elapsed,
+    ...(span.labels.length > 0 ? { labels: span.labels } : {}),
     children,
   }))
 }

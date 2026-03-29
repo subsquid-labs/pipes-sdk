@@ -188,6 +188,7 @@ export function usePipe(serverIndex: number, id: string) {
 export type ApiProfilerResult = {
   name: string
   totalTime: number
+  labels?: string[]
   children: ApiProfilerResult[]
 }
 

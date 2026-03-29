@@ -24,9 +24,7 @@
     "zx": "8.8.5"
   },
   "packageManager": "pnpm@10.17.0",
-  "pnpm": {
-    "overrides": {
-      "@sqd-pipes/delta-db": "link:../delta-db/bindings/typescript/delta-db"
-    }
+  "dependencies": {
+    "@sqd-pipes/delta-db": "0.0.1-alpha.20"
   }
 }

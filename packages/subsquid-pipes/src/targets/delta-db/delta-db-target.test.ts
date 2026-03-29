@@ -5,7 +5,7 @@ import { MockPortal, blockDecoder, createMockPortal } from '~/testing/index.js'
 
 import { DeltaBatch, deltaDbTarget } from './delta-db-target.js'
 
-// Simple schema: raw table of transfers + a MV that counts transfers per address
+// Simple schema: raw table of transfers + MV that counts transfers per address
 const SCHEMA = `
 CREATE TABLE transfers (
   block_number UInt64 NOT NULL,

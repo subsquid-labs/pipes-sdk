@@ -1,8 +1,18 @@
-import { DeltaBatch, DeltaDb } from '@sqd-pipes/delta-db'
+import { DeltaBatch, DeltaDb, type DeltaDbCursor, type IngestInput } from '@sqd-pipes/delta-db'
 
 import { BlockCursor, createTarget } from '~/core/index.js'
 
 export type Row = Record<string, any>
+
+export type { DeltaBatch } from '@sqd-pipes/delta-db'
+
+export interface DeltaDbLike {
+  ingest(input: IngestInput): Promise<DeltaBatch | null>
+  handleFork(previousBlocks: DeltaDbCursor[]): Promise<{ cursor: DeltaDbCursor; batch: DeltaBatch | null }>
+  flush(): DeltaBatch | null
+  ack(sequence: number): void
+  get cursor(): DeltaDbCursor | null
+}
 
 export interface DeltaDbTargetOptions<TInput = Record<string, any[]>> {
   /** SQL schema definition (CREATE TABLE, CREATE REDUCER, CREATE MATERIALIZED VIEW). */
@@ -11,6 +21,8 @@ export interface DeltaDbTargetOptions<TInput = Record<string, any[]>> {
   dataDir?: string
   /** Maximum delta buffer size before backpressure. Default: 10000. */
   maxBufferSize?: number
+  /** Pre-instantiated DeltaDb instance. When provided, schema/dataDir/maxBufferSize are ignored. */
+  db?: DeltaDbLike
   /**
    * Map decoder output to schema tables.
    * Returns Record<string, Row[]> where keys are table names from the schema.
@@ -25,6 +37,19 @@ export interface DeltaDbTargetOptions<TInput = Record<string, any[]>> {
   onDelta: (ctx: { batch: DeltaBatch; ctx: any }) => unknown | Promise<unknown>
 }
 
+type PerfNode = { kind: string; name: string; durationMs: number; children: PerfNode[] }
+
+const LABELS = ['delta-db']
+
+function mapPerfChildren(nodes: PerfNode[]): { name: string; elapsed: number; labels: string[]; children: any[] }[] {
+  return nodes.map((n) => ({
+    name: `${n.kind}:${n.name}`,
+    elapsed: n.durationMs,
+    labels: LABELS,
+    children: mapPerfChildren(n.children),
+  }))
+}
+
 /**
  * Creates a Pipes SDK Target that routes decoded blockchain data
  * through Delta DB's computation pipeline (raw tables → reducers → MVs)
@@ -37,41 +62,44 @@ export function deltaDbTarget<T = Record<string, any[]>>({
   schema,
   dataDir,
   maxBufferSize = 1_000_000,
+  db: providedDb,
   transform,
   onDelta,
 }: DeltaDbTargetOptions<T>) {
-  const db = DeltaDb.open({
-    schema,
-    dataDir,
-    maxBufferSize,
-  })
+  const db =
+    providedDb ??
+    DeltaDb.open({
+      schema,
+      dataDir,
+      maxBufferSize,
+    })
 
   return createTarget<T>({
     write: async ({ read }) => {
       for await (const { data, ctx } of read(db.cursor ?? undefined)) {
-        const span = ctx.profiler.start('delta-db')
-        const mapped = span.measureSync('transform', () => {
-          return transform ? transform(data) : (data as Record<string, any[]>)
-        })
+        if (!ctx.stream.head.finalized) {
+          throw new Error('ctx.stream.finalized is required — source must provide finalization info')
+        }
 
-        const batch = span.measureSync('ingest', () => {
-          if (!ctx.stream.head.finalized) {
-            throw new Error('ctx.stream.finalized is required — source must provide finalization info')
-          }
-
-          return db.ingest({
-            data: mapped,
-            rollbackChain: ctx.stream.state.rollbackChain,
-            finalizedHead: ctx.stream.head.finalized,
-          })
+        const span = ctx.profiler.start({ name: 'delta-db', labels: LABELS })
+        const batch = await db.ingest({
+          data: data as Record<string, any[]>,
+          rollbackChain: ctx.stream.state.rollbackChain,
+          finalizedHead: ctx.stream.head.finalized,
         })
 
         if (batch) {
-          await span.measure('downstream', async () => {
-            await onDelta({
-              batch,
-              ctx,
+          for (const node of batch.perf ?? []) {
+            span.import({
+              name: node.kind === 'pipeline' ? node.name : `${node.kind}:${node.name}`,
+              elapsed: node.durationMs,
+              labels: LABELS,
+              children: mapPerfChildren(node.children),
             })
+          }
+
+          await span.measure('downstream', async () => {
+            await onDelta({ batch, ctx })
           })
 
           span.measureSync('ack', () => {
@@ -85,20 +113,14 @@ export function deltaDbTarget<T = Record<string, any[]>>({
     fork: async (previousBlocks): Promise<BlockCursor | null> => {
       if (!previousBlocks || !previousBlocks?.length) return null
 
-      const forkCursor = db.resolveForkCursor(previousBlocks)
-      if (!forkCursor) {
-        throw new Error('Fork too deep: no common ancestor found in block hashes')
-      }
+      const { cursor, batch } = await db.handleFork(previousBlocks)
 
-      db.rollback(forkCursor.number)
-
-      const batch = db.flush()
       if (batch) {
         await onDelta({ batch, ctx: null })
         db.ack(batch.sequence)
       }
 
-      return forkCursor
+      return cursor
     },
   })
 }

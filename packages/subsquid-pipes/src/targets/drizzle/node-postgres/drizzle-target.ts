@@ -72,6 +72,9 @@ export function drizzleTarget<T>({
   }
 
   return createTarget<T>({
+    streamOptions: {
+      batchUnfinalized: false,
+    },
     write: async ({ read, logger }) => {
       const cursor = await state.getCursor({
         logger,

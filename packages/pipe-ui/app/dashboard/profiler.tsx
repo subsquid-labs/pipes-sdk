@@ -12,6 +12,7 @@ export type ProfilerResult = {
   totalTime: number
   selfTime: number
   percent: number
+  labels?: string[]
   children: ProfilerResult[]
 }
 
@@ -56,6 +57,7 @@ function calcStats({
         totalTime: 0,
         selfTime: 0,
         percent: 0,
+        labels: profiler.labels,
         children: [],
       }
       acc.push(item)
@@ -100,6 +102,18 @@ function ProfilerResultNode({ profiler, useSelfTime }: { profiler: ProfilerResul
           <span className="text-white/50 text-xxs">
             {time.toFixed(2)}ms · {profiler.percent.toFixed(2)}%
           </span>
+          {profiler.labels && profiler.labels.length > 0 && (
+            <div className="ml-auto flex gap-1">
+              {profiler.labels.map((label) => (
+                <span
+                  key={label}
+                  className="text-xxs px-1 py-0.5 rounded bg-white/[0.06] border border-white/[0.1] text-white/40"
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       <div className="pl-6">
