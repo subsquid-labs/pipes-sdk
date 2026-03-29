@@ -1,14 +1,36 @@
-import { Toggle } from '@radix-ui/react-toggle'
-import { Play } from 'lucide-react'
-import { useState } from 'react'
-import { type ApiProfilerResult, useProfilers } from '~/api/metrics'
+'use client'
 
-type ProfilerResult = {
+import { useState } from 'react'
+
+import { Switch } from '~/components/ui/switch'
+import { PanelLoading } from '~/dashboard/panel-loading'
+import { type ApiProfilerResult, useProfilers } from '~/hooks/use-metrics'
+import { useServerIndex } from '~/hooks/use-server-context'
+
+export type ProfilerResult = {
   name: string
   totalTime: number
   selfTime: number
   percent: number
   children: ProfilerResult[]
+}
+
+/**
+ * Maps a percentage (0-100) to a heat color.
+ * Violet (cold/fast) → fuchsia → magenta → amber → red-orange (hot/bottleneck).
+ */
+export function getHeatColor(percent: number): string {
+  if (percent >= 90) return 'oklch(0.55 0.25 25)'
+  if (percent >= 70) return 'oklch(0.60 0.24 30)'
+  if (percent >= 60) return 'oklch(0.65 0.22 45)'
+  if (percent >= 50) return 'oklch(0.62 0.20 35)'
+  if (percent >= 40) return 'oklch(0.60 0.20 10)'
+  if (percent >= 30) return 'oklch(0.58 0.22 340)'
+  if (percent >= 20) return 'oklch(0.55 0.22 320)'
+  if (percent >= 15) return 'oklch(0.50 0.20 310)'
+  if (percent >= 10) return 'oklch(0.45 0.18 300)'
+  if (percent >= 5) return 'oklch(0.40 0.14 290)'
+  return 'oklch(0.35 0.10 280)'
 }
 
 function calcStats({
@@ -55,73 +77,77 @@ function calcStats({
   return acc
 }
 
-export function ProfilerResult({ profiler, useSelfTime }: { profiler: ProfilerResult; useSelfTime: boolean }) {
-  // Use square root scale for better visualization
-  // so that small differences are more visible
-  // and large differences are less dominant
+function ProfilerResultNode({ profiler, useSelfTime }: { profiler: ProfilerResult; useSelfTime: boolean }) {
   const threshold = Math.pow(profiler.percent / 100, 0.5)
-
-  const fontSize = 9 + 6 * threshold
-  const opacity = 0.4 + 0.7 * threshold
-
+  const opacity = 0.4 + 0.6 * threshold
   const time = useSelfTime ? profiler.selfTime : profiler.totalTime
+  const heatColor = getHeatColor(profiler.percent)
+
   return (
     <div className="tree">
-      <div style={{ fontSize }} className="p-2 relative">
+      <div className="py-[10px] px-1 relative text-xs">
         <div
-          className={`absolute top-1 left-0 bottom-0 bg-fuchsia-300/5 rounded-md z-1 transition-width duration-300 ease-out`}
+          className="absolute top-[3px] left-0 bottom-[3px] rounded-[4px] z-1 transition-all duration-300 ease-out border-l-[3px]"
           style={{
             width: `${profiler.percent}%`,
-            minWidth: 1,
+            minWidth: profiler.percent > 0 ? 6 : 0,
+            backgroundColor: `color-mix(in oklch, ${heatColor}, transparent 75%)`,
+            borderColor: heatColor,
           }}
         />
-        <div className="relative">
-          <div className="font-medium" style={{ opacity }}>
-            {profiler.name}
-          </div>
-          <div style={{ opacity }} className="flex leading-none text-muted-foreground gap-2">
-            <div>{time.toFixed(2)}ms</div>
-            <div>{profiler.percent.toFixed(2)}%</div>
-          </div>
+        <div className="relative pl-2.5 flex items-baseline gap-2" style={{ opacity }}>
+          <span>{profiler.name}</span>
+          <span className="text-white/50 text-xxs">
+            {time.toFixed(2)}ms · {profiler.percent.toFixed(2)}%
+          </span>
         </div>
       </div>
       <div className="pl-6">
-        {profiler.children.map((child, index) => (
-          <ProfilerResult key={child.name} profiler={child} useSelfTime={useSelfTime} />
+        {profiler.children.map((child) => (
+          <ProfilerResultNode key={child.name} profiler={child} useSelfTime={useSelfTime} />
         ))}
       </div>
     </div>
   )
 }
 
-export function Profiler() {
-  const { data } = useProfilers()
+export function Profiler({ pipeId }: { pipeId: string }) {
+  const { serverIndex } = useServerIndex()
+  const { data, isLoading } = useProfilers({ serverIndex, pipeId })
   const [useSelfTime, setUseSelfTime] = useState(false)
 
-  const profilers = data?.profilers || []
+  if (isLoading || !data?.profilers.length) {
+    return <PanelLoading message="Waiting for data samples..." />
+  }
+
+  const profilers = data.profilers || []
   const totalSpentTime = profilers.reduce((a, b) => a + b.totalTime, 0)
 
   const res = calcStats({
     acc: [],
-    profilers: data?.profilers || [],
+    profilers: data.profilers || [],
     percentage: {
       totalSpentTime,
       useSelfTime,
     },
   })
 
-  const totalSamples = (data?.profilers || []).length
+  const totalSamples = profilers.length
 
   return (
-    <div>
-      <div className="max-h-[400px] overflow-auto border rounded-md px-1 dotted-background">
-        {res.map((profiler) => (
-          <ProfilerResult key={profiler.name} profiler={profiler} useSelfTime={useSelfTime} />
-        ))}
+    <div className="space-y-3">
+      <div className="flex items-center justify-between text-xxs text-white/50">
+        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+          <Switch checked={useSelfTime} onCheckedChange={setUseSelfTime} />
+          Self time
+        </label>
+        <span>{totalSamples} samples</span>
       </div>
 
-      <div className="text-xxs mt-1 flex justify-end">
-        <div className="text-muted">{totalSamples} samples</div>
+      <div className="h-[400px] relative overflow-auto border rounded-md px-1 dotted-background">
+        {res.map((profiler) => (
+          <ProfilerResultNode key={profiler.name} profiler={profiler} useSelfTime={useSelfTime} />
+        ))}
       </div>
     </div>
   )

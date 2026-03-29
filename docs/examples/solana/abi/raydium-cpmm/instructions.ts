@@ -1,4 +1,5 @@
-import { struct, u8, u16, u64 } from '@subsquid/borsh'
+import { struct, u16, u64, u8 } from '@subsquid/borsh'
+
 import { instruction } from '../abi.support.js'
 
 /**

@@ -1,29 +1,31 @@
 import {
-  array,
+  ANY_NAT,
   BYTES,
-  constant,
   NAT,
+  QTY,
+  STRING,
+  Validator,
+  array,
+  constant,
   nullable,
   object,
   oneOf,
   option,
-  QTY,
-  STRING,
   taggedUnion,
-  Validator,
   withDefault,
 } from '@subsquid/util-internal-validation'
+
 import {
   ConditionalOmit,
   Hex,
   type ObjectValidatorShape,
   PortalQuery,
-  project,
   Select,
   type Selected,
   Selector,
   Simplify,
   Trues,
+  project,
 } from './common.js'
 
 type AddPrefix<Prefix extends string, S> = S extends string ? `${Prefix}${Capitalize<S>}` : never
@@ -62,7 +64,7 @@ export type BlockHeaderFields = {
 export type TransactionFields = {
   transactionIndex: number
   hash: Hex
-  nonce: number
+  nonce: bigint
   from: Hex
   to?: Hex
   input: Hex
@@ -445,7 +447,7 @@ const LogShape: ObjectValidatorShape<LogFields> = {
 const TransactionShape: ObjectValidatorShape<TransactionFields> = {
   transactionIndex: NAT,
   hash: BYTES,
-  nonce: NAT,
+  nonce: ANY_NAT,
   from: BYTES,
   to: option(BYTES),
   input: BYTES,

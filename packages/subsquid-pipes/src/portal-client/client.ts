@@ -1,6 +1,6 @@
 import { Readable } from 'stream'
 
-import { Future, createFuture, unexpectedCase, wait, withErrorContext } from '@subsquid/util-internal'
+import { unexpectedCase, wait, withErrorContext } from '@subsquid/util-internal'
 
 import {
   HttpBody,
@@ -15,6 +15,26 @@ import { npmVersion } from '~/version.js'
 
 import { ForkException } from './fork-exception.js'
 import { GetBlock, PortalQuery, Query } from './query/index.js'
+import { splitLines } from './split-lines.js'
+import { type BlockRef, type PortalHead, StreamBuffer, type StreamData } from './stream-buffer.js'
+
+export type { BlockRef, PortalHead, StreamData } from './stream-buffer.js'
+
+export type ApiDataset = {
+  dataset: string
+  aliases: string[]
+  real_time: boolean
+  start_block: number
+  metadata?: {
+    kind: string
+    display_name?: string
+    logo_url?: string
+    type?: string
+    evm?: {
+      chain_id: number
+    }
+  }
+}
 
 const USER_AGENT = `@subsquid/pipes:${npmVersion}`
 
@@ -35,14 +55,8 @@ export interface PortalClientOptions {
   http?: HttpClient | HttpClientOptions
 
   /**
-   * Minimum number of bytes to return.
+   * Maximum number of bytes to buffer before flushing.
    * @default 10_485_760 (10MB)
-   */
-  minBytes?: number
-
-  /**
-   * Maximum number of bytes to return.
-   * @default minBytes
    */
   maxBytes?: number
 
@@ -72,7 +86,6 @@ export type PortalRequestOptions = Pick<
 
 export interface PortalStreamOptions {
   request?: PortalRequestOptions
-  minBytes?: number
   maxBytes?: number
   maxIdleTime?: number
   maxWaitTime?: number
@@ -80,28 +93,7 @@ export interface PortalStreamOptions {
   finalized?: boolean
 }
 
-type PortalHead = {
-  finalized?: BlockRef
-  latest?: { number: number }
-}
-
-export type PortalStreamData<B> = {
-  blocks: B[]
-  head: PortalHead
-  meta: {
-    bytes: number
-    requestedFromBlock: number
-    lastBlockReceivedAt: Date
-    requests: Record<number, number>
-  }
-}
-
-export interface PortalStream<B> extends AsyncIterable<PortalStreamData<B>> {}
-
-export type BlockRef = {
-  hash: string
-  number: number
-}
+export interface PortalStream<B> extends AsyncIterable<StreamData<B>> {}
 
 function isForkHttpError(err: unknown): err is HttpError {
   if (!(err instanceof HttpError)) return false
@@ -122,8 +114,7 @@ export class PortalClient {
     this.#options = {
       finalized: options.finalized ?? false,
       headPollInterval: options.headPollInterval ?? 0,
-      minBytes: options.minBytes ?? 10 * 1024 * 1024,
-      maxBytes: options.maxBytes ?? options.minBytes ?? 10 * 1024 * 1024,
+      maxBytes: options.maxBytes ?? 10 * 1024 * 1024,
       maxIdleTime: options.maxIdleTime ?? 300,
       maxWaitTime: options.maxWaitTime ?? 5_000,
     }
@@ -143,15 +134,21 @@ export class PortalClient {
     return u.toString()
   }
 
-  async getMetadata(options?: PortalRequestOptions): Promise<{
-    dataset: string
-    aliases: string[]
-    real_time: boolean
-    start_block: number
-  }> {
-    const res = await this.request('GET', this.getDatasetUrl('metadata'), options)
+  async getMetadata(options?: PortalRequestOptions): Promise<ApiDataset> {
+    const url = this.getDatasetUrl('metadata') + '?expand[]=metadata'
+    const res = await this.request('GET', url, options)
 
     return res.body
+  }
+
+  async resolveTimestamp(seconds: number, options?: PortalRequestOptions): Promise<number> {
+    const res = await this.request<{ block_number: number }>(
+      'GET',
+      this.getDatasetUrl(`timestamps/${seconds}/block`),
+      options,
+    )
+
+    return res.body.block_number
   }
 
   async getHead(options?: PortalRequestOptions & { finalized: boolean }): Promise<BlockRef | undefined> {
@@ -231,7 +228,7 @@ function createPortalStream<Q extends Query>(
   }>,
 ): PortalStream<GetBlock<Q>> {
   const { headPollInterval, request, ...bufferOptions } = options
-  const buffer = new PortalStreamBuffer<GetBlock<Q>>(bufferOptions)
+  const buffer = new StreamBuffer<GetBlock<Q>>(bufferOptions)
 
   let { fromBlock = 0, toBlock, parentBlockHash } = query
 
@@ -358,243 +355,6 @@ function createPortalStream<Q extends Query>(
   return buffer.iterate()
 }
 
-class PortalStreamBuffer<B> {
-  private buffer: PortalStreamData<B> | undefined
-  private state: 'pending' | 'ready' | 'failed' | 'closed' = 'pending'
-  private error: unknown
-
-  private readyFuture: Future<void> = createFuture()
-  // Signals that data has been taken and more can be put
-  private takeFuture: Future<void> = createFuture()
-  // Signals that data has been put and can be taken
-  private putFuture: Future<void> = createFuture()
-
-  private idleTimeout: ReturnType<typeof setTimeout> | undefined
-  private waitTimeout: ReturnType<typeof setTimeout> | undefined
-
-  private minBytes: number
-  private maxBytes: number
-  private maxIdleTime: number
-  private maxWaitTime: number
-
-  private abortController = new AbortController()
-
-  get signal() {
-    return this.abortController.signal
-  }
-
-  constructor(options: {
-    maxWaitTime: number
-    maxBytes: number
-    maxIdleTime: number
-    minBytes: number
-  }) {
-    this.maxWaitTime = options.maxWaitTime
-    this.minBytes = options.minBytes
-    this.maxBytes = Math.max(options.maxBytes, options.minBytes)
-    this.maxIdleTime = options.maxIdleTime
-  }
-
-  async take(): Promise<PortalStreamData<B> | undefined> {
-    if (this.state === 'pending') {
-      this.waitTimeout = setTimeout(() => this._ready(), this.maxWaitTime)
-    }
-
-    await Promise.all([this.readyFuture.promise(), this.putFuture.promise()])
-
-    if (this.waitTimeout != null) {
-      clearTimeout(this.waitTimeout)
-      this.waitTimeout = undefined
-    }
-
-    const result = this.buffer
-    this.buffer = undefined
-
-    switch (this.state) {
-      case 'failed':
-        if (result != null) return result
-        throw this.error
-      case 'closed':
-        return result
-      default:
-        if (result == null) {
-          throw new Error('Buffer is empty')
-        }
-        this.takeFuture.resolve()
-        this._reset()
-        return result
-    }
-  }
-
-  async put(data: PortalStreamData<B>, flushImmediate = false): Promise<void> {
-    if (this.state === 'closed' || this.state === 'failed') {
-      throw new Error('Buffer is closed')
-    }
-
-    if (this.idleTimeout != null) {
-      clearTimeout(this.idleTimeout)
-      this.idleTimeout = undefined
-    }
-
-    if (this.buffer == null) {
-      this.buffer = {
-        blocks: [],
-        head: {},
-        meta: {
-          bytes: 0,
-          lastBlockReceivedAt: new Date(),
-          requestedFromBlock: Infinity,
-          requests: {},
-        },
-      }
-    }
-
-    this.buffer.blocks.push(...data.blocks)
-    this.buffer.head = data.head
-    this.buffer.meta.bytes += data.meta.bytes
-    this.buffer.meta.requests = mergeRequests(this.buffer.meta.requests, data.meta.requests)
-    this.buffer.meta.requestedFromBlock = Math.min(this.buffer.meta.requestedFromBlock, data.meta.requestedFromBlock)
-    this.buffer.meta.lastBlockReceivedAt = data.meta.lastBlockReceivedAt
-
-    this.putFuture.resolve()
-
-    if (flushImmediate || this.buffer.meta.bytes >= this.minBytes) {
-      this.readyFuture.resolve()
-    }
-
-    if (flushImmediate || this.buffer.meta.bytes >= this.maxBytes) {
-      await this.takeFuture.promise()
-    }
-
-    if (this.state === 'pending') {
-      this.idleTimeout = setTimeout(() => this._ready(), this.maxIdleTime)
-    }
-  }
-
-  flush() {
-    if (this.buffer == null) return
-    this._ready()
-  }
-
-  close() {
-    if (this.state === 'closed' || this.state === 'failed') return
-    this.state = 'closed'
-    this._cleanup()
-  }
-
-  fail(err: any) {
-    if (this.state === 'closed' || this.state === 'failed') return
-    this.state = 'failed'
-    this.error = err
-    this._cleanup()
-  }
-
-  iterate() {
-    return {
-      [Symbol.asyncIterator]: (): AsyncIterator<PortalStreamData<B>> => {
-        return {
-          next: async (): Promise<IteratorResult<PortalStreamData<B>>> => {
-            const value = await this.take()
-            if (value == null) {
-              return { done: true, value: undefined }
-            }
-            return { done: false, value }
-          },
-          return: async (): Promise<IteratorResult<PortalStreamData<B>>> => {
-            this.close()
-            return { done: true, value: undefined }
-          },
-          throw: async (error?: any): Promise<IteratorResult<PortalStreamData<B>>> => {
-            this.fail(error)
-            throw error
-          },
-        }
-      },
-    }
-  }
-
-  private _reset() {
-    this.readyFuture = createFuture()
-    this.putFuture = createFuture()
-    this.takeFuture = createFuture()
-    this.state = 'pending'
-  }
-
-  private _ready() {
-    if (this.state === 'pending') {
-      this.state = 'ready'
-      this.readyFuture.resolve()
-    }
-    if (this.idleTimeout != null) {
-      clearTimeout(this.idleTimeout)
-      this.idleTimeout = undefined
-    }
-    if (this.waitTimeout != null) {
-      clearTimeout(this.waitTimeout)
-      this.waitTimeout = undefined
-    }
-  }
-
-  private _cleanup() {
-    if (this.idleTimeout != null) {
-      clearTimeout(this.idleTimeout)
-      this.idleTimeout = undefined
-    }
-    if (this.waitTimeout != null) {
-      clearTimeout(this.waitTimeout)
-      this.waitTimeout = undefined
-    }
-    this.readyFuture.resolve()
-    this.putFuture.resolve()
-    this.takeFuture.resolve()
-    this.abortController.abort()
-  }
-}
-
-export async function* splitLines(chunks: AsyncIterable<Uint8Array>) {
-  const splitter = new LineSplitter()
-
-  for await (let chunk of chunks) {
-    const lines = splitter.push(chunk)
-    if (lines.length) {
-      yield lines
-    }
-  }
-
-  const lastLine = splitter.end()
-  if (lastLine) {
-    yield [lastLine]
-  }
-}
-
-class LineSplitter {
-  private decoder = new TextDecoder('utf-8')
-  private line = ''
-
-  push(data: Uint8Array): string[] {
-    let s = this.decoder.decode(data)
-    if (!s) return []
-
-    let lines = s.split('\n')
-    if (lines.length === 1) {
-      this.line += lines[0]
-    } else {
-      lines[0] = this.line + lines[0]
-      this.line = lines.pop() || ''
-
-      return lines.filter((l) => l)
-    }
-
-    return []
-  }
-
-  end(): string | undefined {
-    if (this.line) return this.line
-
-    return
-  }
-}
-
 function getHeadFromHeaders(headers: HttpResponse['headers']) {
   const finalizedHeadHash = headers.get('X-Sqd-Finalized-Head-Hash')
   const finalizedHeadNumber = headers.get('X-Sqd-Finalized-Head-Number')
@@ -638,16 +398,4 @@ function isStreamAbortedError(err: unknown) {
     default:
       return false
   }
-}
-
-function mergeRequests(a: Record<number, number>, b: Record<number, number>) {
-  for (let code in b) {
-    if (a[code] == null) {
-      a[code] = 0
-    }
-
-    a[code] += b[code]
-  }
-
-  return a
 }

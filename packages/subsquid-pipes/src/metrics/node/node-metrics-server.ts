@@ -1,7 +1,9 @@
-import express from 'express'
 import { Server } from 'http'
+
+import express, { Application } from 'express'
 import client from 'prom-client'
-import { Logger } from '~/core/index.js'
+
+import { Logger, Metrics } from '~/core/index.js'
 import {
   Counter,
   CounterConfiguration,
@@ -13,7 +15,7 @@ import {
   Summary,
   SummaryConfiguration,
 } from '~/core/metrics-server.js'
-import { BatchCtx } from '~/core/portal-source.js'
+import { BatchContext } from '~/core/portal-source.js'
 import { Profiler } from '~/core/profiling.js'
 import { npmVersion } from '~/version.js'
 
@@ -23,27 +25,33 @@ export type MetricsServerOptions = {
   logger?: Logger
 }
 
-const metrics = new Map<string, any>()
-
 export type Stats = {
   sdk: {
     version: string
   }
-  portal: {
-    url: string
-    query: any
+  code: {
+    filename: string
   }
-  progress: {
-    from: number
-    current: number
-    to: number
-    percent: number
-    etaSeconds: number
-  }
-  speed: {
-    blocksPerSecond: number
-    bytesPerSecond: number
-  }
+  pipes: {
+    id: string
+    dataset: BatchContext['stream']['dataset'] | null
+    portal: {
+      url: string
+      query: any
+    }
+    progress: {
+      from: number
+      current: number
+      to: number
+      percent: number
+      etaSeconds: number
+    }
+    speed: {
+      blocksPerSecond: number
+      bytesPerSecond: number
+    }
+  }[]
+
   usage: {
     memory: number
   }
@@ -71,223 +79,335 @@ type ProfilerResult = {
 }
 
 function transformProfiler(profiler: Profiler): ProfilerResult {
-  return {
-    name: profiler.name,
-    totalTime: profiler.elapsed,
-    children: profiler.children.map((c) => transformProfiler(c)),
-  }
+  return profiler.transform((span, children) => ({
+    name: span.name,
+    totalTime: span.elapsed,
+    children,
+  }))
 }
 
 type TransformationResult = {
   name: string
   data: any
+  elapsed?: number
+  dataSize?: number
+  labels?: string[]
   children: TransformationResult[]
 }
 
-function transformExemplar(profiler: Profiler): TransformationResult {
-  return {
-    name: profiler.name,
-    data: JSON.stringify(profiler.data, (k: string, v: any) => {
-      if (typeof v === 'bigint') {
-        return v.toString() + 'n'
-      }
-      if (v instanceof Date) {
-        return v.toISOString()
-      }
+function packExemplar(value: any): any {
+  if (Array.isArray(value)) {
+    if (
+      value.length <= 10 &&
+      !value.some((v) => typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean')
+    ) {
+      return value
+    }
 
-      return v
-    }),
-    children: profiler.children.map((c) => transformExemplar(c)),
+    if (value.length > 10) {
+      return [packExemplar(value[0]), `... ${value.length - 1} more ...`]
+    }
+
+    return value.map(packExemplar)
   }
+
+  if (value === null || value instanceof Date) return value
+
+  if (typeof value === 'object') {
+    const res: any = {}
+    for (const key in value) {
+      res[key] = packExemplar(value[key])
+    }
+    return res
+  }
+
+  return value
+}
+
+function transformExemplar(profiler: Profiler): TransformationResult {
+  return profiler.transform((span, children) => {
+    const data = span.data != null
+      ? JSON.stringify(packExemplar(span.data), (k: string, v: any) => {
+          if (typeof v === 'bigint') return v.toString() + 'n'
+          if (v instanceof Date) return v.toISOString()
+          return v
+        })
+      : null
+
+    return {
+      name: span.name,
+      data,
+      elapsed: span.elapsed || undefined,
+      dataSize: data ? data.length : undefined,
+      labels: span.labels.length > 0 ? span.labels : undefined,
+      children,
+    }
+  })
 }
 
 const MAX_HISTORY = 50
+const DEFAULT_PORT = 9090
 
-export function metricsServer({ port = 9090, enabled = true, logger }: MetricsServerOptions = {}): MetricsServer {
-  const registry = new client.Registry()
-  const app = express()
-  let server: Server | undefined = undefined
+type PipeData = {
+  lastBatch?: BatchContext
+  profilers: { profiler: ProfilerResult; collectedAt: Date }[]
+  transformationExemplar?: TransformationResult
+}
 
-  client.collectDefaultMetrics({
-    register: registry,
-  })
+class ExpressMetricServer implements MetricsServer {
+  readonly #options: { port: number; enabled: boolean }
+  readonly #app: Application
+  readonly #metrics: Metrics
 
-  app.use((req, res, next): any => {
-    const origin = req.headers.origin
+  #started: boolean = false
+  #server?: Server
+  #logger?: Logger
+  #pipes: Map<string, PipeData> = new Map()
 
-    // Allow requests only from localhost
-    if (origin && origin.includes('localhost')) {
-      res.setHeader('Access-Control-Allow-Origin', origin)
-      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-      res.setHeader('Access-Control-Allow-Credentials', 'true') // if needed
+  constructor({ port = DEFAULT_PORT, enabled = true, logger }: MetricsServerOptions = {}) {
+    this.#options = {
+      port,
+      enabled,
     }
+    this.#logger = logger
 
-    // Handle preflight requests
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(204) // No Content
-    }
+    const registry = new client.Registry()
+    client.collectDefaultMetrics({ register: registry })
 
-    next()
-  })
+    const metricsCache = new Map<string, any>()
 
-  let lastBatch: BatchCtx | null = null
-  let profilers: { profiler: ProfilerResult; collectedAt: Date }[] = []
-  let transformationExemplar: TransformationResult
+    this.#app = express()
 
-  app.get('/stats', async (req, res) => {
-    const memory = await registry.getSingleMetric('process_resident_memory_bytes')?.get()
-
-    const data: Stats = {
-      sdk: {
-        version: npmVersion,
-      },
-      portal: {
-        url: lastBatch?.query.url || '',
-        query: lastBatch?.query.raw || {},
-      },
-      progress: {
-        from: lastBatch?.state.initial || 0,
-        current: lastBatch?.state.current.number || 0,
-        to: lastBatch?.state.last || 0,
-        percent: lastBatch?.state.progress?.state.percent || 0,
-        etaSeconds: lastBatch?.state.progress?.state.etaSeconds || 0,
-      },
-      speed: {
-        blocksPerSecond: lastBatch?.state.progress?.interval.processedBlocks.perSecond || 0,
-        bytesPerSecond: lastBatch?.state.progress?.interval.bytesDownloaded.perSecond || 0,
-      },
-      usage: {
-        memory: memory?.values?.[0]?.value || 0,
-      },
-    }
-
-    res.json({ payload: data })
-  })
-
-  app.get('/profiler', async (req, res) => {
-    const from = parseDate(req.query['from']) || new Date(0)
-
-    return res.json({
-      // FIXME: remove hardcoded field
-      payload: {
-        enabled: true,
-        profilers: profilers.filter((p) => p.collectedAt >= from).map((p) => p.profiler),
-      },
-    })
-  })
-
-  app.get('/exemplars/transformation', async (req, res) => {
-    return res.json({
-      payload: {
-        transformation: transformationExemplar,
-      },
-    })
-  })
-
-  app.get('/metrics', async (req, res) => {
-    res.set('Content-Type', registry.contentType)
-    res.end(await registry.metrics())
-  })
-
-  app.get('/health', async (req, res) => {
-    res.send('ok')
-  })
-
-  return {
-    setLogger: (newLogger: Logger, override = false) => {
-      if (!override && logger) return
-
-      logger = newLogger
-    },
-
-    start: async () => {
-      if (!enabled) return
-
-      server = app.listen(port)
-
-      logger?.info(`🦑 Metrics server started at http://localhost:${port}`)
-    },
-    stop: async () => {
-      client.register.clear()
-
-      return new Promise((done) => {
-        if (!server) return done()
-
-        server.close((_) => done())
-      })
-    },
-
-    addBatchContext(ctx: BatchCtx) {
-      lastBatch = ctx
-
-      transformationExemplar = transformExemplar(ctx.profiler)
-
-      profilers.push({
-        profiler: transformProfiler(ctx.profiler),
-        collectedAt: new Date(),
-      })
-
-      profilers = profilers.slice(-MAX_HISTORY)
-    },
-
-    metrics: {
+    this.#metrics = {
       counter<T extends string>(options: CounterConfiguration<T>): Counter<T> {
-        const exits = metrics.get(options.name)
-        if (exits) {
-          return exits
-        }
+        const exits = metricsCache.get(options.name)
+        if (exits) return exits
 
         const metric = new client.Counter(options)
-        metrics.set(options.name, metric)
+        metricsCache.set(options.name, metric)
         registry.registerMetric(metric)
 
         return metric
       },
 
       gauge<T extends string>(options: GaugeConfiguration<T>): Gauge<T> {
-        const exits = metrics.get(options.name)
-        if (exits) {
-          return exits as Gauge<T>
-        }
+        const exits = metricsCache.get(options.name)
+        if (exits) return exits
 
         const metric = new client.Gauge(options)
-        metrics.set(options.name, metric)
+        metricsCache.set(options.name, metric)
         registry.registerMetric(metric)
 
         return metric
       },
 
       histogram<T extends string>(options: HistogramConfiguration<T>): Histogram<T> {
-        const exits = metrics.get(options.name)
-        if (exits) {
-          return exits as Histogram<T>
-        }
+        const exits = metricsCache.get(options.name)
+        if (exits) return exits
 
         const metric = new client.Histogram(options)
-        metrics.set(options.name, metric)
+        metricsCache.set(options.name, metric)
         registry.registerMetric(metric)
 
         return metric
       },
 
       summary<T extends string>(options: SummaryConfiguration<T>): Summary<T> {
-        const exits = metrics.get(options.name)
-        if (exits) {
-          return exits as Summary<T>
-        }
+        const exits = metricsCache.get(options.name)
+        if (exits) return exits
 
         const metric = new client.Summary(options)
-        metrics.set(options.name, metric)
+        metricsCache.set(options.name, metric)
         registry.registerMetric(metric)
 
         return metric
       },
-    },
+    }
+
+    this.#app.use((req, res, next): any => {
+      const origin = req.headers.origin
+
+      // Allow requests only from localhost
+      if (origin && origin.includes('localhost')) {
+        res.setHeader('Access-Control-Allow-Origin', origin)
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        res.setHeader('Access-Control-Allow-Credentials', 'true') // if needed
+      }
+
+      // Handle preflight requests
+      if (req.method === 'OPTIONS') {
+        return res.sendStatus(204) // No Content
+      }
+
+      next()
+    })
+
+    this.#app.get('/stats', async (req, res) => {
+      const memory = await registry.getSingleMetric('process_resident_memory_bytes')?.get()
+
+      const data: Stats = {
+        sdk: {
+          version: npmVersion,
+        },
+        usage: {
+          memory: memory?.values?.[0]?.value || 0,
+        },
+        code: {
+          filename: process.argv[1],
+        },
+        pipes: Array.from(this.#pipes.keys()).map((id) => {
+          const pipeData = this.getPipe(id)
+          const lastBatch = pipeData?.lastBatch
+
+          return {
+            id,
+            dataset: lastBatch?.stream.dataset || null,
+            portal: {
+              url: lastBatch?.stream.query.url || '',
+              query: lastBatch?.stream.query.raw || {},
+            },
+            progress: {
+              from: lastBatch?.stream.state.initial || 0,
+              current: lastBatch?.stream.state.current.number || 0,
+              to: lastBatch?.stream.state.last || 0,
+              percent: lastBatch?.stream.progress?.state.percent || 0,
+              etaSeconds: lastBatch?.stream.progress?.state.etaSeconds || 0,
+            },
+            speed: {
+              blocksPerSecond: lastBatch?.stream.progress?.interval.processedBlocks.perSecond || 0,
+              bytesPerSecond: lastBatch?.stream.progress?.interval.bytesDownloaded.perSecond || 0,
+            },
+          }
+        }),
+      }
+
+      res.json({ payload: data })
+    })
+
+    this.#app.get('/profiler', async (req, res) => {
+      const from = parseDate(req.query['from']) || new Date(0)
+      const pipeData = this.getPipe(req.query['id'] as string | undefined)
+      const profilers = pipeData?.profilers || []
+
+      return res.json({
+        // FIXME: remove hardcoded field
+        payload: {
+          enabled: true,
+          profilers: profilers.filter((p) => p.collectedAt >= from).map((p) => p.profiler),
+        },
+      })
+    })
+
+    this.#app.get('/exemplars/transformation', async (req, res) => {
+      const pipeData = this.getPipe(req.query['id'] as string | undefined)
+      const lastBatch = pipeData?.lastBatch
+
+      return res.json({
+        payload: {
+          transformation: pipeData?.transformationExemplar,
+          batch: lastBatch
+            ? {
+                from: lastBatch.batch.blocksCount > 0
+                  ? lastBatch.stream.state.current.number - lastBatch.batch.blocksCount + 1
+                  : lastBatch.stream.state.current.number,
+                to: lastBatch.stream.state.current.number,
+                blocksCount: lastBatch.batch.blocksCount,
+                bytesSize: lastBatch.batch.bytesSize,
+              }
+            : undefined,
+        },
+      })
+    })
+
+    this.#app.get('/metrics', async (req, res) => {
+      res.set('Content-Type', registry.contentType)
+      res.end(await registry.metrics())
+    })
+
+    this.#app.get('/health', async (req, res) => {
+      res.send('ok')
+    })
+  }
+
+  async start() {
+    if (!this.#options.enabled) return
+    if (this.#started) return
+
+    this.#started = true
+    this.#server = this.#app.listen(this.#options.port, () => {
+      this.#logger?.info(`🦑 Metrics server started at http://localhost:${this.#options.port}`)
+    })
+  }
+
+  async stop() {
+    this.#started = false
+    client.register.clear()
+
+    return new Promise<void>((done) => {
+      if (!this.#server) return done()
+
+      this.#server.close((_) => done())
+    })
+  }
+
+  private getPipe(id?: string): PipeData | undefined {
+    if (id) return this.#pipes.get(id)
+    // Default to the first pipe for backward compatibility
+    const first = this.#pipes.keys().next()
+    return first.done ? undefined : this.#pipes.get(first.value)
+  }
+
+  registerPipe(id: string) {
+    let data = this.#pipes.get(id)
+    if (!data) {
+      data = { profilers: [] }
+      this.#pipes.set(id, data)
+    }
+    return data
+  }
+
+  batchProcessed(ctx: BatchContext) {
+    const span = ctx.profiler.start('metrics processing').addLabels('core')
+    const data = this.registerPipe(ctx.id)
+
+    data.lastBatch = ctx
+    data.transformationExemplar = transformExemplar(ctx.profiler)
+
+    const profiler = transformProfiler(ctx.profiler)
+
+    data.profilers.push({
+      profiler,
+      collectedAt: new Date(),
+    })
+    data.profilers = data.profilers.slice(-MAX_HISTORY)
+    span.end()
+
+    // Update total time for the root metrics processing
+    profiler.children[profiler.children.length - 1].totalTime = span.elapsed
+  }
+
+  get metrics() {
+    return this.#metrics
+  }
+
+  setLogger(newLogger: Logger, override = false) {
+    if (!override && this.#logger) return
+
+    this.#logger = newLogger
   }
 }
 
-/**
- *  @deprecated Use `metricsServer` instead.
- */
-export const createNodeMetricsServer = metricsServer
+const servers = new Map<number, ExpressMetricServer>()
+
+export function metricsServer(options: MetricsServerOptions = {}): MetricsServer {
+  const port = options.port || DEFAULT_PORT
+
+  const existed = servers.get(port)
+  if (existed) return existed
+
+  const server = new ExpressMetricServer(options)
+  servers.set(port, server)
+
+  return server
+}
