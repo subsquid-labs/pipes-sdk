@@ -8,6 +8,7 @@
     "test": "vitest"
   },
   "devDependencies": {
+    "@google-cloud/bigquery": "^8.1.1",
     "@types/node": "^22.18.13",
     "drizzle-kit": "^0.31.6",
     "pino": "^9.14.0",
