@@ -84,6 +84,9 @@ importers:
         specifier: ^2.45.1
         version: 2.46.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)
     devDependencies:
+      '@google-cloud/bigquery':
+        specifier: ^8.1.1
+        version: 8.1.1
       '@types/node':
         specifier: ^22.18.13
         version: 22.18.13
