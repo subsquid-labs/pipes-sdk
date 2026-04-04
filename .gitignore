@@ -36,3 +36,6 @@ local/
 **/*.sqlite
 **/*.sqlite-shm
 **/*.sqlite-wal
+
+# Other state files used by pipes
+bigquery-session.txt

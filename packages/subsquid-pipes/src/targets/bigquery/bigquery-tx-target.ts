@@ -23,7 +23,7 @@ export type BigQueryTransactionalTargetSettings = {
    * Path to the file where the active session ID is persisted.
    * On startup, if this file exists its session is terminated before any work
    * begins, cleaning up crashes that left a dangling BQ session.
-   * Defaults to `'.bigquery-session'` (relative to `process.cwd()`).
+   * Defaults to `'bigquery-session.txt'` (relative to `process.cwd()`).
    */
   sessionFile?: string
 }
@@ -69,7 +69,7 @@ export function bigqueryTransactionalTarget<T>({
 }) {
   const stateTable = settings.stateTable ?? 'pipe_sync'
   const id = settings.id ?? 'stream'
-  const sessionFile = settings.sessionFile ?? '.bigquery-session'
+  const sessionFile = settings.sessionFile ?? 'bigquery-session.txt'
 
   const store = new BigQueryStore(bigquery, dataset)
 
