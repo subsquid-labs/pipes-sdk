@@ -111,6 +111,11 @@
       "import": "./dist/targets/clickhouse/index.js",
       "require": "./dist/targets/clickhouse/index.cjs"
     },
+    "./targets/bigquery": {
+      "types": "./dist/targets/bigquery/index.d.ts",
+      "import": "./dist/targets/bigquery/index.js",
+      "require": "./dist/targets/bigquery/index.cjs"
+    },
     "./targets/drizzle/node-postgres": {
       "types": "./dist/targets/drizzle/node-postgres/index.d.ts",
       "import": "./dist/targets/drizzle/node-postgres/index.js",
@@ -165,6 +170,9 @@
       ],
       "targets/clickhouse": [
         "./dist/targets/clickhouse/index.d.ts"
+      ],
+      "targets/bigquery": [
+        "./dist/targets/bigquery/index.d.ts"
       ],
       "targets/drizzle/node-postgres": [
         "./dist/targets/drizzle/node-postgres/index.d.ts"
