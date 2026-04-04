@@ -114,7 +114,7 @@ export async function terminateDanglingSession(
       })
     } catch (e) {
       if (!isSessionGoneError(e)) throw e
-      console.error(`Caught error "${e.message}" when terminating dangling session - deemed safe to ignore`)
+      console.error(`Caught error "${(e as Error).message}" when terminating dangling session - deemed safe to ignore`)
       // Session already expired/terminated — safe to ignore
     }
   }
