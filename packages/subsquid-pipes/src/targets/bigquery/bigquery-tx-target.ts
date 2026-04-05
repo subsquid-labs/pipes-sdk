@@ -26,6 +26,20 @@ export type BigQueryTransactionalTargetSettings = {
    * Defaults to `'bigquery-session.txt'` (relative to `process.cwd()`).
    */
   sessionFile?: string
+
+  /**
+   * Maximum number of rows to send in a single BigQuery INSERT request.
+   * Use `session.queryPaged()` in `onData` to apply this limit automatically.
+   *
+   * BigQuery's HTTP request size limit is 10 MB.  When a batch contains many
+   * rows or wide rows, a single UNNEST-based INSERT can exceed this and return
+   * a 413 error.  Setting `maxRowsPerRequest` splits the insert into multiple
+   * sequential requests within the same transaction.
+   *
+   * A value of `500` is a conservative starting point for typical EVM event
+   * rows.  Defaults to `undefined` (no pagination — single request per batch).
+   */
+  maxRowsPerRequest?: number
 }
 
 /**
@@ -50,11 +64,13 @@ export function bigqueryTransactionalTarget<T>({
   settings?: BigQueryTransactionalTargetSettings
   /** Called once on startup. Use it to run DDL (CREATE TABLE IF NOT EXISTS). */
   onStart?: (ctx: { store: BigQueryStore; logger: Logger }) => unknown | Promise<unknown>
-  /** Called for every batch.  All writes must go through `session.query()`. */
+  /** Called for every batch.  All writes must go through `session.query()` or `session.queryPaged()`. */
   onData: (ctx: {
     session: BigQuerySession
     data: T
     ctx: Ctx
+    /** Value of `settings.maxRowsPerRequest`, passed through for convenience. */
+    maxRowsPerRequest: number | undefined
   }) => unknown | Promise<unknown>
   /**
    * Called on startup when a saved cursor is found — a safety net for any
@@ -70,6 +86,7 @@ export function bigqueryTransactionalTarget<T>({
   const stateTable = settings.stateTable ?? 'pipe_sync'
   const id = settings.id ?? 'stream'
   const sessionFile = settings.sessionFile ?? 'bigquery-session.txt'
+  const maxRowsPerRequest = settings.maxRowsPerRequest
 
   const store = new BigQueryStore(bigquery, dataset)
 
@@ -93,7 +110,7 @@ export function bigqueryTransactionalTarget<T>({
           session = await BigQuerySession.create(bigquery, sessionFile)
 
           await ctx.profiler.measure('db data handler', async (profiler) => {
-            await onData({ session: session!, data, ctx: { logger, profiler } })
+            await onData({ session: session!, data, ctx: { logger, profiler }, maxRowsPerRequest })
           })
 
           await ctx.profiler.measure('db state save', async () => {

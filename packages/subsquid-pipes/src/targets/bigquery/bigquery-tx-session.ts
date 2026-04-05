@@ -58,6 +58,27 @@ export class BigQuerySession {
   }
 
   /**
+   * Executes a query multiple times, splitting `params` into pages of at most
+   * `pageSize` rows each.  Use this when a single INSERT with a large UNNEST
+   * array would exceed BigQuery's 10 MB request size limit.
+   *
+   * `params` must be an object whose values are parallel arrays of the same
+   * length (one element per row).  `types` follows the same format as
+   * `query()`.  When `pageSize` is `undefined` the query is executed once with
+   * the full params (equivalent to `query()`).
+   */
+  async queryPaged(
+    sql: string,
+    params: Record<string, any[]>,
+    types: Record<string, any>,
+    pageSize: number | undefined,
+  ): Promise<void> {
+    for (const page of paginateParams(params, pageSize)) {
+      await this.query(sql, page, types)
+    }
+  }
+
+  /**
    * Commits the transaction, terminates the session, and deletes the session file.
    */
   async commit(): Promise<void> {
@@ -124,6 +145,49 @@ export async function terminateDanglingSession(
   } catch {
     // Already deleted concurrently — nothing to do
   }
+}
+
+/**
+ * Splits a set of parallel-array params into pages of at most `pageSize` rows.
+ *
+ * All arrays in `params` must have the same length.  Returns a single-element
+ * array containing the original `params` when `pageSize` is `undefined`.
+ * Returns an empty array when `params` contains no rows (length 0) or no keys.
+ *
+ * @throws if `pageSize` is not a positive integer, to prevent an infinite loop.
+ */
+export function paginateParams(
+  params: Record<string, any[]>,
+  pageSize: number | undefined,
+): Record<string, any[]>[] {
+  if (pageSize === undefined) {
+    return [params]
+  }
+  if (!Number.isInteger(pageSize) || pageSize <= 0) {
+    throw new Error(`pageSize must be a positive integer, got ${pageSize}`)
+  }
+
+  const entries = Object.entries(params)
+  if (entries.length === 0) return []
+
+  const length = entries[0][1].length
+  if (!entries.every(([, v]) => v.length === length)) {
+    throw new Error(
+      'All param arrays must have the same length for paginated queries. ' +
+        `Got lengths: ${entries.map(([k, v]) => `${k}=${v.length}`).join(', ')}`,
+    )
+  }
+  if (length === 0) return []
+
+  const pages: Record<string, any[]>[] = []
+  for (let pos = 0; pos < length; pos += pageSize) {
+    const page: Record<string, any[]> = {}
+    for (const [col, arr] of entries) {
+      page[col] = arr.slice(pos, pos + pageSize)
+    }
+    pages.push(page)
+  }
+  return pages
 }
 
 function isSessionGoneError(e: unknown): boolean {

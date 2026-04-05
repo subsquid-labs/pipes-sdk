@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { BigQuerySession, terminateDanglingSession } from './bigquery-tx-session.js'
+import { BigQuerySession, paginateParams, terminateDanglingSession } from './bigquery-tx-session.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -258,5 +258,112 @@ describe('terminateDanglingSession', () => {
 
     expect(bq.query).not.toHaveBeenCalled()
     expect(existsSync(sessionFile)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// paginateParams
+// ---------------------------------------------------------------------------
+
+describe('paginateParams', () => {
+  it('returns the original params in a single-element array when pageSize is undefined', () => {
+    const params = { a: [1, 2, 3], b: ['x', 'y', 'z'] }
+    expect(paginateParams(params, undefined)).toEqual([params])
+  })
+
+  it('splits into pages of the given size', () => {
+    const params = { a: [1, 2, 3, 4, 5], b: ['a', 'b', 'c', 'd', 'e'] }
+    expect(paginateParams(params, 2)).toEqual([
+      { a: [1, 2], b: ['a', 'b'] },
+      { a: [3, 4], b: ['c', 'd'] },
+      { a: [5],    b: ['e'] },
+    ])
+  })
+
+  it('returns a single page when rows <= pageSize', () => {
+    const params = { x: [10, 20] }
+    expect(paginateParams(params, 100)).toEqual([{ x: [10, 20] }])
+  })
+
+  it('returns empty array for zero-length arrays', () => {
+    expect(paginateParams({ a: [], b: [] }, 10)).toEqual([])
+  })
+
+  it('returns empty array for empty params object', () => {
+    expect(paginateParams({}, 10)).toEqual([])
+  })
+
+  it('throws when pageSize is zero', () => {
+    expect(() => paginateParams({ a: [1] }, 0)).toThrow('positive integer')
+  })
+
+  it('throws when pageSize is negative', () => {
+    expect(() => paginateParams({ a: [1] }, -5)).toThrow('positive integer')
+  })
+
+  it('throws when pageSize is not an integer', () => {
+    expect(() => paginateParams({ a: [1] }, 1.5)).toThrow('positive integer')
+  })
+
+  it('throws when arrays have different lengths', () => {
+    expect(() => paginateParams({ a: [1, 2], b: ['x'] }, 10)).toThrow('same length')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// BigQuerySession.queryPaged
+// ---------------------------------------------------------------------------
+
+describe('BigQuerySession.queryPaged', () => {
+  let sessionFile: string
+
+  beforeEach(() => { sessionFile = tempPath() })
+  afterEach(() => { try { unlinkSync(sessionFile) } catch { /* already gone */ } })
+
+  it('calls query once when pageSize is undefined', async () => {
+    const { bq } = makeMockBq({})
+    const session = await BigQuerySession.create(bq as any, sessionFile)
+
+    const params = { a: [1, 2, 3] }
+    await session.queryPaged('SELECT 1', params, { a: ['INT64'] }, undefined)
+
+    // Only the BEGIN TRANSACTION implicit call + our one query
+    const userCalls = bq.query.mock.calls.filter(
+      (args: any[]) => args[0].query === 'SELECT 1',
+    )
+    expect(userCalls).toHaveLength(1)
+    expect(userCalls[0][0].params).toEqual(params)
+  })
+
+  it('calls query once per page', async () => {
+    const { bq } = makeMockBq({})
+    const session = await BigQuerySession.create(bq as any, sessionFile)
+
+    await session.queryPaged(
+      'INSERT INTO t SELECT v FROM UNNEST(@v) AS v',
+      { v: [1, 2, 3, 4, 5] },
+      { v: ['INT64'] },
+      2,
+    )
+
+    const insertCalls = bq.query.mock.calls.filter(
+      (args: any[]) => args[0].query?.startsWith('INSERT INTO'),
+    )
+    expect(insertCalls).toHaveLength(3)
+    expect(insertCalls[0][0].params).toEqual({ v: [1, 2] })
+    expect(insertCalls[1][0].params).toEqual({ v: [3, 4] })
+    expect(insertCalls[2][0].params).toEqual({ v: [5] })
+  })
+
+  it('sends no queries for empty params arrays', async () => {
+    const { bq } = makeMockBq({})
+    const session = await BigQuerySession.create(bq as any, sessionFile)
+
+    await session.queryPaged('INSERT INTO t SELECT v FROM UNNEST(@v) AS v', { v: [] }, { v: ['INT64'] }, 100)
+
+    const insertCalls = bq.query.mock.calls.filter(
+      (args: any[]) => args[0].query?.startsWith('INSERT INTO'),
+    )
+    expect(insertCalls).toHaveLength(0)
   })
 })

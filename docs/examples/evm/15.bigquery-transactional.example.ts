@@ -71,6 +71,11 @@ async function main() {
     bigqueryTransactionalTarget({
       bigquery,
       dataset: DATASET,
+      settings: {
+        // Split large batches into pages of 5000 rows per INSERT.
+        // This setting should be based on BigQuery's 10 MB per-request limit.
+        maxRowsPerRequest: 5000,
+      },
 
       onStart: async ({ store }) => {
         // Create the destination table once on startup.
@@ -92,38 +97,39 @@ async function main() {
         `)
       },
 
-      onData: async ({ session, data, ctx }) => {
+      onData: async ({ session, data, ctx, maxRowsPerRequest }) => {
         if (data.transfers.length === 0) return
 
         ctx.logger.info(`Inserting ${data.transfers.length} ERC20 transfers`)
 
         // Collect columns as parallel arrays — BigQuery's UNNEST-based bulk insert
         // is much faster than building a single large VALUES clause.
-        const blockNumber: number[] = []
-        const logIndex: number[] = []
-        const transactionIndex: number[] = []
-        const txHash: string[] = []
-        const tokenAddress: string[] = []
-        const fromAddress: string[] = []
-        const toAddress: string[] = []
+        const block_number: number[] = []
+        const log_index: number[] = []
+        const transaction_index: number[] = []
+        const tx_hash: string[] = []
+        const token_address: string[] = []
+        const from_address: string[] = []
+        const to_address: string[] = []
         const value: string[] = []
-        const blockTimestamp: string[] = []
+        const block_timestamp: string[] = []
 
         for (const t of data.transfers) {
-          blockNumber.push(t.block.number)
-          logIndex.push(t.rawEvent.logIndex)
-          transactionIndex.push(t.rawEvent.transactionIndex)
-          txHash.push(t.rawEvent.transactionHash)
-          tokenAddress.push(t.rawEvent.address)
-          fromAddress.push(t.event.from)
-          toAddress.push(t.event.to)
+          block_number.push(t.block.number)
+          log_index.push(t.rawEvent.logIndex)
+          transaction_index.push(t.rawEvent.transactionIndex)
+          tx_hash.push(t.rawEvent.transactionHash)
+          token_address.push(t.rawEvent.address)
+          from_address.push(t.event.from)
+          to_address.push(t.event.to)
           value.push(t.event.value.toString())
-          blockTimestamp.push(t.timestamp.toISOString())
+          block_timestamp.push(t.timestamp.toISOString())
         }
 
-        // UNNEST aligns the parallel arrays by row offset.
-        // Each array param is declared with its BQ element type via `types`.
-        await session.query(
+        // queryPaged splits the arrays into pages of maxRowsPerRequest rows and
+        // sends one INSERT per page, all within the same transaction.
+        // This avoids BigQuery's 10 MB per-request limit on large batches.
+        await session.queryPaged(
           `
           INSERT INTO \`${DATASET}.erc20_transfers\`
             (block_number, log_index, transaction_index, tx_hash,
@@ -143,15 +149,15 @@ async function main() {
           JOIN UNNEST(@block_timestamp)    AS block_timestamp    WITH OFFSET USING (OFFSET)
           `,
           {
-            block_number: blockNumber,
-            log_index: logIndex,
-            transaction_index: transactionIndex,
-            tx_hash: txHash,
-            token_address: tokenAddress,
-            from_address: fromAddress,
-            to_address: toAddress,
+            block_number,
+            log_index,
+            transaction_index,
+            tx_hash,
+            token_address,
+            from_address,
+            to_address,
             value,
-            block_timestamp: blockTimestamp,
+            block_timestamp,
           },
           {
             block_number: ['INT64'],
@@ -164,6 +170,7 @@ async function main() {
             value: ['STRING'],
             block_timestamp: ['STRING'],
           },
+          maxRowsPerRequest,
         )
       },
 
