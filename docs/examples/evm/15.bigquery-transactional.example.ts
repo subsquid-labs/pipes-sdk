@@ -31,6 +31,8 @@
 import { BigQuery } from '@google-cloud/bigquery'
 import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 import { bigqueryTransactionalTarget } from '@subsquid/pipes/targets/bigquery'
+import { opentelemetryProfiler } from '@subsquid/pipes/opentelemetry'
+import { metricsServer } from '@subsquid/pipes/metrics/node'
 
 const PROJECT_ID = process.env['BIGQUERY_PROJECT_ID']
 const DATASET = process.env['BIGQUERY_DATASET'] ?? 'ethereum'
@@ -58,11 +60,13 @@ async function main() {
     id: 'ethereum-erc20-transfers-bq',
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     outputs: evmDecoder({
-      range: { from: 'latest' },
+      range: { from: 15_000_000 },
       events: {
         transfers: commonAbis.erc20.events.Transfer,
       },
     }),
+    profiler: opentelemetryProfiler(),
+    metrics: metricsServer(),
   }).pipeTo(
     bigqueryTransactionalTarget({
       bigquery,
