@@ -60,7 +60,7 @@ async function main() {
     id: 'ethereum-erc20-transfers-bq',
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     outputs: evmDecoder({
-      range: { from: 15_000_000 },
+      range: { from: 15_000_000, to: 15_050_400 }, // 1 week
       events: {
         transfers: commonAbis.erc20.events.Transfer,
       },
