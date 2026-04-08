@@ -22,13 +22,13 @@ export function getInstructionD1(instruction: RawInstruction) {
 
 export function getInstructionD2(instruction: RawInstruction) {
   if (instruction[D2_SYM]) return instruction[D2_SYM]
-  instruction[D2_SYM] = toHex(getInstructionData(instruction)).slice(0, 8)
+  instruction[D2_SYM] = toHex(getInstructionData(instruction)).slice(0, 6)
   return instruction[D2_SYM]
 }
 
 export function getInstructionD4(instruction: RawInstruction) {
   if (instruction[D4_SYM]) return instruction[D4_SYM]
-  instruction[D4_SYM] = toHex(getInstructionData(instruction)).slice(0, 14)
+  instruction[D4_SYM] = toHex(getInstructionData(instruction)).slice(0, 10)
   return instruction[D4_SYM]
 }
 
