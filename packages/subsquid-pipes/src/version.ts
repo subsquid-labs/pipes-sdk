@@ -1,2 +1,6 @@
-// @ts-ignore
-export { version as npmVersion } from '../package.json'
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
+const pkg = require('../package.json')
+
+export const npmVersion: string = pkg.version
