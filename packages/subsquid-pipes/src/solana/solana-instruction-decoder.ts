@@ -40,6 +40,8 @@ type SelectedFields = typeof decodedEventFields
 export type DecodedInstruction<D> = {
   instruction: D
   programId: string
+  block: { number: number; hash: string }
+  /** @deprecated Use `block.number` instead */
   blockNumber: number
   timestamp: Date
   transaction: Transaction<SelectedFields['transaction']>
@@ -210,6 +212,7 @@ export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEv
               const res = {
                 instruction: decoded,
                 rawInstruction: instruction,
+                block: { number: block.header.number, hash: block.header.hash },
                 blockNumber: block.header.number,
                 transaction,
                 tokenBalances: block.tokenBalances.filter((b) => b.transactionIndex === instruction.transactionIndex),

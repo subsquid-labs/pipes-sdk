@@ -1,6 +1,5 @@
 import { Logger, createDefaultLogger } from '~/core/logger.js'
 import { MetricsServer, noopMetricsServer } from '~/core/metrics-server.js'
-import { Worker } from 'node:worker_threads'
 import { MetricsServerOptions, metricsServer } from '~/metrics/node/index.js'
 
 type Config = {
@@ -37,7 +36,7 @@ type StreamConfig<T extends SerializableObject> = {
   /** Arbitrary params forwarded to the `handler` function. */
   params: T
   /** Async function that runs the pipe to completion. */
-  handler: string | ((ctx: PipeContext<T>) => Promise<unknown>)
+  handler: (ctx: PipeContext<T>) => Promise<unknown>
 }
 
 class Runner<T extends SerializableObject = any> {
@@ -60,8 +59,6 @@ class Runner<T extends SerializableObject = any> {
 
     await Promise.all(
       this.pipes.map(async (pipe) => {
-        const handler = pipe.handler
-
         const maxAttempts = this.config.retry || 5
         let attempts = 0
 
@@ -69,31 +66,12 @@ class Runner<T extends SerializableObject = any> {
 
         while (true) {
           try {
-            if (typeof handler === 'function') {
-              await handler({
-                id: pipe.id,
-                params: pipe.params,
-                metrics,
-                logger,
-              })
-            } else {
-              const worker = new Worker(new URL('worker.ts', import.meta.url).href, {
-                env: {
-                  ...process.env,
-                  PORT: '3333',
-                },
-              })
-
-              await new Promise<void>((resolve, reject) =>
-                worker.addEventListener('close', (event) => {
-                  if (event.code !== 0) {
-                    reject(new Error(`Worker stopped with exit code ${event.code}`))
-                  }
-
-                  resolve()
-                }),
-              )
-            }
+            await pipe.handler({
+              id: pipe.id,
+              params: pipe.params,
+              metrics,
+              logger,
+            })
 
             return
           } catch (e) {

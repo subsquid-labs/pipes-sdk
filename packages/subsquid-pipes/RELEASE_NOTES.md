@@ -519,6 +519,26 @@ evmDecoder({
 - `TransformerFn` removed from public exports
 - `Subset<T, U>` removed from `query-builder.ts` exports — now a recursive type in `types.ts`
 
+### 10. `DecodedInstruction` now includes `block` with hash
+
+Solana `DecodedInstruction` now exposes a `block` object with both `number` and `hash`. The top-level `blockNumber` field is deprecated.
+
+```ts
+// before
+event.blockNumber // number
+
+// after
+event.block.number // number
+event.block.hash   // string
+event.blockNumber  // still works, deprecated
+```
+
+### 11. Fixed D2/D4 discriminator matching in Solana instruction decoder
+
+`getInstructionD2` and `getInstructionD4` used incorrect hex slice offsets for `0x`-prefixed strings, extracting 3/6 bytes instead of 2/4. Programs using 2-byte or 4-byte discriminators (e.g. Solana System Program) silently matched zero instructions.
+
+---
+
 ## Deprecated aliases
 
 The following old names are still exported but marked `@deprecated` and will be removed in a future version:
