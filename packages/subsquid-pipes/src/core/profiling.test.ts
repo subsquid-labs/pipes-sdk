@@ -108,4 +108,56 @@ describe('Span', () => {
 
     expect(ended).toContain('child')
   })
+
+  it('exposes `started` on Profiler so consumers can compute relative offsets', async () => {
+    const root = Span.root('root', true)
+    // Give the root a moment before the first child starts
+    await new Promise((r) => setTimeout(r, 5))
+    const a = root.start('a')
+    a.end()
+    await new Promise((r) => setTimeout(r, 5))
+    const b = root.start('b')
+    b.end()
+
+    // `started` is on the Profiler interface and returns high-res timestamps.
+    expect(typeof root.started).toBe('number')
+    expect(typeof a.started).toBe('number')
+    expect(typeof b.started).toBe('number')
+
+    // Relative offsets grow monotonically as children start later.
+    expect(a.started - root.started).toBeGreaterThan(0)
+    expect(b.started - a.started).toBeGreaterThan(0)
+  })
+
+  it('transform() can produce per-span offsets relative to the root', async () => {
+    const root = Span.root('root', true)
+    await new Promise((r) => setTimeout(r, 5))
+    const a = root.start('a')
+    a.end()
+    await new Promise((r) => setTimeout(r, 5))
+    const b = root.start('b')
+    const bChild = b.start('b.child')
+    bChild.end()
+    b.end()
+
+    const rootStarted = root.started
+    type Out = { name: string; startOffset: number; children: Out[] }
+    const tree = root.transform<Out>((span, children) => ({
+      name: span.name,
+      startOffset: span.started - rootStarted,
+      children,
+    }))
+
+    expect(tree.name).toBe('root')
+    expect(tree.startOffset).toBe(0)
+    expect(tree.children).toHaveLength(2)
+    const [aOut, bOut] = tree.children
+    expect(aOut.name).toBe('a')
+    expect(bOut.name).toBe('b')
+    expect(aOut.startOffset).toBeGreaterThan(0)
+    expect(bOut.startOffset).toBeGreaterThan(aOut.startOffset)
+    // Nested child's offset is also measured from the root, not its direct parent
+    expect(bOut.children[0].name).toBe('b.child')
+    expect(bOut.children[0].startOffset).toBeGreaterThanOrEqual(bOut.startOffset)
+  })
 })

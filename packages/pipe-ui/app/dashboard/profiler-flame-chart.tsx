@@ -9,35 +9,69 @@ import { getHeatColor } from '~/dashboard/profiler'
 
 type FlatNode = ProfilerResult & {
   depth: number
-  startOffset: number
+  /**
+   * Stable hierarchical identity of this node (e.g. `batch/apply transformers/decoder`).
+   * Used as the React key so rows don't remount when timings shift.
+   * `calcStats` merges same-named siblings, so this path is unique within a tree.
+   */
+  path: string
+  /** X position on the canvas, in percent (0–100). */
+  xPercent: number
+  /** Width on the canvas, in percent (0–100). */
   widthPercent: number
 }
 
-function flattenByDepth(
-  nodes: ProfilerResult[],
-  depth: number,
-  parentStartOffset: number,
-  parentWidthPercent: number,
-): FlatNode[] {
+type ParentFrame = {
+  /** `ProfilerResult.startOffset` of the parent (ms, summed across samples). */
+  msOffset: number
+  /** `ProfilerResult.totalTime` of the parent (ms, summed across samples). */
+  totalTime: number
+  /** Canvas x position of the parent, in percent. */
+  xPercent: number
+  /** Canvas width of the parent, in percent. */
+  widthPercent: number
+  /** Hierarchical path of the parent (empty string at the root level). */
+  path: string
+}
+
+function flattenByDepth(nodes: ProfilerResult[], depth: number, parent: ParentFrame): FlatNode[] {
   const result: FlatNode[] = []
+
+  // Legacy fallback: if children don't carry real offsets, lay them out sequentially
+  // inside the parent using duration ratios (this preserves the pre-alpha.7 behavior).
+  const hasRealOffsets = nodes.every((n) => typeof n.startOffset === 'number')
   const siblingTotal = nodes.reduce((sum, n) => sum + n.totalTime, 0)
-  let offset = parentStartOffset
+  const denom = parent.totalTime > 0 ? parent.totalTime : siblingTotal > 0 ? siblingTotal : 1
+  let seqOffsetPercent = parent.xPercent
 
   for (const node of nodes) {
-    const widthPercent = siblingTotal > 0 ? (node.totalTime / siblingTotal) * parentWidthPercent : 0
+    let xPercent: number
+    let widthPercent: number
 
-    result.push({
-      ...node,
-      depth,
-      startOffset: offset,
-      widthPercent,
-    })
-
-    if (node.children.length > 0) {
-      result.push(...flattenByDepth(node.children, depth + 1, offset, widthPercent))
+    if (hasRealOffsets) {
+      const relStart = (node.startOffset as number) - parent.msOffset
+      widthPercent = (node.totalTime / denom) * parent.widthPercent
+      xPercent = parent.xPercent + (relStart / denom) * parent.widthPercent
+    } else {
+      widthPercent = siblingTotal > 0 ? (node.totalTime / siblingTotal) * parent.widthPercent : 0
+      xPercent = seqOffsetPercent
+      seqOffsetPercent += widthPercent
     }
 
-    offset += widthPercent
+    const path = parent.path ? `${parent.path}/${node.name}` : node.name
+    result.push({ ...node, depth, path, xPercent, widthPercent })
+
+    if (node.children.length > 0) {
+      result.push(
+        ...flattenByDepth(node.children, depth + 1, {
+          msOffset: node.startOffset ?? 0,
+          totalTime: node.totalTime,
+          xPercent,
+          widthPercent,
+          path,
+        }),
+      )
+    }
   }
 
   return result
@@ -158,7 +192,33 @@ export function FlameChart({
     return current
   }, [profilers, zoomPath])
 
-  const flat = useMemo(() => flattenByDepth(zoomedRoot, 0, 0, 100), [zoomedRoot])
+  const flat = useMemo(() => {
+    // Top-level roots have no spatial relationship (they're independent trees —
+    // typically just one `batch` aggregate). Pack them sequentially across the
+    // canvas, proportional to their totalTime. Inside each root, children use
+    // their real startOffset (ms relative to their root).
+    const result: FlatNode[] = []
+    const rootsTotal = zoomedRoot.reduce((sum, n) => sum + n.totalTime, 0)
+    let xPercent = 0
+    for (const root of zoomedRoot) {
+      const widthPercent = rootsTotal > 0 ? (root.totalTime / rootsTotal) * 100 : 0
+      const path = root.name
+      result.push({ ...root, depth: 0, path, xPercent, widthPercent })
+      if (root.children.length > 0) {
+        result.push(
+          ...flattenByDepth(root.children, 1, {
+            msOffset: root.startOffset ?? 0,
+            totalTime: root.totalTime,
+            xPercent,
+            widthPercent,
+            path,
+          }),
+        )
+      }
+      xPercent += widthPercent
+    }
+    return result
+  }, [zoomedRoot])
   const depthMap = useMemo(() => groupByDepth(flat), [flat])
   const maxDepth = useMemo(() => Math.max(...Array.from(depthMap.keys()), 0), [depthMap])
 
@@ -201,7 +261,8 @@ export function FlameChart({
             root
           </button>
           {zoomPath.map((name, i) => (
-            <span key={name} className="flex items-center gap-1">
+            // eslint-disable-next-line react/no-array-index-key -- breadcrumb segments can repeat by name
+            <span key={`${i}-${name}`} className="flex items-center gap-1">
               <ChevronRight className="w-3 h-3 text-white/30" />
               <button
                 type="button"
@@ -227,10 +288,10 @@ export function FlameChart({
 
                 return (
                   <div
-                    key={`${node.name}-${node.startOffset}`}
+                    key={node.path}
                     className="flame-cell"
                     style={{
-                      left: `${node.startOffset}%`,
+                      left: `${node.xPercent}%`,
                       width: `${width}%`,
                       minWidth: width > 0 ? 4 : 0,
                       backgroundColor: color,

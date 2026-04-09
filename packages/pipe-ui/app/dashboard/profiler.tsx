@@ -1,13 +1,14 @@
 'use client'
 
-import { Flame, ListTree, Settings } from 'lucide-react'
 import { type ComponentType, useEffect, useRef, useState } from 'react'
+
+import { Flame, ListTree, Settings } from 'lucide-react'
 
 import { Switch } from '~/components/ui/switch'
 import { PanelLoading } from '~/dashboard/panel-loading'
 import { FlameChart } from '~/dashboard/profiler-flame-chart'
-import { type ApiProfilerResult, useProfilers } from '~/hooks/use-metrics'
 import { useLocalStorage } from '~/hooks/use-local-storage'
+import { type ApiProfilerResult, useProfilers } from '~/hooks/use-metrics'
 import { useServerIndex } from '~/hooks/use-server-context'
 import { cn } from '~/lib/utils'
 
@@ -17,6 +18,12 @@ type TimeMode = 'total' | 'avg'
 export type ProfilerResult = {
   name: string
   totalTime: number
+  /**
+   * Summed start offset (ms) across aggregated batches, relative to each batch's root.
+   * Stays in lock-step with `totalTime`, so ratios (`startOffset / totalTime`) survive aggregation.
+   * `undefined` when the SDK did not provide offsets (legacy fallback).
+   */
+  startOffset?: number
   selfTime: number
   percent: number
   labels?: string[]
@@ -62,6 +69,9 @@ function calcStats({
       item = {
         name: profiler.name,
         totalTime: 0,
+        // Leave `startOffset` undefined initially; only seed to 0 when the first
+        // sample carries an offset, so legacy SDKs keep producing `undefined`.
+        startOffset: typeof profiler.startOffset === 'number' ? 0 : undefined,
         selfTime: 0,
         percent: 0,
         labels: profiler.labels,
@@ -72,6 +82,9 @@ function calcStats({
 
     item.totalTime += Number(profiler.totalTime)
     item.selfTime += Number(selfTime)
+    if (typeof profiler.startOffset === 'number') {
+      item.startOffset = (item.startOffset ?? 0) + Number(profiler.startOffset)
+    }
 
     const timeForPercent = percentage.excludeChildren ? item.selfTime : item.totalTime
     item.percent = (timeForPercent / percentage.totalSpentTime) * 100
@@ -178,9 +191,7 @@ function Segmented<T extends string>({
             aria-pressed={active}
             className={cn(
               'flex items-center gap-1 px-2 h-6 text-xxs rounded-sm transition-colors cursor-pointer',
-              active
-                ? 'bg-white/10 text-white shadow-sm'
-                : 'text-white/50 hover:text-white/80 hover:bg-white/[0.04]',
+              active ? 'bg-white/10 text-white shadow-sm' : 'text-white/50 hover:text-white/80 hover:bg-white/[0.04]',
             )}
           >
             {Icon && <Icon className="size-3" />}

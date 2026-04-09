@@ -24,6 +24,8 @@ export interface SpanHooks {
 
 export interface Profiler {
   name: string
+  /** High-resolution timestamp (from `performance.now()`) at which the span started. */
+  started: number
   elapsed: number
   hidden: boolean
   labels: string[]
@@ -173,6 +175,7 @@ export class Span implements Profiler {
 
 export class DummyProfiler implements Profiler {
   name: string = ''
+  started: number = 0
   elapsed: number = 0
   hidden: boolean = false
   labels: string[] = []
