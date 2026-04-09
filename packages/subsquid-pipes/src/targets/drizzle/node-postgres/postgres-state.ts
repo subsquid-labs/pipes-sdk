@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm'
 
-import { BatchContext, BlockCursor, Logger, RollbackRecord, resolveForkCursor } from '~/core/index.js'
+import { BatchContext, BlockCursor, Logger, Profiler, RollbackRecord, resolveForkCursor } from '~/core/index.js'
 import { doWithRetry } from '~/internal/function.js'
 import { parseNumber } from '~/internal/number.js'
 import { Transaction } from '~/targets/drizzle/node-postgres/drizzle-target.js'
@@ -109,25 +109,38 @@ export class PostgresState {
     )
   }
 
-  async saveCursor(tx: Transaction, { stream: { state: { current, rollbackChain }, head }, logger }: BatchContext) {
+  async saveCursor(
+    tx: Transaction,
+    {
+      stream: {
+        state: { current, rollbackChain },
+        head,
+      },
+      logger,
+      profiler,
+    }: BatchContext,
+    parentSpan: Profiler = profiler,
+  ) {
     const finalizedBlock = head.finalized?.number
 
     logger.debug(`Saving cursor at block ${current.number} for ${this.options.id} row...`)
-    await tx.execute(
-      sql`
-        INSERT INTO ${sql.raw(this.#sync.fqnName)} (
-           id, current_number, current_hash, "current_timestamp", finalized, rollback_chain
-        ) 
-        VALUES (
-            ${this.options.id}, 
-            ${current.number}, 
-            ${current.hash}, 
-            ${current.timestamp ? new Date(current.timestamp * 1000) : sql.raw('NULL')}, 
-            ${JSON.stringify(head.finalized || {})}, 
-            ${JSON.stringify(rollbackChain || [])}
-        )
-      `,
-    )
+    await parentSpan.measure({ name: 'insert cursor', labels: 'db' }, async () => {
+      await tx.execute(
+        sql`
+          INSERT INTO ${sql.raw(this.#sync.fqnName)} (
+             id, current_number, current_hash, "current_timestamp", finalized, rollback_chain
+          )
+          VALUES (
+              ${this.options.id},
+              ${current.number},
+              ${current.hash},
+              ${current.timestamp ? new Date(current.timestamp * 1000) : sql.raw('NULL')},
+              ${JSON.stringify(head.finalized || {})},
+              ${JSON.stringify(rollbackChain || [])}
+          )
+        `,
+      )
+    })
     this.#saves++
     if (this.#saves === 1 || this.#saves % 25 === 0) {
       // Clean up old unfinalized blocks beyond retention
@@ -138,10 +151,12 @@ export class PostgresState {
 
       logger.info(`Cleaning up old offsets less than ${safeBlockNumber} block for ${this.options.id} row...`)
 
-      const res = await tx.execute<DeleteResult>(sql`
-        DELETE FROM ${sql.raw(this.#sync.fqnName)}    
-        WHERE "id" = ${this.options.id} AND "current_number" <= ${safeBlockNumber}
-      `)
+      const res = await parentSpan.measure({ name: 'cleanup cursors', labels: 'db' }, async () => {
+        return tx.execute<DeleteResult>(sql`
+          DELETE FROM ${sql.raw(this.#sync.fqnName)}
+          WHERE "id" = ${this.options.id} AND "current_number" <= ${safeBlockNumber}
+        `)
+      })
 
       logger.debug(`Removed unused offsets from ${res.rowCount} rows from ${this.options.table}`)
 

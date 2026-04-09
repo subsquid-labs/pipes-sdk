@@ -1,6 +1,7 @@
 import type { ClickHouseClient } from '@clickhouse/client'
 
-import { BlockCursor, Ctx, createTarget, Logger } from '~/core/index.js'
+import { BlockCursor, Ctx, Logger, createTarget } from '~/core/index.js'
+
 import { ClickhouseState } from './clickhouse-state.js'
 import { ClickhouseStore } from './clickhouse-store.js'
 
@@ -73,18 +74,24 @@ export function clickhouseTarget<T>({
       }
 
       for await (const { data, ctx } of read(cursor)) {
-        await ctx.profiler.measure('db data handler', async (profiler) => {
-          await onData({
-            store,
-            data: data,
-            ctx: {
-              logger,
-              profiler,
-            },
-          })
-        })
+        const target = ctx.profiler.start({ name: 'clickhouse', labels: 'db' })
 
-        await ctx.profiler.measure('db state save', () => state.saveCursor(ctx))
+        try {
+          await target.measure('data handler', async (profiler) => {
+            await onData({
+              store,
+              data: data,
+              ctx: {
+                logger,
+                profiler,
+              },
+            })
+          })
+
+          await state.saveCursor(ctx, target)
+        } finally {
+          target.end()
+        }
       }
 
       await store.close()

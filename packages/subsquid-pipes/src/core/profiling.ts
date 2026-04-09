@@ -1,9 +1,14 @@
-// TODO we need to implement labels
-// When we expose that span to UI, we need to filter them out by label
-
 import { arrayify } from '../internal/array.js'
 
-export type ProfilerOptions = { name: string; hidden?: boolean }
+export type ProfilerOptions = {
+  name: string
+  hidden?: boolean
+  /**
+   * Labels attached to the span. UI/exporters can use these to filter
+   * (e.g. hide `core` SDK spans, group `db` operations).
+   */
+  labels?: string | string[]
+}
 
 /**
  * Lifecycle hooks for a single profiler span.
@@ -88,6 +93,7 @@ export class Span implements Profiler {
         hooks: this.#hooks,
         hidden: true,
       })
+      if (options.labels) child.addLabels(options.labels)
       this.children.push(child)
 
       return child
@@ -97,6 +103,7 @@ export class Span implements Profiler {
       name: options.name,
       hooks: this.#hooks?.onStart(options.name) ?? null,
     })
+    if (options.labels) child.addLabels(options.labels)
     this.children.push(child)
 
     return child
@@ -109,18 +116,20 @@ export class Span implements Profiler {
 
   async measure<T = any>(name: string | ProfilerOptions, fn: (span: Profiler) => Promise<T>): Promise<T> {
     const span = this.start(typeof name === 'string' ? { name } : name)
-    const res = await fn(span)
-    span.end()
-
-    return res
+    try {
+      return await fn(span)
+    } finally {
+      span.end()
+    }
   }
 
   measureSync<T = any>(name: string | ProfilerOptions, fn: (span: Profiler) => T): T {
     const span = this.start(typeof name === 'string' ? { name } : name)
-    const res = fn(span)
-    span.end()
-
-    return res
+    try {
+      return fn(span)
+    } finally {
+      span.end()
+    }
   }
 
   /**

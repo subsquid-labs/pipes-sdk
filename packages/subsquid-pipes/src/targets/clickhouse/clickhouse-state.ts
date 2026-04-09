@@ -1,4 +1,4 @@
-import { BatchContext, BlockCursor, RollbackRecord, resolveForkCursor } from '~/core/index.js'
+import { BatchContext, BlockCursor, Profiler, RollbackRecord, resolveForkCursor } from '~/core/index.js'
 
 import { ClickhouseStore } from './clickhouse-store.js'
 
@@ -83,27 +83,33 @@ export class ClickhouseState {
     return JSON.parse(cursor)
   }
 
-  async saveCursor({
-    stream: {
-      state: { current, rollbackChain },
-      head,
-    },
-  }: BatchContext) {
+  async saveCursor(
+    {
+      stream: {
+        state: { current, rollbackChain },
+        head,
+      },
+      profiler,
+    }: BatchContext,
+    parentSpan: Profiler = profiler,
+  ) {
     const timestamp = Date.now()
 
-    await this.store.insert({
-      table: this.#qualifiedName,
-      values: [
-        {
-          id: this.options.id,
-          current: this.encodeCursor(current),
-          finalized: head.finalized ? this.encodeCursor(head.finalized) : '',
-          rollback_chain: JSON.stringify(rollbackChain),
-          sign: 1,
-          timestamp,
-        },
-      ],
-      format: 'JSONEachRow',
+    await parentSpan.measure({ name: 'insert cursor', labels: 'db' }, async () => {
+      await this.store.insert({
+        table: this.#qualifiedName,
+        values: [
+          {
+            id: this.options.id,
+            current: this.encodeCursor(current),
+            finalized: head.finalized ? this.encodeCursor(head.finalized) : '',
+            rollback_chain: JSON.stringify(rollbackChain),
+            sign: 1,
+            timestamp,
+          },
+        ],
+        format: 'JSONEachRow',
+      })
     })
 
     this.#saves++
@@ -115,18 +121,20 @@ export class ClickhouseState {
     const cleanupInterval = this.options.maxRows < 25 ? 1 : 25
 
     if (this.#saves === 1 || this.#saves % cleanupInterval === 0) {
-      // Filter by id so cleanup of one stream cannot evict another stream's rows
-      // when multiple streams share the same offset table.
-      await this.store.removeAllRowsByQuery({
-        table: this.#qualifiedName,
-        query: `
-          SELECT *
-          FROM ${this.#qualifiedName} FINAL
-          WHERE id = {id:String}
-          ORDER BY "timestamp" DESC
-          OFFSET ${this.options.maxRows}
-        `,
-        params: { id: this.options.id },
+      await parentSpan.measure({ name: 'cleanup cursors', labels: 'db' }, async () => {
+        // Filter by id so cleanup of one stream cannot evict another stream's rows
+        // when multiple streams share the same offset table.
+        await this.store.removeAllRowsByQuery({
+          table: this.#qualifiedName,
+          query: `
+            SELECT *
+            FROM ${this.#qualifiedName} FINAL
+            WHERE id = {id:String}
+            ORDER BY "timestamp" DESC
+            OFFSET ${this.options.maxRows}
+          `,
+          params: { id: this.options.id },
+        })
       })
     }
   }
