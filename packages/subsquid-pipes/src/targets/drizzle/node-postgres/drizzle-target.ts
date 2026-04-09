@@ -102,55 +102,60 @@ export function drizzleTarget<T>({
       logger.debug(`PG triggers configured`)
 
       for await (const { data, ctx } of read(cursor)) {
-        await doWithRetry(
-          () =>
-            db.transaction(async (tx) => {
-              await state.acquireLock(tx)
-              const snapshotEnabled =
-                ctx.stream.head.finalized?.number && ctx.stream.state.current.number >= ctx.stream.head.finalized.number
-                  ? 'true'
-                  : 'false'
+        const target = ctx.profiler.start({ name: 'postgres', labels: 'db' })
 
-              /*
-               * Enable snapshotting for this transaction
-               *
-               * We set the block number to the current batch's block number
-               * so that any changes made during this transaction can be
-               * rolled back to this point if needed.
-               */
-              await tx.execute(`
-                SET LOCAL sqd.snapshot_enabled = ${snapshotEnabled};
-                SET LOCAL sqd.snapshot_block_number = ${ctx.stream.state.current.number};
-              `)
+        try {
+          await doWithRetry(
+            () =>
+              db.transaction(async (tx) => {
+                await state.acquireLock(tx)
+                const snapshotEnabled =
+                  ctx.stream.head.finalized?.number &&
+                  ctx.stream.state.current.number >= ctx.stream.head.finalized.number
+                    ? 'true'
+                    : 'false'
 
-              await ctx.profiler.measure('db data handler', async (profiler) => {
-                await onData({
-                  tx: tracker.wrapTransaction(tx),
-                  data,
-                  ctx: {
-                    logger,
-                    profiler,
-                  },
+                /*
+                 * Enable snapshotting for this transaction
+                 *
+                 * We set the block number to the current batch's block number
+                 * so that any changes made during this transaction can be
+                 * rolled back to this point if needed.
+                 */
+                await tx.execute(`
+                  SET LOCAL sqd.snapshot_enabled = ${snapshotEnabled};
+                  SET LOCAL sqd.snapshot_block_number = ${ctx.stream.state.current.number};
+                `)
+
+                await target.measure('data handler', async (profiler) => {
+                  await onData({
+                    tx: tracker.wrapTransaction(tx),
+                    data,
+                    ctx: {
+                      logger,
+                      profiler,
+                    },
+                  })
                 })
-              })
 
-              await ctx.profiler.measure('db state save', async (span) => {
-                const { safeBlockNumber } = await state.saveCursor(tx, ctx)
-                if (safeBlockNumber <= 0) return
+                const { safeBlockNumber } = await state.saveCursor(tx, ctx, target)
+                if (safeBlockNumber > 0) {
+                  logger.debug(`Safe block number updated to ${safeBlockNumber}`)
 
-                logger.debug(`Safe block number updated to ${safeBlockNumber}`)
-
-                await span.measure('cleanup snapshots', () => {
-                  return tracker.cleanup(tx, safeBlockNumber)
-                })
-              })
-            }, config),
-          {
-            title: 'postgres batch insert transaction',
-            retries: 3,
-            delayMs: 100,
-          },
-        )
+                  await target.measure({ name: 'cleanup snapshots', labels: 'db' }, () => {
+                    return tracker.cleanup(tx, safeBlockNumber)
+                  })
+                }
+              }, config),
+            {
+              title: 'postgres batch insert transaction',
+              retries: 3,
+              delayMs: 100,
+            },
+          )
+        } finally {
+          target.end()
+        }
       }
     },
     fork: async (previousBlocks) => {

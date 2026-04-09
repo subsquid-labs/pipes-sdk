@@ -9,23 +9,14 @@ import {
 } from '~/portal-client/index.js'
 
 import { last } from '../internal/array.js'
-import {
-  ForkCursorMissingError,
-  ForkNoPreviousBlocksError,
-  TargetForkNotSupportedError,
-} from './errors.js'
+import { ForkCursorMissingError, ForkNoPreviousBlocksError, TargetForkNotSupportedError } from './errors.js'
 import { LogLevel, Logger, createDefaultLogger, formatWarning } from './logger.js'
 import { Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
 import { Profiler, Span, SpanHooks } from './profiling.js'
 import { ProgressEvent, StartEvent } from './progress-tracker.js'
 import { QueryBuilder, hashQuery } from './query-builder.js'
 import { Target } from './target.js'
-import {
-  QueryAwareTransformer,
-  Transformer,
-  TransformerArgs,
-  TransformerOptions,
-} from './transformer.js'
+import { QueryAwareTransformer, Transformer, TransformerArgs, TransformerOptions } from './transformer.js'
 import { BlockCursor, Ctx } from './types.js'
 
 const NOT_REAL_TIME_WARNING = (name: string) => {
@@ -325,7 +316,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   }
 
   private async forkTransformers(profiler: Profiler, cursor: BlockCursor) {
-    const span = profiler.start('transformers_rollback')
+    const span = profiler.start({ name: 'transformers_rollback', labels: 'core' })
     const ctx = this.context(span)
     await Promise.all(this.#transformers.map((t) => t.fork(cursor, ctx)))
     span.end()
@@ -352,9 +343,9 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     this.#logger.debug(`invoking <start> hook...`)
 
-    const profiler = Span.root('start', this.#options.profiler)
+    const profiler = Span.root('start', this.#options.profiler).addLabels('core')
 
-    const span = profiler.start('transformers')
+    const span = profiler.start({ name: 'transformers', labels: 'core' })
     const ctx = this.context(span, {
       id: this.#id,
       metrics: this.#metricServer.metrics,
@@ -376,9 +367,9 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   async stop() {
     this.#started = false
 
-    const profiler = Span.root('stop', this.#options.profiler)
+    const profiler = Span.root('stop', this.#options.profiler).addLabels('core')
 
-    const span = profiler.start('transformers')
+    const span = profiler.start({ name: 'transformers', labels: 'core' })
     const ctx = this.context(span)
     await Promise.all(this.#transformers.map((t) => t.stop(ctx)))
     span.end()
@@ -414,9 +405,9 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
               throw new TargetForkNotSupportedError()
             }
 
-            const forkProfiler = Span.root('fork', self.#options.profiler)
+            const forkProfiler = Span.root('fork', self.#options.profiler).addLabels('core')
 
-            const span = forkProfiler.start('target_rollback')
+            const span = forkProfiler.start({ name: 'target_rollback', labels: 'core' })
             const forkedCursor = await target.fork(e.previousBlocks)
             span.end()
 
