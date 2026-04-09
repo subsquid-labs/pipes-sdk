@@ -1,15 +1,12 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 import NumberFlow from '@number-flow/react'
 import { Terminal } from 'lucide-react'
 // @ts-ignore
 import { Sparklines, SparklinesLine } from 'react-sparklines'
 
-import { PipeStatus, useStats } from '~/hooks/use-metrics'
-import { useServerIndex } from '~/hooks/use-server-context'
-import { useUrlParam } from '~/hooks/use-url-param'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { humanBytes } from '~/dashboard/formatters'
@@ -17,19 +14,31 @@ import { PipelineDisconnected } from '~/dashboard/pipeline-disconnected'
 import { Profiler } from '~/dashboard/profiler'
 import { QueryExemplar } from '~/dashboard/query-exemplar'
 import { TransformationExemplar } from '~/dashboard/transformation-exemplar'
+import { PipeStatus, useStats } from '~/hooks/use-metrics'
+import { useServerIndex } from '~/hooks/use-server-context'
 
 const sparklineStyle = { fill: '#d0a9e2' }
 const sparklineColor = 'rgb(170, 140, 235)'
 
 const VALID_TABS = ['profiler', 'data-flow', 'query']
 
+function getInitialTab(): string {
+  if (typeof window === 'undefined') return 'profiler'
+  const param = new URLSearchParams(window.location.search).get('tab')
+  return param && VALID_TABS.includes(param) ? param : 'profiler'
+}
+
 export function Pipeline({ pipeId }: { pipeId: string }) {
   const { serverIndex } = useServerIndex()
   const { data, isError } = useStats(serverIndex)
 
-  const [tab, setTab] = useUrlParam('tab', 'profiler', {
-    validate: (v) => VALID_TABS.includes(v),
-  })
+  const [tab, setTabState] = useState(getInitialTab)
+  const setTab = useCallback((value: string) => {
+    setTabState(value)
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', value)
+    window.history.replaceState({}, '', url.toString())
+  }, [])
 
   const pipe = data?.pipes.find((pipe) => pipe.id === pipeId)
 

@@ -24,7 +24,8 @@ function flattenByDepth(
   let offset = parentStartOffset
 
   for (const node of nodes) {
-    const widthPercent = siblingTotal > 0 ? (node.totalTime / siblingTotal) * parentWidthPercent : 0
+    const widthPercent =
+      siblingTotal > 0 ? (node.totalTime / siblingTotal) * parentWidthPercent : 0
 
     result.push({
       ...node,
@@ -62,15 +63,10 @@ type TooltipData = {
   node: FlatNode
 }
 
-type TimeMode = 'total' | 'avg'
-
-function Tooltip({ data, samples, timeMode }: { data: TooltipData; samples: number; timeMode: TimeMode }) {
+function Tooltip({ data }: { data: TooltipData }) {
   const { node, x, y } = data
-  const divisor = samples > 0 ? samples : 1
-  const totalTime = timeMode === 'avg' ? node.totalTime / divisor : node.totalTime
-  const selfTime = timeMode === 'avg' ? node.selfTime / divisor : node.selfTime
-  const selfPct = node.totalTime > 0 ? (node.selfTime / node.totalTime) * 100 : 0
-  const aggregateLabel = timeMode === 'avg' ? 'avg over' : 'Σ over'
+  const selfTime = node.selfTime
+  const selfPct = node.totalTime > 0 ? (selfTime / node.totalTime) * 100 : 0
 
   return (
     <div
@@ -80,30 +76,32 @@ function Tooltip({ data, samples, timeMode }: { data: TooltipData; samples: numb
         top: y - 10,
       }}
     >
-      <div className="bg-gray-900 border border-white/10 rounded-md p-3 shadow-xl min-w-[220px]">
-        <div className="font-normal text-xs text-white mb-2">{node.name}</div>
+      <div className="bg-gray-900 border border-white/10 rounded-md p-3 shadow-xl min-w-[200px]">
+        <div className="font-normal text-xs text-white mb-2 flex items-center gap-1.5">
+          <span>{node.name}</span>
+          {node.labels?.map((label) => (
+            <span
+              key={label}
+              className="text-xxs px-1 py-0.5 rounded bg-white/[0.06] border border-white/[0.1] text-white/40"
+            >
+              {label}
+            </span>
+          ))}
+        </div>
         <div className="space-y-1 text-xxs">
           <div className="flex justify-between gap-4 text-white/60">
             <span>Total time</span>
-            <span className="text-white/90">
-              {timeMode === 'avg' ? 'avg. ' : ''}
-              {totalTime.toFixed(2)}ms
-            </span>
+            <span className="text-white/90">{node.totalTime.toFixed(2)}ms</span>
           </div>
           <div className="flex justify-between gap-4 text-white/60">
             <span>Self time</span>
             <span className="text-white/90">
-              {timeMode === 'avg' ? 'avg. ' : ''}
               {selfTime.toFixed(2)}ms ({selfPct.toFixed(1)}%)
             </span>
           </div>
           <div className="flex justify-between gap-4 text-white/60">
-            <span>% of total</span>
+            <span>% of batch</span>
             <span className="text-white/90">{node.percent.toFixed(2)}%</span>
-          </div>
-          <div className="flex justify-between gap-4 text-white/40 pt-1 border-t border-white/5">
-            <span>{aggregateLabel}</span>
-            <span>{samples} batches</span>
           </div>
           {node.children.length > 0 && (
             <div className="flex justify-between gap-4 text-white/60">
@@ -126,12 +124,9 @@ function Tooltip({ data, samples, timeMode }: { data: TooltipData; samples: numb
 
 export function FlameChart({
   profilers,
-  samples,
-  timeMode,
 }: {
   profilers: ProfilerResult[]
-  samples: number
-  timeMode: TimeMode
+  useSelfTime?: boolean
 }) {
   const [tooltip, setTooltip] = useState<TooltipData | null>(null)
   const [zoomPath, setZoomPath] = useState<string[]>([])
@@ -233,11 +228,7 @@ export function FlameChart({
                     {width > 8 && <span className="flame-name">{node.name}</span>}
                     {width > 15 && (
                       <span className="flame-time">
-                        {timeMode === 'avg' ? 'avg. ' : ''}
-                        {(timeMode === 'avg' ? node.totalTime / (samples > 0 ? samples : 1) : node.totalTime).toFixed(
-                          1,
-                        )}
-                        ms {node.percent.toFixed(1)}%
+                        {node.totalTime.toFixed(1)}ms {node.percent.toFixed(1)}%
                       </span>
                     )}
                   </div>
@@ -268,7 +259,7 @@ export function FlameChart({
         </span>
       </div>
 
-      {tooltip && <Tooltip data={tooltip} samples={samples} timeMode={timeMode} />}
+      {tooltip && <Tooltip data={tooltip} />}
     </div>
   )
 }
