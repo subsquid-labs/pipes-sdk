@@ -1,7 +1,7 @@
 {
   "name": "@subsquid/pipes",
   "type": "module",
-  "version": "1.0.0-alpha.5",
+  "version": "1.0.0-alpha.6",
   "sideEffects": false,
   "author": "Subsquid Team",
   "files": [
@@ -17,7 +17,8 @@
     "build": "tsx scripts/build.js",
     "lint": "biome check . --write",
     "test": "vitest run",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
     "@subsquid/borsh": "0.3.0",

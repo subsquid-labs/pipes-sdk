@@ -2,7 +2,7 @@ import { createClient } from '@clickhouse/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { evmPortalStream } from '~/evm/index.js'
-import { MockPortal, blockDecoder, createMockPortal } from '~/testing/index.js'
+import { MockPortal, MockResponse, blockDecoder, createMockPortal } from '~/testing/index.js'
 
 import { ClickhouseStore } from './clickhouse-store.js'
 import { clickhouseTarget } from './clickouse-target.js'
@@ -211,10 +211,13 @@ describe('Clickhouse state', () => {
       // that wraps our test client.
       const removeSpy = vi.spyOn(ClickhouseStore.prototype, 'removeAllRowsByQuery')
 
-      const responses = Array.from({ length: 26 }, (_, i) => ({
-        statusCode: 200,
-        data: [{ header: { number: i + 1, hash: `0x${i + 1}`, timestamp: (i + 1) * 1000 } }],
-      }))
+      const responses = Array.from(
+        { length: 26 },
+        (_, i): MockResponse => ({
+          statusCode: 200,
+          data: [{ header: { number: i + 1, hash: `0x${i + 1}`, timestamp: (i + 1) * 1000 } }],
+        }),
+      )
       mockPortal = await createMockPortal(responses)
 
       try {
@@ -235,7 +238,8 @@ describe('Clickhouse state', () => {
         )
 
         const callsForThisClient = removeSpy.mock.instances.reduce<number>(
-          (count, instance) => count + ((instance as ClickhouseStore | undefined)?.client === client ? 1 : 0),
+          (count, instance) =>
+            count + ((instance as unknown as ClickhouseStore | undefined)?.client === client ? 1 : 0),
           0,
         )
         expect(callsForThisClient).toBe(2)
