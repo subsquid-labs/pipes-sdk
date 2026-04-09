@@ -3,7 +3,7 @@
 
 import { arrayify } from '../internal/array.js'
 
-export type ProfilerOptions = { name: string; hidden?: boolean }
+export type ProfilerOptions = { name: string; hidden?: boolean; labels?: string | string[] }
 
 /**
  * Lifecycle hooks for a single profiler span.
@@ -15,6 +15,13 @@ export type ProfilerOptions = { name: string; hidden?: boolean }
 export interface SpanHooks {
   onStart(name: string): SpanHooks
   onEnd(): void
+}
+
+export interface ExternalSpan {
+  name: string
+  elapsed: number
+  labels?: string[]
+  children?: ExternalSpan[]
 }
 
 export interface Profiler {
@@ -29,6 +36,8 @@ export interface Profiler {
   measure<T>(name: string | ProfilerOptions, fn: (span: Profiler) => Promise<T>): Promise<T>
   measureSync<T>(name: string | ProfilerOptions, fn: (span: Profiler) => T): T
   addLabels(labels: string | string[]): Profiler
+  /** Import a pre-measured span tree (e.g. from delta-db perf nodes). */
+  import(span: ExternalSpan): Profiler
   end(): Profiler
   flatten<T>(transformer: (span: Span, level: number) => T, level?: number): T[]
   /**
@@ -88,6 +97,7 @@ export class Span implements Profiler {
         hooks: this.#hooks,
         hidden: true,
       })
+      if (options.labels) child.addLabels(options.labels)
       this.children.push(child)
 
       return child
@@ -97,6 +107,7 @@ export class Span implements Profiler {
       name: options.name,
       hooks: this.#hooks?.onStart(options.name) ?? null,
     })
+    if (options.labels) child.addLabels(options.labels)
     this.children.push(child)
 
     return child
@@ -105,6 +116,17 @@ export class Span implements Profiler {
   addLabels(labels: string | string[]) {
     this.labels.push(...arrayify(labels))
     return this
+  }
+
+  import(external: ExternalSpan): Profiler {
+    const child = this.start({ name: external.name })
+    if (external.labels) child.addLabels(external.labels)
+    if (external.children) {
+      for (const c of external.children) child.import(c)
+    }
+    child.end()
+    child.elapsed = external.elapsed
+    return child
   }
 
   async measure<T = any>(name: string | ProfilerOptions, fn: (span: Profiler) => Promise<T>): Promise<T> {
@@ -178,6 +200,10 @@ export class DummyProfiler implements Profiler {
   }
 
   end() {
+    return this
+  }
+
+  import() {
     return this
   }
 

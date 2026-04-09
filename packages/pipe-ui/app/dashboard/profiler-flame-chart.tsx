@@ -77,7 +77,17 @@ function Tooltip({ data }: { data: TooltipData }) {
       }}
     >
       <div className="bg-gray-900 border border-white/10 rounded-md p-3 shadow-xl min-w-[200px]">
-        <div className="font-normal text-xs text-white mb-2">{node.name}</div>
+        <div className="font-normal text-xs text-white mb-2 flex items-center gap-1.5">
+          <span>{node.name}</span>
+          {node.labels?.map((label) => (
+            <span
+              key={label}
+              className="text-xxs px-1 py-0.5 rounded bg-white/[0.06] border border-white/[0.1] text-white/40"
+            >
+              {label}
+            </span>
+          ))}
+        </div>
         <div className="space-y-1 text-xxs">
           <div className="flex justify-between gap-4 text-white/60">
             <span>Total time</span>

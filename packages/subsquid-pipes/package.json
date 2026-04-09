@@ -46,6 +46,7 @@
   "peerDependencies": {
     "@opentelemetry/api": "^1.9.0",
     "@clickhouse/client": "1.14.0",
+    "@sqd-pipes/delta-db": "0.0.1-alpha.20",
     "better-sqlite3": "12.4.5",
     "drizzle-orm": "0.44.7",
     "pg": "8.16.3"
@@ -55,6 +56,9 @@
       "optional": true
     },
     "@clickhouse/client": {
+      "optional": true
+    },
+    "@sqd-pipes/delta-db": {
       "optional": true
     },
     "better-sqlite3": {
@@ -110,6 +114,11 @@
       "import": "./dist/targets/clickhouse/index.js",
       "require": "./dist/targets/clickhouse/index.cjs"
     },
+    "./targets/delta-db": {
+      "types": "./dist/targets/delta-db/index.d.ts",
+      "import": "./dist/targets/delta-db/index.js",
+      "require": "./dist/targets/delta-db/index.cjs"
+    },
     "./targets/drizzle/node-postgres": {
       "types": "./dist/targets/drizzle/node-postgres/index.d.ts",
       "import": "./dist/targets/drizzle/node-postgres/index.js",
@@ -164,6 +173,9 @@
       ],
       "targets/clickhouse": [
         "./dist/targets/clickhouse/index.d.ts"
+      ],
+      "targets/delta-db": [
+        "./dist/targets/delta-db/index.d.ts"
       ],
       "targets/drizzle/node-postgres": [
         "./dist/targets/drizzle/node-postgres/index.d.ts"

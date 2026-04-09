@@ -4,6 +4,7 @@ import {
   PortalClient,
   PortalClientOptions,
   PortalStream,
+  PortalStreamOptions,
   Query,
   isForkException,
 } from '~/portal-client/index.js'
@@ -46,7 +47,7 @@ export type BatchStreamContext = {
   dataset: ApiDataset
   head: {
     finalized?: BlockCursor
-    latest?: BlockCursor
+    latest?: { number: number }
   }
   state: {
     initial: number
@@ -172,7 +173,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     this.#metricServer.registerPipe(this.#id)
   }
 
-  private async *read(cursor?: BlockCursor): AsyncIterable<PortalBatch<T>> {
+  private async *read(cursor?: BlockCursor, streamOptions?: PortalStreamOptions): AsyncIterable<PortalBatch<T>> {
     /*
      Calculates query ranges while excluding blocks that were previously fetched to avoid duplicate processing
      */
@@ -209,7 +210,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             logger: this.#logger,
             query,
           })
-        : this.#portal.getStream(query)
+        : this.#portal.getStream(query, streamOptions)
 
       let batchSpan = Span.root('batch', this.#options.profiler).addLabels('core')
       let readSpan = batchSpan.start('fetch data').addLabels('core')
@@ -398,7 +399,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
         while (true) {
           try {
-            for await (const batch of self.read(cursor)) {
+            for await (const batch of self.read(cursor, target.streamOptions)) {
               yield batch as PortalBatch<T>
               self.batchEnd(batch.ctx)
             }

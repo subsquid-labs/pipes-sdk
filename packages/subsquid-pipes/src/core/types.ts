@@ -8,7 +8,7 @@ import Logger = pino.Logger
 
 export type BlockCursor = {
   number: number
-  hash?: string
+  hash: string
   timestamp?: number
 }
 

@@ -9,14 +9,21 @@ import typescript from 'react-syntax-highlighter/dist/esm/languages/hljs/typescr
 import { CopyButton } from '~/components/ui/copy-button'
 
 const theme: Record<string, React.CSSProperties> = {
-  'hljs': { background: 'transparent', color: 'rgba(255,255,255,0.4)' },
-  'hljs-string': { color: '#7ec89e' },
-  'hljs-number': { color: '#6eb3d4' },
-  'hljs-literal': { color: '#6eb3d4' },
-  'hljs-keyword': { color: '#7ec89e' },
-  'hljs-attr': { color: '#9d8abf' },
-  'hljs-punctuation': { color: 'rgba(255,255,255,0.3)' },
-  'hljs-comment': { color: 'rgba(255,255,255,0.2)' },
+  'hljs': { background: 'transparent', color: 'rgba(255,255,255,0.85)' },
+  'hljs-string': { color: '#a5d6a7' },
+  'hljs-number': { color: '#90caf9' },
+  'hljs-literal': { color: '#90caf9' },
+  'hljs-keyword': { color: '#c792ea' },
+  'hljs-built_in': { color: '#82aaff' },
+  'hljs-type': { color: '#ffcb6b' },
+  'hljs-function': { color: '#82aaff' },
+  'hljs-title': { color: '#82aaff' },
+  'hljs-attr': { color: '#89ddff' },
+  'hljs-params': { color: 'rgba(255,255,255,0.85)' },
+  'hljs-punctuation': { color: 'rgba(255,255,255,0.5)' },
+  'hljs-comment': { color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' },
+  'hljs-variable': { color: '#f07178' },
+  'hljs-property': { color: '#89ddff' },
 }
 import { cn } from '~/lib/utils'
 
@@ -44,8 +51,8 @@ export const Code = memo(function Code({
   wrapLines?: boolean
 }) {
   return (
-    <div className={cn('relative border rounded-md p-1 text-xs', className)}>
-      {!hideCopyButton ? <CopyButton className="absolute right-0 top-0.5" content={children} /> : null}
+    <div className={cn('relative border rounded-md p-3 text-xs', className)}>
+      {!hideCopyButton ? <CopyButton className="absolute right-1 top-1" content={children} /> : null}
       <SyntaxHighlighter
         wrapLongLines={wrapLongLines}
         wrapLines={wrapLines}
