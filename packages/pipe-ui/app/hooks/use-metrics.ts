@@ -68,6 +68,10 @@ export type ApiStats = {
   sdk: {
     version: string
   }
+  runtime?: {
+    name: 'bun' | 'node' | 'deno' | 'unknown'
+    version: string
+  }
   code?: {
     filename: string
   }

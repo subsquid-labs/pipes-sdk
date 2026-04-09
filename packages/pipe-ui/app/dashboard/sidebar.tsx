@@ -1,10 +1,10 @@
 'use client'
 
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, ChevronsUpDown } from 'lucide-react'
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '~/components/ui/select'
 import { displayEstimatedTime } from '~/dashboard/formatters'
-import { ApiStatus, type Pipe, PipeStatus, useStats } from '~/hooks/use-metrics'
+import { type ApiStats, ApiStatus, type Pipe, PipeStatus, useStats } from '~/hooks/use-metrics'
 import { useServerIndex } from '~/hooks/use-server-context'
 import { type Server, useServers } from '~/hooks/use-servers'
 
@@ -132,34 +132,94 @@ function PipeSelector({
   )
 }
 
-function ServerSelect({ servers, connected, version }: { servers: Server[]; connected: boolean; version?: string }) {
+function StatusDot({ connected }: { connected: boolean }) {
+  return (
+    <span className="relative inline-flex shrink-0 items-center justify-center">
+      {connected && (
+        <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-teal-400 opacity-60" />
+      )}
+      <span
+        className={`relative inline-flex h-[7px] w-[7px] rounded-full ${
+          connected ? 'bg-teal-400 shadow-[0_0_6px_0_rgba(45,212,191,0.8)]' : 'bg-gray-500'
+        }`}
+      />
+    </span>
+  )
+}
+
+function ServerSelect({ servers, connected }: { servers: Server[]; connected: boolean }) {
   const { serverIndex, setServerIndex } = useServerIndex()
+  const current = servers[serverIndex] ?? servers[0]
+  const label = current?.name || current?.url || 'Select server'
 
   return (
     <div>
-      <div className="text-xs font-normal text-muted-foreground mb-1 w-[60px]">Server</div>
+      <div className="text-xs font-normal text-muted-foreground mb-1.5">Server</div>
       <Select value={String(serverIndex)} onValueChange={(v: string) => setServerIndex(Number(v))}>
-        <SelectTrigger className="w-full h-auto py-1.5 text-sm">
-          <div className="flex flex-col items-start gap-0.5 w-full">
-            <SelectValue />
-            <div className="flex items-center gap-1.5 text-muted-foreground w-full">
-              <div className={`w-[6px] h-[6px] rounded-full shrink-0 ${connected ? 'bg-teal-400' : 'bg-gray-500'}`} />
-              {connected ? (
-                version && <span className="text-[10px]">{version}</span>
-              ) : (
-                <span className="text-[10px]">Disconnected</span>
-              )}
+        <SelectTrigger
+          className={`group relative w-full h-auto py-2 px-2.5 text-sm rounded-lg border bg-gradient-to-b from-white/[0.04] to-white/[0.01] hover:from-white/[0.06] hover:to-white/[0.02] transition-all ${
+            connected ? 'border-teal-400/20 hover:border-teal-400/40' : 'border-border hover:border-border/80'
+          }`}
+        >
+          <div className="flex items-center gap-2.5 w-full min-w-0">
+            <StatusDot connected={connected} />
+            <div className="flex flex-col items-start min-w-0 flex-1">
+              <span className="text-xs text-foreground truncate w-full text-left font-normal">{label}</span>
+              <span
+                className={`text-[10px] leading-tight ${
+                  connected ? 'text-teal-400/80' : 'text-muted-foreground'
+                }`}
+              >
+                {connected ? 'Connected' : 'Disconnected'}
+              </span>
             </div>
+            <ChevronsUpDown className="size-3.5 opacity-50 group-hover:opacity-80 transition-opacity shrink-0" />
           </div>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="min-w-[var(--radix-select-trigger-width)]">
           {servers.map((server, index) => (
-            <SelectItem key={server.url} value={String(index)}>
-              {server.name || server.url}
+            <SelectItem key={server.url} value={String(index)} className="text-xs py-2">
+              <div className="flex flex-col items-start gap-0.5 min-w-0">
+                <span className="truncate">{server.name || server.url}</span>
+                {server.name && (
+                  <span className="text-[10px] text-muted-foreground truncate">{server.url}</span>
+                )}
+              </div>
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
+    </div>
+  )
+}
+
+function RuntimeInfo({
+  runtime,
+  sdkVersion,
+}: {
+  runtime?: ApiStats['runtime']
+  sdkVersion?: string
+}) {
+  if (!runtime && !sdkVersion) return null
+
+  const runtimeLabel = runtime?.name === 'bun' ? 'Bun' : runtime?.name === 'deno' ? 'Deno' : 'Node'
+
+  return (
+    <div className="mt-3 rounded-lg border border-border/60 bg-white/[0.015] px-2.5 py-2">
+      <div className="flex flex-col gap-1.5 text-[10px]">
+        {runtime?.version && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-muted-foreground">{runtimeLabel}</span>
+            <span className="font-mono text-foreground/90">v{runtime.version}</span>
+          </div>
+        )}
+        {sdkVersion && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-muted-foreground">SDK</span>
+            <span className="font-mono text-foreground/90">v{sdkVersion}</span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -185,7 +245,8 @@ export function Sidebar({
 
         {servers && (
           <div className="mt-2 mb-3">
-            <ServerSelect servers={servers} connected={connected} version={data?.sdk?.version} />
+            <ServerSelect servers={servers} connected={connected} />
+            <RuntimeInfo runtime={data?.runtime} sdkVersion={data?.sdk?.version} />
           </div>
         )}
       </div>
