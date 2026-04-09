@@ -9,6 +9,7 @@ import { Toggle } from '~/components/ui/toggle'
 import { PanelLoading } from '~/dashboard/panel-loading'
 import { type ApiExemplarResult, useTransformationExemplar } from '~/hooks/use-metrics'
 import { useServerIndex } from '~/hooks/use-server-context'
+import { useUrlParam } from '~/hooks/use-url-param'
 
 type TransformerExample = {
   name: string
@@ -685,20 +686,8 @@ export function TransformationExemplar({ pipeId }: { pipeId: string }) {
   const [expandAll, setExpandAll] = useState(false)
   const { data, isLoading } = useTransformationExemplar({ serverIndex, pipeId })
 
-  // Persist fullscreen in URL
-  const [fullscreen, setFullscreen] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return new URLSearchParams(window.location.search).get('fullscreen') === '1'
-  })
-
-  const toggleFullscreen = () => {
-    const next = !fullscreen
-    setFullscreen(next)
-    const url = new URL(window.location.href)
-    if (next) url.searchParams.set('fullscreen', '1')
-    else url.searchParams.delete('fullscreen')
-    window.history.replaceState({}, '', url.toString())
-  }
+  const [fullscreen, setFullscreen] = useUrlParam('fullscreen', false)
+  const toggleFullscreen = () => setFullscreen(!fullscreen)
 
   const {
     active,

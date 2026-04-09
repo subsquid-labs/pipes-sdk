@@ -1,17 +1,25 @@
 'use client'
 
-import { useState } from 'react'
+import { Flame, ListTree, Settings } from 'lucide-react'
+import { type ComponentType, useEffect, useRef, useState } from 'react'
 
 import { Switch } from '~/components/ui/switch'
 import { PanelLoading } from '~/dashboard/panel-loading'
+import { FlameChart } from '~/dashboard/profiler-flame-chart'
 import { type ApiProfilerResult, useProfilers } from '~/hooks/use-metrics'
+import { useLocalStorage } from '~/hooks/use-local-storage'
 import { useServerIndex } from '~/hooks/use-server-context'
+import { cn } from '~/lib/utils'
+
+type ProfilerView = 'tree' | 'flame'
+type TimeMode = 'total' | 'avg'
 
 export type ProfilerResult = {
   name: string
   totalTime: number
   selfTime: number
   percent: number
+  labels?: string[]
   children: ProfilerResult[]
 }
 
@@ -42,7 +50,7 @@ function calcStats({
   profilers: ApiProfilerResult[]
   percentage: {
     totalSpentTime: number
-    useSelfTime: boolean
+    excludeChildren: boolean
   }
 }): ProfilerResult[] {
   for (const profiler of profilers) {
@@ -56,6 +64,7 @@ function calcStats({
         totalTime: 0,
         selfTime: 0,
         percent: 0,
+        labels: profiler.labels,
         children: [],
       }
       acc.push(item)
@@ -64,7 +73,7 @@ function calcStats({
     item.totalTime += Number(profiler.totalTime)
     item.selfTime += Number(selfTime)
 
-    const timeForPercent = percentage.useSelfTime ? item.selfTime : item.totalTime
+    const timeForPercent = percentage.excludeChildren ? item.selfTime : item.totalTime
     item.percent = (timeForPercent / percentage.totalSpentTime) * 100
 
     item.children = calcStats({
@@ -77,10 +86,22 @@ function calcStats({
   return acc
 }
 
-function ProfilerResultNode({ profiler, useSelfTime }: { profiler: ProfilerResult; useSelfTime: boolean }) {
+function ProfilerResultNode({
+  profiler,
+  excludeChildren,
+  samples,
+  timeMode,
+}: {
+  profiler: ProfilerResult
+  excludeChildren: boolean
+  samples: number
+  timeMode: TimeMode
+}) {
   const threshold = Math.pow(profiler.percent / 100, 0.5)
   const opacity = 0.4 + 0.6 * threshold
-  const time = useSelfTime ? profiler.selfTime : profiler.totalTime
+  const baseTime = excludeChildren ? profiler.selfTime : profiler.totalTime
+  const displayTime = timeMode === 'avg' && samples > 0 ? baseTime / samples : baseTime
+  const prefix = timeMode === 'avg' ? 'avg. ' : ''
   const heatColor = getHeatColor(profiler.percent)
 
   return (
@@ -97,16 +118,159 @@ function ProfilerResultNode({ profiler, useSelfTime }: { profiler: ProfilerResul
         />
         <div className="relative pl-2.5 flex items-baseline gap-2" style={{ opacity }}>
           <span>{profiler.name}</span>
-          <span className="text-white/50 text-xxs">
-            {time.toFixed(2)}ms · {profiler.percent.toFixed(2)}%
+          <span className="text-white/60 text-xxs">
+            {prefix}
+            {displayTime.toFixed(2)}ms · {profiler.percent.toFixed(2)}%
           </span>
+          {profiler.labels && profiler.labels.length > 0 && (
+            <div className="ml-auto flex gap-1">
+              {profiler.labels.map((label) => (
+                <span
+                  key={label}
+                  className="text-xxs px-1 py-0.5 rounded bg-white/[0.06] border border-white/[0.1] text-white/40"
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       <div className="pl-6">
         {profiler.children.map((child) => (
-          <ProfilerResultNode key={child.name} profiler={child} useSelfTime={useSelfTime} />
+          <ProfilerResultNode
+            key={child.name}
+            profiler={child}
+            excludeChildren={excludeChildren}
+            samples={samples}
+            timeMode={timeMode}
+          />
         ))}
       </div>
+    </div>
+  )
+}
+
+type SegmentedOption<T extends string> = {
+  value: T
+  label: string
+  icon?: ComponentType<{ className?: string }>
+}
+
+function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T
+  onChange: (next: T) => void
+  options: SegmentedOption<T>[]
+}) {
+  return (
+    <div className="inline-flex items-center rounded-md border border-white/10 bg-white/[0.03] p-0.5">
+      {options.map(({ value: optValue, label, icon: Icon }) => {
+        const active = value === optValue
+        return (
+          <button
+            key={optValue}
+            type="button"
+            onClick={() => onChange(optValue)}
+            aria-pressed={active}
+            className={cn(
+              'flex items-center gap-1 px-2 h-6 text-xxs rounded-sm transition-colors cursor-pointer',
+              active
+                ? 'bg-white/10 text-white shadow-sm'
+                : 'text-white/50 hover:text-white/80 hover:bg-white/[0.04]',
+            )}
+          >
+            {Icon && <Icon className="size-3" />}
+            {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+const VIEW_OPTIONS: SegmentedOption<ProfilerView>[] = [
+  { value: 'tree', label: 'Tree', icon: ListTree },
+  { value: 'flame', label: 'Flame', icon: Flame },
+]
+
+const TIME_MODE_OPTIONS: SegmentedOption<TimeMode>[] = [
+  { value: 'total', label: 'Total' },
+  { value: 'avg', label: 'Avg' },
+]
+
+function SettingsPopover({
+  excludeChildren,
+  setExcludeChildren,
+  timeMode,
+  setTimeMode,
+}: {
+  excludeChildren: boolean
+  setExcludeChildren: (next: boolean) => void
+  timeMode: TimeMode
+  setTimeMode: (next: TimeMode) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Profiler settings"
+        aria-expanded={open}
+        className={cn(
+          'flex items-center justify-center size-6 rounded-md border border-white/10 bg-white/[0.03] transition-colors cursor-pointer',
+          open ? 'text-white bg-white/10' : 'text-white/50 hover:text-white/80 hover:bg-white/[0.06]',
+        )}
+      >
+        <Settings className="size-3" />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-20 w-[320px] rounded-md border border-white/10 bg-gray-950 shadow-xl p-3 space-y-3">
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xxs text-white/80">Exclude children</span>
+              <Switch checked={excludeChildren} onCheckedChange={setExcludeChildren} />
+            </div>
+            <p className="text-xxs text-white/40 mt-1 leading-snug">
+              Subtract time spent in nested calls to show only the work done directly in each step.
+            </p>
+          </div>
+          <div className="border-t border-white/5 pt-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xxs text-white/80">Time</span>
+              <Segmented value={timeMode} onChange={setTimeMode} options={TIME_MODE_OPTIONS} />
+            </div>
+            <p className="text-xxs text-white/40 mt-1 leading-snug">
+              <span className="text-white/60">Total</span> — sum across all sampled batches.
+              <br />
+              <span className="text-white/60">Avg</span> — mean time per batch.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -114,7 +278,9 @@ function ProfilerResultNode({ profiler, useSelfTime }: { profiler: ProfilerResul
 export function Profiler({ pipeId }: { pipeId: string }) {
   const { serverIndex } = useServerIndex()
   const { data, isLoading } = useProfilers({ serverIndex, pipeId })
-  const [useSelfTime, setUseSelfTime] = useState(false)
+  const [excludeChildren, setExcludeChildren] = useLocalStorage('profiler.excludeChildren', false)
+  const [view, setView] = useLocalStorage<ProfilerView>('profiler.view', 'tree')
+  const [timeMode, setTimeMode] = useLocalStorage<TimeMode>('profiler.timeMode', 'total')
 
   if (isLoading || !data?.profilers.length) {
     return <PanelLoading message="Waiting for data samples..." />
@@ -128,7 +294,7 @@ export function Profiler({ pipeId }: { pipeId: string }) {
     profilers: data.profilers || [],
     percentage: {
       totalSpentTime,
-      useSelfTime,
+      excludeChildren,
     },
   })
 
@@ -136,19 +302,38 @@ export function Profiler({ pipeId }: { pipeId: string }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between text-xxs text-white/50">
-        <label className="flex items-center gap-1.5 cursor-pointer select-none">
-          <Switch checked={useSelfTime} onCheckedChange={setUseSelfTime} />
-          Self time
-        </label>
-        <span>{totalSamples} samples</span>
+      <div className="flex items-center justify-between gap-2 text-xxs text-white/50">
+        <Segmented value={view} onChange={setView} options={VIEW_OPTIONS} />
+        <div className="flex items-center gap-2">
+          <span>
+            {timeMode === 'avg' ? 'avg over' : 'Σ over'} {totalSamples} batches
+          </span>
+          <SettingsPopover
+            excludeChildren={excludeChildren}
+            setExcludeChildren={setExcludeChildren}
+            timeMode={timeMode}
+            setTimeMode={setTimeMode}
+          />
+        </div>
       </div>
 
-      <div className="h-[400px] relative overflow-auto border rounded-md px-1 dotted-background">
-        {res.map((profiler) => (
-          <ProfilerResultNode key={profiler.name} profiler={profiler} useSelfTime={useSelfTime} />
-        ))}
-      </div>
+      {view === 'flame' ? (
+        <div className="border rounded-md p-2 dotted-background">
+          <FlameChart profilers={res} samples={totalSamples} timeMode={timeMode} />
+        </div>
+      ) : (
+        <div className="h-[400px] relative overflow-auto border rounded-md px-1 dotted-background">
+          {res.map((profiler) => (
+            <ProfilerResultNode
+              key={profiler.name}
+              profiler={profiler}
+              excludeChildren={excludeChildren}
+              samples={totalSamples}
+              timeMode={timeMode}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
