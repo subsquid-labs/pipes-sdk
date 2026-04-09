@@ -188,11 +188,21 @@ export function usePipe(serverIndex: number, id: string) {
 export type ApiProfilerResult = {
   name: string
   totalTime: number
+  /** Start offset (ms) relative to the root span of the tree. Optional — absent from SDK < 1.0.0-alpha.7. */
+  startOffset?: number
   labels?: string[]
   children: ApiProfilerResult[]
 }
 
-export function useProfilers({ enabled = true, serverIndex, pipeId }: { enabled?: boolean; serverIndex: number; pipeId: string }) {
+export function useProfilers({
+  enabled = true,
+  serverIndex,
+  pipeId,
+}: {
+  enabled?: boolean
+  serverIndex: number
+  pipeId: string
+}) {
   return useQuery({
     queryKey: ['pipe/profiler', serverIndex, pipeId],
     queryFn: async () => {
@@ -217,12 +227,22 @@ export type ApiExemplarResult = {
   name: string
   data: any
   elapsed?: number
+  /** Start offset (ms) relative to the root span of the tree. Optional — absent from SDK < 1.0.0-alpha.7. */
+  startOffset?: number
   dataSize?: number
   labels?: string[]
   children: ApiExemplarResult[]
 }
 
-export function useTransformationExemplar({ enabled = true, serverIndex, pipeId }: { enabled?: boolean; serverIndex: number; pipeId: string }) {
+export function useTransformationExemplar({
+  enabled = true,
+  serverIndex,
+  pipeId,
+}: {
+  enabled?: boolean
+  serverIndex: number
+  pipeId: string
+}) {
   return useQuery({
     queryKey: ['pipe/exemplars/transformation', serverIndex, pipeId],
     queryFn: async () => {

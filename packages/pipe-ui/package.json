@@ -1,6 +1,6 @@
 {
   "name": "@subsquid/pipes-ui",
-  "version": "1.0.0-alpha.6",
+  "version": "1.0.0-alpha.7",
   "type": "module",
   "scripts": {
     "dev": "next dev",

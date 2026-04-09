@@ -75,13 +75,17 @@ function parseDate(date: any): Date | null {
 type ProfilerResult = {
   name: string
   totalTime: number
+  /** Offset (ms) of this span's start relative to the root of the profiler tree. */
+  startOffset: number
   children: ProfilerResult[]
 }
 
 function transformProfiler(profiler: Profiler): ProfilerResult {
+  const rootStarted = profiler.started
   return profiler.transform((span, children) => ({
     name: span.name,
     totalTime: span.elapsed,
+    startOffset: span.started - rootStarted,
     children,
   }))
 }
@@ -90,6 +94,7 @@ type TransformationResult = {
   name: string
   data: any
   elapsed?: number
+  startOffset?: number
   dataSize?: number
   labels?: string[]
   children: TransformationResult[]
@@ -124,20 +129,49 @@ function packExemplar(value: any): any {
   return value
 }
 
+/**
+ * The `metrics processing` span is started after the root batch span has
+ * already ended, so its real wall-clock offset exceeds `root.elapsed`. We
+ * reposition it to start right at the root's previous end and extend the
+ * root's duration so the tree stays internally consistent (child offsets
+ * always fall within [0, parent.totalTime]).
+ */
+function patchMetricsProcessing(root: ProfilerResult, metricsElapsed: number): void {
+  const lastChild = root.children.at(-1)
+  if (!lastChild || lastChild.name !== 'metrics processing') return
+
+  lastChild.totalTime = metricsElapsed
+  lastChild.startOffset = root.totalTime
+  root.totalTime += metricsElapsed
+}
+
+function patchMetricsProcessingExemplar(root: TransformationResult, metricsElapsed: number): void {
+  const lastChild = root.children.at(-1)
+  if (!lastChild || lastChild.name !== 'metrics processing') return
+
+  const rootElapsed = root.elapsed ?? 0
+  lastChild.elapsed = metricsElapsed
+  lastChild.startOffset = rootElapsed
+  root.elapsed = rootElapsed + metricsElapsed
+}
+
 function transformExemplar(profiler: Profiler): TransformationResult {
+  const rootStarted = profiler.started
   return profiler.transform((span, children) => {
-    const data = span.data != null
-      ? JSON.stringify(packExemplar(span.data), (k: string, v: any) => {
-          if (typeof v === 'bigint') return v.toString() + 'n'
-          if (v instanceof Date) return v.toISOString()
-          return v
-        })
-      : null
+    const data =
+      span.data != null
+        ? JSON.stringify(packExemplar(span.data), (k: string, v: any) => {
+            if (typeof v === 'bigint') return v.toString() + 'n'
+            if (v instanceof Date) return v.toISOString()
+            return v
+          })
+        : null
 
     return {
       name: span.name,
       data,
       elapsed: span.elapsed || undefined,
+      startOffset: span.started - rootStarted,
       dataSize: data ? data.length : undefined,
       labels: span.labels.length > 0 ? span.labels : undefined,
       children,
@@ -308,9 +342,10 @@ class ExpressMetricServer implements MetricsServer {
           transformation: pipeData?.transformationExemplar,
           batch: lastBatch
             ? {
-                from: lastBatch.batch.blocksCount > 0
-                  ? lastBatch.stream.state.current.number - lastBatch.batch.blocksCount + 1
-                  : lastBatch.stream.state.current.number,
+                from:
+                  lastBatch.batch.blocksCount > 0
+                    ? lastBatch.stream.state.current.number - lastBatch.batch.blocksCount + 1
+                    : lastBatch.stream.state.current.number,
                 to: lastBatch.stream.state.current.number,
                 blocksCount: lastBatch.batch.blocksCount,
                 bytesSize: lastBatch.batch.bytesSize,
@@ -372,8 +407,7 @@ class ExpressMetricServer implements MetricsServer {
     const data = this.registerPipe(ctx.id)
 
     data.lastBatch = ctx
-    data.transformationExemplar = transformExemplar(ctx.profiler)
-
+    const exemplar = transformExemplar(ctx.profiler)
     const profiler = transformProfiler(ctx.profiler)
 
     data.profilers.push({
@@ -383,8 +417,19 @@ class ExpressMetricServer implements MetricsServer {
     data.profilers = data.profilers.slice(-MAX_HISTORY)
     span.end()
 
-    // Update total time for the root metrics processing
-    profiler.children[profiler.children.length - 1].totalTime = span.elapsed
+    // `metrics processing` is started AFTER the root batch span ends
+    // (see `PortalSource.batchEnd`). That means:
+    //  - its `elapsed` wasn't captured at transform time (patched below), and
+    //  - its real `startOffset` is beyond `root.elapsed`, which would push it
+    //    off the right edge of the flame chart canvas.
+    //
+    // Reposition the child at the end of the root and extend the root's
+    // duration so both visualizations (profiler tree and exemplar) stay
+    // internally consistent.
+    patchMetricsProcessing(profiler, span.elapsed)
+    patchMetricsProcessingExemplar(exemplar, span.elapsed)
+
+    data.transformationExemplar = exemplar
   }
 
   get metrics() {
