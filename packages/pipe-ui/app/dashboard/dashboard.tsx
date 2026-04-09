@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { ArrowUpRightIcon } from 'lucide-react'
 
@@ -12,12 +12,22 @@ import { Sidebar } from '~/dashboard/sidebar'
 import { useStats } from '~/hooks/use-metrics'
 import { ServerContext } from '~/hooks/use-server-context'
 import { useServers } from '~/hooks/use-servers'
+import { useUrlParam } from '~/hooks/use-url-param'
 
 const DOCS_URL = 'https://beta.docs.sqd.dev'
 
 export function Dashboard() {
-  const [serverIndex, setServerIndex] = useState(0)
+  const [rawServerIndex, setServerIndex] = useUrlParam('server', 0, {
+    validate: (v) => Number.isInteger(v) && v >= 0,
+  })
   const { data: servers } = useServers()
+
+  // Clamp out-of-range indices so an invalid `?server=99` never reaches `/api/metrics/*`
+  // (which 400s on unknown server indices). Once servers are known, also rewrite the URL.
+  const serverIndex = servers && rawServerIndex >= servers.length ? 0 : rawServerIndex
+  useEffect(() => {
+    if (servers && rawServerIndex >= servers.length) setServerIndex(0)
+  }, [servers, rawServerIndex, setServerIndex])
 
   return (
     <ServerContext value={{ serverIndex, setServerIndex }}>
