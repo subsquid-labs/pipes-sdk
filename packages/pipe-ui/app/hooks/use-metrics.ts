@@ -181,6 +181,27 @@ export function useStats(serverIndex: number) {
   })
 }
 
+export function useServerStatuses(count: number) {
+  return useQuery({
+    queryKey: ['server-statuses', count],
+    queryFn: async (): Promise<Map<number, boolean>> => {
+      const results = await Promise.allSettled(
+        Array.from({ length: count }, (_, i) =>
+          fetch(`/api/metrics/stats?_server=${i}`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok),
+        ),
+      )
+      const map = new Map<number, boolean>()
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i]
+        map.set(i, r.status === 'fulfilled' && r.value)
+      }
+      return map
+    },
+    refetchInterval: 5000,
+    retry: false,
+  })
+}
+
 export function usePipe(serverIndex: number, id: string) {
   const { data: stats } = useStats(serverIndex)
 

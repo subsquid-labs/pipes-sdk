@@ -1,10 +1,11 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
+
 import { AlertCircle, ChevronsUpDown } from 'lucide-react'
 
-import { Select, SelectContent, SelectItem, SelectTrigger } from '~/components/ui/select'
 import { displayEstimatedTime } from '~/dashboard/formatters'
-import { type ApiStats, ApiStatus, type Pipe, PipeStatus, useStats } from '~/hooks/use-metrics'
+import { type ApiStats, ApiStatus, type Pipe, PipeStatus, useServerStatuses, useStats } from '~/hooks/use-metrics'
 import { useServerIndex } from '~/hooks/use-server-context'
 import { type Server, useServers } from '~/hooks/use-servers'
 
@@ -14,7 +15,7 @@ function CircularProgress({ percent }: { percent: number }) {
   const offset = circumference - (percent / 100) * circumference
 
   return (
-    <svg width="26" height="26" viewBox="0 0 16 16">
+    <svg width="26" height="26" viewBox="0 0 16 16" className="shrink-0 block">
       <defs>
         <linearGradient id="progress-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#433485" />
@@ -83,7 +84,7 @@ function PipeSelector({
 
   return (
     <div>
-      <div className="text-xs font-normal text-muted-foreground mb-1">Pipes</div>
+      <div className="text-xs font-normal text-muted-foreground mb-1.5">Pipes</div>
 
       <div className="flex flex-col gap-1">
         {pipes.map((pipe) => (
@@ -96,7 +97,7 @@ function PipeSelector({
                 : 'bg-secondary/50 text-muted-foreground border-border hover:bg-secondary'
             }`}
           >
-            <div className="flex items-center gap-1.5 mb-1.5">
+            <div className="flex items-start gap-1.5 mb-0.5">
               {pipe.dataset?.metadata?.logo_url && (
                 <img src={pipe.dataset.metadata.logo_url} alt="" className="w-4 h-4" />
               )}
@@ -117,7 +118,8 @@ function PipeSelector({
             ) : (
               <div
                 className={
-                  'flex w-full font-thin justify-between' + (pipe.status === PipeStatus.Syncing ? ' animate-pulse' : '')
+                  'flex w-full text-[10px] font-thin justify-between' +
+                  (pipe.status === PipeStatus.Syncing ? ' animate-pulse' : '')
                 }
               >
                 <div>{pipe.progress.percent.toFixed(2)}%</div>
@@ -136,59 +138,100 @@ function StatusDot({ connected }: { connected: boolean }) {
   return (
     <span className="relative inline-flex shrink-0 items-center justify-center">
       {connected && (
-        <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-teal-400 opacity-60" />
+        <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-60" />
       )}
       <span
         className={`relative inline-flex h-[7px] w-[7px] rounded-full ${
-          connected ? 'bg-teal-400 shadow-[0_0_6px_0_rgba(45,212,191,0.8)]' : 'bg-gray-500'
+          connected ? 'bg-emerald-400 shadow-[0_0_6px_0_rgba(52,211,153,0.8)]' : 'bg-gray-500'
         }`}
       />
     </span>
   )
 }
 
-function ServerSelect({ servers, connected }: { servers: Server[]; connected: boolean }) {
+function ServerSelect({
+  servers,
+  connected,
+  statuses,
+}: {
+  servers: Server[]
+  connected: boolean
+  statuses?: Map<number, boolean>
+}) {
   const { serverIndex, setServerIndex } = useServerIndex()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
   const current = servers[serverIndex] ?? servers[0]
   const label = current?.name || current?.url || 'Select server'
 
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
   return (
-    <div>
-      <div className="text-xs font-normal text-muted-foreground mb-1.5">Server</div>
-      <Select value={String(serverIndex)} onValueChange={(v: string) => setServerIndex(Number(v))}>
-        <SelectTrigger
-          className={`group relative w-full h-auto py-2 px-2.5 text-sm rounded-lg border bg-gradient-to-b from-white/[0.04] to-white/[0.01] hover:from-white/[0.06] hover:to-white/[0.02] transition-all ${
-            connected ? 'border-teal-400/20 hover:border-teal-400/40' : 'border-border hover:border-border/80'
-          }`}
-        >
-          <div className="flex items-center gap-2.5 w-full min-w-0">
-            <StatusDot connected={connected} />
-            <div className="flex flex-col items-start min-w-0 flex-1">
-              <span className="text-xs text-foreground truncate w-full text-left font-normal">{label}</span>
-              <span
-                className={`text-[10px] leading-tight ${
-                  connected ? 'text-teal-400/80' : 'text-muted-foreground'
-                }`}
-              >
-                {connected ? 'Connected' : 'Disconnected'}
-              </span>
-            </div>
-            <ChevronsUpDown className="size-3.5 opacity-50 group-hover:opacity-80 transition-opacity shrink-0" />
+    <div ref={ref} className="relative">
+      <div className="text-xs font-normal text-muted-foreground mb-1">Server</div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="group relative w-full h-auto py-3 px-3 text-sm text-left rounded-lg border border-border hover:border-border/80 bg-gradient-to-b from-white/[0.04] to-white/[0.01] hover:from-white/[0.06] hover:to-white/[0.02] transition-all"
+      >
+        <div className="flex items-center gap-2.5 w-full min-w-0">
+          <StatusDot connected={connected} />
+          <div className="flex flex-col items-start min-w-0 flex-1">
+            <span className="text-xs text-foreground truncate w-full text-left font-normal">{label}</span>
+            <span className="text-[10px] leading-tight text-muted-foreground">
+              {connected ? 'Connected' : 'Disconnected'}
+            </span>
           </div>
-        </SelectTrigger>
-        <SelectContent className="min-w-[var(--radix-select-trigger-width)]">
-          {servers.map((server, index) => (
-            <SelectItem key={server.url} value={String(index)} className="text-xs py-2">
-              <div className="flex flex-col items-start gap-0.5 min-w-0">
-                <span className="truncate">{server.name || server.url}</span>
-                {server.name && (
-                  <span className="text-[10px] text-muted-foreground truncate">{server.url}</span>
-                )}
-              </div>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+          <ChevronsUpDown className="size-3.5 opacity-40 group-hover:opacity-70 transition-opacity shrink-0" />
+        </div>
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-0.5 w-full rounded-lg border border-border/80 bg-popover/95 backdrop-blur-md shadow-xl shadow-black/30 overflow-hidden animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-150">
+          <div className="p-1 flex flex-col gap-0.5">
+            {servers.map((server, index) => {
+              const isSelected = index === serverIndex
+              const online = statuses?.get(index)
+              return (
+                <button
+                  key={server.url}
+                  type="button"
+                  onClick={() => {
+                    setServerIndex(index)
+                    setOpen(false)
+                  }}
+                  className={`flex items-center gap-2.5 w-full rounded-md px-2.5 py-2 text-left transition-colors ${
+                    isSelected
+                      ? 'bg-white/[0.06] text-foreground'
+                      : 'text-muted-foreground hover:bg-white/[0.05] hover:text-foreground'
+                  }`}
+                >
+                  <span
+                    className={`inline-flex shrink-0 h-[6px] w-[6px] rounded-full ${
+                      online === true
+                        ? 'bg-emerald-400 shadow-[0_0_4px_0_rgba(52,211,153,0.6)]'
+                        : online === false
+                          ? 'bg-red-400/80'
+                          : 'bg-gray-500/50'
+                    }`}
+                  />
+                  <div className="flex flex-col items-start gap-0.5 min-w-0 flex-1">
+                    <span className="text-xs truncate w-full font-normal">{server.name || server.url}</span>
+                    {server.name && <span className="text-[10px] text-muted-foreground truncate">{server.url}</span>}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -196,17 +239,20 @@ function ServerSelect({ servers, connected }: { servers: Server[]; connected: bo
 function RuntimeInfo({
   runtime,
   sdkVersion,
+  entryPoint,
 }: {
   runtime?: ApiStats['runtime']
   sdkVersion?: string
+  entryPoint?: string
 }) {
-  if (!runtime && !sdkVersion) return null
+  if (!runtime && !sdkVersion && !entryPoint) return null
 
   const runtimeLabel = runtime?.name === 'bun' ? 'Bun' : runtime?.name === 'deno' ? 'Deno' : 'Node'
 
   return (
-    <div className="mt-3 rounded-lg border border-border/60 bg-white/[0.015] px-2.5 py-2">
-      <div className="flex flex-col gap-1.5 text-[10px]">
+    <div>
+      <div className="text-xs font-normal text-muted-foreground mb-1">Runtime</div>
+      <div className="rounded-lg border border-border bg-white/[0.015] px-2.5 py-2 flex flex-col gap-1.5 text-[10px]">
         {runtime?.version && (
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">{runtimeLabel}</span>
@@ -217,6 +263,12 @@ function RuntimeInfo({
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">SDK</span>
             <span className="font-mono text-foreground/90">v{sdkVersion}</span>
+          </div>
+        )}
+        {entryPoint && (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-muted-foreground">Entry point</span>
+            <span className="text-foreground/90 break-all">{entryPoint}</span>
           </div>
         )}
       </div>
@@ -236,31 +288,18 @@ export function Sidebar({
   const { serverIndex } = useServerIndex()
   const { data } = useStats(serverIndex)
   const { data: servers } = useServers()
+  const { data: statuses } = useServerStatuses(servers?.length ?? 0)
   const connected = data?.status === ApiStatus.Connected
 
   return (
-    <div className="flex-[0_220px]">
-      <div className="w-full mb-2">
+    <div className="w-[250px] shrink-0 flex flex-col gap-4">
+      <div>
         <h1 className="text-2xl font-normal mb-2">Pipes SDK</h1>
-
-        {servers && (
-          <div className="mt-2 mb-3">
-            <ServerSelect servers={servers} connected={connected} />
-            <RuntimeInfo runtime={data?.runtime} sdkVersion={data?.sdk?.version} />
-          </div>
-        )}
+        {servers && <ServerSelect servers={servers} connected={connected} statuses={statuses} />}
       </div>
-      {/*<PortalStatus url={data?.pipes[0]?.portal.url} />*/}
 
-      <div className="mt-2">
-        <PipeSelector pipes={pipes} selectedPipeId={selectedPipeId} onSelectPipe={onSelectPipe} />
-      </div>
-      {data?.code?.filename && (
-        <div className="my-2">
-          <div className="text-xs font-normal text-muted-foreground mb-0.5">Entry point</div>
-          <div className="text-foreground text-xs">{data?.code?.filename}</div>
-        </div>
-      )}
+      <PipeSelector pipes={pipes} selectedPipeId={selectedPipeId} onSelectPipe={onSelectPipe} />
+      <RuntimeInfo runtime={data?.runtime} sdkVersion={data?.sdk?.version} entryPoint={data?.code?.filename} />
     </div>
   )
 }
