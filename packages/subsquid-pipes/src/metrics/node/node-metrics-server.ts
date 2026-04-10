@@ -29,6 +29,10 @@ export type Stats = {
   sdk: {
     version: string
   }
+  runtime: {
+    name: 'bun' | 'node' | 'deno' | 'unknown'
+    version: string
+  }
   code: {
     filename: string
   }
@@ -55,6 +59,20 @@ export type Stats = {
   usage: {
     memory: number
   }
+}
+
+function detectRuntime(): Stats['runtime'] {
+  const versions = (process as any)?.versions ?? {}
+  if (typeof versions.bun === 'string' && versions.bun) {
+    return { name: 'bun', version: versions.bun }
+  }
+  if (typeof versions.deno === 'string' && versions.deno) {
+    return { name: 'deno', version: versions.deno }
+  }
+  if (typeof versions.node === 'string' && versions.node) {
+    return { name: 'node', version: versions.node }
+  }
+  return { name: 'unknown', version: '' }
 }
 
 function parseDate(date: any): Date | null {
@@ -284,6 +302,7 @@ class ExpressMetricServer implements MetricsServer {
         sdk: {
           version: npmVersion,
         },
+        runtime: detectRuntime(),
         usage: {
           memory: memory?.values?.[0]?.value || 0,
         },
