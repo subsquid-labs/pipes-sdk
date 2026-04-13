@@ -1,4 +1,5 @@
 import { evmPortalSource, factorySqliteDatabase } from '@subsquid/pipes/evm'
+
 import { erc20Transfers, uniswapV3, uniswapV3Decoder } from './decoders'
 
 /**
@@ -15,17 +16,18 @@ async function cli() {
   // from Base Mainnet using Portal API
   const stream = evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/base-mainnet',
-  }).pipeComposite({
-    transfers: erc20Transfers({
-      range: { from: '20,000,000', to: '+1,000' },
-    }),
-    uniswapV3: uniswapV3Decoder({
-      range,
-      factory: {
-        address: uniswapV3.base.mainnet.factory,
-        database: factorySqliteDatabase({ path: './uniswap-v3-pools.sqlite' }),
-      },
-    }),
+    outputs: {
+      transfers: erc20Transfers({
+        range: { from: '20,000,000', to: '+1,000' },
+      }),
+      uniswapV3: uniswapV3Decoder({
+        range,
+        factory: {
+          address: uniswapV3.base.mainnet.factory,
+          database: factorySqliteDatabase({ path: './uniswap-v3-pools.sqlite' }),
+        },
+      }),
+    },
   })
 
   // Process streamed data and log statistics for each batch

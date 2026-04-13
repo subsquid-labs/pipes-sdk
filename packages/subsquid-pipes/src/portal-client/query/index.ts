@@ -1,6 +1,6 @@
 import { unexpectedCase } from '@subsquid/util-internal'
 import { Validator } from '@subsquid/util-internal-validation'
-import { Simplify } from './common.js'
+
 import * as evm from './evm.js'
 import * as hyperliquidFills from './hyperliquid-fills.js'
 import * as solana from './solana.js'
@@ -12,7 +12,6 @@ export type { Block as HyperliquidFillsBlock, FieldSelection as HyperliquidFills
 export type { Block as SubstrateBlock, FieldSelection as SubstrateFieldSelection } from './substrate.js'
 
 export type { PortalBlock, PortalQuery } from './common.js'
-export type { evm, hyperliquidFills, solana, substrate }
 
 export type SolanaQuery = solana.Query
 export type EvmQuery = evm.Query
@@ -28,16 +27,9 @@ export type GetBlock<Q extends Query> = Q extends evm.Query
       ? substrate.Block<Q['fields']>
       : hyperliquidFills.Block<Q['fields']>
 
-export function createQuery<Q extends Query>(query: Q): Simplify<Q & Query> {
-  return {
-    ...query,
-    type: query.type,
-    fields: query.fields,
-  }
-}
-
 const BLOCK_SCHEMAS = new WeakMap<Query, Validator<any, any>>()
 
+/** FIXME split this function */
 export function getBlockSchema<Block>(query: Query): Validator<Block, any> {
   let schema = BLOCK_SCHEMAS.get(query)
   if (schema) return schema

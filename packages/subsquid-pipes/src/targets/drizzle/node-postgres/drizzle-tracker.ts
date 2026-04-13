@@ -1,7 +1,9 @@
-import { and, eq, Table } from 'drizzle-orm'
+import { Table, and, eq } from 'drizzle-orm'
 import { PgColumn } from 'drizzle-orm/pg-core'
+
 import { BlockCursor } from '~/core/index.js'
-import { getDrizzleTableName, SQD_PRIMARY_COLS } from './consts.js'
+
+import { SQD_PRIMARY_COLS, getDrizzleTableName } from './consts.js'
 import { Transaction } from './drizzle-target.js'
 import { generateTriggerSQL } from './rollback.js'
 

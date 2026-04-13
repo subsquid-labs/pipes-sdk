@@ -1,5 +1,7 @@
-import { Pause, Play } from 'lucide-react'
 import { useMemo, useState } from 'react'
+
+import { Pause, Play } from 'lucide-react'
+
 import { useTransformationExemplar } from '~/api/metrics'
 import { Code } from '~/components/ui/code'
 import { Toggle } from '~/components/ui/toggle'
@@ -18,7 +20,6 @@ export function TransformerExample({
   onClick?: (childIsOpen: boolean) => void
 }) {
   const opacity = transformer.data ? 1 : 0.5
-  const fontSize = transformer.data ? 12 : 10
   const [open, setOpen] = useState(false)
 
   const data = useMemo(() => {
@@ -32,8 +33,8 @@ export function TransformerExample({
         // Convert the second element into a TypeScript comment showing the number of truncated items
         res.replace(/"\.\.\.\s+(\d+)\s+more\s+\.\.\."/gm, '// ... truncated $1 items ...')
       : // If not open, just truncate to 100 characters
-        res.length > 100
-        ? res.substring(0, 100) + '...'
+        res.length > 79
+        ? res.substring(0, 79) + '...'
         : res
   }, [transformer.data, open])
 
@@ -46,7 +47,7 @@ export function TransformerExample({
           onClick?.(!open)
         }}
       >
-        <div className="pt-3 pl-1" style={{ opacity, fontSize }}>
+        <div className="pt-3 pl-1 text-xs" style={{ opacity }}>
           {transformer.name}
         </div>
         <div className="text-xxs text-nowrap">
@@ -66,10 +67,10 @@ export function TransformerExample({
   )
 }
 
-export function TransformationExemplar() {
+export function TransformationExemplar({ pipeId }: { pipeId: string }) {
   const [enabled, useEnabled] = useState(true)
   const [autoStopped, useAutoStoppedEnabled] = useState(false)
-  const { data } = useTransformationExemplar({ enabled })
+  const { data } = useTransformationExemplar({ enabled, pipeId })
 
   // If the exemplar is opened, and we are enabled, disable it (pause updates).
   // If the exemplar is closed, and we were auto-stopped, re-enable it (resume updates).
@@ -97,7 +98,7 @@ export function TransformationExemplar() {
         </Toggle>
       </div>
       {data?.transformation ? (
-        <div className="max-h-[400px] overflow-auto border rounded-md px-1 dotted-background">
+        <div className="max-h-[400px] overflow-auto border rounded-md px-1 pb-1 dotted-background">
           <TransformerExample transformer={data.transformation} onClick={handleOnClick} />
         </div>
       ) : (

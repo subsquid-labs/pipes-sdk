@@ -1,4 +1,5 @@
-import { BatchCtx, BlockCursor } from '~/core/index.js'
+import { BatchCtx, BlockCursor, RollbackRecord, resolveForkCursor } from '~/core/index.js'
+
 import { ClickhouseStore } from './clickhouse-store.js'
 
 // FIXME: we need refactor it to make order more deterministic and predictable - WHY?
@@ -141,46 +142,19 @@ export class ClickhouseState {
       query: `SELECT * FROM ${this.#qualifiedName} ORDER BY "timestamp" DESC`,
       format: 'JSONEachRow',
     })
-    for await (const rows of res.stream<{ rollback_chain: string; finalized: string }>()) {
-      for (const row of rows) {
-        const raw = row.json()
-        const blocks = JSON.parse(raw.rollback_chain) as BlockCursor[]
-        if (!blocks.length) continue
 
-        blocks.sort((a, b) => b.number - a.number)
-
-        const finalized = JSON.parse(raw.finalized) as BlockCursor
-
-        for (const block of blocks) {
-          const found = previousBlocks.find((u) => u.number === block.number && u.hash === block.hash)
-          if (found) {
-            return found
+    async function* records(): AsyncIterable<RollbackRecord> {
+      for await (const rows of res.stream<{ rollback_chain: string; finalized: string }>()) {
+        for (const row of rows) {
+          const raw = row.json()
+          yield {
+            rollbackChain: JSON.parse(raw.rollback_chain) as BlockCursor[],
+            finalized: JSON.parse(raw.finalized) as BlockCursor,
           }
-
-          if (!previousBlocks.length) {
-            if (block.number < finalized.number) {
-              /**
-               *  We can't go beyond the finalized block.
-               *  TODO: Dead end? What should we do?
-               */
-
-              return null
-            }
-
-            /*
-             * This indicates a deep blockchain fork where we've exhausted all previously known blocks.
-             * We'll return the current block as the fork point
-             * and let the portal fetch a new valid chain of blocks.
-             */
-            return block
-          }
-
-          // Remove already visited blocks
-          previousBlocks = previousBlocks.filter((u) => u.number < block.number)
         }
       }
     }
 
-    return null
+    return resolveForkCursor(records(), previousBlocks)
   }
 }

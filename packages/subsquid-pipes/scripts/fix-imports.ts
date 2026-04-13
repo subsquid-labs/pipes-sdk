@@ -2,6 +2,7 @@
 import 'zx/globals'
 
 import path from 'node:path'
+
 import { parse, print, visit } from 'recast'
 import parser from 'recast/parsers/typescript.js'
 
@@ -16,6 +17,10 @@ function resolvePathAlias(importPath: string, file: string) {
 
 function fixImportPath(importPath: string, file: string, ext: string) {
   importPath = resolvePathAlias(importPath, file)
+
+  if (importPath === '$context') {
+    return '@subsquid/pipes/runtime/node/context'
+  }
 
   if (!/\..*\.(js|ts)$/.test(importPath)) {
     return importPath

@@ -1,12 +1,14 @@
 import { ArrowUpRightIcon, Terminal } from 'lucide-react'
+
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Button } from '~/components/ui/button'
 import { Code } from '~/components/ui/code'
+
 import example from './code.example?raw'
 
 export function PipelineDisconnected() {
   return (
-    <div className="w-full ">
+    <div className="flex-1">
       <Alert variant="destructive">
         <Terminal />
         <AlertTitle>Your pipe is offline!</AlertTitle>

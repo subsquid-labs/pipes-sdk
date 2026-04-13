@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { solana } from '~/portal-client/index.js'
-import { SolanaQueryBuilder } from '~/solana/solana-query-builder.js'
-import { closeMockPortal, createMockPortal, MockPortal } from '../tests/index.js'
+
+import * as solana from '~/portal-client/query/solana.js'
+import { solanaQuery } from '~/solana/solana-query-builder.js'
+
+import { MockPortal, closeMockPortal, createMockPortal } from '../tests/index.js'
 import { solanaPortalSource } from './solana-portal-source.js'
 
 describe('Portal abstract stream', () => {
@@ -22,7 +24,7 @@ describe('Portal abstract stream', () => {
       },
     ])
 
-    const fields: solana.FieldSelection = {
+    const fields = {
       log: { programId: true, message: true },
       block: { number: true, hash: true, timestamp: true },
       transaction: { version: true },
@@ -30,15 +32,15 @@ describe('Portal abstract stream', () => {
       tokenBalance: { account: true },
       balance: { account: true },
       reward: { lamports: true },
-    } as const
+    } satisfies solana.FieldSelection
 
     const stream = solanaPortalSource({
       portal: mockPortal.url,
-      query: new SolanaQueryBuilder().addFields(fields).addRange({ from: 0, to: 2 }),
+      outputs: solanaQuery().addFields(fields).addRange({ from: 0, to: 2 }),
     })
 
     for await (const { data } of stream) {
-      const [block] = data.blocks
+      const [block] = data
 
       expect(block.logs).toBeInstanceOf(Array)
       expect(block.transactions).toBeInstanceOf(Array)

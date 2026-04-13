@@ -1,6 +1,6 @@
 import { IncomingMessage, Server, ServerResponse, createServer } from 'http'
 
-export type MockData<T extends object = any> = T
+import { Portal } from '~/core/query-builder.js'
 
 type ValidateRequest = (res: any) => unknown
 
@@ -18,6 +18,7 @@ export type MockResponse =
           timestamp?: number
         }
         logs?: any[]
+        instructions?: any[]
       }[]
       head?: {
         finalized?: { number: number; hash: string }
@@ -167,12 +168,20 @@ function getServerAddress(server: Server): string {
   return `http://127.0.0.1:${address.port}`
 }
 
-export async function readAll(stream: AsyncIterable<MockData>) {
-  const res: MockData[] = []
+export async function readAll<T>(stream: AsyncIterable<{ data: T[] }>): Promise<T[]> {
+  const res: T[] = []
 
   for await (const chunk of stream) {
     res.push(...chunk.data)
   }
 
   return res
+}
+
+export function mockPortalRestApi(overrides: Partial<Portal> = {}): Portal {
+  return {
+    getHead: async () => ({ number: 1, hash: '0x' }),
+    resolveTimestamp: async () => 0,
+    ...overrides,
+  }
 }

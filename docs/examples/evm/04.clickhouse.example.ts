@@ -18,28 +18,25 @@ async function cli() {
 
   await evmPortalSource({
     portal: 'https://portal.sqd.dev/datasets/base-mainnet',
-  })
-    .pipe(
-      evmDecoder({
-        range: { from: 'latest' },
-        events: {
-          transfers: commonAbis.erc20.events.Transfer,
-        },
-      }),
-    )
-    .pipeTo(
-      clickhouseTarget({
-        client,
-        onRollback: async () => {},
-        onData: async ({ data, ctx }) => {
-          const span = ctx.profiler.start('my measure')
-          console.log('batch')
-          console.log(`parsed ${data.transfers.length} transfers`)
-          console.log('----------------------------------')
-          span.end()
-        },
-      }),
-    )
+    outputs: evmDecoder({
+      range: { from: 'latest' },
+      events: {
+        transfers: commonAbis.erc20.events.Transfer,
+      },
+    }),
+  }).pipeTo(
+    clickhouseTarget({
+      client,
+      onRollback: async () => {},
+      onData: async ({ data, ctx }) => {
+        const span = ctx.profiler.start('my measure')
+        console.log('batch')
+        console.log(`parsed ${data.transfers.length} transfers`)
+        console.log('----------------------------------')
+        span.end()
+      },
+    }),
+  )
 }
 
 void cli()

@@ -1,12 +1,15 @@
 import { useMemo } from 'react'
-import { useStats } from '~/api/metrics'
+
+import { usePipe } from '~/api/metrics'
 import { Code } from '~/components/ui/code'
 
-export function QueryExemplar() {
-  const { data } = useStats()
+export function QueryExemplar({ pipeId }: { pipeId: string }) {
+  const data = usePipe(pipeId)
+
+  if (!data) return <div>No data</div>
 
   const query = useMemo(() => {
-    if (!data?.portal.query) return ''
+    if (!data.portal.query) return ''
 
     const { type, fromBlock, toBlock, fields, ...rest } = data.portal.query
 
@@ -22,7 +25,9 @@ export function QueryExemplar() {
       null,
       2,
     )
-  }, [data?.portal.query])
+  }, [data.portal.query])
+
+  const curl = `curl -X POST ${data.portal.url}/stream -H "Content-Type: application/json" -d '${query}'`
 
   return (
     <div className="text-sm">
@@ -37,6 +42,11 @@ export function QueryExemplar() {
       ) : (
         <div>No data</div>
       )}
+
+      <div className="mb-1 mt-2">cURL</div>
+      <Code language="bash" className="text-xxs max-h-[400px] overflow-auto px-1">
+        {curl}
+      </Code>
     </div>
   )
 }
