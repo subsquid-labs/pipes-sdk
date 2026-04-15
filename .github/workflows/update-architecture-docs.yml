@@ -26,15 +26,13 @@ jobs:
 
       - name: Install GitHub Copilot CLI
         run: npm install -g @githubnext/github-copilot-cli
-
-      - name: Authenticate Copilot CLI
-        run: |
-          echo "${{ secrets.COPILOT_CLI_TOKEN }}" | copilot auth login --with-token
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Discover packages
         id: packages
         run: |
-          PACKAGES=$(ls -d packages/*/ 2>/dev/null | sed 's|/$||' | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          PACKAGES=$(find packages -mindepth 1 -maxdepth 1 -type d | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "list=$PACKAGES" >> "$GITHUB_OUTPUT"
 
       - name: Update architecture docs per package
@@ -73,6 +71,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No architecture doc changes to commit."
           else
-            git commit -m "docs: update architectural documentation [skip ci]"
+            CHANGED=$(git diff --cached --name-only | grep -oP 'packages/[^/]+' | sort -u | tr '\n' ' ')
+            git commit -m "docs: update architectural documentation for $CHANGED[skip ci]"
             git push
           fi
