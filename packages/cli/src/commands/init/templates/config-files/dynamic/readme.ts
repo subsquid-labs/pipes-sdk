@@ -93,7 +93,7 @@ const pipeline = evmPortalSource({
          * \`profiler\` is an optional parameter to attach a specific id to this decoder.
          * Although not required, it's recommended for a better granularity of the metrics collection.
          */
-        profiler: { id: 'my-decoder' },
+        profiler: { name: 'my-decoder' },
         range: { from: 'latest' },
         events: { /* your events */ },
     }),

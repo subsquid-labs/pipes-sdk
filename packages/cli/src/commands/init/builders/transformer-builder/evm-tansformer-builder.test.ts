@@ -95,7 +95,7 @@ describe('EVM Template Builder', () => {
       }).parse(process.env)
 
       const erc20Transfers = evmDecoder({
-        profiler: { id: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
+        profiler: { name: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
         range: { from: '12,369,621' },
         contracts: [
           '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
@@ -200,7 +200,7 @@ describe('EVM Template Builder', () => {
       }).parse(process.env)
 
       const erc20Transfers = evmDecoder({
-        profiler: { id: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
+        profiler: { name: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
         range: { from: '12,369,621' },
         contracts: [
           '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
