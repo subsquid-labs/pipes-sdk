@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import crypto from 'node:crypto'
+import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { Config } from '~/types/init.js'
 import { svmTemplates } from '../../templates/pipes/svm/index.js'
 import { TransformerBuilder } from './index.js'
 import { ProjectWriter } from '~/utils/project-writer.js'
-const projectWriter = new ProjectWriter('mock-folder')
 
 const whirlpoolMetadata = [
   {
@@ -34,6 +34,19 @@ const whirlpoolMetadata = [
 ]
 
 describe('SVM Template Builder', () => {
+  const projectWriter = new ProjectWriter('mock-folder')
+  let spy: MockInstance
+
+  beforeAll(() => {
+    spy = vi.spyOn(crypto, 'randomBytes').mockImplementation(
+      () => Buffer.from('a1b2c3d4', 'hex') as any,
+    )
+  })
+
+  afterAll(() => {
+    spy.mockRestore()
+  })
+
   it('should build index.ts file using custom template', async () => {
     const config: Config<'svm'> = {
       projectFolder: 'mock-folder',
@@ -81,21 +94,12 @@ describe('SVM Template Builder', () => {
 
       export async function main() {
         await solanaPortalSource({
+          id: 'a1b2c3d4',
           portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
+          outputs: {
+            custom,
+          },
         })
-        .pipeComposite({
-          custom,
-        })
-        /**
-         * Or optionally use only a subset of events by passing the events object directly:
-         * \`\`\`ts
-         * .pipe(({ contract1 }) => {
-         *   return contract1.SomeInstruction.map(e => {
-         *     // do something
-         *   })
-         * })
-         * \`\`\`
-         */
         .pipeTo(clickhouseTarget({
           client: createClient({
               username: env.CLICKHOUSE_USER,
@@ -141,12 +145,12 @@ describe('SVM Template Builder', () => {
     `)
   })
 
-  it.skip('should build index.ts file using single pipe template', async () => {
+  it('should build index.ts file using token-balances template', async () => {
     const config: Config<'svm'> = {
       projectFolder: 'mock-folder',
       networkType: 'svm',
-      network: 'ethereum-mainnet',
-      templates: [],
+      network: 'solana-mainnet',
+      templates: [svmTemplates.tokenBalances],
       sink: 'postgresql',
       packageManager: 'pnpm',
     }
@@ -155,14 +159,11 @@ describe('SVM Template Builder', () => {
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
-      import { SolanaQueryBuilder, solanaPortalSource } from "@subsquid/pipes/solana";
+      import { solanaPortalSource, solanaQuery } from "@subsquid/pipes/solana";
       import { z } from "zod";
       import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres";
       import { drizzle } from "drizzle-orm/node-postgres";
       import { tokenBalancesTable } from "./schemas.js";
-      import { createTransformer } from "@subsquid/pipes";
-      import { PortalStreamData } from "@subsquid/pipes/portal-client";
-      import { Block as SolanaBlock, FieldSelection as SolanaFieldSelection } from "@subsquid/pipes/dist/portal-client/query/solana.js";
 
       const env = z.object({
         DB_CONNECTION_STR: z.string(),
@@ -177,38 +178,32 @@ describe('SVM Template Builder', () => {
         amount: number
       }
 
-      export const tokenBalances = createTransformer<
-        PortalStreamData<SolanaBlock<SolanaFieldSelection>>,
-        TokenBalance[],
-        SolanaQueryBuilder
-      >({
-        query: ({ queryBuilder }) => {
-          queryBuilder
-            .addFields({
-              block: {
-                number: true,
-                hash: true,
-                timestamp: true,
-              },
-              tokenBalance: {
-                preDecimals: true,
-                preAmount: true,
-                postAmount: true,
-                preOwner: true,
-                postOwner: true,
-                preMint: true,
-              },
-            })
-            .addTokenBalance({
-              range: { from: '372,195,730' },
-              request: {
-                // You can filter in that way. it is much faster, but the query has a limit of 5000 addresses
-                // preMint: ['tokenProgramId']
-              },
-            })
-        },
-        transform: (data) =>
-          data.blocks.flatMap((block) =>
+      const tokenBalances = solanaQuery()
+        .addFields({
+          block: {
+            number: true,
+            hash: true,
+            timestamp: true,
+          },
+          tokenBalance: {
+            preDecimals: true,
+            preAmount: true,
+            postAmount: true,
+            preOwner: true,
+            postOwner: true,
+            preMint: true,
+          },
+        })
+        .addTokenBalance({
+          range: { from: '372,195,730' },
+          request: {
+            // You can filter in that way. it is much faster, but the query has a limit of 5000 addresses
+            // preMint: ['tokenProgramId']
+          },
+        })
+        .build()
+        .pipe((data) =>
+          data.flatMap((block) =>
             block.tokenBalances.flatMap((balance) => {
               const balances: TokenBalance[] = []
 
@@ -237,25 +232,16 @@ describe('SVM Template Builder', () => {
               return balances.filter((balance): balance is TokenBalance => balance.owner !== '')
             }),
           ),
-      })
+        )
 
       export async function main() {
         await solanaPortalSource({
-          portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
+          id: 'a1b2c3d4',
+          portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
+          outputs: {
+            tokenBalances,
+          },
         })
-        .pipeComposite({
-          tokenBalances,
-        })
-        /**
-         * Or optionally use only a subset of events by passing the events object directly:
-         * \`\`\`ts
-         * .pipe(({ contract1 }) => {
-         *   return contract1.SomeInstruction.map(e => {
-         *     // do something
-         *   })
-         * })
-         * \`\`\`
-         */
         .pipeTo(drizzleTarget({
           db: drizzle(env.DB_CONNECTION_STR),
           tables: [

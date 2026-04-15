@@ -12,23 +12,14 @@ export const template = `{{#deduplicatedImports}}
 {{/transformerTemplates}}
 export async function main() {
   await solanaPortalSource({
+    id: '{{pipeId}}',
     portal: 'https://portal.sqd.dev/datasets/{{network}}',
-  })
-  .pipeComposite({
+    outputs: {
 {{#transformerTemplates}}
-    {{{templateId}}},
+      {{{templateId}}},
 {{/transformerTemplates}}
+    },
   })
-  /**
-   * Or optionally use only a subset of events by passing the events object directly:
-   * \`\`\`ts
-   * .pipe(({ contract1 }) => {
-   *   return contract1.SomeInstruction.map(e => {
-   *     // do something
-   *   })
-   * })
-   * \`\`\`
-   */
   .pipeTo({{{sinkTemplate}}})
 }
 

@@ -13,17 +13,18 @@ export const template = `{{#deduplicatedImports}}
 {{/transformerTemplates}}
 export async function main() {
   await evmPortalSource({
+    id: '{{pipeId}}',
     portal: 'https://portal.sqd.dev/datasets/{{network}}',
-  })
-  .pipeComposite({
+    outputs: {
 {{#transformerTemplates}}
 {{#templateId}}
-    {{{templateId}}},
+      {{{templateId}}},
 {{/templateId}}
 {{#templateIds}}
-    {{{.}}},
+      {{{.}}},
 {{/templateIds}}
 {{/transformerTemplates}}
+    },
   })
   .pipeTo({{{sinkTemplate}}})
 }

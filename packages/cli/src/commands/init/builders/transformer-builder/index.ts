@@ -3,6 +3,7 @@ import Mustache from 'mustache'
 import { Config, NetworkType, PipeTemplateMeta } from '~/types/init.js'
 import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
 import { ProjectWriter } from '~/utils/project-writer.js'
+import { generatePipeId } from '~/utils/random-id.js'
 
 import { evmTemplates } from '../../templates/pipes/evm/index.js'
 import { svmTemplates } from '../../templates/pipes/svm/index.js'
@@ -76,6 +77,7 @@ export class TransformerBuilder<N extends NetworkType> {
        * At the moment we don't support multi-chain pipes, so network
        * will be the same for all transfomers
        */
+      pipeId: generatePipeId(),
       network: this.config.network,
       deduplicatedImports,
       envTemplate: envCode,

@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import crypto from 'node:crypto'
+import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 import { Config } from '~/types/init.js'
 import { ProjectWriter } from '~/utils/project-writer.js'
@@ -8,6 +9,17 @@ import { TransformerBuilder } from './index.js'
 
 describe('EVM Template Builder', () => {
   const projectWriter = new ProjectWriter('mock-folder')
+  let spy: MockInstance
+
+  beforeAll(() => {
+    spy = vi.spyOn(crypto, 'randomBytes').mockImplementation(
+      () => Buffer.from('a1b2c3d4', 'hex') as any,
+    )
+  })
+
+  afterAll(() => {
+    spy.mockRestore()
+  })
   const wethMetadata = [
     {
       contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
@@ -106,10 +118,11 @@ describe('EVM Template Builder', () => {
 
       export async function main() {
         await evmPortalSource({
+          id: 'a1b2c3d4',
           portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-        })
-        .pipeComposite({
-          erc20Transfers,
+          outputs: {
+            erc20Transfers,
+          },
         })
         .pipeTo(clickhouseTarget({
           client: createClient({
@@ -238,11 +251,12 @@ describe('EVM Template Builder', () => {
 
       export async function main() {
         await evmPortalSource({
+          id: 'a1b2c3d4',
           portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-        })
-        .pipeComposite({
-          erc20Transfers,
-          uniswapV3Swaps,
+          outputs: {
+            erc20Transfers,
+            uniswapV3Swaps,
+          },
         })
         .pipeTo(clickhouseTarget({
           client: createClient({
@@ -340,10 +354,11 @@ describe('EVM Template Builder', () => {
 
       export async function main() {
         await evmPortalSource({
+          id: 'a1b2c3d4',
           portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-        })
-        .pipeComposite({
-          custom,
+          outputs: {
+            custom,
+          },
         })
         .pipeTo(drizzleTarget({
           db: drizzle(env.DB_CONNECTION_STR),

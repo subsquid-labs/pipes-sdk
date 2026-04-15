@@ -1,10 +1,4 @@
-import { createTransformer } from '@subsquid/pipes'
-import { PortalStreamData } from '@subsquid/pipes/portal-client'
-import { SolanaQueryBuilder } from '@subsquid/pipes/solana'
-import {
-  Block as SolanaBlock,
-  FieldSelection as SolanaFieldSelection,
-} from 'node_modules/@subsquid/pipes/dist/portal-client/query/solana.js'
+import { solanaQuery } from '@subsquid/pipes/solana'
 
 interface TokenBalance {
   blockNumber: number
@@ -15,38 +9,32 @@ interface TokenBalance {
   amount: number
 }
 
-export const tokenBalances = createTransformer<
-  PortalStreamData<SolanaBlock<SolanaFieldSelection>>,
-  TokenBalance[],
-  SolanaQueryBuilder
->({
-  query: ({ queryBuilder }) => {
-    queryBuilder
-      .addFields({
-        block: {
-          number: true,
-          hash: true,
-          timestamp: true,
-        },
-        tokenBalance: {
-          preDecimals: true,
-          preAmount: true,
-          postAmount: true,
-          preOwner: true,
-          postOwner: true,
-          preMint: true,
-        },
-      })
-      .addTokenBalance({
-        range: { from: '372,195,730' },
-        request: {
-          // You can filter in that way. it is much faster, but the query has a limit of 5000 addresses
-          // preMint: ['tokenProgramId']
-        },
-      })
-  },
-  transform: (data) =>
-    data.blocks.flatMap((block) =>
+const tokenBalances = solanaQuery()
+  .addFields({
+    block: {
+      number: true,
+      hash: true,
+      timestamp: true,
+    },
+    tokenBalance: {
+      preDecimals: true,
+      preAmount: true,
+      postAmount: true,
+      preOwner: true,
+      postOwner: true,
+      preMint: true,
+    },
+  })
+  .addTokenBalance({
+    range: { from: '372,195,730' },
+    request: {
+      // You can filter in that way. it is much faster, but the query has a limit of 5000 addresses
+      // preMint: ['tokenProgramId']
+    },
+  })
+  .build()
+  .pipe((data) =>
+    data.flatMap((block) =>
       block.tokenBalances.flatMap((balance) => {
         const balances: TokenBalance[] = []
 
@@ -75,4 +63,4 @@ export const tokenBalances = createTransformer<
         return balances.filter((balance): balance is TokenBalance => balance.owner !== '')
       }),
     ),
-})
+  )

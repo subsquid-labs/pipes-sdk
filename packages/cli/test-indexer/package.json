@@ -1,0 +1,34 @@
+{
+  "name": "test-indexer",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsup src/index.ts --format esm --dts",
+    "lint": "biome check . --write",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "@subsquid/borsh": "^0.3.0",
+    "@subsquid/evm-abi": "0.3.1",
+    "@subsquid/evm-codec": "0.3.0",
+    "@subsquid/pipes": "latest",
+    "better-sqlite3": "^12.4.5",
+    "dotenv": "^16.4.5",
+    "drizzle-kit": "^0.30.0",
+    "drizzle-orm": "^0.44.7",
+    "pg": "^8.16.3",
+    "zod": "^4.3.4"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.4",
+    "@types/node": "^22.14.1",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.2"
+  }
+}
