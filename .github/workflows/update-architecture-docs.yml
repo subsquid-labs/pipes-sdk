@@ -26,8 +26,6 @@ jobs:
 
       - name: Install GitHub Copilot CLI
         run: npm install -g @githubnext/github-copilot-cli
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Discover packages
         id: packages
@@ -37,6 +35,7 @@ jobs:
 
       - name: Update architecture docs per package
         env:
+          GITHUB_TOKEN: ${{ secrets.COPILOT_TOKEN }}
           REPO_ROOT: ${{ github.workspace }}
           PACKAGES_JSON: ${{ steps.packages.outputs.list }}
         run: |
