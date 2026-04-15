@@ -1,0 +1,78 @@
+name: Update Architecture Docs
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+
+jobs:
+  update-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install GitHub Copilot CLI
+        run: npm install -g @githubnext/github-copilot-cli
+
+      - name: Authenticate Copilot CLI
+        run: |
+          echo "${{ secrets.COPILOT_CLI_TOKEN }}" | copilot auth login --with-token
+
+      - name: Discover packages
+        id: packages
+        run: |
+          PACKAGES=$(ls -d packages/*/ 2>/dev/null | sed 's|/$||' | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "list=$PACKAGES" >> "$GITHUB_OUTPUT"
+
+      - name: Update architecture docs per package
+        env:
+          REPO_ROOT: ${{ github.workspace }}
+          PACKAGES_JSON: ${{ steps.packages.outputs.list }}
+        run: |
+          PACKAGES=$(echo "$PACKAGES_JSON" | jq -r '.[]')
+          PACKAGE_LIST=""
+          while IFS= read -r pkg; do
+            PACKAGE_LIST+="  - $pkg"$'\n'
+          done <<< "$PACKAGES"
+
+          PROMPT="You are running inside a GitHub Actions workflow for the repository at $REPO_ROOT.
+
+          Goal: keep per-package architectural documentation in sync with the code on every pull request.
+
+          For EACH of the following package subfolders, spin up an independent general-purpose sub-agent IN PARALLEL (one agent per subfolder), and have that agent invoke the \`/map-architecture\` skill scoped to its subfolder. Each agent must either CREATE the architectural documents for its package if none exist, or UPDATE the existing documents to reflect the latest changes in that subfolder. Do not mix concerns between packages — one agent per package, each restricted to its own subfolder.
+
+          Packages to process:
+          $PACKAGE_LIST
+
+          Rules:
+          - Launch all per-package sub-agents concurrently in a single batch.
+          - Each sub-agent must use the \`/map-architecture\` skill; do not improvise a different approach.
+          - Only write/update documentation files; do not modify source code.
+          - When every sub-agent finishes, report a short summary of what was created or updated per package."
+
+          copilot -p "$PROMPT" --allow-tool write
+
+      - name: Commit and push updated docs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add packages/
+          if git diff --cached --quiet; then
+            echo "No architecture doc changes to commit."
+          else
+            git commit -m "docs: update architectural documentation [skip ci]"
+            git push
+          fi
