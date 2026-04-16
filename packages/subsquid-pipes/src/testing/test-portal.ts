@@ -7,6 +7,10 @@ type ValidateRequest = (res: any) => unknown
 export type MockResponse =
   | {
       statusCode: 204
+      head?: {
+        finalized?: { number: number; hash: string }
+        latest?: { number: number }
+      }
       validateRequest?: ValidateRequest
     }
   | {
@@ -107,8 +111,9 @@ export async function createMockPortal(
 
         switch (mockResp.statusCode) {
           case 200:
+          case 204: {
             const headers: Record<string, string | number> = {
-              'Content-Type': 'application/jsonl',
+              ...(mockResp.statusCode === 200 ? { 'Content-Type': 'application/jsonl' } : {}),
             }
             if (mockResp.head?.finalized?.number) {
               headers['X-Sqd-Finalized-Head-Number'] = mockResp.head.finalized.number
@@ -121,11 +126,14 @@ export async function createMockPortal(
             }
 
             res.writeHead(mockResp.statusCode, headers)
-            // Send each mock data item as a JSON line
-            mockResp.data.forEach((data) => {
-              res.write(JSON.stringify(data) + '\n')
-            })
+            if (mockResp.statusCode === 200) {
+              // Send each mock data item as a JSON line
+              mockResp.data.forEach((data) => {
+                res.write(JSON.stringify(data) + '\n')
+              })
+            }
             break
+          }
 
           case 409:
             res.writeHead(mockResp.statusCode, { 'Content-Type': 'application/json' })

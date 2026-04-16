@@ -231,6 +231,7 @@ function createPortalStream<Q extends Query>(
   const buffer = new StreamBuffer<GetBlock<Q>>(bufferOptions)
 
   let { fromBlock = 0, toBlock, parentBlockHash } = query
+  let finalizedHighWaterMark: BlockRef | undefined
 
   const ingest = async () => {
     while (!buffer.signal.aborted) {
@@ -255,12 +256,21 @@ function createPortalStream<Q extends Query>(
         },
       )
 
+      let head = res.head
+      if (head.finalized) {
+        if (finalizedHighWaterMark && head.finalized.number < finalizedHighWaterMark.number) {
+          head = { ...head, finalized: finalizedHighWaterMark }
+        } else {
+          finalizedHighWaterMark = head.finalized
+        }
+      }
+
       // We are on head, we need to wait a little bit until new dta arrives
       if (res.status === 204) {
         await buffer.put({
           blocks: [],
           meta: { bytes: 0, requestedFromBlock: fromBlock, lastBlockReceivedAt: new Date(), requests },
-          head: res.head,
+          head,
         })
         buffer.flush()
         if (headPollInterval > 0) {
@@ -299,7 +309,7 @@ function createPortalStream<Q extends Query>(
             }
           }
 
-          const finalizedHead = res.head.finalized?.number
+          const finalizedHead = head.finalized?.number
 
           // Split blocks into finalized and unfinalized
           const [finalizedBlocks, unfinalizedBlocks] = finalizedHead
@@ -309,7 +319,7 @@ function createPortalStream<Q extends Query>(
           // Push finalized blocks as a batch
           await buffer.put({
             blocks: finalizedBlocks.map((b) => b.block),
-            head: res.head,
+            head,
             meta: {
               bytes: finalizedBlocks.reduce((a, b) => a + b.bytes, 0),
               requestedFromBlock,
@@ -322,7 +332,7 @@ function createPortalStream<Q extends Query>(
             await buffer.put(
               {
                 blocks: [block],
-                head: res.head,
+                head,
                 meta: {
                   bytes,
                   requestedFromBlock,
