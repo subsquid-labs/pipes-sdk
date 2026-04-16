@@ -1,0 +1,344 @@
+You are a senior reviewer running cold on an artifact. Your deliverable is a
+cross-model consolidated review.
+
+REQUIRED: produce independent reviews from each of the following models, then
+consolidate. Name each model explicitly in your output so I can verify coverage.
+
+Models to consult:
+  1. Claude Opus 4.5       (model id: claude-opus-4.5)
+  2. Gemini 2.5 Pro if you can reach it; otherwise Claude Sonnet 4.5
+     (preferred: gemini-2.5-pro; fallback: claude-sonnet-4.5)
+  3. GPT-5.4               (model id: gpt-5.4)
+
+If you cannot reach a model, state so explicitly in the output — do not
+silently drop it and do not substitute without saying what you substituted.
+
+For each model, report:
+  - Blockers (must-fix before advancing)
+  - Risks (might-fix, with severity)
+  - Gaps (missing considerations)
+  - Open questions (things the artifact cannot answer)
+
+After the per-model sections, write a CONSOLIDATED section covering:
+  - Agreements across the three models
+  - Disagreements (who said what)
+  - The union of blockers
+  - Your own judgment call on which blockers are real
+
+Do NOT rewrite the artifact. Do NOT be agreeable. Be specific, cite lines.
+
+Stage: coding
+Goal: implement the approved fix for Portal finalized-head regression with targeted validation and no scope creep
+
+--- STAGE QUESTIONS ---
+- Does the diff implement the plan and nothing more? Flag scope creep.
+- Security / correctness issues?
+- Dead code, unreachable branches, unused exports?
+- Test coverage for edge cases named in the plan?
+- Any step from `02-plan.md` that isn't reflected in the diff?
+
+--- ARTIFACT ---
+[03-summary.md]
+# Coding Summary: Fix Finalization Regression
+
+## What changed
+
+Implemented the approved stream-scoped finalized-head high-water mark in `createPortalStream()` so a regressed Portal finalized head is clamped to the highest previously observed `BlockRef` for the current stream session.
+
+The implementation preserves the entire prior `BlockRef` when clamping, not just the number, so downstream consumers never see a synthetic `(number, hash)` pair.
+
+## Plan mapping
+
+1. **Step 1 complete:** Added `finalizedHighWaterMark` in `packages/subsquid-pipes/src/portal-client/client.ts` and routed both the `204` path and the finalized/unfinalized split through a guarded `head` value.
+2. **Steps 2-4 complete:** Added `packages/subsquid-pipes/src/portal-client/client.test.ts` covering:
+   - finalized-head regression clamps to the high-water mark and preserves the hash
+   - monotonic finalized heads pass through unchanged
+   - undefined finalized head initializes the high-water mark when it first appears
+3. **Step 5 complete:** Extended `packages/subsquid-pipes/src/testing/test-portal.ts` so `204` responses can carry head headers, then added a `204` regression test to verify the guard also applies on head-only updates.
+4. **Step 6 partially complete:** Relevant lint, build, and non-external test validation passed. The package-wide `pnpm test` command still fails in this workspace because the ClickHouse integration tests expect a local server on `127.0.0.1:10123`.
+
+## Files changed
+
+- `packages/subsquid-pipes/src/portal-client/client.ts`
+- `packages/subsquid-pipes/src/portal-client/client.test.ts`
+- `packages/subsquid-pipes/src/testing/test-portal.ts`
+
+## Validation
+
+### Passed
+
+- `pnpm exec biome check --write src/portal-client/client.ts src/portal-client/client.test.ts src/testing/test-portal.ts`
+- `pnpm exec vitest run src/portal-client/client.test.ts`
+  - Result: 4 tests passed
+- `pnpm exec vitest run --exclude 'src/targets/clickhouse/**' --exclude 'src/targets/drizzle/**'`
+  - Result: 22 test files passed, 250 tests passed
+- `pnpm build`
+  - Result: succeeded
+  - Note: emits an existing warning from `src/version.ts` about `import.meta` in CJS output
+
+### Environment-limited failure
+
+- `pnpm test`
+  - Fails in `src/targets/clickhouse/clickhouse-target.test.ts`
+  - Error: `ECONNREFUSED` for `127.0.0.1:10123` / `::1:10123`
+  - Assessment: existing local-environment dependency on ClickHouse, not caused by this change
+
+## Scope check
+
+The diff stays within the approved plan:
+- one production-code change at the stream ingestion boundary
+- one targeted test file added
+- one mock helper extended to exercise the `204` path
+
+No public API changes, migrations, or persistence-layer changes were introduced.
+
+[03-diff.patch]
+diff --git a/packages/subsquid-pipes/src/portal-client/client.ts b/packages/subsquid-pipes/src/portal-client/client.ts
+index e5b7092..4f88a01 100644
+--- a/packages/subsquid-pipes/src/portal-client/client.ts
++++ b/packages/subsquid-pipes/src/portal-client/client.ts
+@@ -231,6 +231,7 @@ function createPortalStream<Q extends Query>(
+   const buffer = new StreamBuffer<GetBlock<Q>>(bufferOptions)
+ 
+   let { fromBlock = 0, toBlock, parentBlockHash } = query
++  let finalizedHighWaterMark: BlockRef | undefined
+ 
+   const ingest = async () => {
+     while (!buffer.signal.aborted) {
+@@ -255,12 +256,21 @@ function createPortalStream<Q extends Query>(
+         },
+       )
+ 
++      let head = res.head
++      if (head.finalized) {
++        if (finalizedHighWaterMark && head.finalized.number < finalizedHighWaterMark.number) {
++          head = { ...head, finalized: finalizedHighWaterMark }
++        } else {
++          finalizedHighWaterMark = head.finalized
++        }
++      }
++
+       // We are on head, we need to wait a little bit until new dta arrives
+       if (res.status === 204) {
+         await buffer.put({
+           blocks: [],
+           meta: { bytes: 0, requestedFromBlock: fromBlock, lastBlockReceivedAt: new Date(), requests },
+-          head: res.head,
++          head,
+         })
+         buffer.flush()
+         if (headPollInterval > 0) {
+@@ -299,7 +309,7 @@ function createPortalStream<Q extends Query>(
+             }
+           }
+ 
+-          const finalizedHead = res.head.finalized?.number
++          const finalizedHead = head.finalized?.number
+ 
+           // Split blocks into finalized and unfinalized
+           const [finalizedBlocks, unfinalizedBlocks] = finalizedHead
+@@ -309,7 +319,7 @@ function createPortalStream<Q extends Query>(
+           // Push finalized blocks as a batch
+           await buffer.put({
+             blocks: finalizedBlocks.map((b) => b.block),
+-            head: res.head,
++            head,
+             meta: {
+               bytes: finalizedBlocks.reduce((a, b) => a + b.bytes, 0),
+               requestedFromBlock,
+@@ -322,7 +332,7 @@ function createPortalStream<Q extends Query>(
+             await buffer.put(
+               {
+                 blocks: [block],
+-                head: res.head,
++                head,
+                 meta: {
+                   bytes,
+                   requestedFromBlock,
+diff --git a/packages/subsquid-pipes/src/testing/test-portal.ts b/packages/subsquid-pipes/src/testing/test-portal.ts
+index 83fbd83..6b9bd13 100644
+--- a/packages/subsquid-pipes/src/testing/test-portal.ts
++++ b/packages/subsquid-pipes/src/testing/test-portal.ts
+@@ -7,6 +7,10 @@ type ValidateRequest = (res: any) => unknown
+ export type MockResponse =
+   | {
+       statusCode: 204
++      head?: {
++        finalized?: { number: number; hash: string }
++        latest?: { number: number }
++      }
+       validateRequest?: ValidateRequest
+     }
+   | {
+@@ -107,8 +111,9 @@ export async function createMockPortal(
+ 
+         switch (mockResp.statusCode) {
+           case 200:
++          case 204: {
+             const headers: Record<string, string | number> = {
+-              'Content-Type': 'application/jsonl',
++              ...(mockResp.statusCode === 200 ? { 'Content-Type': 'application/jsonl' } : {}),
+             }
+             if (mockResp.head?.finalized?.number) {
+               headers['X-Sqd-Finalized-Head-Number'] = mockResp.head.finalized.number
+@@ -121,11 +126,14 @@ export async function createMockPortal(
+             }
+ 
+             res.writeHead(mockResp.statusCode, headers)
+-            // Send each mock data item as a JSON line
+-            mockResp.data.forEach((data) => {
+-              res.write(JSON.stringify(data) + '\n')
+-            })
++            if (mockResp.statusCode === 200) {
++              // Send each mock data item as a JSON line
++              mockResp.data.forEach((data) => {
++                res.write(JSON.stringify(data) + '\n')
++              })
++            }
+             break
++          }
+ 
+           case 409:
+             res.writeHead(mockResp.statusCode, { 'Content-Type': 'application/json' })
+diff --git a/packages/subsquid-pipes/src/portal-client/client.test.ts b/packages/subsquid-pipes/src/portal-client/client.test.ts
+new file mode 100644
+index 0000000..4727e0b
+--- /dev/null
++++ b/packages/subsquid-pipes/src/portal-client/client.test.ts
+@@ -0,0 +1,136 @@
++import { afterEach, describe, expect, it } from 'vitest'
++
++import { type MockPortal, createMockPortal } from '~/testing/index.js'
++
++import { PortalClient } from './client.js'
++import type { Query as EvmQuery } from './query/evm.js'
++
++function getQuery(toBlock: number): EvmQuery<{ block: { number: true; hash: true } }> {
++  return {
++    type: 'evm',
++    fromBlock: 1,
++    toBlock,
++    fields: {
++      block: {
++        number: true,
++        hash: true,
++      },
++    },
++  }
++}
++
++async function collectHeads(query: EvmQuery<{ block: { number: true; hash: true } }>, portalUrl: string) {
++  const client = new PortalClient({
++    url: portalUrl,
++    maxBytes: 1,
++  })
++
++  const heads = []
++
++  for await (const batch of client.getStream(query)) {
++    heads.push(batch.head.finalized)
++  }
++
++  return heads
++}
++
++describe('PortalClient', () => {
++  let mockPortal: MockPortal | undefined
++
++  afterEach(async () => {
++    await mockPortal?.close()
++  })
++
++  it('should clamp regressed finalized heads to the stream high-water mark', async () => {
++    mockPortal = await createMockPortal([
++      {
++        statusCode: 200,
++        data: [{ header: { number: 1, hash: '0x1' } }],
++        head: { finalized: { number: 10, hash: '0xA' } },
++      },
++      {
++        statusCode: 200,
++        data: [{ header: { number: 2, hash: '0x2' } }],
++        head: { finalized: { number: 7, hash: '0xB' } },
++      },
++      {
++        statusCode: 200,
++        data: [{ header: { number: 3, hash: '0x3' } }],
++        head: { finalized: { number: 12, hash: '0xC' } },
++      },
++    ])
++
++    await expect(collectHeads(getQuery(3), mockPortal.url)).resolves.toEqual([
++      { number: 10, hash: '0xA' },
++      { number: 10, hash: '0xA' },
++      { number: 12, hash: '0xC' },
++    ])
++  })
++
++  it('should pass through finalized heads when they increase monotonically', async () => {
++    mockPortal = await createMockPortal([
++      {
++        statusCode: 200,
++        data: [{ header: { number: 1, hash: '0x1' } }],
++        head: { finalized: { number: 5, hash: '0x5' } },
++      },
++      {
++        statusCode: 200,
++        data: [{ header: { number: 2, hash: '0x2' } }],
++        head: { finalized: { number: 10, hash: '0xA' } },
++      },
++      {
++        statusCode: 200,
++        data: [{ header: { number: 3, hash: '0x3' } }],
++        head: { finalized: { number: 15, hash: '0xF' } },
++      },
++    ])
++
++    await expect(collectHeads(getQuery(3), mockPortal.url)).resolves.toEqual([
++      { number: 5, hash: '0x5' },
++      { number: 10, hash: '0xA' },
++      { number: 15, hash: '0xF' },
++    ])
++  })
++
++  it('should initialize the high-water mark when finalized head first appears', async () => {
++    mockPortal = await createMockPortal([
++      {
++        statusCode: 200,
++        data: [{ header: { number: 1, hash: '0x1' } }],
++      },
++      {
++        statusCode: 200,
++        data: [{ header: { number: 2, hash: '0x2' } }],
++        head: { finalized: { number: 10, hash: '0xA' } },
++      },
++    ])
++
++    await expect(collectHeads(getQuery(2), mockPortal.url)).resolves.toEqual([undefined, { number: 10, hash: '0xA' }])
++  })
++
++  it('should clamp regressed finalized heads on 204 responses', async () => {
++    mockPortal = await createMockPortal([
++      {
++        statusCode: 200,
++        data: [{ header: { number: 1, hash: '0x1' } }],
++        head: { finalized: { number: 10, hash: '0xA' } },
++      },
++      {
++        statusCode: 204,
++        head: { finalized: { number: 7, hash: '0xB' } },
++      },
++      {
++        statusCode: 200,
++        data: [{ header: { number: 2, hash: '0x2' } }],
++        head: { finalized: { number: 12, hash: '0xC' } },
++      },
++    ])
++
++    await expect(collectHeads(getQuery(2), mockPortal.url)).resolves.toEqual([
++      { number: 10, hash: '0xA' },
++      { number: 10, hash: '0xA' },
++      { number: 12, hash: '0xC' },
++    ])
++  })
++})

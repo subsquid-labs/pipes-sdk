@@ -1,0 +1,249 @@
+diff --git a/packages/subsquid-pipes/src/portal-client/client.ts b/packages/subsquid-pipes/src/portal-client/client.ts
+index e5b7092..4f88a01 100644
+--- a/packages/subsquid-pipes/src/portal-client/client.ts
++++ b/packages/subsquid-pipes/src/portal-client/client.ts
+@@ -231,6 +231,7 @@ function createPortalStream<Q extends Query>(
+   const buffer = new StreamBuffer<GetBlock<Q>>(bufferOptions)
+ 
+   let { fromBlock = 0, toBlock, parentBlockHash } = query
++  let finalizedHighWaterMark: BlockRef | undefined
+ 
+   const ingest = async () => {
+     while (!buffer.signal.aborted) {
+@@ -255,12 +256,21 @@ function createPortalStream<Q extends Query>(
+         },
+       )
+ 
++      let head = res.head
++      if (head.finalized) {
++        if (finalizedHighWaterMark && head.finalized.number < finalizedHighWaterMark.number) {
++          head = { ...head, finalized: finalizedHighWaterMark }
++        } else {
++          finalizedHighWaterMark = head.finalized
++        }
++      }
++
+       // We are on head, we need to wait a little bit until new dta arrives
+       if (res.status === 204) {
+         await buffer.put({
+           blocks: [],
+           meta: { bytes: 0, requestedFromBlock: fromBlock, lastBlockReceivedAt: new Date(), requests },
+-          head: res.head,
++          head,
+         })
+         buffer.flush()
+         if (headPollInterval > 0) {
+@@ -299,7 +309,7 @@ function createPortalStream<Q extends Query>(
+             }
+           }
+ 
+-          const finalizedHead = res.head.finalized?.number
++          const finalizedHead = head.finalized?.number
+ 
+           // Split blocks into finalized and unfinalized
+           const [finalizedBlocks, unfinalizedBlocks] = finalizedHead
+@@ -309,7 +319,7 @@ function createPortalStream<Q extends Query>(
+           // Push finalized blocks as a batch
+           await buffer.put({
+             blocks: finalizedBlocks.map((b) => b.block),
+-            head: res.head,
++            head,
+             meta: {
+               bytes: finalizedBlocks.reduce((a, b) => a + b.bytes, 0),
+               requestedFromBlock,
+@@ -322,7 +332,7 @@ function createPortalStream<Q extends Query>(
+             await buffer.put(
+               {
+                 blocks: [block],
+-                head: res.head,
++                head,
+                 meta: {
+                   bytes,
+                   requestedFromBlock,
+diff --git a/packages/subsquid-pipes/src/testing/test-portal.ts b/packages/subsquid-pipes/src/testing/test-portal.ts
+index 83fbd83..6b9bd13 100644
+--- a/packages/subsquid-pipes/src/testing/test-portal.ts
++++ b/packages/subsquid-pipes/src/testing/test-portal.ts
+@@ -7,6 +7,10 @@ type ValidateRequest = (res: any) => unknown
+ export type MockResponse =
+   | {
+       statusCode: 204
++      head?: {
++        finalized?: { number: number; hash: string }
++        latest?: { number: number }
++      }
+       validateRequest?: ValidateRequest
+     }
+   | {
+@@ -107,8 +111,9 @@ export async function createMockPortal(
+ 
+         switch (mockResp.statusCode) {
+           case 200:
++          case 204: {
+             const headers: Record<string, string | number> = {
+-              'Content-Type': 'application/jsonl',
++              ...(mockResp.statusCode === 200 ? { 'Content-Type': 'application/jsonl' } : {}),
+             }
+             if (mockResp.head?.finalized?.number) {
+               headers['X-Sqd-Finalized-Head-Number'] = mockResp.head.finalized.number
+@@ -121,11 +126,14 @@ export async function createMockPortal(
+             }
+ 
+             res.writeHead(mockResp.statusCode, headers)
+-            // Send each mock data item as a JSON line
+-            mockResp.data.forEach((data) => {
+-              res.write(JSON.stringify(data) + '\n')
+-            })
++            if (mockResp.statusCode === 200) {
++              // Send each mock data item as a JSON line
++              mockResp.data.forEach((data) => {
++                res.write(JSON.stringify(data) + '\n')
++              })
++            }
+             break
++          }
+ 
+           case 409:
+             res.writeHead(mockResp.statusCode, { 'Content-Type': 'application/json' })
+diff --git a/packages/subsquid-pipes/src/portal-client/client.test.ts b/packages/subsquid-pipes/src/portal-client/client.test.ts
+new file mode 100644
+index 0000000..4727e0b
+--- /dev/null
++++ b/packages/subsquid-pipes/src/portal-client/client.test.ts
+@@ -0,0 +1,136 @@
++import { afterEach, describe, expect, it } from 'vitest'
++
++import { type MockPortal, createMockPortal } from '~/testing/index.js'
++
++import { PortalClient } from './client.js'
++import type { Query as EvmQuery } from './query/evm.js'
++
++function getQuery(toBlock: number): EvmQuery<{ block: { number: true; hash: true } }> {
++  return {
++    type: 'evm',
++    fromBlock: 1,
++    toBlock,
++    fields: {
++      block: {
++        number: true,
++        hash: true,
++      },
++    },
++  }
++}
++
++async function collectHeads(query: EvmQuery<{ block: { number: true; hash: true } }>, portalUrl: string) {
++  const client = new PortalClient({
++    url: portalUrl,
++    maxBytes: 1,
++  })
++
++  const heads = []
++
++  for await (const batch of client.getStream(query)) {
++    heads.push(batch.head.finalized)
++  }
++
++  return heads
++}
++
++describe('PortalClient', () => {
++  let mockPortal: MockPortal | undefined
++
++  afterEach(async () => {
++    await mockPortal?.close()
++  })
++
++  it('should clamp regressed finalized heads to the stream high-water mark', async () => {
++    mockPortal = await createMockPortal([
++      {
++        statusCode: 200,
++        data: [{ header: { number: 1, hash: '0x1' } }],
++        head: { finalized: { number: 10, hash: '0xA' } },
++      },
++      {
++        statusCode: 200,
++        data: [{ header: { number: 2, hash: '0x2' } }],
++        head: { finalized: { number: 7, hash: '0xB' } },
++      },
++      {
++        statusCode: 200,
++        data: [{ header: { number: 3, hash: '0x3' } }],
++        head: { finalized: { number: 12, hash: '0xC' } },
++      },
++    ])
++
++    await expect(collectHeads(getQuery(3), mockPortal.url)).resolves.toEqual([
++      { number: 10, hash: '0xA' },
++      { number: 10, hash: '0xA' },
++      { number: 12, hash: '0xC' },
++    ])
++  })
++
++  it('should pass through finalized heads when they increase monotonically', async () => {
++    mockPortal = await createMockPortal([
++      {
++        statusCode: 200,
++        data: [{ header: { number: 1, hash: '0x1' } }],
++        head: { finalized: { number: 5, hash: '0x5' } },
++      },
++      {
++        statusCode: 200,
++        data: [{ header: { number: 2, hash: '0x2' } }],
++        head: { finalized: { number: 10, hash: '0xA' } },
++      },
++      {
++        statusCode: 200,
++        data: [{ header: { number: 3, hash: '0x3' } }],
++        head: { finalized: { number: 15, hash: '0xF' } },
++      },
++    ])
++
++    await expect(collectHeads(getQuery(3), mockPortal.url)).resolves.toEqual([
++      { number: 5, hash: '0x5' },
++      { number: 10, hash: '0xA' },
++      { number: 15, hash: '0xF' },
++    ])
++  })
++
++  it('should initialize the high-water mark when finalized head first appears', async () => {
++    mockPortal = await createMockPortal([
++      {
++        statusCode: 200,
++        data: [{ header: { number: 1, hash: '0x1' } }],
++      },
++      {
++        statusCode: 200,
++        data: [{ header: { number: 2, hash: '0x2' } }],
++        head: { finalized: { number: 10, hash: '0xA' } },
++      },
++    ])
++
++    await expect(collectHeads(getQuery(2), mockPortal.url)).resolves.toEqual([undefined, { number: 10, hash: '0xA' }])
++  })
++
++  it('should clamp regressed finalized heads on 204 responses', async () => {
++    mockPortal = await createMockPortal([
++      {
++        statusCode: 200,
++        data: [{ header: { number: 1, hash: '0x1' } }],
++        head: { finalized: { number: 10, hash: '0xA' } },
++      },
++      {
++        statusCode: 204,
++        head: { finalized: { number: 7, hash: '0xB' } },
++      },
++      {
++        statusCode: 200,
++        data: [{ header: { number: 2, hash: '0x2' } }],
++        head: { finalized: { number: 12, hash: '0xC' } },
++      },
++    ])
++
++    await expect(collectHeads(getQuery(2), mockPortal.url)).resolves.toEqual([
++      { number: 10, hash: '0xA' },
++      { number: 10, hash: '0xA' },
++      { number: 12, hash: '0xC' },
++    ])
++  })
++})
