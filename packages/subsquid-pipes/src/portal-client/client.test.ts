@@ -34,6 +34,21 @@ async function collectHeads(query: EvmQuery<{ block: { number: true; hash: true 
   return heads
 }
 
+async function collectFullHeads(query: EvmQuery<{ block: { number: true; hash: true } }>, portalUrl: string) {
+  const client = new PortalClient({
+    url: portalUrl,
+    maxBytes: 1,
+  })
+
+  const heads = []
+
+  for await (const batch of client.getStream(query)) {
+    heads.push(batch.head)
+  }
+
+  return heads
+}
+
 describe('PortalClient', () => {
   let mockPortal: MockPortal | undefined
 
@@ -107,6 +122,24 @@ describe('PortalClient', () => {
     ])
 
     await expect(collectHeads(getQuery(2), mockPortal.url)).resolves.toEqual([undefined, { number: 10, hash: '0xA' }])
+  })
+
+  it('should propagate finalized head with number: 0 (genesis finalization) through the mock', async () => {
+    mockPortal = await createMockPortal([
+      {
+        statusCode: 200,
+        data: [{ header: { number: 1, hash: '0x1' } }],
+        head: { finalized: { number: 0, hash: '0xgenesis' }, latest: { number: 0 } },
+      },
+    ])
+
+    const heads = await collectFullHeads(getQuery(1), mockPortal.url)
+    expect(heads).toEqual([
+      {
+        finalized: { number: 0, hash: '0xgenesis' },
+        latest: { number: 0 },
+      },
+    ])
   })
 
   it('should clamp regressed finalized heads on 204 responses', async () => {
