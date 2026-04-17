@@ -8,6 +8,7 @@ import {
   type RollbackReason,
   type RollbackResult,
   type RollbackSettings,
+  getRollbackSemaphore,
   resolveRollbackSettings,
   runManagedRollback,
   validateRollbackTargets,
@@ -92,6 +93,13 @@ export function clickhouseTarget<T>({
     syncCurrent?: BlockCursor,
   ): Promise<string[]> => {
     if (!rollbackTargetsDeclared) return []
+    const semaphore = getRollbackSemaphore({
+      client,
+      db: state.options.database,
+      concurrency: rollbackSettings.concurrency,
+      baseMs: rollbackSettings.retryBackoff.baseMs,
+      jitter: rollbackSettings.retryBackoff.jitter,
+    })
     const { skippedTables } = await runManagedRollback(rollbackSettings.targets, reason, safeCursor, {
       store,
       introspector,
@@ -106,6 +114,7 @@ export function clickhouseTarget<T>({
             checkpointTable: rollbackSettings.checkpointTable,
           }
         : undefined,
+      semaphore,
     })
     return skippedTables
   }

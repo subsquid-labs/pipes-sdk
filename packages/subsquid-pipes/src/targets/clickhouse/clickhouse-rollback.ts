@@ -235,6 +235,98 @@ export class ColumnIntrospector {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Concurrency gate + jittered backoff (Phase 4 Step 1)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Compute a jittered delay `base * (0.5 + random * jitter * 2)`. For the
+ * default `jitter = 0.5`, the output falls in `[0.5×base, 1.5×base]`.
+ */
+export function jitteredBackoff(baseMs: number, jitter: number, rng: () => number = Math.random): number {
+  return baseMs * (0.5 + rng() * jitter * 2)
+}
+
+/**
+ * Async semaphore with jittered post-release wake-up. `acquire()` returns a
+ * release function; the contract is strictly one release per acquire.
+ *
+ * When a slot frees, the oldest waiter is scheduled to resume after a random
+ * jittered delay — this prevents the thundering-herd on release, distinct
+ * from the concurrency cap which prevents the in-flight stampede.
+ */
+export class RollbackSemaphore {
+  #inFlight = 0
+  #waiters: Array<() => void> = []
+  readonly #concurrency: number
+  readonly #baseMs: number
+  readonly #jitter: number
+  readonly #rng: () => number
+
+  constructor(params: { concurrency: number; baseMs: number; jitter: number; rng?: () => number }) {
+    if (params.concurrency < 1) throw new Error('RollbackSemaphore concurrency must be >= 1')
+    this.#concurrency = params.concurrency
+    this.#baseMs = params.baseMs
+    this.#jitter = params.jitter
+    this.#rng = params.rng ?? Math.random
+  }
+
+  /** Test-only: current in-flight count. */
+  get inFlight(): number {
+    return this.#inFlight
+  }
+
+  async acquire(): Promise<() => void> {
+    if (this.#inFlight < this.#concurrency) {
+      this.#inFlight++
+      return () => this.#release()
+    }
+    await new Promise<void>((resolve) => this.#waiters.push(resolve))
+    this.#inFlight++
+    return () => this.#release()
+  }
+
+  #release() {
+    this.#inFlight--
+    const next = this.#waiters.shift()
+    if (!next) return
+    const delay = jitteredBackoff(this.#baseMs, this.#jitter, this.#rng)
+    setTimeout(next, Math.max(0, delay))
+  }
+}
+
+/**
+ * Module-level registry of semaphores keyed by the `(client, database)`
+ * identity tuple.
+ */
+const semaphoreRegistry = new WeakMap<object, Map<string, RollbackSemaphore>>()
+
+export function getRollbackSemaphore(params: {
+  client: object
+  db: string
+  concurrency: number
+  baseMs: number
+  jitter: number
+}): RollbackSemaphore {
+  const { client, db, concurrency, baseMs, jitter } = params
+  let perClient = semaphoreRegistry.get(client)
+  if (!perClient) {
+    perClient = new Map()
+    semaphoreRegistry.set(client, perClient)
+  }
+  const existing = perClient.get(db)
+  if (existing) return existing
+  const s = new RollbackSemaphore({ concurrency, baseMs, jitter })
+  perClient.set(db, s)
+  return s
+}
+
+/** Test-only: clear the semaphore registry. */
+export function resetRollbackSemaphoreRegistry() {
+  // WeakMap has no clear; replace by creating a new one would break references.
+  // Tests instead construct a fresh RollbackSemaphore directly.
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // EXISTS probe (Phase 2 Step 1)
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -340,13 +432,19 @@ export async function runMonolithicCleanup(params: {
   unqualifiedTable: string
   scopeWhere: string
   queryParams?: Record<string, unknown>
+  semaphore?: RollbackSemaphore
 }): Promise<RollbackResult> {
-  const { store, introspector, db, table, unqualifiedTable, scopeWhere, queryParams } = params
+  const { store, introspector, db, table, unqualifiedTable, scopeWhere, queryParams, semaphore } = params
 
   const attempt = async () => {
     const columns = await introspector.columnsFor(db, unqualifiedTable)
     const sql = buildMonolithicInsertSelectSql({ table, columns, scopeWhere })
-    await store.command({ query: sql, query_params: queryParams })
+    const release = semaphore ? await semaphore.acquire() : undefined
+    try {
+      await store.command({ query: sql, query_params: queryParams })
+    } finally {
+      release?.()
+    }
   }
 
   try {
@@ -649,6 +747,8 @@ export type ChunkedRollbackContext = {
   /** Only used when `reason === 'blockchain_fork'`. */
   syncCurrent?: BlockCursor
   logger?: Logger
+  /** Optional Phase-4 in-process concurrency gate for each chunk INSERT SELECT. */
+  semaphore?: RollbackSemaphore
 }
 
 /**
@@ -681,6 +781,7 @@ export async function runChunkedRollback(ctx: ChunkedRollbackContext): Promise<R
     reason,
     syncCurrent,
     logger,
+    semaphore,
   } = ctx
 
   const qualifiedCheckpointTable = await ensurer.ensure({ store, db, checkpointTable })
@@ -762,15 +863,20 @@ export async function runChunkedRollback(ctx: ChunkedRollbackContext): Promise<R
   if (nextChunkIndex < totalChunks) {
     for (let n = nextChunkIndex; n < totalChunks; n++) {
       const { chunkFrom, chunkTo } = chunks[n]!
-      await store.command({
-        query: chunkSql,
-        query_params: {
-          ...(queryParams ?? {}),
-          cursorColumn,
-          chunkFrom,
-          chunkTo,
-        },
-      })
+      const release = semaphore ? await semaphore.acquire() : undefined
+      try {
+        await store.command({
+          query: chunkSql,
+          query_params: {
+            ...(queryParams ?? {}),
+            cursorColumn,
+            chunkFrom,
+            chunkTo,
+          },
+        })
+      } finally {
+        release?.()
+      }
       await advanceCheckpoint({
         store,
         qualifiedCheckpointTable,
@@ -856,6 +962,7 @@ export async function dispatchRollback(params: {
   queryParams?: Record<string, unknown>
   logger?: Logger
   chunked?: ChunkedDispatchConfig
+  semaphore?: RollbackSemaphore
 }): Promise<RollbackResult> {
   const {
     store,
@@ -869,6 +976,7 @@ export async function dispatchRollback(params: {
     queryParams,
     logger,
     chunked,
+    semaphore,
   } = params
 
   if (cursorColumn && safeCursor) {
@@ -907,6 +1015,7 @@ export async function dispatchRollback(params: {
         reason: chunked.reason,
         syncCurrent: chunked.syncCurrent,
         logger,
+        semaphore,
       })
     }
   }
@@ -919,6 +1028,7 @@ export async function dispatchRollback(params: {
     unqualifiedTable,
     scopeWhere,
     queryParams,
+    semaphore,
   })
 }
 
@@ -960,6 +1070,8 @@ export type ManagedRollbackContext = {
     chunkSize: number
     checkpointTable: string
   }
+  /** Phase 4: in-process concurrency gate. */
+  semaphore?: RollbackSemaphore
 }
 
 /**
@@ -1006,6 +1118,7 @@ export async function runManagedRollback(
       queryParams: target.params,
       logger: ctx.logger,
       chunked: chunkedCfg,
+      semaphore: ctx.semaphore,
     })
     ctx.logger?.debug?.(
       { event: `rollback.${result.kind}`, reason, safeCursor, table: qualifiedTable },

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CheckpointTableEnsurer,
   type ColumnIntrospector,
+  RollbackSemaphore,
   type RollbackTarget,
   assertScopeIsolation,
   buildCheckpointTableDDL,
@@ -15,6 +16,8 @@ import {
   deriveMaxCursorOffsetCheck,
   dispatchRollback,
   extractIdentifiers,
+  getRollbackSemaphore,
+  jitteredBackoff,
   probeHasWorkToDo,
   resolveRollbackSettings,
   resolveTargetTable,
@@ -795,5 +798,104 @@ describe('dispatchRollback (chunked)', () => {
     })
     expect(result.kind).toBe('chunked')
     expect(command).toHaveBeenCalled()
+  })
+})
+
+describe('jitteredBackoff', () => {
+  it('computes base * (0.5 + random * jitter * 2) with injected rng', () => {
+    expect(jitteredBackoff(100, 0.5, () => 0)).toBe(50)
+    expect(jitteredBackoff(100, 0.5, () => 1)).toBe(150)
+    expect(jitteredBackoff(100, 0.5, () => 0.5)).toBe(100)
+  })
+
+  it('respects jitter=0 (no spread)', () => {
+    expect(jitteredBackoff(200, 0, () => 0)).toBe(100)
+    expect(jitteredBackoff(200, 0, () => 1)).toBe(100)
+  })
+
+  it('defaults to Math.random and falls inside [0.5×base, 1.5×base] for default jitter', () => {
+    for (let i = 0; i < 100; i++) {
+      const d = jitteredBackoff(1000, 0.5)
+      expect(d).toBeGreaterThanOrEqual(500)
+      expect(d).toBeLessThanOrEqual(1500)
+    }
+  })
+})
+
+describe('RollbackSemaphore', () => {
+  it('rejects concurrency < 1', () => {
+    expect(() => new RollbackSemaphore({ concurrency: 0, baseMs: 0, jitter: 0 })).toThrow()
+  })
+
+  it('caps in-flight at concurrency', async () => {
+    const sem = new RollbackSemaphore({ concurrency: 2, baseMs: 0, jitter: 0 })
+    let maxInFlight = 0
+    let active = 0
+
+    const work = async () => {
+      const release = await sem.acquire()
+      active++
+      maxInFlight = Math.max(maxInFlight, active)
+      await new Promise((r) => setTimeout(r, 5))
+      active--
+      release()
+    }
+
+    await Promise.all(Array.from({ length: 10 }, () => work()))
+    expect(maxInFlight).toBe(2)
+    expect(sem.inFlight).toBe(0)
+  })
+
+  it('runs acquires serially when concurrency = 1', async () => {
+    const sem = new RollbackSemaphore({ concurrency: 1, baseMs: 0, jitter: 0 })
+    const order: number[] = []
+
+    const work = async (id: number) => {
+      const release = await sem.acquire()
+      order.push(id)
+      await new Promise((r) => setTimeout(r, 2))
+      release()
+    }
+
+    await Promise.all([work(1), work(2), work(3)])
+    expect(order).toEqual([1, 2, 3])
+    expect(sem.inFlight).toBe(0)
+  })
+
+  it('applies jittered delay when waking waiters', async () => {
+    const sem = new RollbackSemaphore({ concurrency: 1, baseMs: 60, jitter: 0, rng: () => 0.5 })
+
+    const release1 = await sem.acquire()
+    const startedAt = Date.now()
+    let resumedAt = 0
+    const p = sem.acquire().then((r) => {
+      resumedAt = Date.now()
+      r()
+    })
+    release1()
+    await p
+    expect(resumedAt - startedAt).toBeGreaterThanOrEqual(25)
+  })
+})
+
+describe('getRollbackSemaphore', () => {
+  it('returns the same instance for the same (client, db) tuple', () => {
+    const client = {}
+    const a = getRollbackSemaphore({ client, db: 'default', concurrency: 2, baseMs: 10, jitter: 0 })
+    const b = getRollbackSemaphore({ client, db: 'default', concurrency: 2, baseMs: 10, jitter: 0 })
+    expect(a).toBe(b)
+  })
+
+  it('partitions by db', () => {
+    const client = {}
+    const a = getRollbackSemaphore({ client, db: 'db1', concurrency: 2, baseMs: 10, jitter: 0 })
+    const b = getRollbackSemaphore({ client, db: 'db2', concurrency: 2, baseMs: 10, jitter: 0 })
+    expect(a).not.toBe(b)
+  })
+
+  it('partitions by client', () => {
+    const a = getRollbackSemaphore({ client: {}, db: 'default', concurrency: 2, baseMs: 10, jitter: 0 })
+    const b = getRollbackSemaphore({ client: {}, db: 'default', concurrency: 2, baseMs: 10, jitter: 0 })
+    expect(a).not.toBe(b)
   })
 })

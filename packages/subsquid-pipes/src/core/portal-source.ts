@@ -109,6 +109,15 @@ export type PortalSourceOptions<Query> = {
     onStart?: (data: StartEvent) => void
     onProgress?: (progress: ProgressEvent) => void
   }
+  /**
+   * Optional jittered delay applied before the fork-retry loop re-reads from
+   * the portal. Spreads multi-container reconnect storms after a fork. Actual
+   * delay is `baseMs * (0.5 + random * jitter * 2)`.
+   */
+  forkRetryBackoff?: {
+    baseMs?: number
+    jitter?: number
+  }
 }
 
 export class PortalSource<Q extends QueryBuilder<any>, T = any> {
@@ -116,6 +125,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   readonly #options: {
     profiler: boolean | SpanHooks
     cache?: PortalCache
+    forkRetryBackoff?: { baseMs?: number; jitter?: number }
   }
   readonly #queryBuilder: Q
   readonly #logger: Logger
@@ -155,6 +165,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     this.#options = {
       cache: options.cache,
       profiler: typeof options.profiler === 'undefined' ? process.env.NODE_ENV !== 'production' : options.profiler,
+      forkRetryBackoff: options.forkRetryBackoff,
     }
 
     this.#metricServer = options.metrics ?? noopMetricsServer()
@@ -418,6 +429,14 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             await self.forkTransformers(forkProfiler, forkedCursor)
 
             cursor = forkedCursor
+
+            const backoff = self.#options.forkRetryBackoff
+            if (backoff) {
+              const baseMs = backoff.baseMs ?? 250
+              const jitter = backoff.jitter ?? 0.5
+              const delay = baseMs * (0.5 + Math.random() * jitter * 2)
+              await new Promise((resolve) => setTimeout(resolve, delay))
+            }
           } finally {
             await self.stop()
           }
