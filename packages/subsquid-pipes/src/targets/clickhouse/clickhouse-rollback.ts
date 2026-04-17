@@ -361,6 +361,464 @@ export async function runMonolithicCleanup(params: {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Chunked + resumable rollback (Phase 3)
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Per-chunk half-open window `(chunkFrom, chunkTo]`. Symmetric with probe's `> safeCursor`. */
+export type ChunkBounds = { chunkFrom: number; chunkTo: number }
+
+/**
+ * Compute the chunk tiling for `(safeCursor, maxCursor]` with `chunkSize`.
+ * Chunk n covers `(safeCursor + n*size, min(safeCursor + (n+1)*size, maxCursor)]`.
+ * Empty range (`maxCursor <= safeCursor`) yields `totalChunks = 0`.
+ */
+export function computeChunkBounds(params: { safeCursor: number; maxCursor: number; chunkSize: number }): {
+  totalChunks: number
+  chunks: ChunkBounds[]
+} {
+  const { safeCursor, maxCursor, chunkSize } = params
+  if (chunkSize <= 0) throw new Error('clickhouseTarget: chunkSize must be > 0')
+  const total = maxCursor - safeCursor
+  if (total <= 0) return { totalChunks: 0, chunks: [] }
+  const totalChunks = Math.ceil(total / chunkSize)
+  const chunks: ChunkBounds[] = []
+  for (let n = 0; n < totalChunks; n++) {
+    const chunkFrom = safeCursor + chunkSize * n
+    const chunkTo = Math.min(chunkFrom + chunkSize, maxCursor)
+    chunks.push({ chunkFrom, chunkTo })
+  }
+  return { totalChunks, chunks }
+}
+
+/** Derive `max_cursor` for the `offset_check` path via a bounded MAX query (no FINAL). */
+export async function deriveMaxCursorOffsetCheck(params: {
+  store: ClickhouseStore
+  table: string
+  scopeWhere: string
+  cursorColumn: string
+  safeCursor: BlockCursor
+  queryParams?: Record<string, unknown>
+}): Promise<number> {
+  const { store, table, scopeWhere, cursorColumn, safeCursor, queryParams } = params
+  const sql = `SELECT coalesce(max({cursorColumn:Identifier}), {safeCursor:UInt64}) AS m
+FROM ${table}
+WHERE (${scopeWhere})
+  AND {cursorColumn:Identifier} > {safeCursor:UInt64}`
+  const res = await store.query({
+    query: sql,
+    format: 'JSONEachRow',
+    query_params: { ...(queryParams ?? {}), cursorColumn, safeCursor: safeCursor.number },
+  })
+  const rows = await res.json<{ m: string | number }>()
+  if (rows.length === 0) return safeCursor.number
+  return Number(rows[0]!.m)
+}
+
+/**
+ * Derive `max_cursor` for the `blockchain_fork` path. Never queries the store —
+ * returns `syncCurrent.number` captured at fork-handler entry via
+ * `state.snapshotCurrent()` (R-B freeze).
+ */
+export function deriveMaxCursorBlockchainFork(params: { syncCurrent: BlockCursor }): number {
+  return params.syncCurrent.number
+}
+
+/** Sanitize a stream/table identifier to `[a-z0-9_]` form for snapshot-table naming (5b). */
+export function sanitizeIdentifier(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '_')
+}
+
+/** Build the chunk-snapshot temp-table name used by Phase-0 branch (b) / Step 5b. */
+export function snapshotTableName(params: { streamSafe: string; tableSafe: string; startedAtUnix: number }): string {
+  const { streamSafe, tableSafe, startedAtUnix } = params
+  return `_sqd_chunk_snapshot_${streamSafe}_${tableSafe}_${startedAtUnix}`
+}
+
+/** Build the anchored regex pattern that matches orphan snapshot tables for a (stream, table) pair. */
+export function snapshotOrphanPattern(streamSafe: string, tableSafe: string): string {
+  return `^_sqd_chunk_snapshot_${streamSafe}_${tableSafe}_[0-9]+$`
+}
+
+/** DDL for the checkpoint table. */
+export function buildCheckpointTableDDL(qualifiedTable: string): string {
+  return `CREATE TABLE IF NOT EXISTS ${qualifiedTable}
+(
+  stream              String,
+  table_name          String,
+  started_at          DateTime,
+  safe_cursor         UInt64,
+  max_cursor          UInt64,
+  chunk_size          UInt64,
+  last_completed_chunk Int64,
+  sign                Int8
+) ENGINE = CollapsingMergeTree(sign)
+  ORDER BY (stream, table_name, started_at)
+  TTL started_at + INTERVAL 7 DAY`
+}
+
+type CheckpointRow = {
+  stream: string
+  table_name: string
+  safe_cursor: number
+  max_cursor: number
+  chunk_size: number
+  last_completed_chunk: number
+  started_at_unix: number
+}
+
+/**
+ * Lazy `CREATE TABLE IF NOT EXISTS` for the per-database checkpoint table.
+ * Caches the "already created" flag by `(store, db, checkpointTable)` so a
+ * hot rollback path doesn't re-issue DDL every invocation.
+ */
+export class CheckpointTableEnsurer {
+  #created = new Set<string>()
+
+  async ensure(params: { store: ClickhouseStore; db: string; checkpointTable: string }): Promise<string> {
+    const { store, db, checkpointTable } = params
+    const qualified = `"${db}"."${checkpointTable}"`
+    const key = `${db}.${checkpointTable}`
+    if (this.#created.has(key)) return qualified
+    await store.command({ query: buildCheckpointTableDDL(qualified) })
+    this.#created.add(key)
+    return qualified
+  }
+
+  /** Test-only: clears the per-(db, table) created cache. */
+  reset() {
+    this.#created.clear()
+  }
+}
+
+async function readCheckpoint(params: {
+  store: ClickhouseStore
+  qualifiedCheckpointTable: string
+  stream: string
+  tableName: string
+}): Promise<CheckpointRow | null> {
+  const { store, qualifiedCheckpointTable, stream, tableName } = params
+  const res = await store.query({
+    query: `SELECT stream, table_name, safe_cursor, max_cursor, chunk_size, last_completed_chunk,
+       toUnixTimestamp(started_at) AS started_at_unix
+FROM ${qualifiedCheckpointTable} FINAL
+WHERE stream = {stream:String} AND table_name = {table:String}
+ORDER BY started_at DESC
+LIMIT 1`,
+    format: 'JSONEachRow',
+    query_params: { stream, table: tableName },
+  })
+  const rows = await res.json<{
+    stream: string
+    table_name: string
+    safe_cursor: string | number
+    max_cursor: string | number
+    chunk_size: string | number
+    last_completed_chunk: string | number
+    started_at_unix: string | number
+  }>()
+  if (rows.length === 0) return null
+  const r = rows[0]!
+  return {
+    stream: r.stream,
+    table_name: r.table_name,
+    safe_cursor: Number(r.safe_cursor),
+    max_cursor: Number(r.max_cursor),
+    chunk_size: Number(r.chunk_size),
+    last_completed_chunk: Number(r.last_completed_chunk),
+    started_at_unix: Number(r.started_at_unix),
+  }
+}
+
+async function writeInitialCheckpoint(params: {
+  store: ClickhouseStore
+  qualifiedCheckpointTable: string
+  row: Omit<CheckpointRow, 'started_at_unix' | 'last_completed_chunk'>
+  startedAtUnix: number
+}): Promise<void> {
+  const { store, qualifiedCheckpointTable, row, startedAtUnix } = params
+  await store.command({
+    query: `INSERT INTO ${qualifiedCheckpointTable}
+(stream, table_name, started_at, safe_cursor, max_cursor, chunk_size, last_completed_chunk, sign)
+VALUES ({stream:String}, {table:String}, fromUnixTimestamp({startedAtUnix:UInt32}),
+        {safeCursor:UInt64}, {maxCursor:UInt64}, {chunkSize:UInt64}, -1, 1)`,
+    query_params: {
+      stream: row.stream,
+      table: row.table_name,
+      startedAtUnix,
+      safeCursor: row.safe_cursor,
+      maxCursor: row.max_cursor,
+      chunkSize: row.chunk_size,
+    },
+    clickhouse_settings: { async_insert: 0, wait_for_async_insert: 1 },
+  })
+}
+
+async function advanceCheckpoint(params: {
+  store: ClickhouseStore
+  qualifiedCheckpointTable: string
+  row: Omit<CheckpointRow, 'started_at_unix' | 'last_completed_chunk'>
+  startedAtUnix: number
+  prev: number
+  next: number
+}): Promise<void> {
+  const { store, qualifiedCheckpointTable, row, startedAtUnix, prev, next } = params
+  // Two-row INSERT: sign=-1 on prev, sign=+1 on next. Non-sign columns byte-equal.
+  await store.command({
+    query: `INSERT INTO ${qualifiedCheckpointTable}
+(stream, table_name, started_at, safe_cursor, max_cursor, chunk_size, last_completed_chunk, sign)
+VALUES
+  ({stream:String}, {table:String}, fromUnixTimestamp({startedAtUnix:UInt32}),
+   {safeCursor:UInt64}, {maxCursor:UInt64}, {chunkSize:UInt64}, {prev:Int64}, -1),
+  ({stream:String}, {table:String}, fromUnixTimestamp({startedAtUnix:UInt32}),
+   {safeCursor:UInt64}, {maxCursor:UInt64}, {chunkSize:UInt64}, {next:Int64}, 1)`,
+    query_params: {
+      stream: row.stream,
+      table: row.table_name,
+      startedAtUnix,
+      safeCursor: row.safe_cursor,
+      maxCursor: row.max_cursor,
+      chunkSize: row.chunk_size,
+      prev,
+      next,
+    },
+    clickhouse_settings: { async_insert: 0, wait_for_async_insert: 1 },
+  })
+}
+
+async function retireCheckpoint(params: {
+  store: ClickhouseStore
+  qualifiedCheckpointTable: string
+  row: Omit<CheckpointRow, 'started_at_unix'>
+  startedAtUnix: number
+}): Promise<void> {
+  const { store, qualifiedCheckpointTable, row, startedAtUnix } = params
+  await store.command({
+    query: `INSERT INTO ${qualifiedCheckpointTable}
+(stream, table_name, started_at, safe_cursor, max_cursor, chunk_size, last_completed_chunk, sign)
+VALUES ({stream:String}, {table:String}, fromUnixTimestamp({startedAtUnix:UInt32}),
+        {safeCursor:UInt64}, {maxCursor:UInt64}, {chunkSize:UInt64}, {last:Int64}, -1)`,
+    query_params: {
+      stream: row.stream,
+      table: row.table_name,
+      startedAtUnix,
+      safeCursor: row.safe_cursor,
+      maxCursor: row.max_cursor,
+      chunkSize: row.chunk_size,
+      last: row.last_completed_chunk,
+    },
+    clickhouse_settings: { async_insert: 0, wait_for_async_insert: 1 },
+  })
+}
+
+/**
+ * Build the per-chunk INSERT SELECT FINAL statement (Phase 3 Step 5a —
+ * provisional Phase-0 branch (a)). Chunk uses half-open `(chunkFrom, chunkTo]`.
+ */
+export function buildChunkInsertSelectSql(params: { table: string; columns: string[]; scopeWhere: string }): string {
+  const { table, columns, scopeWhere } = params
+  if (columns.length === 0) {
+    throw new Error(`clickhouseTarget: no insertable columns resolved for table ${table}`)
+  }
+  const nonSignCols = columns.filter((c) => c !== 'sign')
+  const colList = nonSignCols.join(', ')
+  return `INSERT INTO ${table} (${colList}, sign)
+SELECT ${colList}, -1 AS sign
+FROM ${table} FINAL
+WHERE (${scopeWhere})
+  AND {cursorColumn:Identifier} >  {chunkFrom:UInt64}
+  AND {cursorColumn:Identifier} <= {chunkTo:UInt64}`
+}
+
+export type ChunkedRollbackContext = {
+  store: ClickhouseStore
+  introspector: ColumnIntrospector
+  ensurer: CheckpointTableEnsurer
+  db: string
+  table: string
+  unqualifiedTable: string
+  scopeWhere: string
+  cursorColumn: string
+  queryParams?: Record<string, unknown>
+  stream: string
+  chunkSize: number
+  checkpointTable: string
+  /** Required. For `offset_check` use `safeCursor` directly; for `blockchain_fork` the cursor is the fork-resolved one. */
+  safeCursor: BlockCursor
+  /** Required — which `max_cursor` derivation branch to pick. */
+  reason: RollbackReason
+  /** Only used when `reason === 'blockchain_fork'`. */
+  syncCurrent?: BlockCursor
+  logger?: Logger
+}
+
+/**
+ * Orchestrates a chunked, resumable rollback for one target:
+ *   1. ensure checkpoint table exists
+ *   2. resume check (FINAL read)
+ *   3. on fresh: derive `max_cursor` per `reason`, write initial checkpoint (sign=+1)
+ *   4. chunk loop: INSERT SELECT FINAL per chunk, then atomic 2-row advance
+ *   5. retire write (sign=-1)
+ *   6. return `{kind: 'chunked', chunksPlanned, chunksCompleted, resumed}`
+ *
+ * PC-3 shortcut: if resume found `last_completed_chunk + 1 === totalChunks`,
+ * skip the chunk loop and jump straight to retire.
+ */
+export async function runChunkedRollback(ctx: ChunkedRollbackContext): Promise<RollbackResult> {
+  const {
+    store,
+    introspector,
+    ensurer,
+    db,
+    table,
+    unqualifiedTable,
+    scopeWhere,
+    cursorColumn,
+    queryParams,
+    stream,
+    chunkSize,
+    checkpointTable,
+    safeCursor,
+    reason,
+    syncCurrent,
+    logger,
+  } = ctx
+
+  const qualifiedCheckpointTable = await ensurer.ensure({ store, db, checkpointTable })
+
+  const existing = await readCheckpoint({
+    store,
+    qualifiedCheckpointTable,
+    stream,
+    tableName: table,
+  })
+
+  let resumed = false
+  let safe_cursor: number
+  let max_cursor: number
+  let chunk_size: number
+  let startedAtUnix: number
+  let last_completed_chunk: number
+
+  if (existing) {
+    resumed = true
+    safe_cursor = existing.safe_cursor
+    max_cursor = existing.max_cursor
+    chunk_size = existing.chunk_size
+    last_completed_chunk = existing.last_completed_chunk
+    startedAtUnix = existing.started_at_unix
+    logger?.debug?.(
+      { event: 'rollback.chunked.resume', table, last_completed_chunk, max_cursor },
+      'resumed chunked rollback from checkpoint',
+    )
+  } else {
+    // Fresh rollback: derive max_cursor per reason.
+    if (reason === 'blockchain_fork') {
+      if (!syncCurrent) {
+        throw new Error('clickhouseTarget: blockchain_fork chunked rollback requires syncCurrent')
+      }
+      max_cursor = deriveMaxCursorBlockchainFork({ syncCurrent })
+    } else {
+      max_cursor = await deriveMaxCursorOffsetCheck({
+        store,
+        table,
+        scopeWhere,
+        cursorColumn,
+        safeCursor,
+        queryParams,
+      })
+    }
+    safe_cursor = safeCursor.number
+    chunk_size = chunkSize
+    startedAtUnix = Math.floor(Date.now() / 1000)
+    last_completed_chunk = -1
+
+    await writeInitialCheckpoint({
+      store,
+      qualifiedCheckpointTable,
+      row: {
+        stream,
+        table_name: table,
+        safe_cursor,
+        max_cursor,
+        chunk_size,
+      },
+      startedAtUnix,
+    })
+  }
+
+  const { totalChunks, chunks } = computeChunkBounds({
+    safeCursor: safe_cursor,
+    maxCursor: max_cursor,
+    chunkSize: chunk_size,
+  })
+
+  const columns = await introspector.columnsFor(db, unqualifiedTable)
+  const chunkSql = buildChunkInsertSelectSql({ table, columns, scopeWhere })
+
+  let chunksCompleted = 0
+  const nextChunkIndex = last_completed_chunk + 1
+
+  // PC-3 shortcut: if fully completed before crash, skip chunk loop.
+  if (nextChunkIndex < totalChunks) {
+    for (let n = nextChunkIndex; n < totalChunks; n++) {
+      const { chunkFrom, chunkTo } = chunks[n]!
+      await store.command({
+        query: chunkSql,
+        query_params: {
+          ...(queryParams ?? {}),
+          cursorColumn,
+          chunkFrom,
+          chunkTo,
+        },
+      })
+      await advanceCheckpoint({
+        store,
+        qualifiedCheckpointTable,
+        row: {
+          stream,
+          table_name: table,
+          safe_cursor,
+          max_cursor,
+          chunk_size,
+        },
+        startedAtUnix,
+        prev: last_completed_chunk,
+        next: n,
+      })
+      last_completed_chunk = n
+      chunksCompleted++
+    }
+  }
+
+  await retireCheckpoint({
+    store,
+    qualifiedCheckpointTable,
+    row: {
+      stream,
+      table_name: table,
+      safe_cursor,
+      max_cursor,
+      chunk_size,
+      last_completed_chunk,
+    },
+    startedAtUnix,
+  })
+
+  logger?.debug?.(
+    { event: 'rollback.chunked.end', table, chunksPlanned: totalChunks, chunksCompleted, resumed },
+    'chunked rollback complete',
+  )
+
+  return {
+    kind: 'chunked',
+    table,
+    chunksPlanned: totalChunks,
+    chunksCompleted,
+    resumed,
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Dispatch: probe → short-circuit | monolithic (Phase 2 Step 2)
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -372,6 +830,20 @@ export async function runMonolithicCleanup(params: {
  * Phase 3 will replace the monolithic fallthrough with the chunked/resumable
  * path when both inputs are present.
  */
+/**
+ * Opt-in chunked-path configuration. Only the SDK-managed rollback populates
+ * this; the user-facing `store.removeAllRows` leaves it undefined and gets
+ * probe + monolithic behavior.
+ */
+export type ChunkedDispatchConfig = {
+  ensurer: CheckpointTableEnsurer
+  stream: string
+  chunkSize: number
+  checkpointTable: string
+  reason: RollbackReason
+  syncCurrent?: BlockCursor
+}
+
 export async function dispatchRollback(params: {
   store: ClickhouseStore
   introspector: ColumnIntrospector
@@ -383,6 +855,7 @@ export async function dispatchRollback(params: {
   safeCursor?: BlockCursor
   queryParams?: Record<string, unknown>
   logger?: Logger
+  chunked?: ChunkedDispatchConfig
 }): Promise<RollbackResult> {
   const {
     store,
@@ -395,6 +868,7 @@ export async function dispatchRollback(params: {
     safeCursor,
     queryParams,
     logger,
+    chunked,
   } = params
 
   if (cursorColumn && safeCursor) {
@@ -412,6 +886,28 @@ export async function dispatchRollback(params: {
         'managed rollback short-circuited; probe found no rows past safeCursor',
       )
       return { kind: 'short_circuit', table }
+    }
+
+    // Probe returned true — choose chunked path if configured, else monolithic.
+    if (chunked) {
+      return runChunkedRollback({
+        store,
+        introspector,
+        ensurer: chunked.ensurer,
+        db,
+        table,
+        unqualifiedTable,
+        scopeWhere,
+        cursorColumn,
+        queryParams,
+        stream: chunked.stream,
+        chunkSize: chunked.chunkSize,
+        checkpointTable: chunked.checkpointTable,
+        safeCursor,
+        reason: chunked.reason,
+        syncCurrent: chunked.syncCurrent,
+        logger,
+      })
     }
   }
 
@@ -457,6 +953,13 @@ export type ManagedRollbackContext = {
   logger?: Logger
   /** Phase 3 consumer: the in-memory cursor captured before `state.fork()` ran. */
   syncCurrent?: BlockCursor
+  /** Phase 3: required when any target has a `cursorColumn`. */
+  chunked?: {
+    ensurer: CheckpointTableEnsurer
+    stream: string
+    chunkSize: number
+    checkpointTable: string
+  }
 }
 
 /**
@@ -479,6 +982,18 @@ export async function runManagedRollback(
   const results: RollbackResult[] = []
   for (const target of targets) {
     const { db, unqualifiedTable, qualifiedTable } = resolveTargetTable(target.table, ctx.defaultDb)
+    const chunkedCfg: ChunkedDispatchConfig | undefined =
+      ctx.chunked && target.cursorColumn
+        ? {
+            ensurer: ctx.chunked.ensurer,
+            stream: ctx.chunked.stream,
+            chunkSize: ctx.chunked.chunkSize,
+            checkpointTable: ctx.chunked.checkpointTable,
+            reason,
+            syncCurrent: ctx.syncCurrent,
+          }
+        : undefined
+
     const result = await dispatchRollback({
       store: ctx.store,
       introspector: ctx.introspector,
@@ -490,6 +1005,7 @@ export async function runManagedRollback(
       safeCursor,
       queryParams: target.params,
       logger: ctx.logger,
+      chunked: chunkedCfg,
     })
     ctx.logger?.debug?.(
       { event: `rollback.${result.kind}`, reason, safeCursor, table: qualifiedTable },

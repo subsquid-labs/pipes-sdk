@@ -1,18 +1,28 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  CheckpointTableEnsurer,
   type ColumnIntrospector,
   type RollbackTarget,
   assertScopeIsolation,
+  buildCheckpointTableDDL,
+  buildChunkInsertSelectSql,
   buildMonolithicInsertSelectSql,
   buildProbeSql,
+  computeChunkBounds,
   cursorColumnIsInSortKey,
+  deriveMaxCursorBlockchainFork,
+  deriveMaxCursorOffsetCheck,
   dispatchRollback,
   extractIdentifiers,
   probeHasWorkToDo,
   resolveRollbackSettings,
   resolveTargetTable,
+  runChunkedRollback,
   runMonolithicCleanup,
+  sanitizeIdentifier,
+  snapshotOrphanPattern,
+  snapshotTableName,
   sortKeyIdentifiers,
   splitSortKeyEntries,
 } from '~/targets/clickhouse/clickhouse-rollback.js'
@@ -423,5 +433,367 @@ describe('runMonolithicCleanup schema-drift retry', () => {
       }),
     ).rejects.toBe(other)
     expect((introspector as any).invalidate).not.toHaveBeenCalled()
+  })
+})
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase 3 — chunked/resumable rollback
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('computeChunkBounds', () => {
+  it('returns zero chunks when range is empty', () => {
+    expect(computeChunkBounds({ safeCursor: 100, maxCursor: 100, chunkSize: 10 })).toEqual({
+      totalChunks: 0,
+      chunks: [],
+    })
+    expect(computeChunkBounds({ safeCursor: 100, maxCursor: 90, chunkSize: 10 })).toEqual({
+      totalChunks: 0,
+      chunks: [],
+    })
+  })
+
+  it('tiles (safeCursor, maxCursor] with half-open chunks', () => {
+    const r = computeChunkBounds({ safeCursor: 100, maxCursor: 250, chunkSize: 50 })
+    expect(r.totalChunks).toBe(3)
+    expect(r.chunks).toEqual([
+      { chunkFrom: 100, chunkTo: 150 },
+      { chunkFrom: 150, chunkTo: 200 },
+      { chunkFrom: 200, chunkTo: 250 },
+    ])
+  })
+
+  it('pins last chunkTo to maxCursor for non-divisible ranges', () => {
+    const r = computeChunkBounds({ safeCursor: 0, maxCursor: 25, chunkSize: 10 })
+    expect(r.totalChunks).toBe(3)
+    expect(r.chunks[2]).toEqual({ chunkFrom: 20, chunkTo: 25 })
+  })
+
+  it('rejects non-positive chunkSize', () => {
+    expect(() => computeChunkBounds({ safeCursor: 0, maxCursor: 10, chunkSize: 0 })).toThrow(/chunkSize/)
+  })
+})
+
+describe('deriveMaxCursorBlockchainFork', () => {
+  it('returns syncCurrent.number without running SQL', () => {
+    expect(deriveMaxCursorBlockchainFork({ syncCurrent: { number: 9_999 } })).toBe(9_999)
+  })
+})
+
+describe('deriveMaxCursorOffsetCheck', () => {
+  it('returns coalesce(max(col), safeCursor) from the server', async () => {
+    const query = vi.fn(async () => ({ json: async () => [{ m: 777 }] }))
+    const store = { query } as unknown as ClickhouseStore
+    const m = await deriveMaxCursorOffsetCheck({
+      store,
+      table: '"db"."t"',
+      scopeWhere: '1',
+      cursorColumn: 'bn',
+      safeCursor: { number: 500 },
+    })
+    expect(m).toBe(777)
+    const call = (query.mock.calls as any[])[0]![0]
+    expect(call.query_params).toMatchObject({ cursorColumn: 'bn', safeCursor: 500 })
+    expect(call.query).not.toMatch(/FINAL/)
+  })
+
+  it('falls back to safeCursor when the server returns no row', async () => {
+    const query = vi.fn(async () => ({ json: async () => [] }))
+    const store = { query } as unknown as ClickhouseStore
+    const m = await deriveMaxCursorOffsetCheck({
+      store,
+      table: 't',
+      scopeWhere: '1',
+      cursorColumn: 'bn',
+      safeCursor: { number: 42 },
+    })
+    expect(m).toBe(42)
+  })
+})
+
+describe('snapshot table naming (5b)', () => {
+  it('sanitizes punctuation and mixed case to [a-z0-9_]', () => {
+    expect(sanitizeIdentifier('Foo-Bar.Baz Qux')).toBe('foo_bar_baz_qux')
+    expect(sanitizeIdentifier('abc123')).toBe('abc123')
+  })
+
+  it('builds deterministic snapshot table names', () => {
+    expect(snapshotTableName({ streamSafe: 's1', tableSafe: 't1', startedAtUnix: 1_234_567_890 })).toBe(
+      '_sqd_chunk_snapshot_s1_t1_1234567890',
+    )
+  })
+
+  it('builds an anchored regex pattern that avoids LIKE _ wildcard collisions', () => {
+    const pattern = snapshotOrphanPattern('s1', 't1')
+    const rx = new RegExp(pattern)
+    expect(rx.test('_sqd_chunk_snapshot_s1_t1_1234567890')).toBe(true)
+    expect(rx.test('_sqd_chunk_snapshot_s1_t1_other')).toBe(false)
+    expect(rx.test('_sqd_chunk_snapshot_s1_t1_')).toBe(false)
+    expect(rx.test('_sqd_chunk_snapshot_s1other_t1_1234567890')).toBe(false)
+  })
+})
+
+describe('buildChunkInsertSelectSql', () => {
+  it('produces a half-open bounded INSERT SELECT FINAL', () => {
+    const sql = buildChunkInsertSelectSql({
+      table: '"db"."t"',
+      columns: ['id', 'ts', 'sign'],
+      scopeWhere: '1',
+    })
+    expect(sql).toContain('INSERT INTO "db"."t" (id, ts, sign)')
+    expect(sql).toContain('SELECT id, ts, -1 AS sign')
+    expect(sql).toContain('FROM "db"."t" FINAL')
+    expect(sql).toContain('WHERE (1)')
+    expect(sql).toContain('{cursorColumn:Identifier} >  {chunkFrom:UInt64}')
+    expect(sql).toContain('{cursorColumn:Identifier} <= {chunkTo:UInt64}')
+  })
+})
+
+describe('buildCheckpointTableDDL', () => {
+  it('declares all 7 non-sign columns and TTL + ORDER BY', () => {
+    const ddl = buildCheckpointTableDDL('"db"."_sqd_rollback_checkpoint"')
+    expect(ddl).toContain('CREATE TABLE IF NOT EXISTS "db"."_sqd_rollback_checkpoint"')
+    expect(ddl).toContain('stream              String')
+    expect(ddl).toContain('table_name          String')
+    expect(ddl).toContain('started_at          DateTime')
+    expect(ddl).toContain('safe_cursor         UInt64')
+    expect(ddl).toContain('max_cursor          UInt64')
+    expect(ddl).toContain('chunk_size          UInt64')
+    expect(ddl).toContain('last_completed_chunk Int64')
+    expect(ddl).toContain('ENGINE = CollapsingMergeTree(sign)')
+    expect(ddl).toContain('ORDER BY (stream, table_name, started_at)')
+    expect(ddl).toContain('TTL started_at + INTERVAL 7 DAY')
+  })
+})
+
+describe('CheckpointTableEnsurer', () => {
+  it('issues the DDL once per (db, table) key', async () => {
+    const command = vi.fn(async () => undefined)
+    const store = { command } as unknown as ClickhouseStore
+    const ensurer = new CheckpointTableEnsurer()
+
+    const q1 = await ensurer.ensure({ store, db: 'db', checkpointTable: '_sqd_rollback_checkpoint' })
+    const q2 = await ensurer.ensure({ store, db: 'db', checkpointTable: '_sqd_rollback_checkpoint' })
+    expect(q1).toBe('"db"."_sqd_rollback_checkpoint"')
+    expect(q1).toBe(q2)
+    expect(command).toHaveBeenCalledTimes(1)
+
+    await ensurer.ensure({ store, db: 'other', checkpointTable: '_sqd_rollback_checkpoint' })
+    expect(command).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('runChunkedRollback', () => {
+  type MockStore = {
+    command: ReturnType<typeof vi.fn>
+    query: ReturnType<typeof vi.fn>
+  }
+
+  function buildStore(opts: { checkpointRows: unknown[]; maxCursor?: number }): {
+    store: ClickhouseStore
+    mock: MockStore
+  } {
+    const command = vi.fn(async () => undefined)
+    // order of query() calls: (1) read checkpoint, (2) maybe deriveMaxCursor
+    const results: Array<{ json: () => Promise<unknown[]> }> = [{ json: async () => opts.checkpointRows }]
+    if (opts.maxCursor !== undefined) {
+      results.push({ json: async () => [{ m: opts.maxCursor }] })
+    }
+    let i = 0
+    const query = vi.fn(async () => {
+      const r = results[i++]
+      if (!r) throw new Error('unexpected extra query call')
+      return r
+    })
+    return { store: { command, query } as unknown as ClickhouseStore, mock: { command, query } }
+  }
+
+  function introspector(columns: string[]) {
+    return {
+      columnsFor: vi.fn(async () => columns),
+      invalidate: vi.fn(),
+      clear: vi.fn(),
+    } as unknown as ColumnIntrospector
+  }
+
+  it('fresh rollback: derives max_cursor, writes init, runs N chunks + advances, retires', async () => {
+    const { store, mock } = buildStore({ checkpointRows: [], maxCursor: 220 })
+    const ensurer = new CheckpointTableEnsurer()
+    const result = await runChunkedRollback({
+      store,
+      introspector: introspector(['id', 'sign']),
+      ensurer,
+      db: 'db',
+      table: '"db"."t"',
+      unqualifiedTable: 't',
+      scopeWhere: '1',
+      cursorColumn: 'bn',
+      stream: 's1',
+      chunkSize: 100,
+      checkpointTable: '_sqd_rollback_checkpoint',
+      safeCursor: { number: 100 },
+      reason: 'offset_check',
+    })
+    // commands: ensure-DDL + init-write + 2 chunk INSERTs + 2 advances + retire = 7
+    expect(mock.command).toHaveBeenCalledTimes(7)
+    expect(result).toMatchObject({
+      kind: 'chunked',
+      table: '"db"."t"',
+      chunksPlanned: 2,
+      chunksCompleted: 2,
+      resumed: false,
+    })
+  })
+
+  it('blockchain_fork: uses syncCurrent.number as max_cursor, never runs derive SELECT', async () => {
+    const { store, mock } = buildStore({ checkpointRows: [] }) // no maxCursor → query will fail if called
+    const ensurer = new CheckpointTableEnsurer()
+    const result = await runChunkedRollback({
+      store,
+      introspector: introspector(['id', 'sign']),
+      ensurer,
+      db: 'db',
+      table: '"db"."t"',
+      unqualifiedTable: 't',
+      scopeWhere: '1',
+      cursorColumn: 'bn',
+      stream: 's1',
+      chunkSize: 50,
+      checkpointTable: '_sqd_rollback_checkpoint',
+      safeCursor: { number: 0 },
+      reason: 'blockchain_fork',
+      syncCurrent: { number: 120 },
+    })
+    expect(result).toMatchObject({ kind: 'chunked', chunksPlanned: 3, chunksCompleted: 3, resumed: false })
+    // query was used only for readCheckpoint (one call)
+    expect(mock.query).toHaveBeenCalledTimes(1)
+  })
+
+  it('throws if blockchain_fork and syncCurrent is absent', async () => {
+    const { store } = buildStore({ checkpointRows: [] })
+    await expect(
+      runChunkedRollback({
+        store,
+        introspector: introspector(['id', 'sign']),
+        ensurer: new CheckpointTableEnsurer(),
+        db: 'db',
+        table: '"db"."t"',
+        unqualifiedTable: 't',
+        scopeWhere: '1',
+        cursorColumn: 'bn',
+        stream: 's1',
+        chunkSize: 50,
+        checkpointTable: '_sqd_rollback_checkpoint',
+        safeCursor: { number: 0 },
+        reason: 'blockchain_fork',
+      }),
+    ).rejects.toThrow(/syncCurrent/)
+  })
+
+  it('resume: skips init write and picks up at last_completed_chunk + 1', async () => {
+    const { store, mock } = buildStore({
+      checkpointRows: [
+        {
+          stream: 's1',
+          table_name: '"db"."t"',
+          safe_cursor: 100,
+          max_cursor: 220,
+          chunk_size: 100,
+          last_completed_chunk: 0, // completed chunk 0; should run chunk 1 next
+          started_at_unix: 1_700_000_000,
+        },
+      ],
+    })
+    const ensurer = new CheckpointTableEnsurer()
+    const result = await runChunkedRollback({
+      store,
+      introspector: introspector(['id', 'sign']),
+      ensurer,
+      db: 'db',
+      table: '"db"."t"',
+      unqualifiedTable: 't',
+      scopeWhere: '1',
+      cursorColumn: 'bn',
+      stream: 's1',
+      chunkSize: 100, // ignored — resume pulls chunk_size from checkpoint
+      checkpointTable: '_sqd_rollback_checkpoint',
+      safeCursor: { number: 100 },
+      reason: 'offset_check',
+    })
+    // commands: ensure-DDL + 1 chunk INSERT + 1 advance + retire = 4 (no init-write)
+    expect(mock.command).toHaveBeenCalledTimes(4)
+    expect(result).toMatchObject({ chunksPlanned: 2, chunksCompleted: 1, resumed: true })
+  })
+
+  it('PC-3 shortcut: resume with last_completed_chunk+1 == totalChunks runs no chunks', async () => {
+    const { store, mock } = buildStore({
+      checkpointRows: [
+        {
+          stream: 's1',
+          table_name: '"db"."t"',
+          safe_cursor: 100,
+          max_cursor: 220,
+          chunk_size: 100,
+          last_completed_chunk: 1, // all 2 chunks done; only retire remains
+          started_at_unix: 1_700_000_000,
+        },
+      ],
+    })
+    const ensurer = new CheckpointTableEnsurer()
+    const result = await runChunkedRollback({
+      store,
+      introspector: introspector(['id', 'sign']),
+      ensurer,
+      db: 'db',
+      table: '"db"."t"',
+      unqualifiedTable: 't',
+      scopeWhere: '1',
+      cursorColumn: 'bn',
+      stream: 's1',
+      chunkSize: 100,
+      checkpointTable: '_sqd_rollback_checkpoint',
+      safeCursor: { number: 100 },
+      reason: 'offset_check',
+    })
+    // commands: ensure-DDL + retire = 2 (no chunk, no advance)
+    expect(mock.command).toHaveBeenCalledTimes(2)
+    expect(result).toMatchObject({ chunksPlanned: 2, chunksCompleted: 0, resumed: true })
+  })
+})
+
+describe('dispatchRollback (chunked)', () => {
+  it('runs chunked path when probe returns rows and chunked config is supplied', async () => {
+    const probe = { json: async () => [{ '1': 1 }] } // probe hit
+    const max = { json: async () => [{ m: 200 }] }
+    const readCp = { json: async () => [] }
+    const results = [probe, readCp, max]
+    let i = 0
+    const query = vi.fn(async () => results[i++]!)
+    const command = vi.fn(async () => undefined)
+    const store = { query, command } as unknown as ClickhouseStore
+    const introspectorMock = {
+      columnsFor: vi.fn(async () => ['id', 'sign']),
+      invalidate: vi.fn(),
+      clear: vi.fn(),
+    } as unknown as ColumnIntrospector
+
+    const result = await dispatchRollback({
+      store,
+      introspector: introspectorMock,
+      db: 'db',
+      table: '"db"."t"',
+      unqualifiedTable: 't',
+      scopeWhere: '1',
+      cursorColumn: 'bn',
+      safeCursor: { number: 100 },
+      chunked: {
+        ensurer: new CheckpointTableEnsurer(),
+        stream: 's1',
+        chunkSize: 50,
+        checkpointTable: '_sqd_rollback_checkpoint',
+        reason: 'offset_check',
+      },
+    })
+    expect(result.kind).toBe('chunked')
+    expect(command).toHaveBeenCalled()
   })
 })

@@ -3,6 +3,7 @@ import type { ClickHouseClient } from '@clickhouse/client'
 import { BlockCursor, Ctx, Logger, createTarget } from '~/core/index.js'
 
 import {
+  CheckpointTableEnsurer,
   ColumnIntrospector,
   type RollbackReason,
   type RollbackResult,
@@ -80,6 +81,8 @@ export function clickhouseTarget<T>({
   const rollbackSettings = resolveRollbackSettings(settings.rollback)
   const rollbackTargetsDeclared = rollbackSettings.targets.length > 0
   const introspector = new ColumnIntrospector(store)
+  const checkpointEnsurer = new CheckpointTableEnsurer()
+  const chunkedConfigured = rollbackSettings.targets.some((t) => t.cursorColumn)
   let capturedLogger: Logger | undefined
 
   const runManaged = async (
@@ -95,6 +98,14 @@ export function clickhouseTarget<T>({
       defaultDb: state.options.database,
       logger,
       syncCurrent,
+      chunked: chunkedConfigured
+        ? {
+            ensurer: checkpointEnsurer,
+            stream: state.options.id,
+            chunkSize: rollbackSettings.chunkSize,
+            checkpointTable: rollbackSettings.checkpointTable,
+          }
+        : undefined,
     })
     return skippedTables
   }
