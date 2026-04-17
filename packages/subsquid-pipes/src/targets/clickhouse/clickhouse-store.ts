@@ -15,8 +15,8 @@ import {
   ColumnIntrospector,
   type RollbackReason,
   type RollbackResult,
+  dispatchRollback,
   resolveTargetTable,
-  runMonolithicCleanup,
 } from './clickhouse-rollback.js'
 import { loadSqlFiles } from './fs.js'
 
@@ -103,16 +103,19 @@ export class ClickhouseStore {
           'removeAllRows({ where }) is deprecated; pass { scopeWhere, cursorColumn, safeCursor, reason } to get EXISTS short-circuit and chunked+resumable rollback.',
         )
       }
-      return this.#runStructured({
-        tables: args.tables,
-        scopeWhere: args.where,
-        params: args.params,
-      })
+      return this.#runStructured(
+        {
+          tables: args.tables,
+          scopeWhere: args.where,
+          params: args.params,
+        },
+        opts,
+      )
     }
-    return this.#runStructured(args)
+    return this.#runStructured(args, opts)
   }
 
-  async #runStructured(args: StructuredRemoveAllRowsArgs): Promise<RollbackResult[]> {
+  async #runStructured(args: StructuredRemoveAllRowsArgs, opts?: { logger?: Logger }): Promise<RollbackResult[]> {
     const tables = typeof args.tables === 'string' ? [args.tables] : args.tables
     const introspector = this.#getIntrospector()
     const defaultDb = this.#getDefaultDb()
@@ -121,14 +124,17 @@ export class ClickhouseStore {
     const results: RollbackResult[] = []
     for (const rawTable of tables) {
       const { db, unqualifiedTable, qualifiedTable } = resolveTargetTable(rawTable, defaultDb)
-      const result = await runMonolithicCleanup({
+      const result = await dispatchRollback({
         store: this,
         introspector,
         db,
         table: qualifiedTable,
         unqualifiedTable,
         scopeWhere,
+        cursorColumn: args.cursorColumn,
+        safeCursor: args.safeCursor,
         queryParams: args.params,
+        logger: opts?.logger,
       })
       results.push(result)
     }

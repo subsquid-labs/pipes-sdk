@@ -235,6 +235,55 @@ export class ColumnIntrospector {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// EXISTS probe (Phase 2 Step 1)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Build the single-row probe SQL:
+ *   `SELECT 1 FROM <table> WHERE (<scopeWhere>) AND {cursorColumn:Identifier} > {safeCursor:UInt64} LIMIT 1`
+ *
+ * No `FINAL`, no `SETTINGS max_rows_to_read` — relies on sort-key pruning.
+ * Unmerged tombstones may cause the probe to return `true` even when the
+ * logical state is empty; the monolithic INSERT SELECT FINAL that runs next
+ * is idempotent on already-cancelled keys, so this is not a soundness defect.
+ */
+export function buildProbeSql(params: { table: string; scopeWhere: string }): string {
+  const { table, scopeWhere } = params
+  return `SELECT 1
+FROM ${table}
+WHERE (${scopeWhere})
+  AND {cursorColumn:Identifier} > {safeCursor:UInt64}
+LIMIT 1`
+}
+
+/**
+ * Runs the EXISTS probe. Returns `true` when at least one physical row past
+ * `safeCursor` matches the scope.
+ */
+export async function probeHasWorkToDo(params: {
+  store: ClickhouseStore
+  table: string
+  scopeWhere: string
+  cursorColumn: string
+  safeCursor: BlockCursor
+  queryParams?: Record<string, unknown>
+}): Promise<boolean> {
+  const { store, table, scopeWhere, cursorColumn, safeCursor, queryParams } = params
+  const sql = buildProbeSql({ table, scopeWhere })
+  const res = await store.query({
+    query: sql,
+    format: 'JSONEachRow',
+    query_params: {
+      ...(queryParams ?? {}),
+      cursorColumn,
+      safeCursor: safeCursor.number,
+    },
+  })
+  const rows = await res.json<unknown>()
+  return rows.length > 0
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Monolithic cleanup (Phase 1 Step 3)
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -312,6 +361,72 @@ export async function runMonolithicCleanup(params: {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Dispatch: probe → short-circuit | monolithic (Phase 2 Step 2)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * For a single target: if `cursorColumn` and `safeCursor` are both present,
+ * run the EXISTS probe. Empty probe → `{ kind: 'short_circuit' }` and skip
+ * the INSERT SELECT. Otherwise fall through to the monolithic path.
+ *
+ * Phase 3 will replace the monolithic fallthrough with the chunked/resumable
+ * path when both inputs are present.
+ */
+export async function dispatchRollback(params: {
+  store: ClickhouseStore
+  introspector: ColumnIntrospector
+  db: string
+  table: string
+  unqualifiedTable: string
+  scopeWhere: string
+  cursorColumn?: string
+  safeCursor?: BlockCursor
+  queryParams?: Record<string, unknown>
+  logger?: Logger
+}): Promise<RollbackResult> {
+  const {
+    store,
+    introspector,
+    db,
+    table,
+    unqualifiedTable,
+    scopeWhere,
+    cursorColumn,
+    safeCursor,
+    queryParams,
+    logger,
+  } = params
+
+  if (cursorColumn && safeCursor) {
+    const hasWork = await probeHasWorkToDo({
+      store,
+      table,
+      scopeWhere,
+      cursorColumn,
+      safeCursor,
+      queryParams,
+    })
+    if (!hasWork) {
+      logger?.debug?.(
+        { event: 'rollback.short_circuit', table, safeCursor: safeCursor.number },
+        'managed rollback short-circuited; probe found no rows past safeCursor',
+      )
+      return { kind: 'short_circuit', table }
+    }
+  }
+
+  return runMonolithicCleanup({
+    store,
+    introspector,
+    db,
+    table,
+    unqualifiedTable,
+    scopeWhere,
+    queryParams,
+  })
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Managed rollback (Phase 1 Step 6)
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -364,18 +479,21 @@ export async function runManagedRollback(
   const results: RollbackResult[] = []
   for (const target of targets) {
     const { db, unqualifiedTable, qualifiedTable } = resolveTargetTable(target.table, ctx.defaultDb)
-    const result = await runMonolithicCleanup({
+    const result = await dispatchRollback({
       store: ctx.store,
       introspector: ctx.introspector,
       db,
       table: qualifiedTable,
       unqualifiedTable,
       scopeWhere: target.scopeWhere,
+      cursorColumn: target.cursorColumn,
+      safeCursor,
       queryParams: target.params,
+      logger: ctx.logger,
     })
     ctx.logger?.debug?.(
-      { event: 'rollback.monolithic', reason, safeCursor, table: qualifiedTable },
-      'managed rollback monolithic path complete',
+      { event: `rollback.${result.kind}`, reason, safeCursor, table: qualifiedTable },
+      `managed rollback ${result.kind} path complete`,
     )
     skippedTables.push(qualifiedTable)
     results.push(result)

@@ -5,8 +5,11 @@ import {
   type RollbackTarget,
   assertScopeIsolation,
   buildMonolithicInsertSelectSql,
+  buildProbeSql,
   cursorColumnIsInSortKey,
+  dispatchRollback,
   extractIdentifiers,
+  probeHasWorkToDo,
   resolveRollbackSettings,
   resolveTargetTable,
   runMonolithicCleanup,
@@ -193,6 +196,157 @@ describe('assertScopeIsolation', () => {
       { table: 't', scopeWhere: "writer = 'b'" },
     ]
     expect(() => assertScopeIsolation(targets)).toThrow(/cross-writer tombstoning/)
+  })
+})
+
+describe('buildProbeSql', () => {
+  it('uses no FINAL and parameterizes column identifier + safeCursor', () => {
+    const sql = buildProbeSql({ table: '"db"."t"', scopeWhere: "writer = 'x'" })
+    expect(sql).not.toMatch(/FINAL/)
+    expect(sql).toContain('SELECT 1')
+    expect(sql).toContain('FROM "db"."t"')
+    expect(sql).toContain("WHERE (writer = 'x')")
+    expect(sql).toContain('{cursorColumn:Identifier}')
+    expect(sql).toContain('{safeCursor:UInt64}')
+    expect(sql).toContain('LIMIT 1')
+  })
+})
+
+describe('probeHasWorkToDo', () => {
+  function makeStore(rows: unknown[]) {
+    const query = vi.fn(async () => ({
+      json: async () => rows,
+    }))
+    return { store: { query } as unknown as ClickhouseStore, query }
+  }
+
+  it('returns false when the probe row set is empty', async () => {
+    const { store, query } = makeStore([])
+    const result = await probeHasWorkToDo({
+      store,
+      table: '"db"."t"',
+      scopeWhere: '1',
+      cursorColumn: 'block_number',
+      safeCursor: { number: 42 },
+    })
+    expect(result).toBe(false)
+    const call = (query.mock.calls as any[])[0]![0] as { query_params: Record<string, unknown> }
+    expect(call.query_params).toEqual({ cursorColumn: 'block_number', safeCursor: 42 })
+  })
+
+  it('returns true when the probe returns any row', async () => {
+    const { store } = makeStore([{ '1': 1 }])
+    const result = await probeHasWorkToDo({
+      store,
+      table: '"db"."t"',
+      scopeWhere: '1',
+      cursorColumn: 'block_number',
+      safeCursor: { number: 42 },
+    })
+    expect(result).toBe(true)
+  })
+
+  it('merges user queryParams without clobbering probe-reserved names', async () => {
+    const { store, query } = makeStore([])
+    await probeHasWorkToDo({
+      store,
+      table: 't',
+      scopeWhere: 'id = {id:UInt64}',
+      cursorColumn: 'bn',
+      safeCursor: { number: 99 },
+      queryParams: { id: 7 },
+    })
+    const call = (query.mock.calls as any[])[0]![0] as { query_params: Record<string, unknown> }
+    expect(call.query_params).toEqual({ id: 7, cursorColumn: 'bn', safeCursor: 99 })
+  })
+})
+
+describe('dispatchRollback', () => {
+  function makeStore(probeRows: unknown[] = []) {
+    const query = vi.fn(async () => ({ json: async () => probeRows }))
+    const command = vi.fn(async () => undefined)
+    return { store: { query, command } as unknown as ClickhouseStore, query, command }
+  }
+  function makeIntrospector(columns: string[]) {
+    return {
+      columnsFor: vi.fn(async () => columns),
+      invalidate: vi.fn(),
+      clear: vi.fn(),
+    } as unknown as ColumnIntrospector
+  }
+
+  it('short-circuits when cursorColumn+safeCursor are present and probe is empty', async () => {
+    const { store, command } = makeStore([])
+    const introspector = makeIntrospector(['id', 'sign'])
+
+    const result = await dispatchRollback({
+      store,
+      introspector,
+      db: 'db',
+      table: '"db"."t"',
+      unqualifiedTable: 't',
+      scopeWhere: '1',
+      cursorColumn: 'block_number',
+      safeCursor: { number: 100 },
+    })
+
+    expect(result).toEqual({ kind: 'short_circuit', table: '"db"."t"' })
+    expect(command).not.toHaveBeenCalled()
+  })
+
+  it('runs monolithic when probe returns rows', async () => {
+    const { store, command } = makeStore([{ '1': 1 }])
+    const introspector = makeIntrospector(['id', 'sign'])
+
+    const result = await dispatchRollback({
+      store,
+      introspector,
+      db: 'db',
+      table: '"db"."t"',
+      unqualifiedTable: 't',
+      scopeWhere: '1',
+      cursorColumn: 'block_number',
+      safeCursor: { number: 100 },
+    })
+
+    expect(result).toMatchObject({ kind: 'monolithic', table: '"db"."t"' })
+    expect(command).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips probe and runs monolithic when cursorColumn is absent', async () => {
+    const { store, query, command } = makeStore([])
+    const introspector = makeIntrospector(['id', 'sign'])
+
+    const result = await dispatchRollback({
+      store,
+      introspector,
+      db: 'db',
+      table: '"db"."t"',
+      unqualifiedTable: 't',
+      scopeWhere: '1',
+    })
+
+    expect(result).toMatchObject({ kind: 'monolithic' })
+    expect(query).not.toHaveBeenCalled()
+    expect(command).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips probe and runs monolithic when safeCursor is absent', async () => {
+    const { store, query, command } = makeStore([])
+    const introspector = makeIntrospector(['id', 'sign'])
+
+    await dispatchRollback({
+      store,
+      introspector,
+      db: 'db',
+      table: '"db"."t"',
+      unqualifiedTable: 't',
+      scopeWhere: '1',
+      cursorColumn: 'block_number',
+    })
+
+    expect(query).not.toHaveBeenCalled()
+    expect(command).toHaveBeenCalledTimes(1)
   })
 })
 
