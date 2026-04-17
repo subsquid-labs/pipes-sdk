@@ -64,6 +64,25 @@ export type RollbackHookContext = {
   cursor: BlockCursor
 }
 
+/**
+ * Build a ClickHouse write target for the pipe.
+ *
+ * When `settings.rollback.targets` is declared, the SDK runs a managed
+ * rollback path for each target on both `offset_check` (init-time, on resume)
+ * and `blockchain_fork`. Targets that also declare `cursorColumn` are handled
+ * via the chunked + resumable path backed by a `_sqd_rollback_checkpoint`
+ * table; targets without `cursorColumn` fall back to a single monolithic
+ * `INSERT INTO t (cols, sign) SELECT cols, -1 FROM t FINAL WHERE <scope>`.
+ *
+ * The managed path tombstones via the CollapsingMergeTree `sign` column.
+ * Tables listed in `targets` are passed to the optional `onRollback` hook via
+ * the `skippedTables` argument so user code can skip them.
+ *
+ * Every rollback invocation emits structured log events on the target's
+ * logger: `rollback.start`, optional `rollback.chunk` per chunk, and
+ * `rollback.end` discriminated on `{ short_circuit | monolithic | chunked }`.
+ * See `RollbackLogEvent` for the full event union.
+ */
 export function clickhouseTarget<T>({
   client,
   onStart,
@@ -195,4 +214,13 @@ export function clickhouseTarget<T>({
  */
 export const createClickhouseTarget = clickhouseTarget
 
-export type { RollbackReason, RollbackResult, RollbackSettings }
+export type {
+  RollbackChunkEvent,
+  RollbackEndEvent,
+  RollbackLogEvent,
+  RollbackReason,
+  RollbackResult,
+  RollbackSettings,
+  RollbackStartEvent,
+  RollbackTarget,
+} from './clickhouse-rollback.js'

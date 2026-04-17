@@ -1,5 +1,6 @@
 import { createClient } from '@clickhouse/client'
 import { afterEach, describe, expect, it } from 'vitest'
+
 import { ClickhouseStore } from '~/targets/clickhouse/clickhouse-store.js'
 
 const client = createClient({

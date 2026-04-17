@@ -19,11 +19,29 @@ export type RollbackTarget = {
   cursorColumn?: string
 }
 
+/**
+ * Declarative rollback config. When `targets` is non-empty, the SDK runs a
+ * managed rollback path for each target on `offset_check` and `blockchain_fork`
+ * and `onRollback` receives the list of tables the SDK already handled via
+ * `skippedTables` so user code can skip them.
+ */
 export type RollbackSettings = {
+  /** Tables to manage. Each target with `cursorColumn` opts into chunked + resumable rollback. */
   targets?: RollbackTarget[]
+  /**
+   * Max in-flight tombstone INSERTs per (client, database). Default `2`. The
+   * semaphore bounds parallelism regardless of how many pipes share the client.
+   */
   concurrency?: number
+  /** Row-window size for the chunked path. Default `500_000`. Ignored for monolithic and short-circuit paths. */
   chunkSize?: number
+  /**
+   * Jittered backoff for (a) the semaphore wake-up on release and (b) the
+   * optional `PortalSource.forkRetryBackoff` knob. Actual delay
+   * `baseMs * (0.5 + Math.random() * jitter * 2)`; default `baseMs=250, jitter=0.5`.
+   */
   retryBackoff?: { baseMs?: number; jitter?: number }
+  /** Name of the per-database checkpoint table used by the chunked path. Default `_sqd_rollback_checkpoint`. */
   checkpointTable?: string
 }
 

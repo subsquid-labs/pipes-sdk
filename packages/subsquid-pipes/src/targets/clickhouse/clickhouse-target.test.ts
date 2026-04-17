@@ -782,7 +782,10 @@ describe('Clickhouse state', () => {
         },
         {
           statusCode: 200,
-          data: [{ header: { number: 2, hash: '0x2a', timestamp: 2000 } }, { header: { number: 3, hash: '0x3a', timestamp: 3000 } }],
+          data: [
+            { header: { number: 2, hash: '0x2a', timestamp: 2000 } },
+            { header: { number: 3, hash: '0x3a', timestamp: 3000 } },
+          ],
           head: { finalized: { number: 2, hash: '0x2a' } },
         },
         // we mock 2 responses here as the first will fail
