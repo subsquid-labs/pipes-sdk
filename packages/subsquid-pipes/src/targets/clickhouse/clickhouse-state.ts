@@ -51,6 +51,7 @@ export class ClickhouseState {
 
   readonly #qualifiedName: string
   #saves = 0
+  #currentCursor: BlockCursor | undefined
 
   constructor(
     private store: ClickhouseStore,
@@ -112,6 +113,7 @@ export class ClickhouseState {
       })
     })
 
+    this.#currentCursor = { ...current }
     this.#saves++
 
     // Debounce cleanup for large retention windows, but enforce small limits
@@ -149,7 +151,9 @@ export class ClickhouseState {
 
       const [row] = await res.json<{ current: string; initial: string }>()
       if (row) {
-        return this.decodeCursor(row.current)
+        const cursor = this.decodeCursor(row.current)
+        this.#currentCursor = { ...cursor }
+        return cursor
       }
 
       return
@@ -162,6 +166,18 @@ export class ClickhouseState {
 
       throw e
     }
+  }
+
+  /**
+   * Returns a by-value copy of the in-memory current cursor (R-B freeze), or
+   * `undefined` if no cursor has been observed yet. Synchronous — reads the
+   * memoized cursor last written via `saveCursor()` or loaded via
+   * `getCursor()`. Used by the managed rollback helper to bound chunked
+   * `max_cursor` derivation at fork-handler entry, before `state.fork()`
+   * mutates the cursor to the fork-resolved value.
+   */
+  snapshotCurrent(): BlockCursor | undefined {
+    return this.#currentCursor ? { ...this.#currentCursor } : undefined
   }
 
   async fork(previousBlocks: BlockCursor[]): Promise<BlockCursor | null> {

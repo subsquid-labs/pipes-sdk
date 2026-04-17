@@ -55,8 +55,9 @@ describe('Clickhouse store', () => {
     expect(res).toMatchInlineSnapshot(`
       [
         {
-          "count": 1,
-          "table": "big_numbers",
+          "kind": "monolithic",
+          "rowsCanceled": null,
+          "table": ""default"."big_numbers"",
         },
       ]
     `)

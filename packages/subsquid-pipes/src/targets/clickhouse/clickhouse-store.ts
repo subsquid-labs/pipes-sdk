@@ -8,13 +8,50 @@ import type {
   QueryParams,
   QueryResult,
 } from '@clickhouse/client'
+
+import type { BlockCursor, Logger } from '~/core/index.js'
+
+import {
+  ColumnIntrospector,
+  type RollbackReason,
+  type RollbackResult,
+  resolveTargetTable,
+  runMonolithicCleanup,
+} from './clickhouse-rollback.js'
 import { loadSqlFiles } from './fs.js'
 
 export type QueryParamsWithFormat<Format extends DataFormat> = Omit<QueryParams, 'format'> & {
   format?: Format
 }
 
+/** Legacy `removeAllRows` shape, preserved as a shim with a deprecation warning. */
+export type LegacyRemoveAllRowsArgs = {
+  tables: string | string[]
+  where: string
+  params?: Record<string, unknown>
+}
+
+/** Structured `removeAllRows` shape introduced by Phase 1 of SDKTL-52. */
+export type StructuredRemoveAllRowsArgs = {
+  tables: string | string[]
+  scopeWhere?: string
+  params?: Record<string, unknown>
+  cursorColumn?: string
+  safeCursor?: BlockCursor
+  reason?: RollbackReason
+}
+
+export type RemoveAllRowsArgs = LegacyRemoveAllRowsArgs | StructuredRemoveAllRowsArgs
+
+function isLegacy(args: RemoveAllRowsArgs): args is LegacyRemoveAllRowsArgs {
+  return 'where' in args && typeof (args as LegacyRemoveAllRowsArgs).where === 'string'
+}
+
 export class ClickhouseStore {
+  #shimWarned = false
+  #introspector?: ColumnIntrospector
+  #defaultDb?: string
+
   constructor(public client: ClickHouseClient) {}
 
   insert<T>(params: InsertParams<T>): Promise<InsertResult> {
@@ -48,30 +85,54 @@ export class ClickhouseStore {
     }
   }
 
-  async removeAllRows({
-    tables,
-    params,
-    where,
-  }: {
-    tables: string | string[]
-    where: string
-    params?: Record<string, unknown>
-  }) {
-    tables = typeof tables === 'string' ? [tables] : tables
+  /**
+   * Removes all rows matching a scope via CollapsingMergeTree tombstone
+   * insertion. Two call shapes:
+   *
+   * - **Legacy**: `{ tables, where, params? }`. Preserved for back-compat;
+   *   emits a one-time deprecation warning per store instance.
+   * - **Structured** (recommended): `{ tables, scopeWhere?, params?, cursorColumn?, safeCursor?, reason? }`.
+   *   Runs a single server-side `INSERT INTO t (cols, sign) SELECT cols, -1 FROM t FINAL WHERE <scope>`.
+   *   No rows stream through Node.
+   */
+  async removeAllRows(args: RemoveAllRowsArgs, opts?: { logger?: Logger }): Promise<RollbackResult[]> {
+    if (isLegacy(args)) {
+      if (!this.#shimWarned) {
+        this.#shimWarned = true
+        opts?.logger?.warn?.(
+          'removeAllRows({ where }) is deprecated; pass { scopeWhere, cursorColumn, safeCursor, reason } to get EXISTS short-circuit and chunked+resumable rollback.',
+        )
+      }
+      return this.#runStructured({
+        tables: args.tables,
+        scopeWhere: args.where,
+        params: args.params,
+      })
+    }
+    return this.#runStructured(args)
+  }
 
-    return Promise.all(
-      tables.map(async (table) => {
-        // TODO check engine
+  async #runStructured(args: StructuredRemoveAllRowsArgs): Promise<RollbackResult[]> {
+    const tables = typeof args.tables === 'string' ? [args.tables] : args.tables
+    const introspector = this.#getIntrospector()
+    const defaultDb = this.#getDefaultDb()
+    const scopeWhere = args.scopeWhere ?? '1'
 
-        const count = await this.removeAllRowsByQuery({
-          table,
-          query: `SELECT * FROM ${table} FINAL WHERE ${where}`,
-          params,
-        })
-
-        return { table, count }
-      }),
-    )
+    const results: RollbackResult[] = []
+    for (const rawTable of tables) {
+      const { db, unqualifiedTable, qualifiedTable } = resolveTargetTable(rawTable, defaultDb)
+      const result = await runMonolithicCleanup({
+        store: this,
+        introspector,
+        db,
+        table: qualifiedTable,
+        unqualifiedTable,
+        scopeWhere,
+        queryParams: args.params,
+      })
+      results.push(result)
+    }
+    return results
   }
 
   async removeAllRowsByQuery({
@@ -115,5 +176,18 @@ export class ClickhouseStore {
     }
 
     return count
+  }
+
+  #getIntrospector(): ColumnIntrospector {
+    this.#introspector ??= new ColumnIntrospector(this)
+    return this.#introspector
+  }
+
+  #getDefaultDb(): string {
+    if (this.#defaultDb) return this.#defaultDb
+    const anyClient = this.client as any
+    const db = anyClient?.connectionParams?.database || 'default'
+    this.#defaultDb = db
+    return db
   }
 }
