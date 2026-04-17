@@ -39,6 +39,45 @@ export type RollbackResult =
       resumed: boolean
     }
 
+/** Structured log event emitted at the start of every rollback invocation (Phase 5 Step 1). */
+export type RollbackStartEvent = {
+  event: 'rollback.start'
+  stream: string | null
+  table: string
+  reason: RollbackReason | null
+  cursorColumn: string | null
+  safeCursor: number | null
+  probeKind: 'exists' | 'none'
+}
+
+/** Structured log event emitted per chunk. Only produced when `kind === 'chunked'`. */
+export type RollbackChunkEvent = {
+  event: 'rollback.chunk'
+  stream: string | null
+  table: string
+  chunkIndex: number
+  chunkFrom: number
+  chunkTo: number
+  durationMs: number
+}
+
+/** Structured log event emitted at the end of every rollback invocation, discriminated on `RollbackResult.kind`. */
+export type RollbackEndEvent =
+  | { event: 'rollback.end'; kind: 'short_circuit'; stream: string | null; table: string; totalDurationMs: number }
+  | { event: 'rollback.end'; kind: 'monolithic'; stream: string | null; table: string; totalDurationMs: number }
+  | {
+      event: 'rollback.end'
+      kind: 'chunked'
+      stream: string | null
+      table: string
+      chunksPlanned: number
+      chunksCompleted: number
+      resumed: boolean
+      totalDurationMs: number
+    }
+
+export type RollbackLogEvent = RollbackStartEvent | RollbackChunkEvent | RollbackEndEvent
+
 export const DEFAULT_ROLLBACK_CONCURRENCY = 2
 export const DEFAULT_ROLLBACK_CHUNK_SIZE = 500_000
 export const DEFAULT_ROLLBACK_BACKOFF_BASE_MS = 250
@@ -807,10 +846,6 @@ export async function runChunkedRollback(ctx: ChunkedRollbackContext): Promise<R
     chunk_size = existing.chunk_size
     last_completed_chunk = existing.last_completed_chunk
     startedAtUnix = existing.started_at_unix
-    logger?.debug?.(
-      { event: 'rollback.chunked.resume', table, last_completed_chunk, max_cursor },
-      'resumed chunked rollback from checkpoint',
-    )
   } else {
     // Fresh rollback: derive max_cursor per reason.
     if (reason === 'blockchain_fork') {
@@ -864,6 +899,7 @@ export async function runChunkedRollback(ctx: ChunkedRollbackContext): Promise<R
     for (let n = nextChunkIndex; n < totalChunks; n++) {
       const { chunkFrom, chunkTo } = chunks[n]!
       const release = semaphore ? await semaphore.acquire() : undefined
+      const chunkStartedAtMs = Date.now()
       try {
         await store.command({
           query: chunkSql,
@@ -891,6 +927,16 @@ export async function runChunkedRollback(ctx: ChunkedRollbackContext): Promise<R
         prev: last_completed_chunk,
         next: n,
       })
+      const chunkEvent: RollbackChunkEvent = {
+        event: 'rollback.chunk',
+        stream,
+        table,
+        chunkIndex: n,
+        chunkFrom,
+        chunkTo,
+        durationMs: Date.now() - chunkStartedAtMs,
+      }
+      logger?.info?.(chunkEvent, 'rollback chunk')
       last_completed_chunk = n
       chunksCompleted++
     }
@@ -909,11 +955,6 @@ export async function runChunkedRollback(ctx: ChunkedRollbackContext): Promise<R
     },
     startedAtUnix,
   })
-
-  logger?.debug?.(
-    { event: 'rollback.chunked.end', table, chunksPlanned: totalChunks, chunksCompleted, resumed },
-    'chunked rollback complete',
-  )
 
   return {
     kind: 'chunked',
@@ -963,6 +1004,10 @@ export async function dispatchRollback(params: {
   logger?: Logger
   chunked?: ChunkedDispatchConfig
   semaphore?: RollbackSemaphore
+  /** Optional `reason` for structured logs. Populated by the managed path; undefined for direct `removeAllRows`. */
+  reason?: RollbackReason
+  /** Optional stream identifier for structured logs. Populated by the managed path. */
+  stream?: string
 }): Promise<RollbackResult> {
   const {
     store,
@@ -977,7 +1022,46 @@ export async function dispatchRollback(params: {
     logger,
     chunked,
     semaphore,
+    reason,
+    stream,
   } = params
+
+  const probeKind: 'exists' | 'none' = cursorColumn != null ? 'exists' : 'none'
+  const startEvent: RollbackStartEvent = {
+    event: 'rollback.start',
+    stream: stream ?? null,
+    table,
+    reason: reason ?? null,
+    cursorColumn: cursorColumn ?? null,
+    safeCursor: safeCursor?.number ?? null,
+    probeKind,
+  }
+  logger?.info?.(startEvent, 'rollback start')
+  const startedAtMs = Date.now()
+
+  const emitEnd = (result: RollbackResult) => {
+    const totalDurationMs = Date.now() - startedAtMs
+    const end: RollbackEndEvent =
+      result.kind === 'chunked'
+        ? {
+            event: 'rollback.end',
+            kind: 'chunked',
+            stream: stream ?? null,
+            table,
+            chunksPlanned: result.chunksPlanned,
+            chunksCompleted: result.chunksCompleted,
+            resumed: result.resumed,
+            totalDurationMs,
+          }
+        : {
+            event: 'rollback.end',
+            kind: result.kind,
+            stream: stream ?? null,
+            table,
+            totalDurationMs,
+          }
+    logger?.info?.(end, 'rollback end')
+  }
 
   if (cursorColumn && safeCursor) {
     const hasWork = await probeHasWorkToDo({
@@ -989,16 +1073,13 @@ export async function dispatchRollback(params: {
       queryParams,
     })
     if (!hasWork) {
-      logger?.debug?.(
-        { event: 'rollback.short_circuit', table, safeCursor: safeCursor.number },
-        'managed rollback short-circuited; probe found no rows past safeCursor',
-      )
-      return { kind: 'short_circuit', table }
+      const result: RollbackResult = { kind: 'short_circuit', table }
+      emitEnd(result)
+      return result
     }
 
-    // Probe returned true — choose chunked path if configured, else monolithic.
     if (chunked) {
-      return runChunkedRollback({
+      const result = await runChunkedRollback({
         store,
         introspector,
         ensurer: chunked.ensurer,
@@ -1017,10 +1098,12 @@ export async function dispatchRollback(params: {
         logger,
         semaphore,
       })
+      emitEnd(result)
+      return result
     }
   }
 
-  return runMonolithicCleanup({
+  const result = await runMonolithicCleanup({
     store,
     introspector,
     db,
@@ -1030,6 +1113,8 @@ export async function dispatchRollback(params: {
     queryParams,
     semaphore,
   })
+  emitEnd(result)
+  return result
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1119,11 +1204,9 @@ export async function runManagedRollback(
       logger: ctx.logger,
       chunked: chunkedCfg,
       semaphore: ctx.semaphore,
+      reason,
+      stream: ctx.chunked?.stream,
     })
-    ctx.logger?.debug?.(
-      { event: `rollback.${result.kind}`, reason, safeCursor, table: qualifiedTable },
-      `managed rollback ${result.kind} path complete`,
-    )
     skippedTables.push(qualifiedTable)
     results.push(result)
   }

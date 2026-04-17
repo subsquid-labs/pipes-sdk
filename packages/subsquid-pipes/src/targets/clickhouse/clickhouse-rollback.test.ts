@@ -899,3 +899,182 @@ describe('getRollbackSemaphore', () => {
     expect(a).not.toBe(b)
   })
 })
+
+describe('dispatchRollback log events (Phase 5)', () => {
+  const makeLogger = () => {
+    const events: Array<{ payload: any; msg: string }> = []
+    const fn = (payload: any, msg: string) => events.push({ payload, msg })
+    return {
+      logger: { info: fn, debug: fn, warn: fn, error: fn } as any,
+      events,
+    }
+  }
+
+  it('emits start with probeKind=none + end (monolithic) when no cursorColumn', async () => {
+    const { logger, events } = makeLogger()
+    const command = vi.fn().mockResolvedValue(undefined)
+    const query = vi.fn()
+    const store = { command, query } as unknown as ClickhouseStore
+    const introspector = {
+      columnsFor: vi.fn().mockResolvedValue(['id', 'value', 'sign']),
+      invalidate: vi.fn(),
+    } as unknown as ColumnIntrospector
+
+    await dispatchRollback({
+      store,
+      introspector,
+      db: 'default',
+      table: '"default"."t"',
+      unqualifiedTable: 't',
+      scopeWhere: '1',
+      logger,
+      reason: 'offset_check',
+      stream: 'pipe1',
+    })
+
+    const starts = events.filter((e) => e.payload.event === 'rollback.start')
+    const ends = events.filter((e) => e.payload.event === 'rollback.end')
+    expect(starts).toHaveLength(1)
+    expect(ends).toHaveLength(1)
+    expect(starts[0]!.payload).toMatchObject({
+      event: 'rollback.start',
+      stream: 'pipe1',
+      table: '"default"."t"',
+      reason: 'offset_check',
+      cursorColumn: null,
+      safeCursor: null,
+      probeKind: 'none',
+    })
+    expect(ends[0]!.payload).toMatchObject({
+      event: 'rollback.end',
+      kind: 'monolithic',
+      stream: 'pipe1',
+      table: '"default"."t"',
+    })
+    expect(typeof ends[0]!.payload.totalDurationMs).toBe('number')
+  })
+
+  it('emits start + short_circuit end when probe finds no work', async () => {
+    const { logger, events } = makeLogger()
+    const query = vi.fn().mockResolvedValue({
+      json: async () => [],
+    })
+    const command = vi.fn()
+    const store = { command, query } as unknown as ClickhouseStore
+    const introspector = {
+      columnsFor: vi.fn(),
+      invalidate: vi.fn(),
+    } as unknown as ColumnIntrospector
+
+    await dispatchRollback({
+      store,
+      introspector,
+      db: 'default',
+      table: '"default"."t"',
+      unqualifiedTable: 't',
+      scopeWhere: '1',
+      cursorColumn: 'block_number',
+      safeCursor: { number: 100, hash: 'h', timestamp: 0 },
+      logger,
+      reason: 'offset_check',
+      stream: 'pipe1',
+    })
+
+    const starts = events.filter((e) => e.payload.event === 'rollback.start')
+    const ends = events.filter((e) => e.payload.event === 'rollback.end')
+    expect(starts[0]!.payload).toMatchObject({
+      probeKind: 'exists',
+      cursorColumn: 'block_number',
+      safeCursor: 100,
+    })
+    expect(ends[0]!.payload).toMatchObject({
+      event: 'rollback.end',
+      kind: 'short_circuit',
+    })
+    expect(command).not.toHaveBeenCalled()
+  })
+
+  it('end-event keys exactly match the discriminated union (no stray fields)', async () => {
+    const { logger, events } = makeLogger()
+    const query = vi.fn().mockResolvedValue({ json: async () => [] })
+    const store = { command: vi.fn(), query } as unknown as ClickhouseStore
+    const introspector = {
+      columnsFor: vi.fn(),
+      invalidate: vi.fn(),
+    } as unknown as ColumnIntrospector
+
+    await dispatchRollback({
+      store,
+      introspector,
+      db: 'default',
+      table: '"default"."t"',
+      unqualifiedTable: 't',
+      scopeWhere: '1',
+      cursorColumn: 'block_number',
+      safeCursor: { number: 100, hash: 'h', timestamp: 0 },
+      logger,
+    })
+
+    const end = events.find((e) => e.payload.event === 'rollback.end')!.payload
+    expect(Object.keys(end).sort()).toEqual(['event', 'kind', 'stream', 'table', 'totalDurationMs'].sort())
+  })
+})
+
+describe('runChunkedRollback log events (Phase 5)', () => {
+  it('emits a rollback.chunk event per completed chunk with chunkFrom/chunkTo/durationMs', async () => {
+    const events: Array<{ payload: any; msg: string }> = []
+    const fn = (payload: any, msg: string) => events.push({ payload, msg })
+    const logger = { info: fn, debug: fn, warn: fn, error: fn } as any
+
+    const command = vi.fn().mockResolvedValue(undefined)
+    const query = vi
+      .fn()
+      // readCheckpoint → no existing
+      .mockResolvedValueOnce({ json: async () => [] })
+      // deriveMaxCursorOffsetCheck → max=200
+      .mockResolvedValueOnce({ json: async () => [{ m: 200 }] })
+    const store = { command, query } as unknown as ClickhouseStore
+    const introspector = {
+      columnsFor: vi.fn().mockResolvedValue(['block_number', 'value', 'sign']),
+      invalidate: vi.fn(),
+    } as unknown as ColumnIntrospector
+    const ensurer = new CheckpointTableEnsurer()
+
+    const result = await runChunkedRollback({
+      store,
+      introspector,
+      ensurer,
+      db: 'default',
+      table: '"default"."t"',
+      unqualifiedTable: 't',
+      scopeWhere: '1',
+      cursorColumn: 'block_number',
+      stream: 's1',
+      chunkSize: 50,
+      checkpointTable: '_sqd_rollback_checkpoint',
+      safeCursor: { number: 100, hash: 'h', timestamp: 0 },
+      reason: 'offset_check',
+      logger,
+    })
+
+    expect(result.kind).toBe('chunked')
+    const chunkEvents = events.filter((e) => e.payload.event === 'rollback.chunk')
+    expect(chunkEvents).toHaveLength(2)
+    expect(chunkEvents[0]!.payload).toMatchObject({
+      event: 'rollback.chunk',
+      stream: 's1',
+      table: '"default"."t"',
+      chunkIndex: 0,
+      chunkFrom: 100,
+      chunkTo: 150,
+    })
+    expect(chunkEvents[1]!.payload).toMatchObject({
+      chunkIndex: 1,
+      chunkFrom: 150,
+      chunkTo: 200,
+    })
+    for (const e of chunkEvents) {
+      expect(typeof e.payload.durationMs).toBe('number')
+    }
+  })
+})
