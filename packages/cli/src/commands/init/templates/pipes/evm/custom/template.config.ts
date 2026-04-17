@@ -83,7 +83,7 @@ export const customTemplate = defineTemplate({
   },
   async postSetup(params, ctx) {
     const abiService = new SqdAbiService()
-    abiService.generateTypes(
+    await abiService.generateTypes(
       'evm',
       ctx.network,
       ctx.projectPath,
