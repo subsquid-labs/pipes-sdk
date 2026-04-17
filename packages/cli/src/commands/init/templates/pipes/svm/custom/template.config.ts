@@ -6,7 +6,7 @@ import { resolveDuplicateContractNames } from '~/utils/resolve-duplicate-contrac
 import { defineTemplate } from '../../../define-template.js'
 import { renderClickhouse } from './templates/clickhouse-table.sql.js'
 import { renderSchema } from './templates/pg-table.js'
-import { renderTransformer } from './templates/transformer.js'
+import { buildDecoderGroups, renderTransformer } from './templates/transformer.js'
 
 const RawInputSchema: z.ZodType<{ name: string; type: string; components?: unknown }> = z.lazy(() =>
   z.object({
@@ -84,7 +84,7 @@ export const customTemplate = defineTemplate({
       transformer: renderTransformer(params),
       postgresSchema: renderSchema(params),
       clickhouseTable: renderClickhouse(params),
-      decoderIds: ['custom'],
+      decoderIds: buildDecoderGroups(params).map((g) => g.decoderId),
     }
   },
 })

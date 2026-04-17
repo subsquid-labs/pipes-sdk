@@ -217,8 +217,10 @@ export const svmToClickhouseTypes = {
   // Boolean
   bool: 'Bool',
 
-  // Pubkey / Address (raw 32 bytes)
+  // Pubkey / Address (raw 32 bytes). `pubkey` is accepted as an alias because
+  // some IDL dumps lowercase it.
   publicKey: 'FixedString(86)',
+  pubkey: 'FixedString(86)',
 
   // Common Solana primitives
   // unix timestamp in seconds (i64)
@@ -294,8 +296,10 @@ export const svmToPostgresTypes = {
   // Boolean
   bool: 'boolean()',
 
-  // Pubkey / Address (base58)
+  // Pubkey / Address (base58). `pubkey` is accepted as an alias because some
+  // IDL dumps lowercase it.
   publicKey: 'varchar({ length: 44 })',
+  pubkey: 'varchar({ length: 44 })',
 
   // Common Solana primitives
   unix_timestamp: "bigint({ mode: 'bigint' })", // i64 seconds

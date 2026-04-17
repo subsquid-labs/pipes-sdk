@@ -3,18 +3,36 @@ import Mustache from 'mustache'
 
 import { CustomTemplateParams } from '../template.config.js'
 
+interface Program {
+  contractName: string
+  contractAddress: string
+  contractEvents: Array<{ name: string }>
+  range: { from: string; to?: string }
+}
+
+interface DecoderGroup {
+  decoderId: string
+  rangeFrom: string
+  rangeTo?: string
+  programs: Program[]
+  instructions: Array<{ contractName: string; name: string; uniqueKey: string }>
+}
+
 export const customContractTemplate = `import { solanaInstructionDecoder } from '@subsquid/pipes/solana'
-{{#contracts}}
+{{#decoderGroups}}
+{{#programs}}
 import { instructions as {{{contractName}}}Instructions } from "./contracts/{{{contractAddress}}}/index.js"
-{{/contracts}}
+{{/programs}}
+{{/decoderGroups}}
 import { enrichEvents } from './utils/index.js'
 
-const custom = solanaInstructionDecoder({
+{{#decoderGroups}}
+const {{{decoderId}}} = solanaInstructionDecoder({
   range: { from: '{{{rangeFrom}}}'{{#rangeTo}}, to: '{{{rangeTo}}}'{{/rangeTo}} },
   programId: [
-    {{#contracts}}
+    {{#programs}}
     "{{{contractAddress}}}",
-    {{/contracts}}
+    {{/programs}}
   ],
   /**
    * Or optionally use pass all events object directly to listen to all contract events
@@ -28,24 +46,37 @@ const custom = solanaInstructionDecoder({
     {{/instructions}}
   },
 }).pipe(enrichEvents)
+{{/decoderGroups}}
 `
 
-export function renderTransformer(params: CustomTemplateParams) {
-  // For SVM, use the oldest (smallest block number) range across all contracts
-  const ranges = params.contracts.map((c) => c.range).filter(Boolean)
-  const range = ranges.reduce((oldest, r) => {
-    if (!r) return oldest
-    const a = Number(oldest.from)
-    const b = Number(r.from)
-    if (isNaN(b)) return oldest
-    if (isNaN(a)) return r
-    return b < a ? r : oldest
-  }, ranges[0] ?? { from: 'latest' })
+export function buildDecoderGroups(params: CustomTemplateParams): DecoderGroup[] {
+  const programs: Program[] = params.contracts.map((c) => ({
+    contractName: toCamelCase(c.contractName),
+    contractAddress: c.contractAddress,
+    contractEvents: c.contractEvents,
+    range: c.range ?? { from: 'latest' },
+  }))
 
-  const contractsWithCamelName = params.contracts.map((c) => ({ ...c, contractName: toCamelCase(c.contractName) }))
+  if (programs.length === 0) return []
 
-  const instructions = contractsWithCamelName.flatMap((c) =>
-    c.contractEvents.map((e) => ({ contractName: c.contractName, name: e.name })),
+  const allSameRange = programs.every(
+    (p) => p.range.from === programs[0]!.range.from && p.range.to === programs[0]!.range.to,
+  )
+
+  if (allSameRange && programs.length > 0) {
+    return [makeGroup('custom', programs)]
+  }
+
+  return programs.map((p) => {
+    const suffix = p.contractName.charAt(0).toUpperCase() + p.contractName.slice(1)
+    return makeGroup(`custom${suffix}`, [p])
+  })
+}
+
+function makeGroup(decoderId: string, programs: Program[]): DecoderGroup {
+  const range = programs[0]!.range
+  const instructions = programs.flatMap((p) =>
+    p.contractEvents.map((e) => ({ contractName: p.contractName, name: e.name })),
   )
   const nameCounts = new Map<string, number>()
   for (const i of instructions) nameCounts.set(i.name, (nameCounts.get(i.name) ?? 0) + 1)
@@ -53,11 +84,16 @@ export function renderTransformer(params: CustomTemplateParams) {
     ...i,
     uniqueKey: (nameCounts.get(i.name) ?? 0) > 1 ? `${i.contractName}${i.name}` : i.name,
   }))
-
-  return Mustache.render(customContractTemplate, {
+  return {
+    decoderId,
     rangeFrom: range.from,
     rangeTo: range.to,
-    contracts: contractsWithCamelName,
+    programs,
     instructions: instructionsWithKeys,
-  })
+  }
+}
+
+export function renderTransformer(params: CustomTemplateParams): string {
+  const decoderGroups = buildDecoderGroups(params)
+  return Mustache.render(customContractTemplate, { decoderGroups })
 }
