@@ -34,6 +34,14 @@ function oldestRange(contracts: ContractWithRange[]): BlockRange {
   })
 }
 
+export function areRangesCompatible(contracts: ContractWithRange[]): boolean {
+  if (contracts.length <= 1) return true
+  const [first, ...rest] = contracts
+  const firstFrom = first.range?.from ?? 'latest'
+  const firstTo = first.range?.to
+  return rest.every((c) => (c.range?.from ?? 'latest') === firstFrom && c.range?.to === firstTo)
+}
+
 export function groupContractsForDecoders(contracts: ContractWithRange[]): DecoderGrouping {
   const nonEmpty = contracts.filter((c) => c.contractEvents.length > 0)
 
@@ -56,8 +64,10 @@ export function groupContractsForDecoders(contracts: ContractWithRange[]): Decod
     }
   }
 
-  // Multiple contracts, all share identical event signatures
-  if (areContractsCompatible(nonEmpty)) {
+  // Multiple contracts, all share identical event signatures AND ranges.
+  // Range compatibility matters because evmDecoder uses a single range for the
+  // whole decoder — collapsing divergent ranges would silently widen the scan.
+  if (areContractsCompatible(nonEmpty) && areRangesCompatible(nonEmpty)) {
     return {
       shared: true,
       groups: [
@@ -71,7 +81,7 @@ export function groupContractsForDecoders(contracts: ContractWithRange[]): Decod
     }
   }
 
-  // Contracts differ: one decoder per contract
+  // Contracts differ (by events or by range): one decoder per contract
   return {
     shared: false,
     groups: nonEmpty.map((c) => {
