@@ -1,66 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { Config } from '~/types/init.js'
-import { evmTemplates } from '../../templates/pipes/evm/index.js'
+
+import { fixtures, wethContract } from '../../templates/test-fixtures.js'
 import { renderSchemasTemplate } from './index.js'
 
-const wethMetadata = [
-  {
-    contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-    contractName: 'WETH9',
-    contractEvents: [
-      {
-        inputs: [
-          {
-            name: 'src',
-            type: 'address',
-          },
-          {
-            name: 'guy',
-            type: 'address',
-          },
-          {
-            name: 'wad',
-            type: 'uint256',
-          },
-        ],
-        name: 'Approval',
-        type: 'event',
-      },
-      {
-        inputs: [
-          {
-            name: 'src',
-            type: 'address',
-          },
-          {
-            name: 'dst',
-            type: 'address',
-          },
-          {
-            name: 'wad',
-            type: 'uint256',
-          },
-        ],
-        name: 'Transfer',
-        type: 'event',
-      },
-    ],
-    range: { from: 'latest' },
-  },
-]
+const ctx = {
+  network: 'ethereum-mainnet',
+  projectPath: '',
+  networkType: 'evm' as const,
+}
+
+function renderAll(tuples: Array<{ template: any; params: any }>) {
+  return renderSchemasTemplate(tuples.map((t) => t.template.render(t.params, ctx).postgresSchema))
+}
 
 describe('Schema template builder', () => {
   it('should build schema file for single pipe template', () => {
-    const config: Config<'evm'> = {
-      projectFolder: 'mock-folder',
-      networkType: 'evm',
-      network: 'ethereum-mainnet',
-      templates: [evmTemplates.erc20Transfers],
-      sink: 'postgresql',
-      packageManager: 'pnpm',
-    }
-
-    const schemaContent = renderSchemasTemplate(config.templates.map((t) => t.renderPostgresSchemas()))
+    const schemaContent = renderAll([fixtures.erc20Transfers()])
 
     expect(schemaContent).toMatchInlineSnapshot(`
       "import { bigint, integer, numeric, pgTable, primaryKey, varchar } from "drizzle-orm/pg-core";
@@ -92,19 +47,7 @@ describe('Schema template builder', () => {
   })
 
   it('should build schema file for multiple pipe templates', () => {
-    const config: Config<'evm'> = {
-      projectFolder: 'mock-folder',
-      networkType: 'evm',
-      network: 'ethereum-mainnet',
-      templates: [
-        evmTemplates.erc20Transfers,
-        evmTemplates.uniswapV3Swaps,
-      ],
-      sink: 'postgresql',
-      packageManager: 'pnpm',
-    }
-
-    const schemaContent = renderSchemasTemplate(config.templates.map((t) => t.renderPostgresSchemas()))
+    const schemaContent = renderAll([fixtures.erc20Transfers(), fixtures.uniswapV3Swaps()])
 
     expect(schemaContent).toMatchInlineSnapshot(`
       "import { bigint, integer, numeric, pgTable, primaryKey, varchar } from "drizzle-orm/pg-core";
@@ -156,15 +99,7 @@ describe('Schema template builder', () => {
   })
 
   it('should build schema for custom contract', () => {
-    const config: Config<'evm'> = {
-      projectFolder: 'mock-folder',
-      networkType: 'evm',
-      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
-      network: 'ethereum-mainnet',
-      sink: 'postgresql',
-      packageManager: 'pnpm',
-    }
-    const schemaContent = renderSchemasTemplate(config.templates.map((t) => t.renderPostgresSchemas()))
+    const schemaContent = renderAll([fixtures.evmCustom([wethContract])])
 
     expect(schemaContent).toMatchInlineSnapshot(`
       "import { bigint, char, integer, pgTable, primaryKey, numeric } from "drizzle-orm/pg-core";

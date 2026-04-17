@@ -1,15 +1,10 @@
-import { checkbox, input } from '@inquirer/prompts'
-import chalk from 'chalk'
-import ora from 'ora'
 import z from 'zod'
 
 import { ContractMetadata, SqdAbiService } from '~/services/sqd-abi.js'
-import { PipeTemplateMeta } from '~/types/init.js'
-import { promptBlockRange } from '~/utils/block-range-prompt.js'
 import { resolveDuplicateContractNames } from '~/utils/resolve-duplicate-contracts.js'
-import { createSpinner } from '~/utils/spinner.js'
 
-import { groupContractsForDecoders } from './decoder-grouping.js'
+import { defineTemplate } from '../../../define-template.js'
+import { DecoderGrouping, groupContractsForDecoders } from './decoder-grouping.js'
 import { renderClickhouse } from './templates/clickhouse-table.sql.js'
 import { renderSchema } from './templates/pg-table.js'
 import { renderTransformer } from './templates/transformer.js'
@@ -36,82 +31,66 @@ export const CustomTemplateParamsSchema = z.object({
 
 export type CustomTemplateParams = z.infer<typeof CustomTemplateParamsSchema>
 
-class CustomTemplate extends PipeTemplateMeta<'evm', typeof CustomTemplateParamsSchema> {
-  templateId = 'custom'
-  templateName = 'Bring your own contracts'
-  networkType = 'evm' as const
-  override paramsSchema = CustomTemplateParamsSchema
+const groupingCache = new WeakMap<CustomTemplateParams['contracts'], DecoderGrouping>()
 
-  override async collectParamsCustom(network: string) {
-    const addressesInput = await input({
-      message: `Contract addresses. ${chalk.dim('Comma separated')}:`,
-    })
+export function getGrouping(params: CustomTemplateParams): DecoderGrouping {
+  const cached = groupingCache.get(params.contracts)
+  if (cached) return cached
+  const grouping = groupContractsForDecoders(params.contracts)
+  groupingCache.set(params.contracts, grouping)
+  return grouping
+}
 
-    const spinner = createSpinner('Fetching contract data...')
-    spinner.start()
+export const customTemplate = defineTemplate({
+  id: 'custom',
+  name: 'Bring your own contracts',
+  networkType: 'evm',
+  paramsSchema: CustomTemplateParamsSchema,
+  async prompt(ctx) {
+    const addressesInput = await ctx.text('Contract addresses (comma separated)')
+    const addresses = addressesInput
+      .split(',')
+      .map((address) => address.trim())
+      .filter(Boolean)
 
-    const addresses = addressesInput.split(',').map((address) => address.trim())
-    const abiService = new SqdAbiService()
-    const metadata = await abiService.getContractData('evm', network, addresses)
-    spinner.succeed()
-
+    const metadata = await ctx.abiService.getContractData('evm', ctx.network, addresses)
     await resolveDuplicateContractNames(metadata)
 
     const contracts: (ContractMetadata & { range: { from: string; to?: string } })[] = []
     for (const contract of metadata) {
-      const choices = contract.contractEvents.map((event) => ({
-        name: event.name,
-        value: event,
-      }))
-      choices.sort((a, b) => a.name.localeCompare(b.name))
-      const events = await checkbox({
-        message: `Pick the events to track for ${contract.contractName}:`,
-        choices,
-        pageSize: 15,
-      })
+      const choices = contract.contractEvents
+        .map((event) => ({ name: event.name, value: event }))
+        .sort((a, b) => a.name.localeCompare(b.name))
 
-      const range = await promptBlockRange({
-        networkType: 'evm',
-        network,
-        contractAddresses: [contract.contractAddress],
-      })
+      const events = await ctx.checkbox(`Pick the events to track for ${contract.contractName}`, choices)
+      const range = await ctx.blockRange(`Block range for ${contract.contractName}`)
 
       contracts.push({
         contractAddress: contract.contractAddress,
         contractName: contract.contractName,
-        contractEvents: events,
+        contractEvents: events as any,
         range,
       })
     }
 
-    this.setParams({ contracts })
-  }
-
-  override async postSetup(network: string, projectPath: string): Promise<void> {
+    return { contracts }
+  },
+  async postSetup(params, ctx) {
     const abiService = new SqdAbiService()
     abiService.generateTypes(
-      this.networkType,
-      network,
-      projectPath,
-      this.getParams().contracts.map((c) => c.contractAddress),
+      'evm',
+      ctx.network,
+      ctx.projectPath,
+      params.contracts.map((c) => c.contractAddress),
     )
-  }
-
-  override getDecoderIds(): string[] {
-    return groupContractsForDecoders(this.getParams().contracts).groups.map((g) => g.decoderId)
-  }
-
-  override renderTransformers() {
-    return renderTransformer(this.getParams())
-  }
-
-  override renderPostgresSchemas() {
-    return renderSchema(this.getParams())
-  }
-
-  override renderClickhouseTables() {
-    return renderClickhouse(this.getParams())
-  }
-}
-
-export const custom = new CustomTemplate()
+  },
+  render(params) {
+    const grouping = getGrouping(params)
+    return {
+      transformer: renderTransformer(grouping),
+      postgresSchema: renderSchema(grouping),
+      clickhouseTable: renderClickhouse(grouping),
+      decoderIds: grouping.groups.map((g) => g.decoderId),
+    }
+  },
+})

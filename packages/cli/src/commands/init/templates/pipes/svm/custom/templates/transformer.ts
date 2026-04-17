@@ -1,5 +1,6 @@
 import { toCamelCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
+
 import { CustomTemplateParams } from '../template.config.js'
 
 export const customContractTemplate = `import { solanaInstructionDecoder } from '@subsquid/pipes/solana'
@@ -34,17 +35,14 @@ const custom = solanaInstructionDecoder({
 export function renderTransformer(params: CustomTemplateParams) {
   // For SVM, use the oldest (smallest block number) range across all contracts
   const ranges = params.contracts.map((c) => c.range).filter(Boolean)
-  const range = ranges.reduce(
-    (oldest, r) => {
-      if (!r) return oldest
-      const a = Number(oldest.from)
-      const b = Number(r.from)
-      if (isNaN(b)) return oldest
-      if (isNaN(a)) return r
-      return b < a ? r : oldest
-    },
-    ranges[0] ?? { from: 'latest' },
-  )
+  const range = ranges.reduce((oldest, r) => {
+    if (!r) return oldest
+    const a = Number(oldest.from)
+    const b = Number(r.from)
+    if (isNaN(b)) return oldest
+    if (isNaN(a)) return r
+    return b < a ? r : oldest
+  }, ranges[0] ?? { from: 'latest' })
 
   return Mustache.render(customContractTemplate, {
     rangeFrom: range.from,

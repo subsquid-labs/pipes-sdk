@@ -39,9 +39,7 @@ async function promptFromBlock(opts: PromptBlockRangeOpts): Promise<string> {
   }
 
   type FromChoice = 'latest' | 'deployment' | 'custom'
-  const choices: { name: string; value: FromChoice }[] = [
-    { name: 'Start from the latest block', value: 'latest' },
-  ]
+  const choices: { name: string; value: FromChoice }[] = [{ name: 'Start from the latest block', value: 'latest' }]
 
   if (deploymentBlock) {
     const suffix = opts.contractAddresses!.length > 1 ? ' - oldest contract' : ''

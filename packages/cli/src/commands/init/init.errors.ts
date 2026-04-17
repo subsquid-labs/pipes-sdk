@@ -1,13 +1,13 @@
-import { NetworkType, networkTypes } from '~/types/init.js'
+import { NetworkType } from '~/types/init.js'
 
-import { templates } from './builders/transformer-builder/index.js'
+import { templateRegistry } from './templates/registry.js'
 
 export class TemplateNotFoundError extends Error {
   constructor(templateId: unknown, network: NetworkType) {
     super(
       `Template '${templateId}' not found for ${network.toUpperCase()} networks
 The available values templates for this blockchain are:
-${Object.keys(templates[network])
+${Object.keys(templateRegistry[network])
   .map((id) => `  - ${id}`)
   .join('\n')}
   `,

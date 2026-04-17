@@ -1,7 +1,7 @@
 import { AbiEvent } from '@subsquid/evm-abi'
 import type { Codec } from '@subsquid/evm-codec'
 
-import { BlockCursor, Logger, PortalRange, createDefaultLogger, createTarget, parsePortalRange } from '~/core/index.js'
+import { BlockCursor, Logger, createDefaultLogger, createTarget, parsePortalRange } from '~/core/index.js'
 import { arrayify } from '~/internal/array.js'
 import { PortalClient, PortalClientOptions } from '~/portal-client/client.js'
 import { Log, LogRequest } from '~/portal-client/query/evm.js'
@@ -47,7 +47,7 @@ export type FactoryOptions<T extends EventArgs> = {
   address: string | string[]
   event: AbiEvent<T> | EventWithArgsInput<AbiEvent<T>>
   parameter: keyof T | ((data: DecodedAbiEvent<T>) => string | null)
-  /** 
+  /**
    * It is safe to use `any` here because the FactoryPersistentAdapter generic argument
    * will be inferred in the constructor of `Factory`
    */

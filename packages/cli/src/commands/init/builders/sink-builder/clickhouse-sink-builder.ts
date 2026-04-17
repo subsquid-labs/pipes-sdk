@@ -1,16 +1,11 @@
-import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 
-import { NetworkType, PipeTemplateMeta } from '~/types/init.js'
+import type { Config, NetworkType } from '~/types/init.js'
 
 import { clickhouseDefaults } from '../../templates/config-files/dynamic/docker-compose.js'
-import { groupContractsForDecoders, type DecoderGrouping } from '../../templates/pipes/evm/custom/decoder-grouping.js'
-import { CustomTemplateParamsSchema } from '../../templates/pipes/evm/custom/template.config.js'
-import { BaseSinkBuilder } from './base-sink-builder.js'
-
-function chTableName(grouping: DecoderGrouping, contractName: string, eventName: string) {
-  return grouping.shared ? toSnakeCase(eventName) : toSnakeCase(`${contractName}_${eventName}`)
-}
+import { groupContractsForDecoders } from '../../templates/pipes/evm/custom/decoder-grouping.js'
+import type { SinkArtifacts, SinkFile } from './sink-artifacts.js'
+import { extractCreateTableNames, tableName as chTableName } from './shared.js'
 
 const sinkTemplate = `
 import path from 'node:path'
@@ -79,53 +74,7 @@ clickhouseTarget({
     },
   })`
 
-export class ClickhouseSinkBuilder extends BaseSinkBuilder {
-  render() {
-    const templates = this.config.templates
-      .filter((t) => t.templateId !== 'custom')
-      .map((t) => ({
-        ...t,
-        tableNames: this.extactTableNames(t.renderClickhouseTables()),
-      }))
-
-    const customTemplates = this.config.templates
-      .filter((t): t is PipeTemplateMeta<NetworkType, typeof CustomTemplateParamsSchema> => t.templateId === 'custom')
-      .flatMap((t) => {
-        const grouping = groupContractsForDecoders(t.getParams().contracts)
-        return grouping.groups.map((group) => ({
-          decoderId: group.decoderId,
-          schemaNames: group.events.map((e) => ({
-            event: e.name,
-            tableName: chTableName(grouping, group.contracts[0].contractName, e.name),
-          })),
-        }))
-      })
-
-    return Mustache.render(sinkTemplate, {
-      templates,
-      customTemplates,
-    })
-  }
-
-  async createMigrations(): Promise<void> {
-    this.config.templates.forEach((t) => {
-      this.projectWriter.createFile(`migrations/${t.templateId}-migration.sql`, t.renderClickhouseTables())
-    })
-  }
-
-  async createEnvFile(): Promise<void> {
-    this.projectWriter.createFile(
-      '.env',
-      `CLICKHOUSE_URL=http://localhost:${clickhouseDefaults.port}
-CLICKHOUSE_DATABASE=${clickhouseDefaults.db}
-CLICKHOUSE_USER=${clickhouseDefaults.user}
-CLICKHOUSE_PASSWORD=${clickhouseDefaults.password}
-    `,
-    )
-  }
-
-  getEnvSchema(): string {
-    return `
+const envSchema = `
 import { z } from 'zod'
 
 const env = z.object({
@@ -135,15 +84,64 @@ const env = z.object({
   CLICKHOUSE_DATABASE: z.string(),
 }).parse(process.env)
 `
-  }
 
-  private extactTableNames(code: string): string[] {
-    const CREATE_TABLE_IF_NOT_EXISTS_NAME_REGEX =
-      /^\s*CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([A-Za-z_][A-Za-z0-9_]*)\b/gim
-    const names: string[] = []
-    for (const m of code.trim().matchAll(CREATE_TABLE_IF_NOT_EXISTS_NAME_REGEX)) {
-      names.push(m[1])
-    }
-    return [...new Set(names)]
+const envFileContent = `CLICKHOUSE_URL=http://localhost:${clickhouseDefaults.port}
+CLICKHOUSE_DATABASE=${clickhouseDefaults.db}
+CLICKHOUSE_USER=${clickhouseDefaults.user}
+CLICKHOUSE_PASSWORD=${clickhouseDefaults.password}
+    `
+
+function renderCtx(config: Config<NetworkType>) {
+  return {
+    network: config.network,
+    projectPath: '',
+    networkType: config.networkType,
+  }
+}
+
+function renderSinkCode(config: Config<NetworkType>): string {
+  const ctx = renderCtx(config)
+
+  const templates = config.templates
+    .filter(({ template }) => template.id !== 'custom')
+    .map(({ template, params }) => ({
+      templateId: template.id,
+      tableNames: extractCreateTableNames(template.render(params, ctx).clickhouseTable),
+    }))
+
+  const customTemplates = config.templates
+    .filter(({ template }) => template.id === 'custom')
+    .flatMap(({ params }) => {
+      const contracts = (params as { contracts: Array<any> }).contracts
+      const grouping = groupContractsForDecoders(contracts)
+      return grouping.groups.map((group) => ({
+        decoderId: group.decoderId,
+        schemaNames: group.events.map((e) => ({
+          event: e.name,
+          tableName: chTableName(grouping, group.contracts[0].contractName, e.name),
+        })),
+      }))
+    })
+
+  return Mustache.render(sinkTemplate, {
+    templates,
+    customTemplates,
+  })
+}
+
+function renderMigrationFiles(config: Config<NetworkType>): SinkFile[] {
+  const ctx = renderCtx(config)
+  return config.templates.map(({ template, params }) => ({
+    path: `migrations/${template.id}-migration.sql`,
+    content: template.render(params, ctx).clickhouseTable,
+  }))
+}
+
+export function buildClickhouseSink(config: Config<NetworkType>): SinkArtifacts {
+  return {
+    sinkCode: renderSinkCode(config),
+    envSchema,
+    files: [{ path: '.env', content: envFileContent }, ...renderMigrationFiles(config)],
+    postSteps: [],
   }
 }

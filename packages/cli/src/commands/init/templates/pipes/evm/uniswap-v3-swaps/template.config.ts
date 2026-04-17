@@ -1,9 +1,9 @@
-import { input } from '@inquirer/prompts'
 import { z } from 'zod'
-import { PipeTemplateMeta } from '~/types/init.js'
-import { promptBlockRange } from '~/utils/block-range-prompt.js'
+
 import { getTemplateDirname } from '~/utils/fs.js'
 import { TemplateReader } from '~/utils/template-reader.js'
+
+import { defineTemplate } from '../../../define-template.js'
 import { renderTemplate } from './templates/transformer.js'
 
 const templateReader = new TemplateReader(getTemplateDirname('evm'), 'uniswap-v3-swaps')
@@ -26,41 +26,24 @@ export const UniswapV3SwapsPipeTemplateParamsSchema = z.object({
 
 export type UniswapV3SwapsPipeTemplateParams = z.infer<typeof UniswapV3SwapsPipeTemplateParamsSchema>
 
-class UniswapV3SwapsTemplate extends PipeTemplateMeta<'evm', typeof UniswapV3SwapsPipeTemplateParamsSchema> {
-  templateId = 'uniswapV3Swaps'
-  templateName = 'Uniswap V3 Swaps'
-  networkType = 'evm' as const
-
-  override paramsSchema = UniswapV3SwapsPipeTemplateParamsSchema
-  override defaultParams = defaults
-
-  override async collectParamsCustom(network: string) {
-    const factoryAddress = await input({
-      default: defaults.factoryAddress,
-      message: 'Uniswap V3 compatible factory address:',
-      validate: (v: string) => (v.trim().length > 0 ? true : 'Value cannot be empty'),
-    })
-
-    const range = await promptBlockRange({
-      networkType: 'evm',
-      network,
-      contractAddresses: [factoryAddress.trim()],
-    })
-
-    this.setParams({ factoryAddress: factoryAddress.trim(), range })
-  }
-
-  renderTransformers() {
-    return renderTemplate(this.getParams())
-  }
-
-  renderPostgresSchemas() {
-    return templateReader.readPgTable()
-  }
-
-  renderClickhouseTables() {
-    return templateReader.readClickhouseTable()
-  }
-}
-
-export const uniswapV3Swaps = new UniswapV3SwapsTemplate()
+export const uniswapV3SwapsTemplate = defineTemplate({
+  id: 'uniswapV3Swaps',
+  name: 'Uniswap V3 Swaps',
+  networkType: 'evm',
+  paramsSchema: UniswapV3SwapsPipeTemplateParamsSchema,
+  defaultParams: defaults,
+  copySrc: 'src',
+  async prompt(ctx) {
+    const factoryAddress = await ctx.text('Uniswap V3 compatible factory address', defaults.factoryAddress)
+    const range = await ctx.blockRange('Block range')
+    return { factoryAddress: factoryAddress.trim(), range }
+  },
+  render(params) {
+    return {
+      transformer: renderTemplate(params),
+      postgresSchema: templateReader.readPgTable(),
+      clickhouseTable: templateReader.readClickhouseTable(),
+      decoderIds: ['uniswapV3Swaps'],
+    }
+  },
+})

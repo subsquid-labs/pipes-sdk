@@ -1,13 +1,11 @@
 import Mustache from 'mustache'
 
-import { Config, NetworkType, PipeTemplateMeta } from '~/types/init.js'
+import { Config, NetworkType } from '~/types/init.js'
 import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
 import { ProjectWriter } from '~/utils/project-writer.js'
 import { generatePipeId } from '~/utils/random-id.js'
 
-import { evmTemplates } from '../../templates/pipes/evm/index.js'
-import { svmTemplates } from '../../templates/pipes/svm/index.js'
-import { SinkBuilder } from '../sink-builder/index.js'
+import { buildSink } from '../sink-builder/index.js'
 import { BaseTransformerBuilder } from './base-transformer-builder.js'
 import { EvmTransformerBuilder } from './evm-transformer-builder.js'
 import { SvmTransformerBuilder } from './svm-transformer-builder.js'
@@ -15,7 +13,6 @@ import { SvmTransformerBuilder } from './svm-transformer-builder.js'
 export class TransformerBuilder<N extends NetworkType> {
   protected static readonly BASE_IMPORTS = ['import "dotenv/config"']
   private transformerBuilder: BaseTransformerBuilder<NetworkType>
-  private sinkBuilder: SinkBuilder
 
   constructor(
     protected config: Config<N>,
@@ -29,8 +26,6 @@ export class TransformerBuilder<N extends NetworkType> {
         this.transformerBuilder = new SvmTransformerBuilder(config as Config<'svm'>)
         break
     }
-
-    this.sinkBuilder = new SinkBuilder(config, projectWriter)
   }
 
   async writeIndexTs() {
@@ -40,9 +35,13 @@ export class TransformerBuilder<N extends NetworkType> {
 
   async runPostSetups() {
     await Promise.all(
-      this.config.templates.map(async (t) => {
-        if (t.postSetup) {
-          await t.postSetup(this.config.network, this.projectWriter.getAbsolutePath())
+      this.config.templates.map(async ({ template, params }) => {
+        if (template.postSetup) {
+          await template.postSetup(params, {
+            network: this.config.network,
+            projectPath: this.projectWriter.getAbsolutePath(),
+            networkType: this.config.networkType,
+          })
         }
       }),
     )
@@ -50,8 +49,9 @@ export class TransformerBuilder<N extends NetworkType> {
 
   async render() {
     const transformerTemplates = await this.transformerBuilder.getTransformerTemplates()
-    const sinkTemplates = this.sinkBuilder.render()
-    const envTemplate = this.sinkBuilder.getEnvSchema()
+    const sinkArtifacts = buildSink(this.config)
+    const sinkTemplates = sinkArtifacts.sinkCode
+    const envTemplate = sinkArtifacts.envSchema
 
     // TODO: rename this variable
     const componentsCode = [
@@ -90,27 +90,4 @@ export class TransformerBuilder<N extends NetworkType> {
     const imports = templates.map(splitImportsAndCode).flatMap(({ imports }) => imports)
     return mergeImports(imports).map(generateImportStatement)
   }
-}
-
-export const templates: {
-  evm: Record<string, PipeTemplateMeta<'evm', any>>
-  svm: Record<string, PipeTemplateMeta<'svm', any>>
-} = {
-  evm: evmTemplates,
-  svm: svmTemplates,
-} as const
-
-export type NetworkTemplate<N extends NetworkType> = (typeof templates)[N]
-export type NetworkTemplateValue<N extends NetworkType> = (typeof templates)[N][keyof NetworkTemplate<N>]
-export type TemplateId<N extends NetworkType> = keyof (typeof templates)[N]
-
-export function getTemplate<N extends NetworkType>(
-  networkType: N,
-  templateId: keyof (typeof templates)[N],
-): PipeTemplateMeta<N, any> {
-  return templates[networkType][templateId] as PipeTemplateMeta<N, any>
-}
-
-export function getTemplates<N extends NetworkType>(networkType: N): NetworkTemplateValue<N>[] {
-  return Object.values(templates[networkType])
 }

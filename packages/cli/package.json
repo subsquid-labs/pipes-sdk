@@ -44,6 +44,7 @@
     "build": "tsup",
     "lint": "biome check . --write",
     "test": "vitest run",
+    "test:integration": "RUN_INTEGRATION=1 vitest run src/commands/init/init.handler.test.ts",
     "coverage": "vitest run --coverage"
   },
   "dependencies": {

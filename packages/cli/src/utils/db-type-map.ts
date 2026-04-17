@@ -54,10 +54,7 @@ function smallestClickHouseSize(bits: number): (typeof CLICKHOUSE_INT_SIZES)[num
   return size ?? 256
 }
 
-function buildSolidityIntEntries<T>(
-  prefix: 'uint' | 'int',
-  toType: (bits: number) => T,
-): Record<string, T> {
+function buildSolidityIntEntries<T>(prefix: 'uint' | 'int', toType: (bits: number) => T): Record<string, T> {
   const entries: Record<string, T> = {}
   for (let bits = 8; bits <= 256; bits += 8) {
     entries[`${prefix}${bits}`] = toType(bits)

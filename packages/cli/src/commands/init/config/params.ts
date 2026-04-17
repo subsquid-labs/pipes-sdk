@@ -2,8 +2,8 @@ import z from 'zod'
 
 import { NetworkType, packageManagerTypes, sinkTypes } from '~/types/init.js'
 
-import { TemplateId, getTemplate, getTemplates } from '../builders/transformer-builder/index.js'
 import { TemplateNotFoundError } from '../init.errors.js'
+import { getTemplate, getTemplates } from '../templates/registry.js'
 import { getPortalNetworkSlugs } from './networks.js'
 
 function getTemplateSchemas<N extends NetworkType>(networkType: N) {
@@ -52,9 +52,9 @@ export const configJsonSchema = configJsonSchemaRaw.transform((data) => {
     sink: data.sink,
     packageManager: data.packageManager,
     templates: data.templates.map((t) => {
-      const template = getTemplate(networkType, t.templateId as TemplateId<NetworkType>)
+      const template = getTemplate(networkType, t.templateId)
       if (!template) throw new TemplateNotFoundError(t.templateId, networkType)
-      return t.params ? template.setParams(t.params) : template
+      return { template, params: t.params }
     }),
   }
 })

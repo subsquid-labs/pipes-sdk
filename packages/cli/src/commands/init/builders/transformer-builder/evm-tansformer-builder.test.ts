@@ -1,10 +1,11 @@
 import crypto from 'node:crypto'
-import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest'
+
+import { type MockInstance, afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { Config } from '~/types/init.js'
 import { ProjectWriter } from '~/utils/project-writer.js'
 
-import { evmTemplates } from '../../templates/pipes/evm/index.js'
+import { fixtures, wethContract } from '../../templates/test-fixtures.js'
 import { TransformerBuilder } from './index.js'
 
 describe('EVM Template Builder', () => {
@@ -12,66 +13,19 @@ describe('EVM Template Builder', () => {
   let spy: MockInstance
 
   beforeAll(() => {
-    spy = vi.spyOn(crypto, 'randomBytes').mockImplementation(
-      () => Buffer.from('a1b2c3d4', 'hex') as any,
-    )
+    spy = vi.spyOn(crypto, 'randomBytes').mockImplementation(() => Buffer.from('a1b2c3d4', 'hex') as any)
   })
 
   afterAll(() => {
     spy.mockRestore()
   })
-  const wethMetadata = [
-    {
-      contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-      contractName: 'WETH9',
-      contractEvents: [
-        {
-          inputs: [
-            {
-              name: 'src',
-              type: 'address',
-            },
-            {
-              name: 'guy',
-              type: 'address',
-            },
-            {
-              name: 'wad',
-              type: 'uint256',
-            },
-          ],
-          name: 'Approval',
-          type: 'event',
-        },
-        {
-          inputs: [
-            {
-              name: 'src',
-              type: 'address',
-            },
-            {
-              name: 'dst',
-              type: 'address',
-            },
-            {
-              name: 'wad',
-              type: 'uint256',
-            },
-          ],
-        name: 'Transfer',
-        type: 'event',
-      },
-    ],
-    range: { from: 'latest' },
-  },
-]
 
   it('should build index.ts file using single pipe template', async () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates.erc20Transfers],
+      templates: [fixtures.erc20Transfers()],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -174,7 +128,7 @@ describe('EVM Template Builder', () => {
       projectFolder: 'mock-folder',
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates.erc20Transfers, evmTemplates.uniswapV3Swaps],
+      templates: [fixtures.erc20Transfers(), fixtures.uniswapV3Swaps()],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -314,7 +268,7 @@ describe('EVM Template Builder', () => {
       projectFolder: 'mock-folder',
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
+      templates: [fixtures.evmCustom([wethContract])],
       sink: 'postgresql',
       packageManager: 'pnpm',
     }

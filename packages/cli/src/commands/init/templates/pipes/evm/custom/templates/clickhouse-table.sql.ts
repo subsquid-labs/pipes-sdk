@@ -3,9 +3,8 @@ import Mustache from 'mustache'
 
 import { evmToClickhouseType } from '~/utils/db-type-map.js'
 
+import { tableName } from '../../../../../builders/sink-builder/shared.js'
 import { type DecoderGrouping } from '../decoder-grouping.js'
-import { CustomTemplateParams } from '../template.config.js'
-import { groupContractsForDecoders } from '../decoder-grouping.js'
 
 export const customContractChTemplate = `
 {{#contracts}}
@@ -27,12 +26,7 @@ ORDER BY (block_number, tx_hash, log_index);
 {{/contracts}}
 `
 
-function tableName(grouping: DecoderGrouping, contractName: string, eventName: string) {
-  return grouping.shared ? toSnakeCase(eventName) : toSnakeCase(`${contractName}_${eventName}`)
-}
-
-export function renderClickhouse({ contracts }: CustomTemplateParams) {
-  const grouping = groupContractsForDecoders(contracts)
+export function renderClickhouse(grouping: DecoderGrouping) {
   const contracsWithDbTypes = getContractWithDbTypes(grouping)
 
   return Mustache.render(customContractChTemplate, {

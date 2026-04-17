@@ -1,7 +1,8 @@
 import { exec } from 'child_process'
-import { mkdirSync, writeFileSync, existsSync, statSync, cpSync, copyFileSync } from 'fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, statSync, writeFileSync } from 'fs'
 import path from 'path'
 import { promisify } from 'util'
+
 import { TemplateFileNotFoundError, UnexpectedTemplateFileError } from '~/commands/init/init.errors.js'
 
 const execAsync = promisify(exec)

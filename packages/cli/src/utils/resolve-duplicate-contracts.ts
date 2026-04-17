@@ -38,11 +38,7 @@ function findDuplicateNames(contracts: Array<{ contractName: string }>): Map<str
   return new Map(Array.from(nameToIndices.entries()).filter(([, indices]) => indices.length > 1))
 }
 
-async function promptForUniqueName(
-  originalName: string,
-  address: string,
-  usedNames: Set<string>,
-): Promise<string> {
+async function promptForUniqueName(originalName: string, address: string, usedNames: Set<string>): Promise<string> {
   const shortAddress = address.length > 12 ? `${address.slice(0, 6)}...${address.slice(-5)}` : address
   return input({
     message: `Contract name "${originalName}" is duplicated. Enter unique name for ${shortAddress}:`,

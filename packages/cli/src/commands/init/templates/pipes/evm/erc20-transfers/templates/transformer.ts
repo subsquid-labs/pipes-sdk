@@ -1,4 +1,5 @@
 import Mustache from 'mustache'
+
 import { Erc20TransfersPipeTemplateParams } from '../template.config.js'
 
 const template = `import { commonAbis, evmDecoder } from '@subsquid/pipes/evm'

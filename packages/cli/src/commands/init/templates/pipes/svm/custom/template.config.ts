@@ -1,13 +1,12 @@
-import { PipeTemplateMeta } from '~/types/init.js'
-import { renderTransformer } from './templates/transformer.js'
-import { ContractMetadata, SqdAbiService } from '~/services/sqd-abi.js'
-import { renderSchema } from './templates/pg-table.js'
-import { renderClickhouse } from './templates/clickhouse-table.sql.js'
 import { z } from 'zod'
-import { input, checkbox } from '@inquirer/prompts'
-import chalk from 'chalk'
-import { promptBlockRange } from '~/utils/block-range-prompt.js'
+
+import { ContractMetadata, SqdAbiService } from '~/services/sqd-abi.js'
 import { resolveDuplicateContractNames } from '~/utils/resolve-duplicate-contracts.js'
+
+import { defineTemplate } from '../../../define-template.js'
+import { renderClickhouse } from './templates/clickhouse-table.sql.js'
+import { renderSchema } from './templates/pg-table.js'
+import { renderTransformer } from './templates/transformer.js'
 
 const RawInputSchema = z.object({ name: z.string(), type: z.string() })
 
@@ -31,73 +30,55 @@ export const CustomTemplateParamsSchema = z.object({
 
 export type CustomTemplateParams = z.infer<typeof CustomTemplateParamsSchema>
 
-class CustomTemplate extends PipeTemplateMeta<'svm', typeof CustomTemplateParamsSchema> {
-  templateId = 'custom'
-  templateName = 'Bring your own contracts'
-  networkType = 'svm' as const
-  override paramsSchema = CustomTemplateParamsSchema
+export const customTemplate = defineTemplate({
+  id: 'custom',
+  name: 'Bring your own contracts',
+  networkType: 'svm',
+  paramsSchema: CustomTemplateParamsSchema,
+  async prompt(ctx) {
+    const addressesInput = await ctx.text('Contract addresses (comma separated)')
+    const addresses = addressesInput
+      .split(',')
+      .map((address) => address.trim())
+      .filter(Boolean)
 
-  override async collectParamsCustom(network: string) {
-    const addressesInput = await input({
-      message: `Contract addresses. ${chalk.dim('Comma separated')}:`,
-    })
-    const addresses = addressesInput.split(',').map((address) => address.trim())
-    const abiService = new SqdAbiService()
-    const metadata = await abiService.getContractData('svm', network, addresses)
-
+    const metadata = await ctx.abiService.getContractData('svm', ctx.network, addresses)
     await resolveDuplicateContractNames(metadata)
 
     const contracts: (ContractMetadata & { range: { from: string; to?: string } })[] = []
     for (const contract of metadata) {
-      const choices = contract.contractEvents.map((event) => ({
-        name: event.name,
-        value: event,
-      }))
-      choices.sort((a, b) => a.name.localeCompare(b.name))
+      const choices = contract.contractEvents
+        .map((event) => ({ name: event.name, value: event }))
+        .sort((a, b) => a.name.localeCompare(b.name))
 
-      const events = await checkbox({
-        message: `Pick the events to track for ${contract.contractName}:`,
-        choices,
-        pageSize: 15,
-      })
-
-      const range = await promptBlockRange({
-        networkType: 'svm',
-        network,
-      })
+      const events = await ctx.checkbox(`Pick the events to track for ${contract.contractName}`, choices)
+      const range = await ctx.blockRange(`Block range for ${contract.contractName}`)
 
       contracts.push({
         contractAddress: contract.contractAddress,
         contractName: contract.contractName,
-        contractEvents: events,
+        contractEvents: events as any,
         range,
       })
     }
 
-    this.setParams({ contracts })
-  }
-
-  override async postSetup(network: string, projectPath: string): Promise<void> {
+    return { contracts }
+  },
+  async postSetup(params, ctx) {
     const abiService = new SqdAbiService()
     await abiService.generateTypes(
-      this.networkType,
-      network,
-      projectPath,
-      this.getParams().contracts.map((c) => c.contractAddress),
+      'svm',
+      ctx.network,
+      ctx.projectPath,
+      params.contracts.map((c) => c.contractAddress),
     )
-  }
-
-  override renderTransformers() {
-    return renderTransformer(this.getParams())
-  }
-
-  override renderPostgresSchemas() {
-    return renderSchema(this.getParams())
-  }
-
-  override renderClickhouseTables() {
-    return renderClickhouse(this.getParams())
-  }
-}
-
-export const custom = new CustomTemplate()
+  },
+  render(params) {
+    return {
+      transformer: renderTransformer(params),
+      postgresSchema: renderSchema(params),
+      clickhouseTable: renderClickhouse(params),
+      decoderIds: ['custom'],
+    }
+  },
+})

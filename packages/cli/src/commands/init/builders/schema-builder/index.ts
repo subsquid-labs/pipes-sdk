@@ -3,6 +3,8 @@ import Mustache from 'mustache'
 
 import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
 
+import { extractExportConstNames } from '../sink-builder/shared.js'
+
 export const schemasTemplate = `{{#mergedImports}}
 {{{.}}}
 {{/mergedImports}}
@@ -37,9 +39,3 @@ export function renderSchemasTemplate(renderedSchemas: string[]): string {
   })
 }
 
-const EXPORT_CONST_NAME_REGEX = /^\s*export\s+const\s+([A-Za-z_$][\w$]*)\b/gm
-function extractExportConstNames(code: string): string[] {
-  const names: string[] = []
-  for (const m of code.matchAll(EXPORT_CONST_NAME_REGEX)) names.push(m[1])
-  return [...new Set(names)]
-}

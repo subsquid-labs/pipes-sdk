@@ -1,7 +1,9 @@
 import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
+
 import { ContractMetadata, RawAbiItem } from '~/services/sqd-abi.js'
 import { svmToPostgresType } from '~/utils/db-type-map.js'
+
 import { tableToSchemaName } from '../../../../../builders/schema-builder/index.js'
 import { CustomTemplateParams } from '../template.config.js'
 
@@ -41,7 +43,6 @@ export const {{schemaName}} = pgTable(
 
 {{/contracts}}
 `
-
 
 export const eventTableName = (contract: ContractMetadata, event: RawAbiItem) =>
   toSnakeCase(`${contract.contractName}_${event.name}`)

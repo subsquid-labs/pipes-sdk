@@ -5,10 +5,7 @@ export function getEventSignature(event: RawAbiEvent): string {
 }
 
 function buildSignatureSet(contract: ContractMetadata): string {
-  return contract.contractEvents
-    .map(getEventSignature)
-    .sort()
-    .join('|')
+  return contract.contractEvents.map(getEventSignature).sort().join('|')
 }
 
 export function areContractsCompatible(contracts: ContractMetadata[]): boolean {

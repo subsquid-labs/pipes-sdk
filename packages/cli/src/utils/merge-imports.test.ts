@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { generateImportStatement, mergeImports, splitImportsAndCode, parseNamedImports } from './merge-imports.js'
+
+import { generateImportStatement, mergeImports, parseNamedImports, splitImportsAndCode } from './merge-imports.js'
 
 describe('parseImports', () => {
   it('should parse side-effect imports', () => {

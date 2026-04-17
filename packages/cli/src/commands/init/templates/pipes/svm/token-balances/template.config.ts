@@ -1,25 +1,18 @@
-import { PipeTemplateMeta } from '~/types/init.js'
-import { TemplateReader } from '~/utils/template-reader.js'
 import { getTemplateDirname } from '~/utils/fs.js'
+import { TemplateReader } from '~/utils/template-reader.js'
+
+import { defineTemplate } from '../../../define-template.js'
 
 const templateReader = new TemplateReader(getTemplateDirname('svm'), 'token-balances')
 
-class TokenBalancesTemplate extends PipeTemplateMeta<'svm'> {
-  templateId = 'tokenBalances'
-  templateName = 'Token balances'
-  networkType = 'svm' as const
-
-  override renderTransformers() {
-    return templateReader.readTransformer()
-  }
-
-  override renderPostgresSchemas() {
-    return templateReader.readPgTable()
-  }
-
-  override renderClickhouseTables() {
-    return templateReader.readClickhouseTable()
-  }
-}
-
-export const tokenBalances = new TokenBalancesTemplate()
+export const tokenBalancesTemplate = defineTemplate({
+  id: 'tokenBalances',
+  name: 'Token balances',
+  networkType: 'svm',
+  render: () => ({
+    transformer: templateReader.readTransformer(),
+    postgresSchema: templateReader.readPgTable(),
+    clickhouseTable: templateReader.readClickhouseTable(),
+    decoderIds: ['tokenBalances'],
+  }),
+})

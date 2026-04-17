@@ -1,8 +1,7 @@
 import { toCamelCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 
-import { CustomTemplateParams } from '../template.config.js'
-import { groupContractsForDecoders } from '../decoder-grouping.js'
+import { type DecoderGrouping } from '../decoder-grouping.js'
 
 export const customContractTemplate = `import { evmDecoder } from '@subsquid/pipes/evm'
 {{#decoderGroups}}
@@ -35,9 +34,7 @@ const {{{decoderId}}} = evmDecoder({
 {{/decoderGroups}}
 `
 
-export function renderTransformer({ contracts }: CustomTemplateParams) {
-  const grouping = groupContractsForDecoders(contracts)
-
+export function renderTransformer(grouping: DecoderGrouping) {
   const decoderGroups = grouping.groups.map((group) => {
     const firstContract = group.contracts[0]
     const alias = `${toCamelCase(firstContract.contractName)}Events`

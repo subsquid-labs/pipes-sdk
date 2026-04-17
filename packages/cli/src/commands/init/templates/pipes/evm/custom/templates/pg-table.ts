@@ -1,12 +1,10 @@
-import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 
 import { evmToPostgresType } from '~/utils/db-type-map.js'
 
 import { tableToSchemaName } from '../../../../../builders/schema-builder/index.js'
+import { tableName } from '../../../../../builders/sink-builder/shared.js'
 import { type DecoderGrouping } from '../decoder-grouping.js'
-import { CustomTemplateParams } from '../template.config.js'
-import { groupContractsForDecoders } from '../decoder-grouping.js'
 
 export const customContractPgTemplate = `
 import {
@@ -43,12 +41,7 @@ export const {{schemaName}} = pgTable(
 {{/contracts}}
 `
 
-export function tableName(grouping: DecoderGrouping, contractName: string, eventName: string) {
-  return grouping.shared ? toSnakeCase(eventName) : toSnakeCase(`${contractName}_${eventName}`)
-}
-
-export function renderSchema({ contracts }: CustomTemplateParams) {
-  const grouping = groupContractsForDecoders(contracts)
+export function renderSchema(grouping: DecoderGrouping) {
   const contracsWithDbTypes = getContractWithDbTypes(grouping)
 
   return Mustache.render(customContractPgTemplate, {

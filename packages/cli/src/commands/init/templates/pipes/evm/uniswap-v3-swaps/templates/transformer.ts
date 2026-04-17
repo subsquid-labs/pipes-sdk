@@ -1,4 +1,5 @@
 import Mustache from 'mustache'
+
 import { UniswapV3SwapsPipeTemplateParams } from '../template.config.js'
 
 const template = `import { evmDecoder, factory, factorySqliteDatabase } from '@subsquid/pipes/evm'

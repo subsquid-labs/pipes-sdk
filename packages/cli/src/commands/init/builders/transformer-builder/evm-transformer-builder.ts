@@ -1,5 +1,4 @@
-import Mustache from 'mustache'
-import { BaseTransformerBuilder, TemplateValues } from './base-transformer-builder.js'
+import { BaseTransformerBuilder } from './base-transformer-builder.js'
 
 export const template = `{{#deduplicatedImports}}
 {{{.}}}
@@ -42,16 +41,16 @@ export class EvmTransformerBuilder extends BaseTransformerBuilder<'evm'> {
     return ['import { evmPortalSource } from "@subsquid/pipes/evm"']
   }
 
-  runPostSetups() {
-    this.config.templates.map(async (t) => {
-    })
-  }
-
   getTransformerTemplates() {
+    const ctx = {
+      network: this.config.network,
+      projectPath: '',
+      networkType: this.config.networkType,
+    }
     return Promise.all(
-      this.config.templates.map(async (t) => {
-        const code = t.renderTransformers()
-        const decoderIds = t.getDecoderIds()
+      this.config.templates.map(async ({ template, params }) => {
+        const artifacts = template.render(params, ctx)
+        const { transformer: code, decoderIds } = artifacts
 
         if (decoderIds.length === 1) {
           return { code, templateId: decoderIds[0] }

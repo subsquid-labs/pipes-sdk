@@ -1,15 +1,13 @@
-import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 
-import { NetworkType, PipeTemplateMeta } from '~/types/init.js'
+import type { Config, NetworkType } from '~/types/init.js'
 
 import { postgresDefaults } from '../../templates/config-files/dynamic/docker-compose.js'
 import { drizzleConfigTemplate } from '../../templates/config-files/static/drizzle-config.js'
 import { groupContractsForDecoders } from '../../templates/pipes/evm/custom/decoder-grouping.js'
-import { tableName as pgTableName } from '../../templates/pipes/evm/custom/templates/pg-table.js'
-import { CustomTemplateParamsSchema } from '../../templates/pipes/evm/custom/template.config.js'
 import { renderSchemasTemplate, tableToSchemaName } from '../schema-builder/index.js'
-import { BaseSinkBuilder } from './base-sink-builder.js'
+import type { SinkArtifacts } from './sink-artifacts.js'
+import { extractExportConstNames, tableName as pgTableName } from './shared.js'
 
 const sinkTemplate = `
 import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
@@ -44,84 +42,86 @@ drizzleTarget({
     onData: async ({ tx, data }) => {
     {{#templates}}
       for (const values of chunk(data.{{{templateId}}})) {
-        {{#schemas}} 
+        {{#schemas}}
         await tx.insert({{.}}).values(values)
         {{/schemas}}
       }
     {{/templates}}
     {{#customTemplates}}
-      {{#schemas}} 
+      {{#schemas}}
       for (const values of chunk(data.{{decoderId}}.{{event}})) {
         await tx.insert({{schemaName}}).values(values)
       }
-      {{/schemas}} 
+      {{/schemas}}
     {{/customTemplates}}
     },
   })`
 
-export class PostgresSinkBuilder extends BaseSinkBuilder {
-  render() {
-    const templates = this.config.templates
-      .filter((t) => t.templateId !== 'custom')
-      .map((t) => ({
-        schemas: this.extractExportConstNames(t.renderPostgresSchemas()),
-        templateId: t.templateId,
-      }))
-
-    const customTemplates = this.config.templates
-      .filter((t): t is PipeTemplateMeta<NetworkType, typeof CustomTemplateParamsSchema> => t.templateId === 'custom')
-      .flatMap((t) => {
-        const grouping = groupContractsForDecoders(t.getParams().contracts)
-        return grouping.groups.map((group) => ({
-          decoderId: group.decoderId,
-          schemas: group.events.map((e) => ({
-            event: e.name,
-            schemaName: tableToSchemaName(
-              pgTableName(grouping, group.contracts[0].contractName, e.name),
-            ),
-          })),
-        }))
-      })
-
-    return Mustache.render(sinkTemplate, {
-      templates,
-      customTemplates,
-    })
-  }
-
-  async createMigrations(): Promise<void> {
-    const schemas = this.config.templates.map((t) => t.renderPostgresSchemas())
-    const renderedSchemas = renderSchemasTemplate(schemas)
-    this.projectWriter.createFile(`src/schemas.ts`, renderedSchemas)
-    this.projectWriter.createFile('drizzle.config.ts', drizzleConfigTemplate)
-    await this.generateDatabaseMigrations()
-  }
-
-  private async generateDatabaseMigrations(): Promise<void> {
-    await this.projectWriter.executeCommand(`${this.config.packageManager} run db:generate`)
-  }
-
-  async createEnvFile(): Promise<void> {
-    this.projectWriter.createFile(
-      '.env',
-      `DB_CONNECTION_STR=postgresql://${postgresDefaults.user}:${postgresDefaults.password}@localhost:${postgresDefaults.port}/${postgresDefaults.db}`,
-    )
-  }
-
-  getEnvSchema(): string {
-    return `
+const envSchema = `
 import { z } from 'zod'
 
 const env = z.object({
   DB_CONNECTION_STR: z.string(),
 }).parse(process.env)
 `
-  }
 
-  protected extractExportConstNames(code: string): string[] {
-    const EXPORT_CONST_NAME_REGEX = /^\s*export\s+const\s+([A-Za-z_$][\w$]*)\b/gm
-    const names: string[] = []
-    for (const m of code.matchAll(EXPORT_CONST_NAME_REGEX)) names.push(m[1])
-    return [...new Set(names)]
+function renderCtx(config: Config<NetworkType>) {
+  return {
+    network: config.network,
+    projectPath: '',
+    networkType: config.networkType,
+  }
+}
+
+function renderSinkCode(config: Config<NetworkType>): string {
+  const ctx = renderCtx(config)
+
+  const templates = config.templates
+    .filter(({ template }) => template.id !== 'custom')
+    .map(({ template, params }) => ({
+      schemas: extractExportConstNames(template.render(params, ctx).postgresSchema),
+      templateId: template.id,
+    }))
+
+  const customTemplates = config.templates
+    .filter(({ template }) => template.id === 'custom')
+    .flatMap(({ params }) => {
+      const contracts = (params as { contracts: Array<any> }).contracts
+      const grouping = groupContractsForDecoders(contracts)
+      return grouping.groups.map((group) => ({
+        decoderId: group.decoderId,
+        schemas: group.events.map((e) => ({
+          event: e.name,
+          schemaName: tableToSchemaName(pgTableName(grouping, group.contracts[0].contractName, e.name)),
+        })),
+      }))
+    })
+
+  return Mustache.render(sinkTemplate, {
+    templates,
+    customTemplates,
+  })
+}
+
+function renderEnvFile(): string {
+  return `DB_CONNECTION_STR=postgresql://${postgresDefaults.user}:${postgresDefaults.password}@localhost:${postgresDefaults.port}/${postgresDefaults.db}`
+}
+
+function renderSchemasFile(config: Config<NetworkType>): string {
+  const ctx = renderCtx(config)
+  const schemas = config.templates.map(({ template, params }) => template.render(params, ctx).postgresSchema)
+  return renderSchemasTemplate(schemas)
+}
+
+export function buildPostgresSink(config: Config<NetworkType>): SinkArtifacts {
+  return {
+    sinkCode: renderSinkCode(config),
+    envSchema,
+    files: [
+      { path: '.env', content: renderEnvFile() },
+      { path: 'src/schemas.ts', content: renderSchemasFile(config) },
+      { path: 'drizzle.config.ts', content: drizzleConfigTemplate },
+    ],
+    postSteps: [{ kind: 'exec', command: `${config.packageManager} run db:generate` }],
   }
 }

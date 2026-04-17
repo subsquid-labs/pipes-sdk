@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { Config } from '~/types/init.js'
 
-import { evmTemplates } from '../templates/pipes/evm/index.js'
+import { getTemplate } from '../templates/registry.js'
 import { configJsonSchema, configJsonSchemaRaw } from './params.js'
 
 describe('--config params schema', () => {
@@ -44,13 +44,13 @@ describe('--config params schema', () => {
               type: 'uint256',
             },
           ],
-        name: 'Transfer',
-        type: 'event',
-      },
-    ],
-    range: { from: 'latest' },
-  },
-]
+          name: 'Transfer',
+          type: 'event',
+        },
+      ],
+      range: { from: 'latest' },
+    },
+  ]
 
   const strictConfigSchema = {
     projectFolder: './morpho-blue-markets',
@@ -150,17 +150,18 @@ describe('--config params schema', () => {
     expect(() => configJsonSchemaRaw.parse(strictConfigSchema)).to.not.throw()
   })
 
-  it('should transform the raw config into Config<NetworkType> interface', () => {
+  it('should transform the raw config into Config<NetworkType> interface with tuples', () => {
     const config = configJsonSchema.parse(strictConfigSchema)
-    const expectedConfig: Config<'evm'> = {
-      projectFolder: './morpho-blue-markets',
-      networkType: 'evm',
-      network: 'ethereum-mainnet',
-      packageManager: 'bun',
-      sink: 'clickhouse',
-      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
-    }
-    expect(config).to.deep.equal(expectedConfig)
+    const customTemplate = getTemplate('evm', 'custom')
+
+    expect(config.projectFolder).toBe('./morpho-blue-markets')
+    expect(config.networkType).toBe('evm')
+    expect(config.network).toBe('ethereum-mainnet')
+    expect(config.packageManager).toBe('bun')
+    expect(config.sink).toBe('clickhouse')
+    expect(config.templates).toHaveLength(1)
+    expect(config.templates[0].template).toBe(customTemplate)
+    expect(config.templates[0].params).toEqual(strictConfigSchema.templates[0].params)
   })
 
   it('should be able to parse the config, ignoring unknown fields', () => {

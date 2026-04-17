@@ -1,70 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { Config } from '~/types/init.js'
-import { evmTemplates } from '../../templates/pipes/evm/index.js'
-import { SinkBuilder } from './index.js'
-import { ProjectWriter } from '~/utils/project-writer.js'
 
-const wethMetadata = [
-  {
-    contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-    contractName: 'WETH9',
-    contractEvents: [
-      {
-        inputs: [
-          {
-            name: 'src',
-            type: 'address',
-          },
-          {
-            name: 'guy',
-            type: 'address',
-          },
-          {
-            name: 'wad',
-            type: 'uint256',
-          },
-        ],
-        name: 'Approval',
-        type: 'event',
-      },
-      {
-        inputs: [
-          {
-            name: 'src',
-            type: 'address',
-          },
-          {
-            name: 'dst',
-            type: 'address',
-          },
-          {
-            name: 'wad',
-            type: 'uint256',
-          },
-        ],
-        name: 'Transfer',
-        type: 'event',
-      },
-    ],
-    range: { from: 'latest' },
-  },
-]
+import { Config } from '~/types/init.js'
+
+import { fixtures, wethContract } from '../../templates/test-fixtures.js'
+import { buildClickhouseSink, buildPostgresSink, buildSink } from './index.js'
 
 describe('clickhouse sink template builder', () => {
   it('should render sink for pre-defined template', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
-      templates: [
-        evmTemplates.erc20Transfers,
-      ],
+      templates: [fixtures.erc20Transfers()],
       network: 'ethereum-mainnet',
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
-    const sinkBuilder = new SinkBuilder(config, new ProjectWriter('mock-folder'))
-
-    expect(sinkBuilder.render()).toMatchInlineSnapshot(`
+    expect(buildSink(config).sinkCode).toMatchInlineSnapshot(`
       "
       import path from 'node:path'
       import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
@@ -116,15 +67,13 @@ describe('clickhouse sink template builder', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
-      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
+      templates: [fixtures.evmCustom([wethContract])],
       network: 'ethereum-mainnet',
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
 
-    const sinkBuilder = new SinkBuilder(config, new ProjectWriter('mock-folder'))
-
-    expect(sinkBuilder.render()).toMatchInlineSnapshot(`
+    expect(buildSink(config).sinkCode).toMatchInlineSnapshot(`
       "
       import path from 'node:path'
       import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
@@ -184,16 +133,12 @@ describe('postgres sink template builder', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
-      templates: [
-        evmTemplates.erc20Transfers,
-      ],
+      templates: [fixtures.erc20Transfers()],
       network: 'ethereum-mainnet',
       sink: 'postgresql',
       packageManager: 'pnpm',
     }
-    const sinkBuilder = new SinkBuilder(config, new ProjectWriter('mock-folder'))
-
-    expect(sinkBuilder.render()).toMatchInlineSnapshot(`
+    expect(buildSink(config).sinkCode).toMatchInlineSnapshot(`
       "
       import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
       import { drizzle } from 'drizzle-orm/node-postgres',
@@ -219,17 +164,12 @@ describe('postgres sink template builder', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
-      templates: [
-        evmTemplates.erc20Transfers,
-        evmTemplates.uniswapV3Swaps,
-      ],
+      templates: [fixtures.erc20Transfers(), fixtures.uniswapV3Swaps()],
       network: 'ethereum-mainnet',
       sink: 'postgresql',
       packageManager: 'pnpm',
     }
-    const sinkBuilder = new SinkBuilder(config, new ProjectWriter('mock-folder'))
-
-    expect(sinkBuilder.render()).toMatchInlineSnapshot(`
+    expect(buildSink(config).sinkCode).toMatchInlineSnapshot(`
       "
       import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
       import { drizzle } from 'drizzle-orm/node-postgres',
@@ -260,15 +200,13 @@ describe('postgres sink template builder', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
-      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
+      templates: [fixtures.evmCustom([wethContract])],
       network: 'ethereum-mainnet',
       sink: 'postgresql',
       packageManager: 'pnpm',
     }
 
-    const sinkBuilder = new SinkBuilder(config, new ProjectWriter('mock-folder'))
-
-    expect(sinkBuilder.render()).toMatchInlineSnapshot(`
+    expect(buildSink(config).sinkCode).toMatchInlineSnapshot(`
       "
       import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
       import { drizzle } from 'drizzle-orm/node-postgres',
@@ -299,18 +237,13 @@ describe('postgres sink template builder', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
-      templates: [
-        evmTemplates.erc20Transfers,
-        evmTemplates.custom.setParams({ contracts: wethMetadata }),
-      ],
+      templates: [fixtures.erc20Transfers(), fixtures.evmCustom([wethContract])],
       network: 'ethereum-mainnet',
       sink: 'postgresql',
       packageManager: 'pnpm',
     }
 
-    const sinkBuilder = new SinkBuilder(config, new ProjectWriter('mock-folder'))
-
-    expect(sinkBuilder.render()).toMatchInlineSnapshot(`
+    expect(buildSink(config).sinkCode).toMatchInlineSnapshot(`
       "
       import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
       import { drizzle } from 'drizzle-orm/node-postgres',
@@ -340,5 +273,96 @@ describe('postgres sink template builder', () => {
           },
         })"
     `)
+  })
+})
+
+describe('buildPostgresSink artifacts', () => {
+  const config: Config<'evm'> = {
+    projectFolder: 'mock-folder',
+    networkType: 'evm',
+    templates: [fixtures.erc20Transfers()],
+    network: 'ethereum-mainnet',
+    sink: 'postgresql',
+    packageManager: 'pnpm',
+  }
+
+  it('returns the postgres env schema', () => {
+    expect(buildPostgresSink(config).envSchema).toMatchInlineSnapshot(`
+      "
+      import { z } from 'zod'
+
+      const env = z.object({
+        DB_CONNECTION_STR: z.string(),
+      }).parse(process.env)
+      "
+    `)
+  })
+
+  it('returns files for .env, src/schemas.ts, and drizzle.config.ts', () => {
+    const files = buildPostgresSink(config).files
+    expect(files.map((f) => f.path)).toEqual(['.env', 'src/schemas.ts', 'drizzle.config.ts'])
+    expect(files.find((f) => f.path === '.env')!.content).toContain('DB_CONNECTION_STR=postgresql://')
+    expect(files.find((f) => f.path === 'src/schemas.ts')!.content).toContain('erc20TransfersTable')
+    expect(files.find((f) => f.path === 'drizzle.config.ts')!.content.length).toBeGreaterThan(0)
+  })
+
+  it('returns a single db:generate post step using the configured package manager', () => {
+    expect(buildPostgresSink(config).postSteps).toEqual([
+      { kind: 'exec', command: 'pnpm run db:generate' },
+    ])
+  })
+})
+
+describe('buildClickhouseSink artifacts', () => {
+  const config: Config<'evm'> = {
+    projectFolder: 'mock-folder',
+    networkType: 'evm',
+    templates: [fixtures.erc20Transfers(), fixtures.evmCustom([wethContract])],
+    network: 'ethereum-mainnet',
+    sink: 'clickhouse',
+    packageManager: 'pnpm',
+  }
+
+  it('returns the clickhouse env schema', () => {
+    expect(buildClickhouseSink(config).envSchema).toMatchInlineSnapshot(`
+      "
+      import { z } from 'zod'
+
+      const env = z.object({
+        CLICKHOUSE_USER: z.string(),
+        CLICKHOUSE_PASSWORD: z.string(),
+        CLICKHOUSE_URL: z.string(),
+        CLICKHOUSE_DATABASE: z.string(),
+      }).parse(process.env)
+      "
+    `)
+  })
+
+  it('returns .env and one migrations file per template', () => {
+    const files = buildClickhouseSink(config).files
+    expect(files.map((f) => f.path)).toEqual([
+      '.env',
+      'migrations/erc20Transfers-migration.sql',
+      'migrations/custom-migration.sql',
+    ])
+    expect(files.find((f) => f.path === '.env')!.content).toContain('CLICKHOUSE_URL=http://localhost:')
+  })
+
+  it('returns an empty postSteps array', () => {
+    expect(buildClickhouseSink(config).postSteps).toEqual([])
+  })
+})
+
+describe('buildSink dispatch', () => {
+  it('throws an unsupported error for memory sink', () => {
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      templates: [fixtures.erc20Transfers()],
+      network: 'ethereum-mainnet',
+      sink: 'memory',
+      packageManager: 'pnpm',
+    }
+    expect(() => buildSink(config)).toThrow(/Memory sink is not supported/)
   })
 })

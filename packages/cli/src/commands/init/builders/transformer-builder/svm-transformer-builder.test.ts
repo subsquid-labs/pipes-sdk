@@ -1,46 +1,19 @@
 import crypto from 'node:crypto'
-import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest'
+
+import { type MockInstance, afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+
 import { Config } from '~/types/init.js'
-import { svmTemplates } from '../../templates/pipes/svm/index.js'
-import { TransformerBuilder } from './index.js'
 import { ProjectWriter } from '~/utils/project-writer.js'
 
-const whirlpoolMetadata = [
-  {
-    contractAddress: '0x0000000000000000000000000000000000000000',
-    contractName: 'whirpool',
-    contractEvents: [
-      {
-        name: 'Swap',
-        type: 'event',
-        inputs: [
-          {
-            name: 'amount0',
-            type: 'i128',
-          },
-          {
-            name: 'amount1',
-            type: 'i128',
-          },
-          {
-            name: 'sqrt_price_x96',
-            type: 'i128',
-          },
-        ],
-      },
-    ],
-    range: { from: 'latest' },
-  },
-]
+import { fixtures, whirlpoolContract } from '../../templates/test-fixtures.js'
+import { TransformerBuilder } from './index.js'
 
 describe('SVM Template Builder', () => {
   const projectWriter = new ProjectWriter('mock-folder')
   let spy: MockInstance
 
   beforeAll(() => {
-    spy = vi.spyOn(crypto, 'randomBytes').mockImplementation(
-      () => Buffer.from('a1b2c3d4', 'hex') as any,
-    )
+    spy = vi.spyOn(crypto, 'randomBytes').mockImplementation(() => Buffer.from('a1b2c3d4', 'hex') as any)
   })
 
   afterAll(() => {
@@ -52,7 +25,7 @@ describe('SVM Template Builder', () => {
       projectFolder: 'mock-folder',
       networkType: 'svm',
       network: 'ethereum-mainnet',
-      templates: [svmTemplates.custom.setParams({ contracts: whirlpoolMetadata })],
+      templates: [fixtures.svmCustom([whirlpoolContract])],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -150,7 +123,7 @@ describe('SVM Template Builder', () => {
       projectFolder: 'mock-folder',
       networkType: 'svm',
       network: 'solana-mainnet',
-      templates: [svmTemplates.tokenBalances],
+      templates: [fixtures.tokenBalances()],
       sink: 'postgresql',
       packageManager: 'pnpm',
     }

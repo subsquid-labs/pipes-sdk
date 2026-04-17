@@ -1,7 +1,9 @@
 import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
+
 import { ContractMetadata } from '~/services/sqd-abi.js'
 import { svmToClickhouseType } from '~/utils/db-type-map.js'
+
 import { CustomTemplateParams } from '../template.config.js'
 
 export const customContractChTemplate = `

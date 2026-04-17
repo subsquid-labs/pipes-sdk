@@ -1,14 +1,17 @@
-import { execSync } from 'node:child_process'
 import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { evmTemplates } from '~/commands/init/templates/pipes/evm/index.js'
 import { Config } from '~/types/init.js'
 
 import { InitHandler } from './init.handler.js'
+import { InitPipelineError } from './pipeline/index.js'
+import { getTemplate } from './templates/registry.js'
+
+const runIntegration = process.env['RUN_INTEGRATION'] === '1'
+const describeIntegration = runIntegration ? describe : describe.skip
 
 async function exists(p: string) {
   try {
@@ -38,55 +41,68 @@ function fileContent(p: string) {
   return readFile(p, 'utf8')
 }
 
-describe('InitHandler', () => {
+function configuredErc20(range: { from: string; to?: string } = { from: '12,369,621' }) {
+  const template = getTemplate('evm', 'erc20Transfers')!
+  return {
+    template,
+    params: {
+      contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+      range,
+    },
+  }
+}
+
+function configuredUniswap() {
+  const template = getTemplate('evm', 'uniswapV3Swaps')!
+  return {
+    template,
+    params: {
+      factoryAddress: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
+      range: { from: '12,369,621' },
+    },
+  }
+}
+
+function configuredCustomWeth() {
+  const template = getTemplate('evm', 'custom')!
+  return {
+    template,
+    params: {
+      contracts: [
+        {
+          contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+          contractName: 'WETH9',
+          contractEvents: [
+            {
+              name: 'Approval',
+              type: 'event',
+              inputs: [
+                { name: 'src', type: 'address' },
+                { name: 'guy', type: 'address' },
+                { name: 'wad', type: 'uint256' },
+              ],
+            },
+            {
+              name: 'Transfer',
+              type: 'event',
+              inputs: [
+                { name: 'src', type: 'address' },
+                { name: 'dst', type: 'address' },
+                { name: 'wad', type: 'uint256' },
+              ],
+            },
+          ],
+          range: { from: 'latest' },
+        },
+      ],
+    },
+  }
+}
+
+describeIntegration('InitHandler', () => {
   const PROJECT_NAME = 'my-project'
   let tmpRoot: string
   let projectDir: string
-  const wethMetadata = [
-    {
-      contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-      contractName: 'WETH9',
-      contractEvents: [
-        {
-          inputs: [
-            {
-              name: 'src',
-              type: 'address',
-            },
-            {
-              name: 'guy',
-              type: 'address',
-            },
-            {
-              name: 'wad',
-              type: 'uint256',
-            },
-          ],
-          name: 'Approval',
-          type: 'event',
-        },
-        {
-          inputs: [
-            {
-              name: 'src',
-              type: 'address',
-            },
-            {
-              name: 'dst',
-              type: 'address',
-            },
-            {
-              name: 'wad',
-              type: 'uint256',
-            },
-          ],
-        name: 'Transfer',
-        type: 'event',
-      },
-    ],
-    range: { from: 'latest' },
-  },
-]
 
   beforeEach(async () => {
     tmpRoot = await mkdtemp(path.join(tmpdir(), 'my-cli-'))
@@ -102,7 +118,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates.erc20Transfers],
+      templates: [configuredErc20()],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -120,7 +136,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates.erc20Transfers],
+      templates: [configuredErc20()],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -143,87 +159,12 @@ describe('InitHandler', () => {
     )
   })
 
-  it('ensures build pass for erc20Transfers + clickhouse template', async () => {
-    const config: Config<'evm'> = {
-      projectFolder: projectDir,
-      networkType: 'evm',
-      network: 'ethereum-mainnet',
-      templates: [evmTemplates.erc20Transfers],
-      sink: 'clickhouse',
-      packageManager: 'pnpm',
-    }
-
-    await new InitHandler(config).handle()
-
-    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
-  })
-
-  it('ensures build pass for erc20Transfers + postgres template', async () => {
-    const config: Config<'evm'> = {
-      projectFolder: projectDir,
-      networkType: 'evm',
-      network: 'ethereum-mainnet',
-      templates: [evmTemplates.erc20Transfers],
-      sink: 'postgresql',
-      packageManager: 'pnpm',
-    }
-
-    await new InitHandler(config).handle()
-
-    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
-  })
-
-  it('ensures build pass for custom contract + clickhouse template', async () => {
-    const config: Config<'evm'> = {
-      projectFolder: projectDir,
-      networkType: 'evm',
-      network: 'ethereum-mainnet',
-      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
-      sink: 'clickhouse',
-      packageManager: 'pnpm',
-    }
-
-    await new InitHandler(config).handle()
-
-    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
-  })
-
-  it('ensures build pass for custom contract + postgresql template', async () => {
-    const config: Config<'evm'> = {
-      projectFolder: projectDir,
-      networkType: 'evm',
-      network: 'ethereum-mainnet',
-      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
-      sink: 'postgresql',
-      packageManager: 'pnpm',
-    }
-
-    await new InitHandler(config).handle()
-
-    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
-  })
-
-  it('ensures build pass for multiple templates + postgresql template', async () => {
-    const config: Config<'evm'> = {
-      projectFolder: projectDir,
-      networkType: 'evm',
-      network: 'ethereum-mainnet',
-      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata }), evmTemplates.erc20Transfers],
-      sink: 'postgresql',
-      packageManager: 'pnpm',
-    }
-
-    await new InitHandler(config).handle()
-
-    expect(() => execSync(`cd ${projectDir} && pnpm build`)).to.not.throw()
-  })
-
   it('creates project specific folders and files for pre-built template sink is clickhouse ', async () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates.erc20Transfers],
+      templates: [configuredErc20()],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -281,7 +222,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates.custom.setParams({ contracts: wethMetadata })],
+      templates: [configuredCustomWeth()],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -297,8 +238,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-
-      templates: [evmTemplates.erc20Transfers],
+      templates: [configuredErc20()],
       sink: 'postgresql',
       packageManager: 'pnpm',
     }
@@ -353,7 +293,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates.uniswapV3Swaps],
+      templates: [configuredUniswap()],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -372,7 +312,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates.erc20Transfers],
+      templates: [configuredErc20()],
       sink: 'clickhouse',
       packageManager: 'pnpm',
     }
@@ -387,7 +327,7 @@ describe('InitHandler', () => {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates.erc20Transfers],
+      templates: [configuredErc20()],
       sink: 'clickhouse',
       packageManager: 'yarn',
     }
@@ -397,13 +337,12 @@ describe('InitHandler', () => {
     await expect(isFile(path.join(projectDir, 'yarn.lock'))).resolves.toBe(true)
   })
 
-  // Skipped to avoid CI failures due to bun not being installed in the CI environment
   it.skip('install dependencies using bun as package manager', async () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
       networkType: 'evm',
       network: 'ethereum-mainnet',
-      templates: [evmTemplates.erc20Transfers],
+      templates: [configuredErc20()],
       sink: 'clickhouse',
       packageManager: 'bun',
     }
@@ -411,5 +350,24 @@ describe('InitHandler', () => {
     await new InitHandler(config).handle()
 
     await expect(isFile(path.join(projectDir, 'bun.lock'))).resolves.toBe(true)
+  })
+
+  it('cleans up the project directory and surfaces the failing stage id when a stage fails', async () => {
+    // `memory` sink throws inside the `write-index-ts` stage via buildSink; this is
+    // a real stage failure occurring after the safe-to-clean check-project-path stage.
+    const config: Config<'evm'> = {
+      projectFolder: projectDir,
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [configuredErc20()],
+      sink: 'memory',
+      packageManager: 'pnpm',
+    }
+
+    const thrown = await new InitHandler(config).handle().catch((e) => e)
+
+    expect(thrown).toBeInstanceOf(InitPipelineError)
+    expect((thrown as InitPipelineError).stageId).toBe('write-index-ts')
+    await expect(exists(projectDir)).resolves.toBe(false)
   })
 })

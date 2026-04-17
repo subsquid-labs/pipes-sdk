@@ -34,8 +34,6 @@ const sinkDependencies: Record<Sink, Record<string, string>> = {
 export function renderDependencies(sink: Sink): {
   dependencies: Record<string, string>
   devDependencies: Record<string, string>
-  dependencyNames: string[]
-  devDependencyNames: string[]
 } {
   const dependencies = { ...baseDependencies, ...sinkDependencies[sink] }
   const devDependencies = { ...baseDevDependencies }
@@ -43,7 +41,5 @@ export function renderDependencies(sink: Sink): {
   return {
     dependencies,
     devDependencies,
-    dependencyNames: Object.keys(dependencies),
-    devDependencyNames: Object.keys(devDependencies),
   }
 }

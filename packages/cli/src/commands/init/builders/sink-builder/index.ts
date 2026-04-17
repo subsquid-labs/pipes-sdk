@@ -1,38 +1,21 @@
-import { Config, NetworkType } from '~/types/init.js'
-import { BaseSinkBuilder } from './base-sink-builder.js'
-import { ClickhouseSinkBuilder } from './clickhouse-sink-builder.js'
-import { PostgresSinkBuilder } from './postgres-sink-builder.js'
-import { ProjectWriter } from '~/utils/project-writer.js'
+import type { Config, NetworkType, Sink } from '~/types/init.js'
 
-export class SinkBuilder {
-  private sinkBuilder: BaseSinkBuilder
+import { buildClickhouseSink } from './clickhouse-sink-builder.js'
+import { buildPostgresSink } from './postgres-sink-builder.js'
+import type { SinkArtifacts, SinkHandler } from './sink-artifacts.js'
 
-  constructor(config: Config<NetworkType>, projectWriter: ProjectWriter) {
-    switch (config.sink) {
-      case 'postgresql':
-        this.sinkBuilder = new PostgresSinkBuilder(config, projectWriter)
-        break
-      case 'clickhouse':
-        this.sinkBuilder = new ClickhouseSinkBuilder(config, projectWriter)
-        break
-      case 'memory':
-        throw new Error('Memory sink template not implemeted')
-    }
-  }
+export type { SinkArtifacts, SinkFile, SinkHandler, SinkPostStep } from './sink-artifacts.js'
+export { buildClickhouseSink } from './clickhouse-sink-builder.js'
+export { buildPostgresSink } from './postgres-sink-builder.js'
 
-  render() {
-    return this.sinkBuilder.render()
-  }
+const handlers: Record<Sink, SinkHandler> = {
+  postgresql: buildPostgresSink,
+  clickhouse: buildClickhouseSink,
+  memory: () => {
+    throw new Error('Memory sink is not supported')
+  },
+}
 
-  getEnvSchema(): string {
-    return this.sinkBuilder.getEnvSchema()
-  }
-
-  async createMigrations() {
-    await this.sinkBuilder.createMigrations()
-  }
-
-  createEnvFile() {
-    this.sinkBuilder.createEnvFile()
-  }
+export function buildSink(config: Config<NetworkType>): SinkArtifacts {
+  return handlers[config.sink](config)
 }

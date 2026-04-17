@@ -1,14 +1,14 @@
 import type { NetworkType } from '~/types/init.js'
 
-import { TemplateId, templates } from '../builders/transformer-builder/index.js'
+import { getTemplates } from '../templates/registry.js'
 
-export function getTemplatePrompts<N extends NetworkType>(networkType: N): { name: string; value: TemplateId<N> }[] {
-  const choices: { name: string; value: TemplateId<N>; disabled?: boolean }[] = Object.entries(
-    templates[networkType],
-  ).map(([id, option]) => ({
-    name: option.templateName,
-    value: option.templateId as TemplateId<N>,
-    disabled: option.disabled,
+export function getTemplatePrompts<N extends NetworkType>(
+  networkType: N,
+): { name: string; value: string; disabled?: boolean }[] {
+  const choices = getTemplates(networkType).map((template) => ({
+    name: template.name,
+    value: template.id,
+    disabled: template.disabled,
   }))
 
   choices.sort((a, b) => {

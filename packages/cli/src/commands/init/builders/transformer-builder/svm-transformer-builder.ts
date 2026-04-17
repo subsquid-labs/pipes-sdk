@@ -36,9 +36,15 @@ export class SvmTransformerBuilder extends BaseTransformerBuilder<'svm'> {
   }
 
   getTransformerTemplates() {
+    const ctx = {
+      network: this.config.network,
+      projectPath: '',
+      networkType: this.config.networkType,
+    }
     return Promise.all(
-      this.config.templates.map((template) => {
-        return { code: template.renderTransformers(), templateId: template.templateId }
+      this.config.templates.map(({ template, params }) => {
+        const artifacts = template.render(params, ctx)
+        return { code: artifacts.transformer, templateId: template.id }
       }),
     )
   }
