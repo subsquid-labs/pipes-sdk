@@ -1,6 +1,7 @@
 import { toCamelCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 
+import { uniqueEventKey } from '../../../../../builders/sink-builder/shared.js'
 import { type DecoderGrouping } from '../decoder-grouping.js'
 
 export const customContractTemplate = `import { evmDecoder } from '@subsquid/pipes/evm'
@@ -27,7 +28,10 @@ const {{{decoderId}}} = evmDecoder({
    */
   events: {
     {{#events}}
-    {{name}}: {{{eventsAlias}}}.{{name}},
+    {{#overloaded}}
+    // NOTE: "{{name}}" is overloaded in this ABI; evm-typegen exposes only the canonical variant, so additional signatures may not decode until upstream support lands.
+    {{/overloaded}}
+    {{uniqueKey}}: {{{eventsAlias}}}.{{name}},
     {{/events}}
   },
 }).pipe(enrichEvents)
@@ -45,10 +49,15 @@ export function renderTransformer(grouping: DecoderGrouping) {
       contracts: group.contracts,
       rangeFrom: group.range.from,
       rangeTo: group.range.to,
-      events: group.events.map((e) => ({
-        name: e.name,
-        eventsAlias: alias,
-      })),
+      events: group.events.map((e) => {
+        const uniqueKey = uniqueEventKey(e, group.events)
+        return {
+          name: e.name,
+          uniqueKey,
+          overloaded: uniqueKey !== e.name,
+          eventsAlias: alias,
+        }
+      }),
     }
   })
 

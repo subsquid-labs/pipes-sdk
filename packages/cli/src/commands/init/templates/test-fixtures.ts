@@ -61,6 +61,42 @@ export const wethContract = {
   range: { from: 'latest' },
 }
 
+export const overloadedApprovalContract = {
+  contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+  contractName: 'OverloadedToken',
+  contractEvents: [
+    {
+      name: 'Transfer',
+      type: 'event',
+      inputs: [
+        { name: 'from', type: 'address' },
+        { name: 'to', type: 'address' },
+        { name: 'value', type: 'uint256' },
+      ],
+    },
+    {
+      name: 'Approval',
+      type: 'event',
+      inputs: [
+        { name: 'owner', type: 'address' },
+        { name: 'spender', type: 'address' },
+        { name: 'value', type: 'uint256' },
+      ],
+    },
+    {
+      name: 'Approval',
+      type: 'event',
+      inputs: [
+        { name: 'owner', type: 'address' },
+        { name: 'spender', type: 'address' },
+        { name: 'value', type: 'uint256' },
+        { name: 'deadline', type: 'uint256' },
+      ],
+    },
+  ],
+  range: { from: 'latest' },
+}
+
 export const seaportContract = {
   contractAddress: '0x00000000000001ad428e4906aE43D8F9852d0dD6',
   contractName: 'Seaport',

@@ -39,7 +39,7 @@ function getContractWithDbTypes(grouping: DecoderGrouping) {
     group.events.map((e) => ({
       event: e.name,
       decoderId: group.decoderId,
-      tableName: tableName(grouping, group.contracts[0].contractName, e.name),
+      tableName: tableName(grouping, group.contracts[0].contractName, e, group.events),
       inputs: e.inputs.map((i) => ({
         ...i,
         name: toSnakeCase(i.name),

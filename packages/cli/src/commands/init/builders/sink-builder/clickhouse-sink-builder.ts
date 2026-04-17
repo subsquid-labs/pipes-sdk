@@ -118,7 +118,7 @@ function renderSinkCode(config: Config<NetworkType>): string {
         decoderId: group.decoderId,
         schemaNames: group.events.map((e) => ({
           event: e.name,
-          tableName: chTableName(grouping, group.contracts[0].contractName, e.name),
+          tableName: chTableName(grouping, group.contracts[0].contractName, e, group.events),
         })),
       }))
     })

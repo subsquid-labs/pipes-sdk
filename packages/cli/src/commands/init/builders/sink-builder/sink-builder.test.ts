@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { Config } from '~/types/init.js'
 
-import { fixtures, seaportContract, wethContract } from '../../templates/test-fixtures.js'
+import { fixtures, overloadedApprovalContract, seaportContract, wethContract } from '../../templates/test-fixtures.js'
 import { buildClickhouseSink, buildPostgresSink, buildSink } from './index.js'
 
 describe('clickhouse sink template builder', () => {
@@ -364,6 +364,39 @@ describe('buildSink dispatch', () => {
       packageManager: 'pnpm',
     }
     expect(() => buildSink(config)).toThrow(/Memory sink is not supported/)
+  })
+})
+
+describe('overloaded events', () => {
+  it('emits distinct postgres tables for events with the same name', () => {
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      templates: [fixtures.evmCustom([overloadedApprovalContract])],
+      network: 'ethereum-mainnet',
+      sink: 'postgresql',
+      packageManager: 'pnpm',
+    }
+    const schema = buildPostgresSink(config).files.find((f) => f.path === 'src/schemas.ts')!.content
+    const approvalTableDecls = schema.match(/'overloaded_token_approval(_[0-9a-f]{4})?'/g) ?? []
+    expect(approvalTableDecls).toHaveLength(2)
+    expect(new Set(approvalTableDecls).size).toBe(2)
+    expect(schema).toContain("'overloaded_token_transfer'")
+  })
+
+  it('emits distinct clickhouse tables for events with the same name', () => {
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      templates: [fixtures.evmCustom([overloadedApprovalContract])],
+      network: 'ethereum-mainnet',
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
+    }
+    const migration = buildClickhouseSink(config).files.find((f) => f.path.includes('migrations/'))!.content
+    const approvalCreates = migration.match(/CREATE TABLE IF NOT EXISTS overloaded_token_approval(_[0-9a-f]{4})?/g) ?? []
+    expect(approvalCreates).toHaveLength(2)
+    expect(new Set(approvalCreates).size).toBe(2)
   })
 })
 

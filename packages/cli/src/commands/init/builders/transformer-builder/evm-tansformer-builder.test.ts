@@ -5,7 +5,7 @@ import { type MockInstance, afterAll, beforeAll, describe, expect, it, vi } from
 import { Config } from '~/types/init.js'
 import { ProjectWriter } from '~/utils/project-writer.js'
 
-import { fixtures, wethContract } from '../../templates/test-fixtures.js'
+import { fixtures, overloadedApprovalContract, wethContract } from '../../templates/test-fixtures.js'
 import { TransformerBuilder } from './index.js'
 
 describe('EVM Template Builder', () => {
@@ -261,6 +261,26 @@ describe('EVM Template Builder', () => {
       void main()
       "
     `)
+  })
+
+  it('disambiguates overloaded events with unique keys + warning comment', async () => {
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      network: 'ethereum-mainnet',
+      templates: [fixtures.evmCustom([overloadedApprovalContract])],
+      sink: 'postgresql',
+      packageManager: 'pnpm',
+    }
+
+    const indexerContent = await new TransformerBuilder(config, projectWriter).render()
+
+    expect(indexerContent).toContain('Transfer: overloadedTokenEvents.Transfer,')
+    expect(indexerContent).toMatch(/Approval_[0-9a-f]{4}: overloadedTokenEvents\.Approval/)
+    const approvalKeyMatches = indexerContent.match(/Approval_[0-9a-f]{4}: overloadedTokenEvents\.Approval,/g) ?? []
+    expect(approvalKeyMatches).toHaveLength(2)
+    expect(new Set(approvalKeyMatches).size).toBe(2)
+    expect(indexerContent).toContain('"Approval" is overloaded in this ABI')
   })
 
   it('should build custom contract template', async () => {

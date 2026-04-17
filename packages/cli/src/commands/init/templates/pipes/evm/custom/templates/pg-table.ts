@@ -53,7 +53,7 @@ export function renderSchema(grouping: DecoderGrouping) {
 export function getContractWithDbTypes(grouping: DecoderGrouping) {
   return grouping.groups.flatMap((group) =>
     group.events.map((e) => {
-      const tbl = tableName(grouping, group.contracts[0].contractName, e.name)
+      const tbl = tableName(grouping, group.contracts[0].contractName, e, group.events)
       return {
         event: e.name,
         decoderId: group.decoderId,

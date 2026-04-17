@@ -23,11 +23,9 @@ const custom = solanaInstructionDecoder({
    * \`\`\`
    */
   instructions: {
-    {{#contracts}}
-    {{#contractEvents}}
-    {{name}}: {{contractName}}Instructions.{{name}},
-    {{/contractEvents}}
-    {{/contracts}}
+    {{#instructions}}
+    {{uniqueKey}}: {{contractName}}Instructions.{{name}},
+    {{/instructions}}
   },
 }).pipe(enrichEvents)
 `
@@ -44,9 +42,22 @@ export function renderTransformer(params: CustomTemplateParams) {
     return b < a ? r : oldest
   }, ranges[0] ?? { from: 'latest' })
 
+  const contractsWithCamelName = params.contracts.map((c) => ({ ...c, contractName: toCamelCase(c.contractName) }))
+
+  const instructions = contractsWithCamelName.flatMap((c) =>
+    c.contractEvents.map((e) => ({ contractName: c.contractName, name: e.name })),
+  )
+  const nameCounts = new Map<string, number>()
+  for (const i of instructions) nameCounts.set(i.name, (nameCounts.get(i.name) ?? 0) + 1)
+  const instructionsWithKeys = instructions.map((i) => ({
+    ...i,
+    uniqueKey: (nameCounts.get(i.name) ?? 0) > 1 ? `${i.contractName}${i.name}` : i.name,
+  }))
+
   return Mustache.render(customContractTemplate, {
     rangeFrom: range.from,
     rangeTo: range.to,
-    contracts: params.contracts.map((c) => ({ ...c, contractName: toCamelCase(c.contractName) })),
+    contracts: contractsWithCamelName,
+    instructions: instructionsWithKeys,
   })
 }
