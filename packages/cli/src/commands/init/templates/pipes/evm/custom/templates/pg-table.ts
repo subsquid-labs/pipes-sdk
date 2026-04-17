@@ -26,6 +26,9 @@ export const {{schemaName}} = pgTable(
     txHash: char({ length: 66 }).notNull(),
     logIndex: integer().notNull(),
     timestamp: bigint({ mode: 'number' }).notNull(),
+    {{#shared}}
+    contractAddress: char({ length: 42 }).notNull(),
+    {{/shared}}
 
     {{#inputs}}
     {{name}}: {{{dbType}}},
@@ -59,6 +62,7 @@ export function getContractWithDbTypes(grouping: DecoderGrouping) {
         decoderId: group.decoderId,
         schemaName: tableToSchemaName(tbl),
         tableName: tbl,
+        shared: grouping.shared,
         inputs: e.inputs.map((i) => ({
           ...i,
           dbType: evmToPostgresType(i.type),

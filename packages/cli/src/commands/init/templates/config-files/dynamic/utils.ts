@@ -40,11 +40,12 @@ export interface EnrichedEventMeta {
   txHash: string
   logIndex: number
   timestamp: number // unix seconds
+  contractAddress: string
 }
 
 export function enrichEvents<T extends EventResponse<Events, string[]>>(obj: T): ExtendEventResponse<T, EnrichedEventMeta> {
   const result = {} as ExtendEventResponse<T, EnrichedEventMeta>
-  
+
   for (const key in obj) {
     const value = obj[key]
     result[key] = (value as any[]).map((v) => ({
@@ -53,6 +54,7 @@ export function enrichEvents<T extends EventResponse<Events, string[]>>(obj: T):
       txHash: v.rawEvent.transactionHash,
       logIndex: v.rawEvent.logIndex,
       timestamp: new Date(v.timestamp).getTime() / 1000,
+      contractAddress: v.contract,
     })) as ExtendEventResponse<T, EnrichedEventMeta>[typeof key]
   }
 

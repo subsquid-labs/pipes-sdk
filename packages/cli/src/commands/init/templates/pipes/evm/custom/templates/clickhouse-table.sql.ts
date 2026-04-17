@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS {{tableName}} (
   tx_hash String,
   log_index UInt16,
   timestamp DateTime CODEC (DoubleDelta, ZSTD),
+  {{#shared}}
+  contract_address LowCardinality(FixedString(42)),
+  {{/shared}}
   sign Int8  DEFAULT toInt8(1)
 )
 ENGINE = CollapsingMergeTree(sign) PARTITION BY toYYYYMM(timestamp) -- Data will be split by month
@@ -40,6 +43,7 @@ function getContractWithDbTypes(grouping: DecoderGrouping) {
       event: e.name,
       decoderId: group.decoderId,
       tableName: tableName(grouping, group.contracts[0].contractName, e, group.events),
+      shared: grouping.shared,
       inputs: e.inputs.map((i) => ({
         ...i,
         name: toSnakeCase(i.name),

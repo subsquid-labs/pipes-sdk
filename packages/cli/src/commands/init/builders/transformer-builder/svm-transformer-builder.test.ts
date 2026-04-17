@@ -88,6 +88,7 @@ describe('SVM Template Builder', () => {
                   output_format_json_named_tuples_as_objects: 1,
                   output_format_json_quote_64bit_floats: 1,
                   output_format_json_quote_64bit_integers: 1,
+                  input_format_skip_unknown_fields: 1,
               },
           }),
           onStart: async ({ store }) => {

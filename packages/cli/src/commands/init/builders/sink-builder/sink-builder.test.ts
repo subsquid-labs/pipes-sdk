@@ -37,6 +37,7 @@ describe('clickhouse sink template builder', () => {
                   output_format_json_named_tuples_as_objects: 1,
                   output_format_json_quote_64bit_floats: 1,
                   output_format_json_quote_64bit_integers: 1,
+                  input_format_skip_unknown_fields: 1,
               },
           }),
           onStart: async ({ store }) => {
@@ -95,6 +96,7 @@ describe('clickhouse sink template builder', () => {
                   output_format_json_named_tuples_as_objects: 1,
                   output_format_json_quote_64bit_floats: 1,
                   output_format_json_quote_64bit_integers: 1,
+                  input_format_skip_unknown_fields: 1,
               },
           }),
           onStart: async ({ store }) => {
@@ -364,6 +366,54 @@ describe('buildSink dispatch', () => {
       packageManager: 'pnpm',
     }
     expect(() => buildSink(config)).toThrow(/Memory sink is not supported/)
+  })
+})
+
+describe('shared-decoder contract-address discriminator', () => {
+  const usdcContract = {
+    contractAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    contractName: 'USDC',
+    contractEvents: wethContract.contractEvents,
+    range: { from: 'latest' },
+  }
+
+  it('adds contractAddress column to postgres schema when decoder is shared', () => {
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      templates: [fixtures.evmCustom([wethContract, usdcContract])],
+      network: 'ethereum-mainnet',
+      sink: 'postgresql',
+      packageManager: 'pnpm',
+    }
+    const schema = buildPostgresSink(config).files.find((f) => f.path === 'src/schemas.ts')!.content
+    expect(schema).toContain('contractAddress: char({ length: 42 }).notNull()')
+  })
+
+  it('adds contract_address column to clickhouse DDL when decoder is shared', () => {
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      templates: [fixtures.evmCustom([wethContract, usdcContract])],
+      network: 'ethereum-mainnet',
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
+    }
+    const migration = buildClickhouseSink(config).files.find((f) => f.path.includes('migrations/'))!.content
+    expect(migration).toContain('contract_address LowCardinality(FixedString(42))')
+  })
+
+  it('omits the discriminator when decoder is per-contract (not shared)', () => {
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      templates: [fixtures.evmCustom([wethContract])],
+      network: 'ethereum-mainnet',
+      sink: 'postgresql',
+      packageManager: 'pnpm',
+    }
+    const schema = buildPostgresSink(config).files.find((f) => f.path === 'src/schemas.ts')!.content
+    expect(schema).not.toContain('contractAddress: char({ length: 42 })')
   })
 })
 
