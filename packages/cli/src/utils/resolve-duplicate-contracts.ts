@@ -5,11 +5,16 @@ interface ContractWithName {
   contractName: string
 }
 
+type InputFn = typeof input
+
 /**
  * Detects duplicate `contractName` values in the array and prompts the user
  * to provide unique names. Mutates the contracts in place.
  */
-export async function resolveDuplicateContractNames(contracts: ContractWithName[]): Promise<void> {
+export async function resolveDuplicateContractNames(
+  contracts: ContractWithName[],
+  promptFn: InputFn = input,
+): Promise<void> {
   const duplicates = findDuplicateNames(contracts)
   if (duplicates.size === 0) return
 
@@ -20,7 +25,7 @@ export async function resolveDuplicateContractNames(contracts: ContractWithName[
       const contract = contracts[idx]
       usedNames.delete(contract.contractName)
 
-      const newName = await promptForUniqueName(name, contract.contractAddress, usedNames)
+      const newName = await promptForUniqueName(name, contract.contractAddress, usedNames, promptFn)
 
       contract.contractName = newName
       usedNames.add(newName)
@@ -38,7 +43,12 @@ function findDuplicateNames(contracts: Array<{ contractName: string }>): Map<str
   return new Map(Array.from(nameToIndices.entries()).filter(([, indices]) => indices.length > 1))
 }
 
-async function promptForUniqueName(originalName: string, address: string, usedNames: Set<string>): Promise<string> {
+async function promptForUniqueName(
+  originalName: string,
+  address: string,
+  usedNames: Set<string>,
+  promptFn: InputFn,
+): Promise<string> {
   const shortAddress = address.length > 12 ? `${address.slice(0, 6)}...${address.slice(-5)}` : address
   const baseDefault = `${originalName}_${address.slice(0, 6)}`
   let defaultName = baseDefault
@@ -47,7 +57,7 @@ async function promptForUniqueName(originalName: string, address: string, usedNa
     defaultName = `${baseDefault}_${counter}`
     counter += 1
   }
-  return input({
+  return promptFn({
     message: `Contract name "${originalName}" is duplicated. Enter unique name for ${shortAddress}:`,
     default: defaultName,
     validate: (value) => {
