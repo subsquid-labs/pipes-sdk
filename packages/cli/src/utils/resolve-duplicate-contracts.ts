@@ -40,9 +40,16 @@ function findDuplicateNames(contracts: Array<{ contractName: string }>): Map<str
 
 async function promptForUniqueName(originalName: string, address: string, usedNames: Set<string>): Promise<string> {
   const shortAddress = address.length > 12 ? `${address.slice(0, 6)}...${address.slice(-5)}` : address
+  const baseDefault = `${originalName}_${address.slice(0, 6)}`
+  let defaultName = baseDefault
+  let counter = 2
+  while (usedNames.has(defaultName)) {
+    defaultName = `${baseDefault}_${counter}`
+    counter += 1
+  }
   return input({
     message: `Contract name "${originalName}" is duplicated. Enter unique name for ${shortAddress}:`,
-    default: `${originalName}_${address.slice(0, 6)}`,
+    default: defaultName,
     validate: (value) => {
       if (!value.trim()) return 'Contract name cannot be empty'
       if (usedNames.has(value)) return `Name "${value}" already in use`
