@@ -1,5 +1,5 @@
 import { createClient } from '@clickhouse/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ClickhouseStore } from '~/targets/clickhouse/clickhouse-store.js'
 
@@ -68,5 +68,42 @@ describe('Clickhouse store', () => {
     })
     const rows = await select.json()
     expect(rows.data).toHaveLength(0)
+  })
+})
+
+describe('ClickhouseStore.removeAllRows (unit)', () => {
+  it('forwards reason from structured args to the rollback.start log event', async () => {
+    const events: Array<{ payload: any; msg: string }> = []
+    const logger = {
+      info: (payload: any, msg: string) => events.push({ payload, msg }),
+      debug: () => {},
+      warn: () => {},
+      error: () => {},
+    } as any
+
+    // Mock ClickHouse client: schema version, columns, then the monolithic
+    // INSERT SELECT command. No real connection is opened.
+    const query = vi
+      .fn()
+      // ColumnIntrospector#schemaVersion
+      .mockResolvedValueOnce({ json: async () => [{ v: '0' }] })
+      // ColumnIntrospector#fetchColumns
+      .mockResolvedValueOnce({ json: async () => [{ name: 'id' }, { name: 'value' }, { name: 'sign' }] })
+    const command = vi.fn().mockResolvedValue({ query_id: 'cmd' })
+    const mockClient = {
+      connectionParams: { database: 'default' },
+      query,
+      command,
+    } as any
+
+    const store = new ClickhouseStore(mockClient)
+    await store.removeAllRows(
+      { tables: 't', scopeWhere: '1', reason: 'blockchain_fork' },
+      { logger },
+    )
+
+    const start = events.find((e) => e.payload?.event === 'rollback.start')
+    expect(start).toBeDefined()
+    expect(start!.payload.reason).toBe('blockchain_fork')
   })
 })

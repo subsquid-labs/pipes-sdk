@@ -876,6 +876,39 @@ describe('RollbackSemaphore', () => {
     await p
     expect(resumedAt - startedAt).toBeGreaterThanOrEqual(25)
   })
+
+  it('does not let a fast-path acquire steal a handed-off slot during wake-up delay', async () => {
+    // Reserve-on-handoff invariant: when `release()` finds a queued waiter,
+    // it must keep `#inFlight` at the cap so a fresh `acquire()` arriving
+    // during the jittered wake-up window cannot pass the fast path.
+    const sem = new RollbackSemaphore({ concurrency: 1, baseMs: 100, jitter: 0, rng: () => 0.5 })
+
+    const release1 = await sem.acquire()
+    const waiterP = sem.acquire()
+
+    release1()
+
+    // Fast-path acquire during the wake-up delay window. With the bug, this
+    // resolved immediately and pushed `#inFlight` to 2.
+    let stolen = false
+    const freshP = sem.acquire().then((r) => {
+      stolen = true
+      return r
+    })
+
+    await new Promise((r) => setTimeout(r, 10))
+    expect(sem.inFlight).toBeLessThanOrEqual(1)
+    expect(stolen).toBe(false)
+
+    const waiterRelease = await waiterP
+    expect(sem.inFlight).toBe(1)
+    waiterRelease()
+
+    const freshRelease = await freshP
+    expect(sem.inFlight).toBe(1)
+    freshRelease()
+    expect(sem.inFlight).toBe(0)
+  })
 })
 
 describe('getRollbackSemaphore', () => {
@@ -992,6 +1025,37 @@ describe('dispatchRollback log events (Phase 5)', () => {
       kind: 'short_circuit',
     })
     expect(command).not.toHaveBeenCalled()
+  })
+
+  it('reports probeKind=none when cursorColumn is set but safeCursor is missing', async () => {
+    // The probe only runs when BOTH cursorColumn and safeCursor are present;
+    // the start event must reflect that.
+    const { logger, events } = makeLogger()
+    const command = vi.fn().mockResolvedValue(undefined)
+    const query = vi.fn()
+    const store = { command, query } as unknown as ClickhouseStore
+    const introspector = {
+      columnsFor: vi.fn().mockResolvedValue(['id', 'value', 'sign']),
+      invalidate: vi.fn(),
+    } as unknown as ColumnIntrospector
+
+    await dispatchRollback({
+      store,
+      introspector,
+      db: 'default',
+      table: '"default"."t"',
+      unqualifiedTable: 't',
+      scopeWhere: '1',
+      cursorColumn: 'block_number',
+      logger,
+    })
+
+    const start = events.find((e) => e.payload.event === 'rollback.start')!.payload
+    expect(start).toMatchObject({
+      probeKind: 'none',
+      cursorColumn: 'block_number',
+      safeCursor: null,
+    })
   })
 
   it('end-event keys exactly match the discriminated union (no stray fields)', async () => {

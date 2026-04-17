@@ -134,6 +134,7 @@ export class ClickhouseStore {
         cursorColumn: args.cursorColumn,
         safeCursor: args.safeCursor,
         queryParams: args.params,
+        reason: args.reason,
         logger: opts?.logger,
       })
       results.push(result)

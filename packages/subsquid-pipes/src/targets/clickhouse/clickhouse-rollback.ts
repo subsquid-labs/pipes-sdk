@@ -337,15 +337,20 @@ export class RollbackSemaphore {
       this.#inFlight++
       return () => this.#release()
     }
+    // The slot is handed off to us by `#release()` without decrementing
+    // `#inFlight` — otherwise a fast-path `acquire()` arriving during the
+    // jittered wake-up delay could steal the slot and push in-flight past
+    // the cap.
     await new Promise<void>((resolve) => this.#waiters.push(resolve))
-    this.#inFlight++
     return () => this.#release()
   }
 
   #release() {
-    this.#inFlight--
     const next = this.#waiters.shift()
-    if (!next) return
+    if (!next) {
+      this.#inFlight--
+      return
+    }
     const delay = jitteredBackoff(this.#baseMs, this.#jitter, this.#rng)
     setTimeout(next, Math.max(0, delay))
   }
@@ -1044,7 +1049,7 @@ export async function dispatchRollback(params: {
     stream,
   } = params
 
-  const probeKind: 'exists' | 'none' = cursorColumn != null ? 'exists' : 'none'
+  const probeKind: 'exists' | 'none' = cursorColumn != null && safeCursor != null ? 'exists' : 'none'
   const startEvent: RollbackStartEvent = {
     event: 'rollback.start',
     stream: stream ?? null,
