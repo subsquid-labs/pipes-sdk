@@ -15,10 +15,13 @@ export class DbMappingError extends Error {
   }
 }
 
+const ARRAY_SUFFIX_REGEX = /\[\d*\]$/
+
 export function evmToClickhouseType(type: string) {
   if (type in solidityToClickHouseTypes) {
     return solidityToClickHouseTypes[type as keyof typeof solidityToClickHouseTypes]
   }
+  if (ARRAY_SUFFIX_REGEX.test(type)) return 'JSON'
   throw new DbMappingError('evm', 'clickhouse', type)
 }
 
@@ -26,6 +29,7 @@ export function evmToPostgresType(type: string) {
   if (type in solidityToPostgresTypes) {
     return solidityToPostgresTypes[type as keyof typeof solidityToPostgresTypes]
   }
+  if (ARRAY_SUFFIX_REGEX.test(type)) return 'jsonb()'
   throw new DbMappingError('evm', 'postgresql', type)
 }
 

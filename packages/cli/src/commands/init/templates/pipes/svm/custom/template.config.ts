@@ -8,7 +8,13 @@ import { renderClickhouse } from './templates/clickhouse-table.sql.js'
 import { renderSchema } from './templates/pg-table.js'
 import { renderTransformer } from './templates/transformer.js'
 
-const RawInputSchema = z.object({ name: z.string(), type: z.string() })
+const RawInputSchema: z.ZodType<{ name: string; type: string; components?: unknown }> = z.lazy(() =>
+  z.object({
+    name: z.string(),
+    type: z.string(),
+    components: z.array(RawInputSchema).optional(),
+  }),
+)
 
 const RawAbiEventSchema = z.object({ name: z.string(), type: z.string(), inputs: z.array(RawInputSchema) })
 

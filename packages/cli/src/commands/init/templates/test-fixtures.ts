@@ -61,6 +61,45 @@ export const wethContract = {
   range: { from: 'latest' },
 }
 
+export const seaportContract = {
+  contractAddress: '0x00000000000001ad428e4906aE43D8F9852d0dD6',
+  contractName: 'Seaport',
+  contractEvents: [
+    {
+      name: 'OrderFulfilled',
+      type: 'event',
+      inputs: [
+        { name: 'orderHash', type: 'bytes32' },
+        { name: 'offerer', type: 'address' },
+        { name: 'zone', type: 'address' },
+        { name: 'recipient', type: 'address' },
+        {
+          name: 'offer',
+          type: 'tuple[]',
+          components: [
+            { name: 'itemType', type: 'uint8' },
+            { name: 'token', type: 'address' },
+            { name: 'identifier', type: 'uint256' },
+            { name: 'amount', type: 'uint256' },
+          ],
+        },
+        {
+          name: 'consideration',
+          type: 'tuple[]',
+          components: [
+            { name: 'itemType', type: 'uint8' },
+            { name: 'token', type: 'address' },
+            { name: 'identifier', type: 'uint256' },
+            { name: 'amount', type: 'uint256' },
+            { name: 'recipient', type: 'address' },
+          ],
+        },
+      ],
+    },
+  ],
+  range: { from: 'latest' },
+}
+
 export const whirlpoolContract = {
   contractAddress: '0x0000000000000000000000000000000000000000',
   contractName: 'whirpool',

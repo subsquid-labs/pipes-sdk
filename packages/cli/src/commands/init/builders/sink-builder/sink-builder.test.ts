@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { Config } from '~/types/init.js'
 
-import { fixtures, wethContract } from '../../templates/test-fixtures.js'
+import { fixtures, seaportContract, wethContract } from '../../templates/test-fixtures.js'
 import { buildClickhouseSink, buildPostgresSink, buildSink } from './index.js'
 
 describe('clickhouse sink template builder', () => {
@@ -364,5 +364,37 @@ describe('buildSink dispatch', () => {
       packageManager: 'pnpm',
     }
     expect(() => buildSink(config)).toThrow(/Memory sink is not supported/)
+  })
+})
+
+describe('tuple[] event inputs', () => {
+  it('renders postgres schema with jsonb columns for tuple-array inputs', () => {
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      templates: [fixtures.evmCustom([seaportContract])],
+      network: 'ethereum-mainnet',
+      sink: 'postgresql',
+      packageManager: 'pnpm',
+    }
+    const files = buildPostgresSink(config).files.map((f) => ({ path: f.path, content: f.content }))
+    const schema = files.find((f) => f.path === 'src/schemas.ts')!
+    expect(schema.content).toContain('offer: jsonb()')
+    expect(schema.content).toContain('consideration: jsonb()')
+  })
+
+  it('renders clickhouse DDL with JSON columns for tuple-array inputs', () => {
+    const config: Config<'evm'> = {
+      projectFolder: 'mock-folder',
+      networkType: 'evm',
+      templates: [fixtures.evmCustom([seaportContract])],
+      network: 'ethereum-mainnet',
+      sink: 'clickhouse',
+      packageManager: 'pnpm',
+    }
+    const files = buildClickhouseSink(config).files.map((f) => ({ path: f.path, content: f.content }))
+    const migration = files.find((f) => f.path.includes('migrations/'))!
+    expect(migration.content).toMatch(/offer\s+JSON/)
+    expect(migration.content).toMatch(/consideration\s+JSON/)
   })
 })
