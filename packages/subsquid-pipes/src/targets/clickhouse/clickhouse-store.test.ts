@@ -49,7 +49,7 @@ describe('Clickhouse store', () => {
 
     const res = await store.removeAllRows({
       tables: 'big_numbers',
-      where: 'id = {id:UInt64}',
+      scopeWhere: 'id = {id:UInt64}',
       params: { id: 1 },
     })
 

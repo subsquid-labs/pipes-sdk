@@ -24,15 +24,7 @@ export type QueryParamsWithFormat<Format extends DataFormat> = Omit<QueryParams,
   format?: Format
 }
 
-/** Legacy `removeAllRows` shape, preserved as a shim with a deprecation warning. */
-export type LegacyRemoveAllRowsArgs = {
-  tables: string | string[]
-  where: string
-  params?: Record<string, unknown>
-}
-
-/** Structured `removeAllRows` shape introduced by Phase 1 of SDKTL-52. */
-export type StructuredRemoveAllRowsArgs = {
+export type RemoveAllRowsArgs = {
   tables: string | string[]
   scopeWhere?: string
   params?: Record<string, unknown>
@@ -41,14 +33,7 @@ export type StructuredRemoveAllRowsArgs = {
   reason?: RollbackReason
 }
 
-export type RemoveAllRowsArgs = LegacyRemoveAllRowsArgs | StructuredRemoveAllRowsArgs
-
-function isLegacy(args: RemoveAllRowsArgs): args is LegacyRemoveAllRowsArgs {
-  return 'where' in args && typeof (args as LegacyRemoveAllRowsArgs).where === 'string'
-}
-
 export class ClickhouseStore {
-  #shimWarned = false
   #introspector?: ColumnIntrospector
   #defaultDb?: string
 
@@ -87,35 +72,11 @@ export class ClickhouseStore {
 
   /**
    * Removes all rows matching a scope via CollapsingMergeTree tombstone
-   * insertion. Two call shapes:
-   *
-   * - **Legacy**: `{ tables, where, params? }`. Preserved for back-compat;
-   *   emits a one-time deprecation warning per store instance.
-   * - **Structured** (recommended): `{ tables, scopeWhere?, params?, cursorColumn?, safeCursor?, reason? }`.
-   *   Runs a single server-side `INSERT INTO t (cols, sign) SELECT cols, -1 FROM t FINAL WHERE <scope>`.
-   *   No rows stream through Node.
+   * insertion. Runs a single server-side
+   * `INSERT INTO t (cols, sign) SELECT cols, -1 FROM t FINAL WHERE <scope>`;
+   * no rows stream through Node.
    */
   async removeAllRows(args: RemoveAllRowsArgs, opts?: { logger?: Logger }): Promise<RollbackResult[]> {
-    if (isLegacy(args)) {
-      if (!this.#shimWarned) {
-        this.#shimWarned = true
-        opts?.logger?.warn?.(
-          'removeAllRows({ where }) is deprecated; pass { scopeWhere, cursorColumn, safeCursor, reason } to get EXISTS short-circuit and chunked+resumable rollback.',
-        )
-      }
-      return this.#runStructured(
-        {
-          tables: args.tables,
-          scopeWhere: args.where,
-          params: args.params,
-        },
-        opts,
-      )
-    }
-    return this.#runStructured(args, opts)
-  }
-
-  async #runStructured(args: StructuredRemoveAllRowsArgs, opts?: { logger?: Logger }): Promise<RollbackResult[]> {
     const tables = typeof args.tables === 'string' ? [args.tables] : args.tables
     const introspector = this.#getIntrospector()
     const defaultDb = this.#getDefaultDb()

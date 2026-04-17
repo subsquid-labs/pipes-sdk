@@ -506,7 +506,7 @@ describe('Clickhouse state', () => {
             expect(safeCursor).toMatchObject({ number: 3, hash: '0x3' })
             await store.removeAllRows({
               tables: 'test',
-              where: `block_number > {latest:UInt32}`,
+              scopeWhere: `block_number > {latest:UInt32}`,
               params: { latest: safeCursor.number },
             })
           },
@@ -703,7 +703,7 @@ describe('Clickhouse state', () => {
             rollbackCalls++
             await store.removeAllRows({
               tables: 'test',
-              where: `block_number > {latest:UInt32}`,
+              scopeWhere: `block_number > {latest:UInt32}`,
               params: { latest: safeCursor.number },
             })
           },
@@ -829,7 +829,7 @@ describe('Clickhouse state', () => {
               onRollback: async ({ store, cursor }) => {
                 await store.removeAllRows({
                   tables: 'test',
-                  where: `block_number > {latest:UInt32}`,
+                  scopeWhere: `block_number > {latest:UInt32}`,
                   params: { latest: cursor.number },
                 })
               },
@@ -1048,7 +1048,7 @@ describe('Clickhouse state', () => {
             rollbackCalls++
             await store.removeAllRows({
               tables: 'test',
-              where: `block_number > {latest:UInt32}`,
+              scopeWhere: `block_number > {latest:UInt32}`,
               params: { latest: safeCursor.number },
             })
           },
