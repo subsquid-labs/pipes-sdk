@@ -1,4 +1,5 @@
 import { address, bool, option, struct, u64, unit } from '@subsquid/borsh'
+
 import { instruction } from '../abi.support.js'
 import { ConfigParameters, CurveType, CustomizableParams, PoolFees } from './types.js'
 

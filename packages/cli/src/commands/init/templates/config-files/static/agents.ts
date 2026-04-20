@@ -136,7 +136,7 @@ async function main() {
       contracts: factory({
         address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
         event: factoryAbi.PoolCreated,
-        parameter: 'pool',
+        childAddressField: 'pool',
         database: factorySqliteDatabase({ path: './uniswap3-eth-pools.sqlite' }),
       }),
       events: {

@@ -2,8 +2,6 @@ import { Logger, createDefaultLogger } from '~/core/logger.js'
 import { MetricsServer, noopMetricsServer } from '~/core/metrics-server.js'
 import { MetricsServerOptions, metricsServer } from '~/metrics/node/index.js'
 
-import { RuntimeContext, runWithContext } from './context.js'
-
 type Config = {
   /**
    * Maximum number of restart attempts per pipe before the runner gives up and
@@ -19,9 +17,9 @@ type Config = {
 type SerializableObject = Record<string, string | number | Date | boolean>
 
 /**
- * Context passed to each pipe's `stream` function at runtime.
+ * Context passed to each pipe's `handler` function at runtime.
  */
-export type RunConfig<T extends SerializableObject> = {
+export type PipeContext<T extends SerializableObject> = {
   /** Stable ID for this pipe, used for cursor persistence and log prefixing. */
   id: string
   /** Params supplied in the pipe declaration. */
@@ -35,10 +33,10 @@ export type RunConfig<T extends SerializableObject> = {
 type StreamConfig<T extends SerializableObject> = {
   /** Stable, unique identifier for this pipe. */
   id: string
-  /** Arbitrary params forwarded to the `stream` function. */
+  /** Arbitrary params forwarded to the `handler` function. */
   params: T
   /** Async function that runs the pipe to completion. */
-  stream: string | ((ctx: RunConfig<T>) => Promise<unknown>)
+  handler: (ctx: PipeContext<T>) => Promise<unknown>
 }
 
 class Runner<T extends SerializableObject = any> {
@@ -61,47 +59,19 @@ class Runner<T extends SerializableObject = any> {
 
     await Promise.all(
       this.pipes.map(async (pipe) => {
-        const stream = pipe.stream
-
         const maxAttempts = this.config.retry || 5
         let attempts = 0
 
         const logger = this.#logger.child({ id: pipe.id })
-        const ctx: RuntimeContext = {
-          id: pipe.id,
-          logger,
-          metrics,
-        }
 
         while (true) {
           try {
-            if (typeof stream === 'function') {
-              await runWithContext(ctx, async () => {
-                await stream({
-                  id: pipe.id,
-                  params: pipe.params,
-                  metrics,
-                  logger,
-                })
-              })
-            } else {
-              const worker = new Worker(new URL('worker.ts', import.meta.url).href, {
-                env: {
-                  ...process.env,
-                  PORT: '3333',
-                },
-              })
-
-              await new Promise<void>((resolve, reject) =>
-                worker.addEventListener('close', (event) => {
-                  if (event.code !== 0) {
-                    reject(new Error(`Worker stopped with exit code ${event.code}`))
-                  }
-
-                  resolve()
-                }),
-              )
-            }
+            await pipe.handler({
+              id: pipe.id,
+              params: pipe.params,
+              metrics,
+              logger,
+            })
 
             return
           } catch (e) {
@@ -147,8 +117,8 @@ class Runner<T extends SerializableObject = any> {
  *   {
  *     id: 'transfers',
  *     params: { portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet' },
- *     stream: async ({ id, params, logger, metrics }) => {
- *       const stream = evmPortalSource({ id, portal: params.portal, outputs: evmDecoder({ ... }) })
+ *     handler: async ({ id, params, logger, metrics }) => {
+ *       const stream = evmPortalStream({ id, portal: params.portal, outputs: evmDecoder({ ... }) })
  *       for await (const { data } of stream) { ... }
  *     },
  *   },

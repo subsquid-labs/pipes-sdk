@@ -1,4 +1,4 @@
-import { BatchCtx } from '~/core/portal-source.js'
+import { BatchContext } from '~/core/portal-source.js'
 
 type Aggregator = 'omit' | 'sum' | 'first' | 'min' | 'max' | 'average'
 type CollectFunction<T> = (this: T) => void | Promise<void>
@@ -62,7 +62,7 @@ export type MetricsServer = {
   start(): void
   stop(): Promise<void>
   registerPipe(id: string): void
-  batchProcessed(ctx: BatchCtx): void
+  batchProcessed(ctx: BatchContext): void
   metrics: Metrics
 }
 

@@ -1,4 +1,4 @@
-import { address, Codec, fixedArray, ref, struct, u8, u64, u128 } from '@subsquid/borsh'
+import { Codec, address, fixedArray, ref, struct, u128, u64, u8 } from '@subsquid/borsh'
 
 export interface WithdrawDestToken {
   withdrawAmount: bigint

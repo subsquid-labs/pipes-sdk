@@ -71,7 +71,7 @@ export class EvmQueryBuilder<F extends evm.FieldSelection = {}> extends QueryBui
 
     return new QueryAwareTransformer(setupQuery, {
       profiler: {
-        id: 'query builder',
+        name: 'query builder',
         hidden: true,
       },
       transform: (data) => data,

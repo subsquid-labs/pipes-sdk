@@ -84,9 +84,9 @@ export function rpcLatencyWatcher({ watcher }: { watcher: RpcLatencyWatcher }) {
     }[],
     Latency | null
   >({
-    profiler: { id: 'rpc latency' },
+    profiler: { name: 'rpc latency' },
     transform: (data, ctx): Latency | null => {
-      const receivedAt = ctx.meta.lastBlockReceivedAt
+      const receivedAt = ctx.batch.lastBlockReceivedAt
 
       const block = last(data)
       if (!block) return null

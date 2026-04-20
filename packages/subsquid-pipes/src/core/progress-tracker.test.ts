@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { evmQuery } from '~/evm/evm-query-builder.js'
-import { evmPortalSource } from '~/evm/index.js'
-import { MockPortal, closeMockPortal, createMockMetricServer, createMockPortal } from '~/tests/index.js'
+import { evmPortalStream } from '~/evm/index.js'
+import { MockPortal, createMockMetricServer, createMockPortal } from '~/testing/index.js'
 
 function blockOutputs(range: { from: number; to: number }) {
   return evmQuery()
@@ -14,7 +14,7 @@ describe('Pipeline metrics', () => {
   let mockPortal: MockPortal
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
 
   it('should register all expected progress-tracker metrics', async () => {
@@ -31,7 +31,8 @@ describe('Pipeline metrics', () => {
 
     const metrics = createMockMetricServer()
 
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: blockOutputs({ from: 0, to: 3 }),
       metrics: metrics.server,
@@ -45,7 +46,7 @@ describe('Pipeline metrics', () => {
     expect(metrics.gauge('sqd_last_block')).toBeDefined()
     expect(metrics.gauge('sqd_progress_ratio')).toBeDefined()
     expect(metrics.gauge('sqd_eta_seconds')).toBeDefined()
-    expect(metrics.gauge('sqd_blocks_per_second')).toBeDefined()
+    expect(metrics.counter('sqd_blocks_processed_total')).toBeDefined()
     expect(metrics.counter('sqd_bytes_downloaded_total')).toBeDefined()
   })
 
@@ -59,7 +60,8 @@ describe('Pipeline metrics', () => {
 
     const metrics = createMockMetricServer()
 
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: blockOutputs({ from: 0, to: 1 }),
       metrics: metrics.server,
@@ -88,7 +90,8 @@ describe('Pipeline metrics', () => {
 
     const metrics = createMockMetricServer()
 
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: blockOutputs({ from: 0, to: 2 }),
       metrics: metrics.server,
@@ -123,7 +126,8 @@ describe('Pipeline metrics', () => {
 
     const metrics = createMockMetricServer()
 
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: blockOutputs({ from: 0, to: 3 }),
       metrics: metrics.server,
@@ -137,7 +141,7 @@ describe('Pipeline metrics', () => {
     expect(metrics.gauge('sqd_last_block').lastValue).toBe(3)
     expect(metrics.gauge('sqd_progress_ratio').lastValue).toBe(1)
     expect(metrics.gauge('sqd_eta_seconds').lastValue).toBe(0)
-    expect(metrics.gauge('sqd_blocks_per_second').lastValue).toBeGreaterThanOrEqual(0)
+    expect(metrics.counter('sqd_blocks_processed_total').total).toBeGreaterThanOrEqual(0)
     expect(metrics.counter('sqd_bytes_downloaded_total').total).toBeGreaterThan(0)
   })
 
@@ -155,7 +159,8 @@ describe('Pipeline metrics', () => {
 
     const metrics = createMockMetricServer()
 
-    const stream = evmPortalSource({
+    const stream = evmPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: blockOutputs({ from: 0, to: 3 }),
       metrics: metrics.server,

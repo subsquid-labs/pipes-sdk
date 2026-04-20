@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { mockPortalRestApi } from '~/tests/index.js'
+import { mockPortalRestApi } from '~/testing/index.js'
 
 import { HyperliquidFillsQueryBuilder } from './hyperliquid-fills-query-builder.js'
 

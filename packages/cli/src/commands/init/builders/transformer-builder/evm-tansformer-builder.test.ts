@@ -183,7 +183,7 @@ describe('EVM Template Builder', () => {
             '0x1f98431c8ad98523631ae4a59f267346ea31f984',
           ],
           event: factoryEvents.PoolCreated,
-          parameter: 'pool',
+          childAddressField: 'pool',
           database: await factorySqliteDatabase({
             path: './uniswap3-eth-pools.sqlite',
           }),

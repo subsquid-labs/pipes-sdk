@@ -1,4 +1,5 @@
 import { address, array, bool, i32, i64, option, struct, u16, u64, unit } from '@subsquid/borsh'
+
 import { instruction } from '../abi.support.js'
 import {
   AddLiquiditySingleSidePreciseParameter,

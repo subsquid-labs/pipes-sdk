@@ -1,3 +1,5 @@
+'use client'
+
 import { useMemo } from 'react'
 
 import NumberFlow from '@number-flow/react'
@@ -5,7 +7,9 @@ import { Terminal } from 'lucide-react'
 // @ts-ignore
 import { Sparklines, SparklinesLine } from 'react-sparklines'
 
-import { PipeStatus, useStats } from '~/api/metrics'
+import { PipeStatus, useStats } from '~/hooks/use-metrics'
+import { useServerIndex } from '~/hooks/use-server-context'
+import { useUrlParam } from '~/hooks/use-url-param'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { humanBytes } from '~/dashboard/formatters'
@@ -17,14 +21,25 @@ import { TransformationExemplar } from '~/dashboard/transformation-exemplar'
 const sparklineStyle = { fill: '#d0a9e2' }
 const sparklineColor = 'rgb(170, 140, 235)'
 
+const VALID_TABS = ['profiler', 'data-flow', 'query']
+
 export function Pipeline({ pipeId }: { pipeId: string }) {
-  const { data, isError } = useStats()
+  const { serverIndex } = useServerIndex()
+  const { data, isError } = useStats(serverIndex)
+
+  const [tab, setTab] = useUrlParam('tab', 'profiler', {
+    validate: (v) => VALID_TABS.includes(v),
+  })
 
   const pipe = data?.pipes.find((pipe) => pipe.id === pipeId)
 
-  const dataset = useMemo(() => {
-    return pipe?.portal.url.replace(/^[\w.\/:]+datasets\//, '')
-  }, [pipe?.portal.url])
+  const datasetLabel = useMemo(() => {
+    return (
+      pipe?.dataset?.metadata?.display_name ||
+      pipe?.dataset?.dataset ||
+      pipe?.portal.url.replace(/^[\w.\/:]+datasets\//, '')
+    )
+  }, [pipe?.dataset, pipe?.portal.url])
 
   if (!pipe) return <PipelineDisconnected />
 
@@ -61,11 +76,23 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
         </div>
 
         <div className="flex justify-between mb-3 text-muted-foreground text-xs">
-          <div>{dataset}</div>
+          <div className="flex items-center gap-1.5">
+            {pipe.dataset?.metadata?.logo_url && (
+              <img src={pipe.dataset.metadata.logo_url} alt="" className="w-4 h-4" />
+            )}
+            <span>{datasetLabel}</span>
+            {pipe.dataset?.metadata?.evm?.chain_id != null && (
+              <span className="text-muted-foreground/60">{pipe.dataset.metadata.evm.chain_id}</span>
+            )}
+          </div>
           <div>{pipe.progress.percent.toFixed(2)}%</div>
         </div>
 
-        <Tabs className="mt-4 mb-6" defaultValue="profiler">
+        <Tabs
+          className="mt-4 mb-6"
+          value={tab}
+          onValueChange={setTab}
+        >
           <TabsList className="bg-gray-950">
             <TabsTrigger className="" value="profiler">
               Profiler
@@ -84,9 +111,9 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
           </TabsContent>
         </Tabs>
 
-        <div className="flex items-center justify-between font-medium text-foreground/80 text-xs">
+        <div className="flex items-center justify-between font-medium text-foreground/80 text-xxs">
           <div className="flex items-center gap-1">
-            <div className="w-[100px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
+            <div className="w-[90px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
               <Sparklines min={0} data={pipe.history.map((v) => v.blocksPerSecond)} width={100} height={32} margin={0}>
                 <SparklinesLine style={sparklineStyle} color={sparklineColor} />
               </Sparklines>
@@ -97,24 +124,24 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-[100px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
+            <div className="w-[90px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
               <Sparklines min={0} data={pipe.history.map((v) => v.bytesPerSecond)} width={100} height={32} margin={0}>
                 <SparklinesLine style={sparklineStyle} color={sparklineColor} />
               </Sparklines>
             </div>
             <div>
-              <div className="text-xxs font-normal">Download speed</div>
+              <div className="font-normal">Download speed</div>
               <div>{humanBytes(pipe.speed.bytesPerSecond)}/sec</div>
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-[100px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
+            <div className="w-[90px] mr-2 bg-primary/2 rounded-sm overflow-hidden border test pt-2">
               <Sparklines min={0} data={pipe.history.map((v) => v.memory)} width={100} height={32} margin={0}>
                 <SparklinesLine style={sparklineStyle} color={sparklineColor} />
               </Sparklines>
             </div>
             <div>
-              <div className="text-xxs font-normal">Memory</div>
+              <div className="font-normal">Process Memory</div>
               <div>{data?.usage.memory && humanBytes(data.usage.memory)}</div>
             </div>
           </div>

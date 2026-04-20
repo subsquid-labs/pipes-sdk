@@ -1,4 +1,4 @@
-import { BatchCtx, PortalRange, ProfilerOptions, parsePortalRange } from '~/core/index.js'
+import { BatchContext, PortalRange, ProfilerOptions, parsePortalRange } from '~/core/index.js'
 import { arrayify } from '~/internal/array.js'
 import { FieldSelection, Instruction, TokenBalance, Transaction } from '~/portal-client/query/solana.js'
 
@@ -40,6 +40,8 @@ type SelectedFields = typeof decodedEventFields
 export type DecodedInstruction<D> = {
   instruction: D
   programId: string
+  block: { number: number; hash: string }
+  /** @deprecated Use `block.number` instead */
   blockNumber: number
   timestamp: Date
   transaction: Transaction<SelectedFields['transaction']>
@@ -69,7 +71,7 @@ export type EventResponse<T extends Instructions> = {
   [K in keyof T]: AbiDecodeInstruction<T[K]>[]
 }
 
-const defaultError = (ctx: BatchCtx, error: any) => {
+const defaultError = (ctx: BatchContext, error: any) => {
   throw error
 }
 
@@ -78,7 +80,7 @@ type DecodedEventPipeArgs<T extends Instructions> = {
   programId: string | string[]
   instructions: InstructionsArgs<T>
   profiler?: ProfilerOptions
-  onError?: (ctx: BatchCtx, error: any) => unknown | Promise<unknown>
+  onError?: (ctx: BatchContext, error: any) => unknown | Promise<unknown>
 }
 
 export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEventPipeArgs<T>) {
@@ -181,7 +183,7 @@ export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEv
   }
 
   return query.build().pipe({
-    profiler: opts.profiler || { id: 'instruction decoder' },
+    profiler: opts.profiler || { name: 'instruction decoder' },
 
     transform: async (data, ctx) => {
       const result = {} as EventResponse<T>
@@ -210,6 +212,7 @@ export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEv
               const res = {
                 instruction: decoded,
                 rawInstruction: instruction,
+                block: { number: block.header.number, hash: block.header.hash },
                 blockNumber: block.header.number,
                 transaction,
                 tokenBalances: block.tokenBalances.filter((b) => b.transactionIndex === instruction.transactionIndex),

@@ -3,14 +3,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import * as solana from '~/portal-client/query/solana.js'
 import { solanaQuery } from '~/solana/solana-query-builder.js'
 
-import { MockPortal, closeMockPortal, createMockPortal } from '../tests/index.js'
-import { solanaPortalSource } from './solana-portal-source.js'
+import { MockPortal, createMockPortal } from '../testing/index.js'
+import { solanaPortalStream } from './solana-portal-source.js'
 
 describe('Portal abstract stream', () => {
   let mockPortal: MockPortal
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
 
   it('should add default fields', async () => {
@@ -34,7 +34,8 @@ describe('Portal abstract stream', () => {
       reward: { lamports: true },
     } satisfies solana.FieldSelection
 
-    const stream = solanaPortalSource({
+    const stream = solanaPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: solanaQuery().addFields(fields).addRange({ from: 0, to: 2 }),
     })

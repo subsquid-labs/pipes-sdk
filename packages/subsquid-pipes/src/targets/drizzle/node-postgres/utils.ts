@@ -13,12 +13,12 @@ const PG_DRIVER_MAX_PARAMETERS = 32_767
  * @example
  * ```ts
  * const records = [{id: 1, name: 'a'}, {id: 2, name: 'b'}]
- * for (const chunk of chunk(records)) {
- *   await db.insert(table).values(chunk)
+ * for (const batch of batchForInsert(records)) {
+ *   await db.insert(table).values(batch)
  * }
  * ```
  */
-export function* chunk<T>(data: readonly T[], size?: number) {
+export function* batchForInsert<T>(data: readonly T[], size?: number) {
   // Calculate how many parameters each record will use in the query
   const parametersPerRecord = data[0] ? Object.keys(data[0]).length : 1
   // Calculate maximum chunk size based on Postgres parameter limit
@@ -32,3 +32,6 @@ export function* chunk<T>(data: readonly T[], size?: number) {
     yield data.slice(i, i + size)
   }
 }
+
+/** @deprecated Use {@link batchForInsert} instead. */
+export const chunk = batchForInsert

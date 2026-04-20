@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { MockPortal, closeMockPortal, createMockPortal } from '../tests/index.js'
-import { hyperliquidFillsPortalSource } from './hyperliquid-fills-portal-source.js'
+import { MockPortal, createMockPortal } from '../testing/index.js'
+import { hyperliquidFillsPortalStream } from './hyperliquid-fills-portal-source.js'
 import { HyperliquidFillsQueryBuilder } from './hyperliquid-fills-query-builder.js'
 
 describe('Portal abstract stream', () => {
   let mockPortal: MockPortal
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
 
   it('should add default fields', async () => {
@@ -22,7 +22,8 @@ describe('Portal abstract stream', () => {
       },
     ])
 
-    const stream = hyperliquidFillsPortalSource({
+    const stream = hyperliquidFillsPortalStream({
+      id: 'test',
       portal: mockPortal.url,
       outputs: new HyperliquidFillsQueryBuilder()
         .addFields({

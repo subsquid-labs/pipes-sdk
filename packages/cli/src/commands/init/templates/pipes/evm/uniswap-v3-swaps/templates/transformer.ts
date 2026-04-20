@@ -13,7 +13,7 @@ const uniswapV3Swaps = evmDecoder({
       '{{factoryAddress}}',
     ],
     event: factoryEvents.PoolCreated,
-    parameter: 'pool',
+    childAddressField: 'pool',
     database: await factorySqliteDatabase({
       path: './uniswap3-eth-pools.sqlite',
     }),

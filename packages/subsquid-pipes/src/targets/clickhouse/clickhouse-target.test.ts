@@ -1,9 +1,10 @@
 import { createClient } from '@clickhouse/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { evmPortalSource } from '~/evm/index.js'
-import { MockPortal, blockDecoder, closeMockPortal, createMockPortal } from '~/tests/index.js'
+import { evmPortalStream } from '~/evm/index.js'
+import { MockPortal, MockResponse, blockDecoder, createMockPortal } from '~/testing/index.js'
 
+import { ClickhouseStore } from './clickhouse-store.js'
 import { clickhouseTarget } from './clickouse-target.js'
 
 const client = createClient({
@@ -27,7 +28,7 @@ describe('Clickhouse state', () => {
   let mockPortal: MockPortal
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
     await client.close()
   })
 
@@ -53,7 +54,7 @@ describe('Clickhouse state', () => {
         },
       ])
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
@@ -116,14 +117,14 @@ describe('Clickhouse state', () => {
         },
       ])
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: {
           url: mockPortal.url,
           // we need to save each response separately
           // to create multiple rows in the status table,
-          // so, we set minBytes to 1 to avoid batching
-          minBytes: 1,
+          // so, we set maxBytes to 1 to avoid batching
+          maxBytes: 1,
         },
         outputs: blockDecoder({ from: 0, to: 3 }),
       }).pipeTo(
@@ -171,7 +172,7 @@ describe('Clickhouse state', () => {
         { statusCode: 200, data: [{ header: { number: 3, hash: '0x3', timestamp: 3000 } }] },
       ])
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 3 }),
@@ -200,6 +201,53 @@ describe('Clickhouse state', () => {
       `)
     })
 
+    it('should debounce cleanup with default maxRows', async () => {
+      // With the default maxRows (10_000) cleanup runs every 25 saves.
+      // For 26 saves we expect cleanup to run exactly twice: on save #1 and save #25.
+      //
+      // The Vitest pool runs tests without isolation (singleFork + isolate: false),
+      // so a prototype spy can catch calls from unrelated stores in other tests.
+      // Filter by `instance.client === client` to count only calls on the store
+      // that wraps our test client.
+      const removeSpy = vi.spyOn(ClickhouseStore.prototype, 'removeAllRowsByQuery')
+
+      const responses = Array.from(
+        { length: 26 },
+        (_, i): MockResponse => ({
+          statusCode: 200,
+          data: [{ header: { number: i + 1, hash: `0x${i + 1}`, timestamp: (i + 1) * 1000 } }],
+        }),
+      )
+      mockPortal = await createMockPortal(responses)
+
+      try {
+        await evmPortalStream({
+          id: 'test',
+          portal: {
+            url: mockPortal.url,
+            // force one batch per response so each triggers a saveCursor call
+            maxBytes: 1,
+          },
+          outputs: blockDecoder({ from: 0, to: 26 }),
+        }).pipeTo(
+          clickhouseTarget({
+            client,
+            settings: { table: 'sync' },
+            onData: () => {},
+          }),
+        )
+
+        const callsForThisClient = removeSpy.mock.instances.reduce<number>(
+          (count, instance) =>
+            count + ((instance as unknown as ClickhouseStore | undefined)?.client === client ? 1 : 0),
+          0,
+        )
+        expect(callsForThisClient).toBe(2)
+      } finally {
+        removeSpy.mockRestore()
+      }
+    })
+
     it('should not store chain continuity if finalized head doesnt exist', async () => {
       mockPortal = await createMockPortal([
         {
@@ -208,7 +256,7 @@ describe('Clickhouse state', () => {
         },
       ])
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
@@ -254,7 +302,7 @@ describe('Clickhouse state', () => {
         },
       ])
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
@@ -265,7 +313,7 @@ describe('Clickhouse state', () => {
         }),
       )
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 1, to: 2 }),
@@ -275,6 +323,62 @@ describe('Clickhouse state', () => {
           onData: () => {},
         }),
       )
+    })
+
+    it('should write to a non-default database when settings.database is set', async () => {
+      // The ClickHouse client is connected to the default database, but we tell the
+      // target to use a different one via settings.database. Previously the INSERT
+      // and cleanup paths used the unqualified table name and would have written to
+      // the client's default DB instead of the requested one.
+      const customDb = 'pipes_custom_db'
+      await client.query({ query: `DROP DATABASE IF EXISTS ${customDb} SYNC` })
+      await client.query({ query: `CREATE DATABASE ${customDb}` })
+
+      try {
+        mockPortal = await createMockPortal([
+          {
+            statusCode: 200,
+            data: [
+              { header: { number: 1, hash: '0x1', timestamp: 1000 } },
+              { header: { number: 2, hash: '0x2', timestamp: 2000 } },
+            ],
+          },
+        ])
+
+        await evmPortalStream({
+          id: 'test',
+          portal: mockPortal.url,
+          outputs: blockDecoder({ from: 0, to: 2 }),
+        }).pipeTo(
+          clickhouseTarget({
+            client,
+            settings: {
+              database: customDb,
+              table: 'sync',
+            },
+            onData: () => {},
+          }),
+        )
+
+        // Rows must land in the custom DB...
+        const customRes = await client.query({
+          query: `SELECT "current" FROM "${customDb}"."sync" FINAL ORDER BY "timestamp" ASC`,
+          format: 'JSONEachRow',
+        })
+        const customRows = await customRes.json<{ current: string }>()
+        expect(customRows.length).toBeGreaterThan(0)
+        expect(JSON.parse(customRows.at(-1)!.current)).toMatchObject({ number: 2, hash: '0x2' })
+
+        // ...and the default DB must not have received a stray sync table.
+        await expect(
+          client.query({
+            query: `SELECT count() FROM "default"."sync"`,
+            format: 'JSONEachRow',
+          }),
+        ).rejects.toThrow(/UNKNOWN_TABLE|doesn't exist|Unknown table/i)
+      } finally {
+        await client.query({ query: `DROP DATABASE IF EXISTS ${customDb} SYNC` })
+      }
     })
   })
 
@@ -379,7 +483,7 @@ describe('Clickhouse state', () => {
       ])
 
       let rollbackCalls = 0
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
@@ -571,7 +675,7 @@ describe('Clickhouse state', () => {
 
       let rollbackCalls = 0
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
@@ -706,7 +810,7 @@ describe('Clickhouse state', () => {
 
       while (!finished) {
         try {
-          await evmPortalSource({
+          await evmPortalStream({
             id: 'test',
             portal: mockPortal.url,
             outputs: blockDecoder({ from: 0, to: 7 }),
@@ -913,7 +1017,7 @@ describe('Clickhouse state', () => {
 
       let rollbackCalls = 0
 
-      await evmPortalSource({
+      await evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),

@@ -1,4 +1,4 @@
-import { type Pipe, PipeStatus } from '~/api/metrics'
+import { type Pipe, PipeStatus } from '~/hooks/use-metrics'
 
 export function humanBytes(bytes: number) {
   const sizes = ['bytes', 'KB', 'MB', 'GB', 'TB']

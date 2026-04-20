@@ -31,8 +31,17 @@ export class DefaultPipeIdError extends PipeError {
       'Pipe requires a non-default ID when used with targets.',
       'Set a unique id in your pipe source options:',
       '',
-      '  evmPortalSource({ portal: "...", id: "my-pipe", outputs })',
+      '  evmPortalStream({ portal: "...", id: "my-pipe", outputs })',
     ])
+  }
+}
+
+/**
+ * E0002: Thrown when a block range is misconfigured (inverted range, invalid date usage, unresolvable timestamp, etc.).
+ */
+export class BlockRangeConfigurationError extends PipeError {
+  constructor(message: string | string[]) {
+    super('E0002', SdkError.PipeConfiguration, message)
   }
 }
 

@@ -1,9 +1,14 @@
-// TODO we need to implement labels
-// When we expose that span to UI, we need to filter them out by label
-
 import { arrayify } from '../internal/array.js'
 
-export type ProfilerOptions = { id: string; hidden?: boolean }
+export type ProfilerOptions = {
+  name: string
+  hidden?: boolean
+  /**
+   * Labels attached to the span. UI/exporters can use these to filter
+   * (e.g. hide `core` SDK spans, group `db` operations).
+   */
+  labels?: string | string[]
+}
 
 /**
  * Lifecycle hooks for a single profiler span.
@@ -18,9 +23,12 @@ export interface SpanHooks {
 }
 
 export interface Profiler {
-  id: string
+  name: string
+  /** High-resolution timestamp (from `performance.now()`) at which the span started. */
+  started: number
   elapsed: number
   hidden: boolean
+  labels: string[]
   children: Profiler[]
   data?: any
 
@@ -38,7 +46,7 @@ export interface Profiler {
 }
 
 export class Span implements Profiler {
-  id: string
+  name: string
   children: Span[] = []
   elapsed = 0
   started = 0
@@ -60,15 +68,15 @@ export class Span implements Profiler {
     if (enabled === false) return new DummyProfiler()
 
     const hooks = enabled === true ? null : enabled.onStart(name)
-    return new Span({ id: name, hooks })
+    return new Span({ name, hooks })
   }
 
   private constructor(opts: {
-    id: string
+    name: string
     hooks?: SpanHooks | null
     hidden?: boolean
   }) {
-    this.id = opts.id
+    this.name = opts.name
     this.started = performance.now()
     this.hidden = opts.hidden ?? false
     this.#hooks = opts.hooks ?? null
@@ -76,26 +84,28 @@ export class Span implements Profiler {
 
   start(options?: string | ProfilerOptions) {
     if (typeof options === 'string') {
-      options = { id: options }
+      options = { name: options }
     } else if (!options) {
-      options = { id: 'anonymous' }
+      options = { name: 'anonymous' }
     }
 
     if (options.hidden) {
       const child = new Span({
-        id: options.id,
+        name: options.name,
         hooks: this.#hooks,
         hidden: true,
       })
+      if (options.labels) child.addLabels(options.labels)
       this.children.push(child)
 
       return child
     }
 
     const child = new Span({
-      id: options.id,
-      hooks: this.#hooks?.onStart(options.id) ?? null,
+      name: options.name,
+      hooks: this.#hooks?.onStart(options.name) ?? null,
     })
+    if (options.labels) child.addLabels(options.labels)
     this.children.push(child)
 
     return child
@@ -107,19 +117,21 @@ export class Span implements Profiler {
   }
 
   async measure<T = any>(name: string | ProfilerOptions, fn: (span: Profiler) => Promise<T>): Promise<T> {
-    const span = this.start(typeof name === 'string' ? { id: name } : name)
-    const res = await fn(span)
-    span.end()
-
-    return res
+    const span = this.start(typeof name === 'string' ? { name } : name)
+    try {
+      return await fn(span)
+    } finally {
+      span.end()
+    }
   }
 
   measureSync<T = any>(name: string | ProfilerOptions, fn: (span: Profiler) => T): T {
-    const span = this.start(typeof name === 'string' ? { id: name } : name)
-    const res = fn(span)
-    span.end()
-
-    return res
+    const span = this.start(typeof name === 'string' ? { name } : name)
+    try {
+      return fn(span)
+    } finally {
+      span.end()
+    }
   }
 
   /**
@@ -157,14 +169,16 @@ export class Span implements Profiler {
   }
 
   toString() {
-    return this.flatten((s, level) => `${''.padEnd(level, ' ')}[${s.id}] ${s.elapsed.toFixed(2)}ms`).join('\n')
+    return this.flatten((s, level) => `${''.padEnd(level, ' ')}[${s.name}] ${s.elapsed.toFixed(2)}ms`).join('\n')
   }
 }
 
 export class DummyProfiler implements Profiler {
-  id: string = ''
+  name: string = ''
+  started: number = 0
   elapsed: number = 0
   hidden: boolean = false
+  labels: string[] = []
   children: DummyProfiler[] = []
 
   start(options?: string | ProfilerOptions) {

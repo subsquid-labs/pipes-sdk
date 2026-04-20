@@ -16,9 +16,4 @@ await Promise.all([
   })(),
 ])
 
-await Promise.all([
-  $`tsup src/version.ts --no-config --dts --format esm --outDir dist`.stdio('pipe', 'pipe', 'pipe'),
-  $`tsup src/version.ts --no-config --dts --format cjs --outDir dist`.stdio('pipe', 'pipe', 'pipe'),
-])
-
 await $`scripts/fix-imports.ts`

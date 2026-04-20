@@ -15,7 +15,7 @@ import {
   Summary,
   SummaryConfiguration,
 } from '~/core/metrics-server.js'
-import { BatchCtx } from '~/core/portal-source.js'
+import { BatchContext } from '~/core/portal-source.js'
 import { Profiler } from '~/core/profiling.js'
 import { npmVersion } from '~/version.js'
 
@@ -34,6 +34,7 @@ export type Stats = {
   }
   pipes: {
     id: string
+    dataset: BatchContext['stream']['dataset'] | null
     portal: {
       url: string
       query: any
@@ -74,13 +75,17 @@ function parseDate(date: any): Date | null {
 type ProfilerResult = {
   name: string
   totalTime: number
+  /** Offset (ms) of this span's start relative to the root of the profiler tree. */
+  startOffset: number
   children: ProfilerResult[]
 }
 
 function transformProfiler(profiler: Profiler): ProfilerResult {
+  const rootStarted = profiler.started
   return profiler.transform((span, children) => ({
-    name: span.id,
+    name: span.name,
     totalTime: span.elapsed,
+    startOffset: span.started - rootStarted,
     children,
   }))
 }
@@ -88,6 +93,10 @@ function transformProfiler(profiler: Profiler): ProfilerResult {
 type TransformationResult = {
   name: string
   data: any
+  elapsed?: number
+  startOffset?: number
+  dataSize?: number
+  labels?: string[]
   children: TransformationResult[]
 }
 
@@ -120,28 +129,61 @@ function packExemplar(value: any): any {
   return value
 }
 
-function transformExemplar(profiler: Profiler): TransformationResult {
-  return profiler.transform((span, children) => ({
-    name: span.id,
-    data: JSON.stringify(packExemplar(span.data), (k: string, v: any) => {
-      if (typeof v === 'bigint') {
-        return v.toString() + 'n'
-      }
-      if (v instanceof Date) {
-        return v.toISOString()
-      }
+/**
+ * The `metrics processing` span is started after the root batch span has
+ * already ended, so its real wall-clock offset exceeds `root.elapsed`. We
+ * reposition it to start right at the root's previous end and extend the
+ * root's duration so the tree stays internally consistent (child offsets
+ * always fall within [0, parent.totalTime]).
+ */
+function patchMetricsProcessing(root: ProfilerResult, metricsElapsed: number): void {
+  const lastChild = root.children.at(-1)
+  if (!lastChild || lastChild.name !== 'metrics processing') return
 
-      return v
-    }),
-    children,
-  }))
+  lastChild.totalTime = metricsElapsed
+  lastChild.startOffset = root.totalTime
+  root.totalTime += metricsElapsed
+}
+
+function patchMetricsProcessingExemplar(root: TransformationResult, metricsElapsed: number): void {
+  const lastChild = root.children.at(-1)
+  if (!lastChild || lastChild.name !== 'metrics processing') return
+
+  const rootElapsed = root.elapsed ?? 0
+  lastChild.elapsed = metricsElapsed
+  lastChild.startOffset = rootElapsed
+  root.elapsed = rootElapsed + metricsElapsed
+}
+
+function transformExemplar(profiler: Profiler): TransformationResult {
+  const rootStarted = profiler.started
+  return profiler.transform((span, children) => {
+    const data =
+      span.data != null
+        ? JSON.stringify(packExemplar(span.data), (k: string, v: any) => {
+            if (typeof v === 'bigint') return v.toString() + 'n'
+            if (v instanceof Date) return v.toISOString()
+            return v
+          })
+        : null
+
+    return {
+      name: span.name,
+      data,
+      elapsed: span.elapsed || undefined,
+      startOffset: span.started - rootStarted,
+      dataSize: data ? data.length : undefined,
+      labels: span.labels.length > 0 ? span.labels : undefined,
+      children,
+    }
+  })
 }
 
 const MAX_HISTORY = 50
 const DEFAULT_PORT = 9090
 
 type PipeData = {
-  lastBatch?: BatchCtx
+  lastBatch?: BatchContext
   profilers: { profiler: ProfilerResult; collectedAt: Date }[]
   transformationExemplar?: TransformationResult
 }
@@ -254,20 +296,21 @@ class ExpressMetricServer implements MetricsServer {
 
           return {
             id,
+            dataset: lastBatch?.stream.dataset || null,
             portal: {
-              url: lastBatch?.query.url || '',
-              query: lastBatch?.query.raw || {},
+              url: lastBatch?.stream.query.url || '',
+              query: lastBatch?.stream.query.raw || {},
             },
             progress: {
-              from: lastBatch?.state.initial || 0,
-              current: lastBatch?.state.current.number || 0,
-              to: lastBatch?.state.last || 0,
-              percent: lastBatch?.state.progress?.state.percent || 0,
-              etaSeconds: lastBatch?.state.progress?.state.etaSeconds || 0,
+              from: lastBatch?.stream.state.initial || 0,
+              current: lastBatch?.stream.state.current.number || 0,
+              to: lastBatch?.stream.state.last || 0,
+              percent: lastBatch?.stream.progress?.state.percent || 0,
+              etaSeconds: lastBatch?.stream.progress?.state.etaSeconds || 0,
             },
             speed: {
-              blocksPerSecond: lastBatch?.state.progress?.interval.processedBlocks.perSecond || 0,
-              bytesPerSecond: lastBatch?.state.progress?.interval.bytesDownloaded.perSecond || 0,
+              blocksPerSecond: lastBatch?.stream.progress?.interval.processedBlocks.perSecond || 0,
+              bytesPerSecond: lastBatch?.stream.progress?.interval.bytesDownloaded.perSecond || 0,
             },
           }
         }),
@@ -292,10 +335,22 @@ class ExpressMetricServer implements MetricsServer {
 
     this.#app.get('/exemplars/transformation', async (req, res) => {
       const pipeData = this.getPipe(req.query['id'] as string | undefined)
+      const lastBatch = pipeData?.lastBatch
 
       return res.json({
         payload: {
           transformation: pipeData?.transformationExemplar,
+          batch: lastBatch
+            ? {
+                from:
+                  lastBatch.batch.blocksCount > 0
+                    ? lastBatch.stream.state.current.number - lastBatch.batch.blocksCount + 1
+                    : lastBatch.stream.state.current.number,
+                to: lastBatch.stream.state.current.number,
+                blocksCount: lastBatch.batch.blocksCount,
+                bytesSize: lastBatch.batch.bytesSize,
+              }
+            : undefined,
         },
       })
     })
@@ -347,13 +402,12 @@ class ExpressMetricServer implements MetricsServer {
     return data
   }
 
-  batchProcessed(ctx: BatchCtx) {
-    const span = ctx.profiler.start('metrics processing')
+  batchProcessed(ctx: BatchContext) {
+    const span = ctx.profiler.start('metrics processing').addLabels('core')
     const data = this.registerPipe(ctx.id)
 
     data.lastBatch = ctx
-    data.transformationExemplar = transformExemplar(ctx.profiler)
-
+    const exemplar = transformExemplar(ctx.profiler)
     const profiler = transformProfiler(ctx.profiler)
 
     data.profilers.push({
@@ -363,8 +417,19 @@ class ExpressMetricServer implements MetricsServer {
     data.profilers = data.profilers.slice(-MAX_HISTORY)
     span.end()
 
-    // Update total time for the root metrics processing
-    profiler.children[profiler.children.length - 1].totalTime = span.elapsed
+    // `metrics processing` is started AFTER the root batch span ends
+    // (see `PortalSource.batchEnd`). That means:
+    //  - its `elapsed` wasn't captured at transform time (patched below), and
+    //  - its real `startOffset` is beyond `root.elapsed`, which would push it
+    //    off the right edge of the flame chart canvas.
+    //
+    // Reposition the child at the end of the root and extend the root's
+    // duration so both visualizations (profiler tree and exemplar) stay
+    // internally consistent.
+    patchMetricsProcessing(profiler, span.elapsed)
+    patchMetricsProcessingExemplar(exemplar, span.elapsed)
+
+    data.transformationExemplar = exemplar
   }
 
   get metrics() {

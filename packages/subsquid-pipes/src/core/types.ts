@@ -18,7 +18,7 @@ type ClassOutput<T> = T extends QueryAwareTransformer<any, infer O> ? O : never
 type StreamsOutput<T> = { [K in keyof T]: ClassOutput<T[K]> }
 type FunctionOutput<T> = T extends (...args: any) => Transformer<any, infer O> ? O : never
 
-export type ResultOf<T> =
+export type OutputOf<T> =
   T extends Record<string, QueryAwareTransformer>
     ? StreamsOutput<T>
     : T extends (...args: any) => any

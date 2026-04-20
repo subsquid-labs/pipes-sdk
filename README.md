@@ -34,14 +34,14 @@ The snippet below streams ERC-20 transfers from Ethereum Mainnet via the Subsqui
 Create `src/erc20-transfers.ts`:
 
 ```ts
-import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
+import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 
 async function main() {
-  const stream = evmPortalSource({
+  const stream = evmPortalStream({
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
   }).pipe(
     evmDecoder({
-      profiler: { id: 'erc20-transfers' },
+      profiler: { name: 'erc20-transfers' },
       range: { from: '12,000,000' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,
