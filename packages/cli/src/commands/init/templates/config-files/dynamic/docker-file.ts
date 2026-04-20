@@ -53,7 +53,7 @@ COPY src/schemas.ts ./src/schemas.ts
 COPY migrations ./dist/migrations
 {{/isPostgres}}
 # Default command
-CMD ["sh", "-lc", "{{#isPostgres}}{{packageManager}} run db:generate && {{packageManager}} db:migrate && {{/isPostgres}}node dist/index.js"]
+CMD ["sh", "-lc", "{{#isPostgres}}{{packageManager}} run db:generate && {{packageManager}} run db:migrate && {{/isPostgres}}node dist/index.js"]
 `
 
 interface DockerfileTemplateValues {
