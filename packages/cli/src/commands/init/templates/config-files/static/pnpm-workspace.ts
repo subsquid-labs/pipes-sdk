@@ -1,6 +1,6 @@
 export const pnpmWorkspaceTemplate = `onlyBuiltDependencies:
   - better-sqlite3
-  - bufferutil 
+  - bufferutil
   - es5-ext
   - keccak
   - utf-8-validate
