@@ -3,6 +3,7 @@ import { toCamelCase } from 'drizzle-orm/casing'
 import { ContractMetadata, RawAbiEvent } from '~/services/sqd-abi.js'
 import { BlockRange } from '~/utils/block-range-prompt.js'
 import { areContractsCompatible } from '~/utils/event-signature.js'
+import { oldestRange as pickOldestRange } from '~/utils/range.js'
 
 export interface ContractWithRange extends ContractMetadata {
   range?: BlockRange
@@ -24,14 +25,7 @@ function oldestRange(contracts: ContractWithRange[]): BlockRange {
   const ranges = contracts.map((c) => c.range).filter(Boolean) as BlockRange[]
   if (ranges.length === 0) return { from: 'latest' }
 
-  // Pick the range with the smallest numeric `from`, or the first if non-numeric
-  return ranges.reduce((oldest, r) => {
-    const a = Number(oldest.from)
-    const b = Number(r.from)
-    if (isNaN(b)) return oldest
-    if (isNaN(a)) return r
-    return b < a ? r : oldest
-  })
+  return ranges.reduce((oldest, r) => pickOldestRange(oldest, r))
 }
 
 export function areRangesCompatible(contracts: ContractWithRange[]): boolean {

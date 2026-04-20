@@ -1,5 +1,6 @@
 import type { Config, NetworkType } from '~/types/init.js'
 import { getEventSignature } from '~/utils/event-signature.js'
+import { oldestRange } from '~/utils/range.js'
 import { resolveDuplicateContractNames as realResolver } from '~/utils/resolve-duplicate-contracts.js'
 
 type Contract = { contractAddress: string; contractName: string }
@@ -68,12 +69,4 @@ function mergeDuplicateAddresses(contracts: ContractWithOptionalShape[]): void {
   for (let i = toRemove.length - 1; i >= 0; i--) {
     contracts.splice(toRemove[i]!, 1)
   }
-}
-
-function oldestRange(a: RangeShape, b: RangeShape): RangeShape {
-  const na = Number(a.from)
-  const nb = Number(b.from)
-  if (isNaN(nb)) return a
-  if (isNaN(na)) return b
-  return nb < na ? b : a
 }

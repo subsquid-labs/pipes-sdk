@@ -4,6 +4,7 @@ import chalk from 'chalk'
 import { z } from 'zod'
 
 import { type Config, type NetworkType, sinkTypes } from '~/types/init.js'
+import { deriveProjectName } from '~/utils/project-name.js'
 import { ProjectWriter } from '~/utils/project-writer.js'
 import { createSpinner } from '~/utils/spinner.js'
 
@@ -16,9 +17,7 @@ export class InitHandler {
   private readonly projectWriter: ProjectWriter
 
   constructor(private config: Config<NetworkType>) {
-    const pathParts = config.projectFolder.split('/')
-
-    this.projectName = pathParts[pathParts.length - 1] ?? config.projectFolder
+    this.projectName = deriveProjectName(config.projectFolder)
     this.projectWriter = new ProjectWriter(this.config.projectFolder)
   }
 
