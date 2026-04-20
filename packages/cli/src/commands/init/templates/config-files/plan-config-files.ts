@@ -55,6 +55,7 @@ export function planConfigFiles(config: Config<NetworkType>, projectName: string
       contents: renderDockerCompose({
         projectName,
         sink: config.sink,
+        packageManager: config.packageManager,
       }),
     },
     {

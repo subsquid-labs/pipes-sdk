@@ -1,15 +1,10 @@
+const DEFAULT_CONFIG_API_URL = 'https://pipes-starter-ui-3yl1.vercel.app/api/config'
+
 export class ConfigService {
   private readonly baseUrl: string
 
   constructor() {
-    const baseUrl = process.env['PIPES_CONFIG_API_URL'] ?? 'https://pipes-starter-ui-3yl1.vercel.app/api/config'
-
-    if (!baseUrl) {
-      throw new Error(
-        'Missing config API base URL. Pass { baseUrl } or set PIPES_CONFIG_API_URL (or PIPES_CONFIG_BASE_URL).',
-      )
-    }
-
+    const baseUrl = process.env['PIPES_CONFIG_API_URL'] ?? DEFAULT_CONFIG_API_URL
     this.baseUrl = baseUrl.replace(/\/+$/, '')
   }
 

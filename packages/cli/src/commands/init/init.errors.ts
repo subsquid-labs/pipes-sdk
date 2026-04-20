@@ -6,7 +6,7 @@ export class TemplateNotFoundError extends Error {
   constructor(templateId: unknown, network: NetworkType) {
     super(
       `Template '${templateId}' not found for ${network.toUpperCase()} networks
-The available values templates for this blockchain are:
+The available templates for this blockchain are:
 ${Object.keys(templateRegistry[network])
   .map((id) => `  - ${id}`)
   .join('\n')}

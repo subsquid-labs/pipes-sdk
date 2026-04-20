@@ -1,6 +1,6 @@
 import Mustache from 'mustache'
 
-import { Sink } from '~/types/init.js'
+import { PackageManager, Sink } from '~/types/init.js'
 
 interface DbConfig {
   user: string
@@ -37,7 +37,7 @@ const indexerService = `{{projectName}}:
       CLICKHOUSE_USER: {{user}}
       CLICKHOUSE_PASSWORD: {{password}}
     {{/isPostgres}}
-    command: ["sh", "-lc", "{{#isPostgres}}pnpm db:generate && pnpm db:migrate && {{/isPostgres}}node dist/index.js"]
+    command: ["sh", "-lc", "{{#isPostgres}}{{packageManager}} run db:generate && {{packageManager}} run db:migrate && {{/isPostgres}}node dist/index.js"]
     depends_on:
       {{#isPostgres}}postgres{{/isPostgres}}{{^isPostgres}}clickhouse{{/isPostgres}}:
         condition: service_healthy
@@ -81,6 +81,7 @@ const dockerComposeTemplate = `services:
 interface DockerComposeTemplateValues {
   projectName: string
   sink: Sink
+  packageManager: PackageManager
 }
 
 export function renderDockerCompose(values: DockerComposeTemplateValues): string {

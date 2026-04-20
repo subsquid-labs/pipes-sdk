@@ -142,8 +142,8 @@ describe('postgres sink template builder', () => {
     }
     expect(buildSink(config).sinkCode).toMatchInlineSnapshot(`
       "
-      import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
-      import { drizzle } from 'drizzle-orm/node-postgres',
+      import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
+      import { drizzle } from 'drizzle-orm/node-postgres'
       import {
         erc20TransfersTable,
       } from './schemas.js'
@@ -173,8 +173,8 @@ describe('postgres sink template builder', () => {
     }
     expect(buildSink(config).sinkCode).toMatchInlineSnapshot(`
       "
-      import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
-      import { drizzle } from 'drizzle-orm/node-postgres',
+      import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
+      import { drizzle } from 'drizzle-orm/node-postgres'
       import {
         erc20TransfersTable,
         uniswapV3SwapsTable,
@@ -210,8 +210,8 @@ describe('postgres sink template builder', () => {
 
     expect(buildSink(config).sinkCode).toMatchInlineSnapshot(`
       "
-      import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
-      import { drizzle } from 'drizzle-orm/node-postgres',
+      import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
+      import { drizzle } from 'drizzle-orm/node-postgres'
       import {
         weth9ApprovalTable,
         weth9TransferTable,
@@ -247,8 +247,8 @@ describe('postgres sink template builder', () => {
 
     expect(buildSink(config).sinkCode).toMatchInlineSnapshot(`
       "
-      import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
-      import { drizzle } from 'drizzle-orm/node-postgres',
+      import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
+      import { drizzle } from 'drizzle-orm/node-postgres'
       import {
         erc20TransfersTable,
         weth9ApprovalTable,

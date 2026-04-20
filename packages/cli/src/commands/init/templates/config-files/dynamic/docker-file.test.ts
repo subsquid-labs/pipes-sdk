@@ -50,7 +50,7 @@ describe('Dockerfile generation', () => {
       COPY src/schemas.ts ./src/schemas.ts
 
       # Default command
-      CMD ["sh", "-lc", "pnpm run db:generate && pnpm db:migrate && node dist/index.js"]
+      CMD ["sh", "-lc", "pnpm run db:generate && pnpm run db:migrate && node dist/index.js"]
       "
     `)
   })
@@ -101,7 +101,7 @@ describe('Dockerfile generation', () => {
       COPY src/schemas.ts ./src/schemas.ts
 
       # Default command
-      CMD ["sh", "-lc", "npm run db:generate && npm db:migrate && node dist/index.js"]
+      CMD ["sh", "-lc", "npm run db:generate && npm run db:migrate && node dist/index.js"]
       "
     `)
   })
@@ -146,7 +146,7 @@ describe('Dockerfile generation', () => {
       COPY src/schemas.ts ./src/schemas.ts
 
       # Default command
-      CMD ["sh", "-lc", "bun run db:generate && bun db:migrate && node dist/index.js"]
+      CMD ["sh", "-lc", "bun run db:generate && bun run db:migrate && node dist/index.js"]
       "
     `)
   })
@@ -197,7 +197,7 @@ describe('Dockerfile generation', () => {
       COPY src/schemas.ts ./src/schemas.ts
 
       # Default command
-      CMD ["sh", "-lc", "yarn run db:generate && yarn db:migrate && node dist/index.js"]
+      CMD ["sh", "-lc", "yarn run db:generate && yarn run db:migrate && node dist/index.js"]
       "
     `)
   })

@@ -10,8 +10,8 @@ import type { SinkArtifacts } from './sink-artifacts.js'
 import { extractExportConstNames, tableName as pgTableName } from './shared.js'
 
 const sinkTemplate = `
-import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres',
-import { drizzle } from 'drizzle-orm/node-postgres',
+import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
+import { drizzle } from 'drizzle-orm/node-postgres'
 import {
   {{#templates}}
   {{#schemas}}
