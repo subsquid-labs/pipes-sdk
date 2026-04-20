@@ -286,7 +286,7 @@ describe('mergeImports', () => {
     })
   })
 
-  it('should handle namespace imports', () => {
+  it('should keep namespace imports separate from named imports for the same module', () => {
     const imports = [
       {
         namespaceImport: 'Pipes',
@@ -303,15 +303,21 @@ describe('mergeImports', () => {
 
     const result = mergeImports(imports)
 
-    expect(result[0]).toEqual({
+    expect(result).toHaveLength(2)
+    expect(result).toContainEqual({
       namespaceImport: 'Pipes',
+      namedImports: [],
+      from: '@subsquid/pipes',
+      typeOnly: false,
+    })
+    expect(result).toContainEqual({
       namedImports: ['PortalRange'],
       from: '@subsquid/pipes',
       typeOnly: false,
     })
   })
 
-  it('should handle type-only imports', () => {
+  it('should keep value and type-only imports separate for the same module', () => {
     const imports = [
       {
         namedImports: ['PortalRange'],
@@ -327,10 +333,16 @@ describe('mergeImports', () => {
 
     const result = mergeImports(imports)
 
-    expect(result[0]).toEqual({
-      namedImports: ['PortalRange', 'Transformer'],
+    expect(result).toHaveLength(2)
+    expect(result).toContainEqual({
+      namedImports: ['PortalRange'],
       from: '@subsquid/pipes',
       typeOnly: true,
+    })
+    expect(result).toContainEqual({
+      namedImports: ['Transformer'],
+      from: '@subsquid/pipes',
+      typeOnly: false,
     })
   })
 
@@ -433,6 +445,42 @@ describe('mergeImports', () => {
       'evmPortalSource',
     ])
     expect(result.find((imp) => imp.from === 'lodash')!.namedImports).toEqual(['lodash'])
+  })
+
+  it('should round-trip mixed namespace + named + type-only imports through generation and parsing', () => {
+    const source = [
+      'import * as Pipes from "@subsquid/pipes";',
+      'import { PortalRange } from "@subsquid/pipes";',
+      'import type { Transformer } from "@subsquid/pipes";',
+    ].join('\n')
+
+    const parsed = splitImportsAndCode(source)
+    const merged = mergeImports(parsed.imports)
+    const regenerated = merged.map(generateImportStatement).join('\n')
+    const reparsed = splitImportsAndCode(regenerated)
+
+    expect(reparsed.imports).toHaveLength(3)
+    expect(reparsed.imports).toContainEqual({
+      namespaceImport: 'Pipes',
+      namedImports: [],
+      from: '@subsquid/pipes',
+      typeOnly: false,
+    })
+    expect(reparsed.imports).toContainEqual({
+      namedImports: ['PortalRange'],
+      from: '@subsquid/pipes',
+      typeOnly: false,
+    })
+    expect(reparsed.imports).toContainEqual({
+      namedImports: ['Transformer'],
+      from: '@subsquid/pipes',
+      typeOnly: true,
+    })
+
+    // None of the statements should collapse into the invalid `import { x }, * as ns` form.
+    expect(regenerated).not.toMatch(/import[^\n]*\},\s*\*\s+as/)
+    // No value import should be silently converted to `import type`.
+    expect(regenerated).toMatch(/^import \{ PortalRange \} from "@subsquid\/pipes";$/m)
   })
 })
 

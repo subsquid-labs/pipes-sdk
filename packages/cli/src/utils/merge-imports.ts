@@ -128,7 +128,9 @@ export function mergeImports(imports: ParsedImport[]): ParsedImport[] {
       continue
     }
 
-    const key = imp.from
+    // Keep namespace, type-only, and value imports as distinct entries so the
+    // emitted statements stay syntactically valid and don't erase runtime identifiers.
+    const key = `${imp.from}|${imp.typeOnly ? 'type' : 'value'}|${imp.namespaceImport ? 'ns' : 'std'}`
     const existing = merged.get(key)
 
     if (!existing) {
@@ -146,17 +148,11 @@ export function mergeImports(imports: ParsedImport[]): ParsedImport[] {
       imp.namedImports.forEach((n) => namedSet.add(n))
       existing.namedImports = Array.from(namedSet).sort()
 
-      // Handle default/namespace conflicts
       if (imp.defaultImport && !existing.defaultImport) {
         existing.defaultImport = imp.defaultImport
       }
       if (imp.namespaceImport && !existing.namespaceImport) {
         existing.namespaceImport = imp.namespaceImport
-      }
-
-      // Type-only takes precedence if mixed
-      if (imp.typeOnly) {
-        existing.typeOnly = true
       }
     }
   }

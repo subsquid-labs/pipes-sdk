@@ -8,16 +8,21 @@ import { getPortalNetworkSlugs } from './networks.js'
 
 function getTemplateSchemas<N extends NetworkType>(networkType: N) {
   const networkTemplates = getTemplates(networkType)
-  const options = []
-  for (const template of networkTemplates) {
-    const schema = z.object({
-      templateId: z.string(),
-      ...(template.paramsSchema ? { params: template.paramsSchema } : {}),
-    })
-    options.push(schema)
+  const options = networkTemplates.map((template) =>
+    z
+      .object({
+        templateId: z.literal(template.id),
+        ...(template.paramsSchema ? { params: template.paramsSchema } : {}),
+      })
+      .strict(),
+  )
+
+  if (options.length < 2) {
+    throw new Error(`Expected at least two templates for network ${networkType}, got ${options.length}`)
   }
 
-  return z.array(z.union(options))
+  const [first, second, ...rest] = options
+  return z.array(z.discriminatedUnion('templateId', [first!, second!, ...rest]))
 }
 
 const baseSchemaRaw = z.object({

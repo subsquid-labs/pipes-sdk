@@ -113,96 +113,28 @@ describe('SQD Typegen Service', () => {
     ])
   })
 
-  it('should fetch implementation ABI for a Proxy contract', async () => {
-    const contracts = ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2']
+  it('should resolve implementation ABI for an EIP-1967 proxy contract', async () => {
+    // Aave V3 Pool proxy on ethereum-mainnet. Proxy resolution should recurse
+    // into the PoolInstance implementation and return its DeFi-specific events,
+    // not the proxy's bare ABI (which only exposes `Upgraded`).
+    const aaveV3Proxy = '0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2'
     const s = new SqdAbiService()
-    const aavePoolData = await s.getContractData('evm', 'ethereum-mainnet', contracts)
+    const [aaveV3ProxyData] = await s.getContractData('evm', 'ethereum-mainnet', [aaveV3Proxy])
 
-    expect(aavePoolData).toEqual([
-      {
-        contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-        contractEvents: [
-          {
-            anonymous: false,
-            inputs: [
-              {
-                indexed: true,
-                name: 'src',
-                type: 'address',
-              },
-              {
-                indexed: true,
-                name: 'guy',
-                type: 'address',
-              },
-              {
-                indexed: false,
-                name: 'wad',
-                type: 'uint256',
-              },
-            ],
-            name: 'Approval',
-            type: 'event',
-          },
-          {
-            anonymous: false,
-            inputs: [
-              {
-                indexed: true,
-                name: 'src',
-                type: 'address',
-              },
-              {
-                indexed: true,
-                name: 'dst',
-                type: 'address',
-              },
-              {
-                indexed: false,
-                name: 'wad',
-                type: 'uint256',
-              },
-            ],
-            name: 'Transfer',
-            type: 'event',
-          },
-          {
-            anonymous: false,
-            inputs: [
-              {
-                indexed: true,
-                name: 'dst',
-                type: 'address',
-              },
-              {
-                indexed: false,
-                name: 'wad',
-                type: 'uint256',
-              },
-            ],
-            name: 'Deposit',
-            type: 'event',
-          },
-          {
-            anonymous: false,
-            inputs: [
-              {
-                indexed: true,
-                name: 'src',
-                type: 'address',
-              },
-              {
-                indexed: false,
-                name: 'wad',
-                type: 'uint256',
-              },
-            ],
-            name: 'Withdrawal',
-            type: 'event',
-          },
-        ],
-        contractName: 'WETH9',
-      },
-    ])
-  })
+    expect(aaveV3ProxyData).toBeDefined()
+    // The service recurses into the implementation (`sqd-abi.ts:140`), so the
+    // returned `contractAddress` is the implementation — not the proxy address
+    // we passed in. Asserting they differ proves the recursion ran.
+    expect(aaveV3ProxyData!.contractAddress.toLowerCase()).not.toBe(aaveV3Proxy.toLowerCase())
+    expect(aaveV3ProxyData!.contractAddress).toMatch(/^0x[0-9a-fA-F]{40}$/)
+    expect(aaveV3ProxyData!.contractName).not.toMatch(/proxy/i)
+
+    const eventNames = aaveV3ProxyData!.contractEvents.map((e) => e.name)
+    // These are PoolInstance events — they do not exist on the proxy ABI
+    // (which only has `Upgraded`), so their presence proves the proxy-resolution
+    // path in SqdAbiService.fetchEvmContractData ran.
+    for (const required of ['Supply', 'Borrow', 'Repay', 'LiquidationCall']) {
+      expect(eventNames).toContain(required)
+    }
+  }, 30_000)
 })

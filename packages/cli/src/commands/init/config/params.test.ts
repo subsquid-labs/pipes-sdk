@@ -293,4 +293,49 @@ describe('--config params schema', () => {
 
     expect(() => configJsonSchemaRaw.parse(configJson)).to.not.throw()
   })
+
+  it('should reject configs with an unknown templateId', () => {
+    const configJson = {
+      ...strictConfigSchema,
+      templates: [{ templateId: 'doesNotExist', params: {} }],
+    }
+
+    expect(() => configJsonSchemaRaw.parse(configJson)).toThrow()
+  })
+
+  it('should reject configs with extra top-level keys on a template entry', () => {
+    const configJson = {
+      ...strictConfigSchema,
+      templates: [
+        {
+          templateId: 'custom',
+          params: strictConfigSchema.templates[0]!.params,
+          rogueKey: 'should not be allowed',
+        },
+      ],
+    }
+
+    expect(() => configJsonSchemaRaw.parse(configJson)).toThrow()
+  })
+
+  it('should validate params against the schema for the selected templateId, not fall through to another templates option', () => {
+    const configJson = {
+      ...strictConfigSchema,
+      templates: [
+        {
+          templateId: 'erc20Transfers',
+          params: { contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'] },
+        },
+      ],
+    }
+
+    const parsed = configJsonSchemaRaw.parse(configJson)
+    expect(parsed.templates[0]).toMatchObject({
+      templateId: 'erc20Transfers',
+      params: {
+        contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
+        range: { from: '12,369,621' },
+      },
+    })
+  })
 })
