@@ -97,8 +97,8 @@ export abstract class QueryBuilder<F extends {}, R = any> {
               ...(r.range.to ? { to: r.range.to } : {}),
             }
           : {
-              from: resolveRangeValue(r.range.from, resolvedTimestamps),
-              to: resolveRangeValue(r.range.to, resolvedTimestamps),
+              from: resolveRequiredRangeValue(r.range.from, resolvedTimestamps),
+              to: resolveOptionalRangeValue(r.range.to, resolvedTimestamps),
             },
       request: r.request || ({} as R),
     }))
@@ -173,16 +173,25 @@ function dateToSeconds(date: Date): number {
   return Math.floor(date.getTime() / 1000)
 }
 
-function resolveRangeValue(value: number | Date, resolved: Map<number, number>): number
-function resolveRangeValue(value: number | Date | undefined, resolved: Map<number, number>): number | undefined
-function resolveRangeValue(value: number | Date | undefined, resolved: Map<number, number>): number | undefined {
-  if (value instanceof Date) {
-    return resolved.get(dateToSeconds(value))
-  } else if (typeof value === 'number') {
-    return value
+function resolveRequiredRangeValue(value: number | Date, resolved: Map<number, number>): number {
+  if (typeof value === 'number') return value
+
+  const timestamp = dateToSeconds(value)
+  const blockNumber = resolved.get(timestamp)
+
+  if (blockNumber === undefined) {
+    throw new BlockRangeConfigurationError(`Failed to resolve date ${value.toISOString()} to a block number.`)
   }
 
-  return
+  return blockNumber
+}
+
+function resolveOptionalRangeValue(
+  value: number | Date | undefined,
+  resolved: Map<number, number>,
+): number | undefined {
+  if (value === undefined) return undefined
+  return resolveRequiredRangeValue(value, resolved)
 }
 
 /**

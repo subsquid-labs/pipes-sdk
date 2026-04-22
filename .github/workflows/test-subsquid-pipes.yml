@@ -73,3 +73,7 @@ jobs:
           TEST_CLICKHOUSE_PASSWORD: default
           TEST_POSTGRES_DSN: postgresql://postgres:postgres@localhost:5432/postgres
         run: pnpm test
+
+      - name: Run pipes-cli tests
+        working-directory: packages/cli
+        run: pnpm test
