@@ -1,19 +1,19 @@
 ---
 name: deploy-pipes-cli
-description: Deploy a new version of @iankressin/pipes-cli to npm. Handles version bumping, building, testing, publishing, and git tagging. Use when user says "deploy", "release", "publish", or "bump version" for the pipes CLI package.
+description: Deploy a new version of @subsquid/pipes-cli to npm. Handles version bumping, building, testing, publishing, and git tagging. Use when user says "deploy", "release", "publish", or "bump version" for the pipes CLI package.
 ---
 
 # Deploy Pipes CLI
 
-Publish a new version of `@iankressin/pipes-cli` to the npm registry.
+Publish a new version of `@subsquid/pipes-cli` to the npm registry.
 
 ## Pre-flight checks
 
 Before starting, verify:
 
 - [ ] Working tree is clean (`git status` shows no uncommitted changes)
-- [ ] You are on the correct branch (typically `feat/pipes-cli` or `main`)
-- [ ] npm auth is valid (`pnpm whoami` returns `iankressin`)
+- [ ] You are on the correct branch (typically `design/sdk1` or `main`)
+- [ ] npm auth is valid (`pnpm whoami`)
 
 If any check fails, stop and tell the user.
 
@@ -44,7 +44,7 @@ If tests fail, stop and report failures. Do not publish broken code.
 ### 3. Run the build
 
 ```bash
-pnpm --filter @iankressin/pipes-cli build
+pnpm --filter @subsquid/pipes-cli build
 ```
 
 The CLI build:
@@ -74,7 +74,7 @@ git tag cli-v<NEW_VERSION>
 ### 7. Publish to npm
 
 ```bash
-pnpm --filter @iankressin/pipes-cli publish --access public --no-git-checks
+pnpm --filter @subsquid/pipes-cli publish --access public
 ```
 
 The `files` field in package.json controls what gets published: `dist/`, `src/`, `package.json`, `README.md`, `LICENSE`.
@@ -91,7 +91,7 @@ git push origin cli-v<NEW_VERSION>
 ### 9. Verify
 
 ```bash
-pnpm info @iankressin/pipes-cli version
+pnpm info @subsquid/pipes-cli version
 ```
 
 Confirm the published version matches the intended release.
@@ -101,7 +101,7 @@ Confirm the published version matches the intended release.
 If a bad version was published:
 
 ```bash
-pnpm unpublish @iankressin/pipes-cli@<BAD_VERSION>
+pnpm unpublish @subsquid/pipes-cli@<BAD_VERSION>
 git tag -d cli-v<BAD_VERSION>
 git push origin :refs/tags/cli-v<BAD_VERSION>
 ```
@@ -110,7 +110,7 @@ Note: `pnpm unpublish` only works within 72 hours of publish. After that, use `p
 
 ## Notes
 
-- The package is scoped to `@iankressin` and published to the default npm registry (npmjs.org)
-- The binary name is `pipes` (users run `npx @iankressin/pipes-cli` or install globally)
+- The package is scoped to `@subsquid` and published to the default npm registry (npmjs.org)
+- The binary name is `pipes` (users run `npx @subsquid/pipes-cli` or install globally)
 - There is a workspace dependency `@subsquid/pipes: workspace:*` -- if that package also changed, it may need publishing first
 - No automated CI/CD publish workflow exists; this is a manual process
