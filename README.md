@@ -1,10 +1,8 @@
-# Subsquid Pipes SDK
+# SQD Pipes SDK
 
-> ⚠️ The SDK is experimental. Expect rapid iteration and occasional breaking changes.
+SQD Pipes is a TypeScript-first toolkit for streaming blockchain data, transforming it in-flight, and delivering the results to your own systems. It glues together:
 
-Subsquid Pipes is a TypeScript-first toolkit for streaming blockchain data, transforming it in-flight, and delivering the results to your own systems. It glues together:
-
-- **Sources** that tap into managed Subsquid Portal datasets for chains like Ethereum and Solana.
+- **Sources** that tap into managed SQD Portal datasets for chains like Ethereum and Solana.
 - **Transforms/decoders** that turn raw blocks and logs into strongly-typed objects.
 - **Targets** that persist or forward processed data (ClickHouse today, with community hooks for more sinks).
 - **Observability** utilities such as profiling, structured logging, and Prometheus metrics.
@@ -29,7 +27,7 @@ npm install @subsquid/pipes
 
 ## 3. Create your first pipeline
 
-The snippet below streams ERC-20 transfers from Ethereum Mainnet via the Subsquid Portal and prints them to the console.
+The snippet below streams ERC-20 transfers from Ethereum Mainnet via the SQD Portal and prints them to the console.
 
 Create `src/erc20-transfers.ts`:
 
