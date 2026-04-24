@@ -21,22 +21,22 @@ If any check fails, stop and tell the user.
 
 ### 1. Determine the new version
 
-Current version lives in `packages/cli/package.json` under `"version"`.
-The project uses **pre-release semver**: `0.1.0-beta.N`.
+Current version lives in `packages/pipes-cli/package.json` under `"version"`.
+The project uses **pre-release semver**: `1.0.0-alpha.N`.
 
 Ask the user which bump they want:
 
 | Bump type | Example |
 |-----------|---------|
-| Pre-release (default) | `0.1.0-beta.22` -> `0.1.0-beta.23` |
-| Minor | `0.1.0-beta.22` -> `0.2.0` |
-| Major | `0.1.0-beta.22` -> `1.0.0` |
+| Pre-release (default) | `1.0.0-alpha.1` -> `1.0.0-alpha.2` |
+| Minor | `1.0.0-alpha.1` -> `1.1.0` |
+| Major | `1.0.0-alpha.1` -> `2.0.0` |
 | Custom | User specifies exact version |
 
 ### 2. Run tests
 
 ```bash
-cd packages/cli && pnpm run test
+pnpm --filter @subsquid/pipes-cli run test
 ```
 
 If tests fail, stop and report failures. Do not publish broken code.
@@ -56,39 +56,56 @@ If the build fails (especially DTS generation), stop and report.
 
 ### 4. Bump the version
 
-Edit `packages/cli/package.json` to set the new version string.
+Edit `packages/pipes-cli/package.json` to set the new version string.
 
 ### 5. Commit the version bump
 
 ```bash
-git add packages/cli/package.json
-git commit -m "chore(cli): bump version to <NEW_VERSION>"
+git add packages/pipes-cli/package.json
+git commit -m "chore(pipes-cli): bump version to <NEW_VERSION>"
 ```
 
 ### 6. Tag the release
 
 ```bash
-git tag cli-v<NEW_VERSION>
+git tag pipes-cli-v<NEW_VERSION>
 ```
 
-### 7. Publish to npm
+### 7. Verify the tarball (MANDATORY)
+
+Before publishing, pack and inspect the tarball to confirm that the `workspace:` protocol has been rewritten to concrete versions. If `workspace:*` leaks into the published tarball, consumers get `EUNSUPPORTEDPROTOCOL` on install.
 
 ```bash
-pnpm --filter @subsquid/pipes-cli publish --access public
+rm -rf /tmp/pipes-cli-verify && mkdir -p /tmp/pipes-cli-verify
+pnpm --filter @subsquid/pipes-cli pack --pack-destination /tmp/pipes-cli-verify
+tar -xzf /tmp/pipes-cli-verify/*.tgz -C /tmp/pipes-cli-verify
+grep -n 'workspace:' /tmp/pipes-cli-verify/package/package.json && echo "FAIL: workspace: protocol leaked" && exit 1
 ```
 
-The `files` field in package.json controls what gets published: `dist/`, `src/`, `package.json`, `README.md`, `LICENSE`.
+If the `grep` finds anything, stop. The publish tool is not rewriting the workspace protocol — do NOT fall back to `npm publish` (it does not rewrite `workspace:` at all; that is how `1.0.0-alpha.1` shipped broken).
 
-### 8. Push commit and tag
+### 8. Publish to npm
+
+Publish the **verified tarball** directly (not a fresh pack) so you publish exactly what you inspected:
+
+```bash
+pnpm publish /tmp/pipes-cli-verify/*.tgz --access public
+```
+
+Never use `npm publish` for this package — it does not rewrite the `workspace:` protocol and will produce a broken release.
+
+The `files` field in package.json controls what gets included in the tarball: `dist/`, `src/`, `package.json`, `README.md`, `LICENSE`.
+
+### 9. Push commit and tag
 
 Ask the user before pushing:
 
 ```bash
 git push origin <current-branch>
-git push origin cli-v<NEW_VERSION>
+git push origin pipes-cli-v<NEW_VERSION>
 ```
 
-### 9. Verify
+### 10. Verify
 
 ```bash
 pnpm info @subsquid/pipes-cli version
@@ -102,8 +119,8 @@ If a bad version was published:
 
 ```bash
 pnpm unpublish @subsquid/pipes-cli@<BAD_VERSION>
-git tag -d cli-v<BAD_VERSION>
-git push origin :refs/tags/cli-v<BAD_VERSION>
+git tag -d pipes-cli-v<BAD_VERSION>
+git push origin :refs/tags/pipes-cli-v<BAD_VERSION>
 ```
 
 Note: `pnpm unpublish` only works within 72 hours of publish. After that, use `pnpm deprecate` instead.
