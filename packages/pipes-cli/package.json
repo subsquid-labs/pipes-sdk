@@ -45,7 +45,8 @@
     "lint": "biome check . --write",
     "test": "vitest run",
     "test:integration": "RUN_INTEGRATION=1 vitest run src/commands/init/init.handler.test.ts",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.1.0",
