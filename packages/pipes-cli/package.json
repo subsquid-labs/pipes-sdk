@@ -1,7 +1,7 @@
 {
-  "name": "@iankressin/pipes-cli",
+  "name": "@subsquid/pipes-cli",
   "type": "module",
-  "version": "0.1.0-beta.23",
+  "version": "1.0.0-alpha.1",
   "author": "Subsquid Team",
   "files": [
     "dist",
