@@ -1,7 +1,7 @@
 packages:
   - packages/subsquid-pipes
   - packages/pipe-ui
-  - packages/cli
+  - packages/pipes-cli
   - docs
 
 onlyBuiltDependencies:
