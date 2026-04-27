@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 // Package name - must match package.json
-const PACKAGE_NAME = '@iankressin/pipes-cli'
+const PACKAGE_NAME = '@subsquid/pipes-cli'
 
 /**
  * Finds the package root directory by resolving the package location.
