@@ -1,7 +1,7 @@
 {
   "name": "@subsquid/pipes",
   "type": "module",
-  "version": "1.0.0-alpha.7",
+  "version": "1.0.0-alpha.8",
   "sideEffects": false,
   "author": "Subsquid Team",
   "files": [
@@ -96,6 +96,11 @@
       "import": "./dist/hyperliquid/index.js",
       "require": "./dist/hyperliquid/index.cjs"
     },
+    "./bitcoin": {
+      "types": "./dist/bitcoin/index.d.ts",
+      "import": "./dist/bitcoin/index.js",
+      "require": "./dist/bitcoin/index.cjs"
+    },
     "./portal-client": {
       "types": "./dist/portal-client/index.d.ts",
       "import": "./dist/portal-client/index.js",
@@ -141,6 +146,11 @@
       "types": "./dist/testing/evm/index.d.ts",
       "import": "./dist/testing/evm/index.js",
       "require": "./dist/testing/evm/index.cjs"
+    },
+    "./testing/bitcoin": {
+      "types": "./dist/testing/bitcoin/index.d.ts",
+      "import": "./dist/testing/bitcoin/index.js",
+      "require": "./dist/testing/bitcoin/index.cjs"
     }
   },
   "typesVersions": {
@@ -156,6 +166,9 @@
       ],
       "hyperliquid": [
         "./dist/hyperliquid/index.d.ts"
+      ],
+      "bitcoin": [
+        "./dist/bitcoin/index.d.ts"
       ],
       "portal-client": [
         "./dist/portal-client/index.d.ts"
@@ -183,6 +196,9 @@
       ],
       "testing/evm": [
         "./dist/testing/evm/index.d.ts"
+      ],
+      "testing/bitcoin": [
+        "./dist/testing/bitcoin/index.d.ts"
       ]
     }
   }

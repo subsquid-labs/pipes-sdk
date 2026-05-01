@@ -1,17 +1,27 @@
 import { createTransformer } from '~/core/index.js'
 import { arrayify, last } from '~/internal/array.js'
 
-import { WebSocketListener } from './ws-client.js'
-
 type RpcHead = { number: number; timestamp: Date; receivedAt: Date }
+
+export interface RpcLatencyListener {
+  stop(): void
+}
 
 export abstract class RpcLatencyWatcher {
   nodes: Map<string, Map<number, RpcHead>> = new Map()
-  watchers: WebSocketListener[] = []
+  watchers: RpcLatencyListener[] = []
 
   constructor(protected rpcUrl: string | string[]) {
     this.rpcUrl = arrayify(rpcUrl)
+  }
 
+  /**
+   * Subscribes each configured URL via `watch()`. Subclasses **must** call this
+   * from their constructor *after* their own fields are initialized — otherwise
+   * `watch()` would observe undefined subclass state, since `super()` runs
+   * before subclass field initializers.
+   */
+  protected attach() {
     for (const url of this.rpcUrl) {
       this.nodes.set(url, new Map())
       this.watchers.push(this.watch(url))
@@ -61,7 +71,7 @@ export abstract class RpcLatencyWatcher {
     chain.set(block.number, block)
   }
 
-  abstract watch(url: string): WebSocketListener
+  abstract watch(url: string): RpcLatencyListener
 }
 
 type Latency = {

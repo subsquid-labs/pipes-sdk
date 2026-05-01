@@ -19,6 +19,9 @@ export type MockResponse =
         }
         logs?: any[]
         instructions?: any[]
+        transactions?: any[]
+        inputs?: any[]
+        outputs?: any[]
       }[]
       head?: {
         finalized?: { number: number; hash: string }
