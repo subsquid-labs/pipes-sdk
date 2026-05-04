@@ -3,7 +3,7 @@ import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
 /**
  * Basic example demonstrating how to use pipes for processing EVM data.
  * This example shows how to:
- * - Create a data stream from Base Mainnet using Portal API
+ * - Create a data stream from Ethereum Mainnet using Portal API
  * - Decode ERC20 transfer events
  * - Process the transformed events in a streaming fashion
  */
