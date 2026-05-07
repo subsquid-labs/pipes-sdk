@@ -1,7 +1,7 @@
 {
   "name": "@subsquid/pipes",
   "type": "module",
-  "version": "1.0.0-alpha.8",
+  "version": "1.0.0-alpha.9",
   "sideEffects": false,
   "author": "Subsquid Team",
   "files": [
@@ -21,7 +21,10 @@
     "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
+    "@google-cloud/bigquery": "8.3.0",
+    "@google-cloud/bigquery-storage": "5.1.0",
     "@subsquid/borsh": "0.3.0",
+    "protobufjs": "7.5.0",
     "@types/better-sqlite3": "7.6.13",
     "@types/express": "4.17.23",
     "@types/node": "22.14.1",
@@ -47,15 +50,24 @@
   "peerDependencies": {
     "@opentelemetry/api": "^1.9.0",
     "@clickhouse/client": "1.14.0",
+    "@google-cloud/bigquery": "8.3.0",
+    "@google-cloud/bigquery-storage": "5.1.0",
     "better-sqlite3": "12.4.5",
     "drizzle-orm": "0.44.7",
-    "pg": "8.16.3"
+    "pg": "8.16.3",
+    "protobufjs": "^7.2.4"
   },
   "peerDependenciesMeta": {
     "@opentelemetry/api": {
       "optional": true
     },
     "@clickhouse/client": {
+      "optional": true
+    },
+    "@google-cloud/bigquery": {
+      "optional": true
+    },
+    "@google-cloud/bigquery-storage": {
       "optional": true
     },
     "better-sqlite3": {
@@ -65,6 +77,9 @@
       "optional": true
     },
     "pg": {
+      "optional": true
+    },
+    "protobufjs": {
       "optional": true
     }
   },
@@ -110,6 +125,11 @@
       "types": "./dist/portal-cache/node/index.d.ts",
       "import": "./dist/portal-cache/node/index.js",
       "require": "./dist/portal-cache/node/index.cjs"
+    },
+    "./targets/bigquery": {
+      "types": "./dist/targets/bigquery/index.d.ts",
+      "import": "./dist/targets/bigquery/index.js",
+      "require": "./dist/targets/bigquery/index.cjs"
     },
     "./targets/clickhouse": {
       "types": "./dist/targets/clickhouse/index.d.ts",
@@ -175,6 +195,9 @@
       ],
       "portal-cache/node": [
         "./dist/portal-cache/node/index.d.ts"
+      ],
+      "targets/bigquery": [
+        "./dist/targets/bigquery/index.d.ts"
       ],
       "targets/clickhouse": [
         "./dist/targets/clickhouse/index.d.ts"

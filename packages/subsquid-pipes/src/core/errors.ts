@@ -7,6 +7,7 @@ const DOCS_BASE = 'https://docs.sqd.dev/errors'
 export enum SdkError {
   PipeConfiguration = 'PipeConfiguration',
   ForkHandling = 'ForkHandling',
+  TargetConfiguration = 'TargetConfiguration',
 }
 
 export class PipeError extends Error {
