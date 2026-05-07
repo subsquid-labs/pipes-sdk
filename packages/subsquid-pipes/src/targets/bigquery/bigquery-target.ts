@@ -1,0 +1,244 @@
+import type { BigQuery } from '@google-cloud/bigquery'
+import { managedwriter } from '@google-cloud/bigquery-storage'
+
+import {
+  type BlockCursor,
+  type Ctx,
+  type Logger,
+  createTarget,
+  formatBlock,
+  formatNumber,
+  humanBytes,
+} from '~/core/index.js'
+
+import { BigQueryState, type BigQueryStateOptions } from './bigquery-state.js'
+import { BigQueryStore } from './bigquery-store.js'
+import { BigQueryTracker, type TrackedTableLocation } from './bigquery-tracker.js'
+import { BQ_ERR, BigQueryTargetError } from './errors.js'
+import { type PartitioningSetting, type TrackedTable, ensureTrackedTable, partitioningWithDefaults } from './tables.js'
+
+export type BigQuerySettings = {
+  state?: Omit<BigQueryStateOptions, 'projectId' | 'dataset'>
+  /**
+   * `false` disables partitioning DDL emission for tracked tables. Production must keep
+   * partitioning enabled (default) — without it, fork DELETEs scan the whole table on every
+   * reorg. The sync table is always unpartitioned (small enough that pruning buys nothing).
+   */
+  partitioning?: PartitioningSetting
+  /**
+   * Optional proto Writer factory passed through to BigQueryStore. Tests inject a fake here
+   * to avoid the fragile vi.mock-on-Storage-Write-API path under v8 coverage.
+   */
+  protoWriterFactory?: import('./bigquery-store.js').ProtoWriterFactory
+}
+
+export type BigQueryClients = {
+  bigquery: BigQuery
+  /**
+   * Storage Write API client. Optional — if omitted, the target constructs one with the
+   * same `projectId` and the default `bigquerystorage.googleapis.com` endpoint. Pass an
+   * explicit instance when you need custom credentials, a non-default endpoint (e.g.
+   * non-default endpoint, or retry settings.
+   */
+  writer?: managedwriter.WriterClient
+}
+
+/**
+ * Creates a BigQuery target with fork-aware reorg handling.
+ *
+ * The target uses the Storage Write API with **Committed streams**: one long-lived stream
+ * per table, opened lazily on first write and reused for every batch. Rows are immediately
+ * visible after `AppendRows` acks (the 2025 GA closed the streaming-buffer DML lockout that
+ * would otherwise block fork DELETEs on freshly streamed rows). Cumulative per-stream
+ * offsets give exactly-once semantics — a retried AppendRows resends the same offset and
+ * BQ server-dedupes.
+ *
+ * Atomicity model: the Storage Write API has no atomic flush across tables, so atomicity
+ * lives at the WAL level. The `sync` table records every batch's intent (`IN_FLIGHT_COMMIT`)
+ * before any data write and the completion marker (`COMMITTED`) only after every tracked
+ * table has acked its AppendRows. Forks follow the same shape: `IN_FLIGHT_ROLLBACK` →
+ * per-table DELETEs → `ROLLED_BACK`. A crash mid-batch leaves the cursor unmoved; the next
+ * `getCursor()` re-runs the bounded DELETE on every tracked table, idempotently cleaning
+ * any partial write before resuming.
+ *
+ * @param options.tables - Tracked tables. Auto-created with RANGE_BUCKET partitioning on
+ *   `blockNumberColumn` if missing; existing tables validated against the declared schema
+ *   on every restart. Writes to any non-listed table from `onData` throw.
+ * @param options.onData - Per-batch handler. Use `store.insert(table, rows)` to buffer rows;
+ *   they flush when `onData` returns successfully and the WAL marks the batch COMMITTED.
+ * @param options.onBeforeRollback / onAfterRollback - Hooks around the fork DELETE phase.
+ *   These receive only the safe cursor (no `store`) — the fork path has no commit point,
+ *   so writes would either be lost or sit outside the WAL recovery range.
+ */
+export function bigqueryTarget<T>(options: {
+  client: BigQueryClients
+  /** GCP project id; defaults to `client.bigquery.projectId`. */
+  projectId?: string
+  /** BQ dataset that hosts both tracked tables and the sync table. */
+  dataset: string
+  tables: TrackedTable[]
+  settings?: BigQuerySettings
+  onStart?: (ctx: { store: BigQueryStore; logger: Logger }) => Promise<unknown> | unknown
+  onData: (ctx: { store: BigQueryStore; data: T; ctx: Ctx }) => Promise<unknown> | unknown
+  onBeforeRollback?: (ctx: { cursor: BlockCursor }) => Promise<unknown> | unknown
+  onAfterRollback?: (ctx: { cursor: BlockCursor }) => Promise<unknown> | unknown
+}) {
+  const { client, dataset, tables, settings = {}, onStart, onData, onBeforeRollback, onAfterRollback } = options
+
+  const projectId = options.projectId ?? (client.bigquery.projectId as string | undefined)
+  if (!projectId) {
+    throw new BigQueryTargetError(
+      BQ_ERR.PROJECT_ID,
+      `bigqueryTarget: cannot determine GCP project id. Pass options.projectId explicitly or ` +
+        `construct BigQuery({ projectId }) so client.bigquery.projectId is set.`,
+    )
+  }
+
+  const partitioning = partitioningWithDefaults(settings.partitioning)
+  const stateTableName = settings.state?.table ?? 'sync'
+
+  // BQ REST (`bigquery.googleapis.com`) and Storage Write API (`bigquerystorage.googleapis.com`)
+  // are separate services; do not forward the REST `apiEndpoint` to the writer. For
+  // non-default endpoints the user must pass `client.writer` themselves.
+  const writer = client.writer ?? new managedwriter.WriterClient({ projectId })
+  // We own the writer only when we constructed it. User-supplied writers are their
+  // responsibility to shut down; closing them inside write()'s finally would yank a long-lived
+  // gRPC handle out from under any other code holding a reference.
+  const ownsWriter = !client.writer
+
+  const store = new BigQueryStore(client.bigquery, writer, {
+    projectId,
+    dataset,
+    trackedTables: tables,
+    syncTable: { dataset, table: stateTableName },
+    protoWriterFactory: settings.protoWriterFactory,
+  })
+
+  const trackedLocations: TrackedTableLocation[] = tables.map((t) => ({
+    table: t.table,
+    fqn: `${projectId}.${dataset}.${t.table}`,
+    blockNumberColumn: t.blockNumberColumn,
+  }))
+
+  const tracker = new BigQueryTracker({ store, tables, dataset, projectId })
+
+  const state = new BigQueryState({
+    store,
+    bigquery: client.bigquery,
+    trackedTables: trackedLocations,
+    options: { projectId, dataset, ...settings.state },
+  })
+
+  return createTarget<T>({
+    write: async ({ read, logger }) => {
+      // The try/finally wraps the ENTIRE write() body — including ensureTrackedTable,
+      // onStart, and getCursor — so the internally-constructed WriterClient is closed
+      // even if startup throws. fork() runs inside read()'s generator while this
+      // for-await is suspended; once we exit the for-await (normally or via throw) no
+      // more forks fire, so close-in-finally is race-free.
+      //
+      // Drop any rows the previous invocation buffered without committing — if `onData`
+      // threw between `insert` and `commitBatch`, those rows would leak into our first
+      // commit on this re-entry and duplicate.
+      store.resetBuffer()
+      try {
+        // Validate / auto-create tracked tables BEFORE accepting any data so schema
+        // mismatches surface at startup, not deep in the first batch. projectId is
+        // passed explicitly so validation runs against the same project as writes/deletes.
+        for (const table of tables) {
+          await ensureTrackedTable({
+            bigquery: client.bigquery,
+            projectId,
+            dataset,
+            trackedTable: table,
+            partitioning,
+          })
+        }
+
+        await onStart?.({ store, logger })
+
+        // Recovery: getCursor re-executes any outstanding IN_FLIGHT operation before returning.
+        let previousCursor = await state.getCursor({ logger })
+        for await (const { data, ctx } of read(previousCursor)) {
+          const span = ctx.profiler.start({ name: 'bigquery', labels: 'db' })
+          try {
+            const next = ctx.stream.state.current
+            const finalized = ctx.stream.head.finalized
+            const rollbackChain = ctx.stream.state.rollbackChain
+            // Range of new blocks this batch is about to write: [low, next.number].
+            //   - Subsequent batches: low = previousCursor.number + 1.
+            //   - Very first batch (no previousCursor): low = stream.state.initial — the
+            //     stream's configured starting block. Hardcoding 0 here would tell recovery
+            //     to DELETE everything from block 0 to the crash point, destroying any rows
+            //     written by a prior run (or by a backfill starting at a non-zero block).
+            const low = previousCursor ? previousCursor.number + 1 : ctx.stream.state.initial
+            const high = next.number
+
+            await span.measure('wal pre-commit', () =>
+              state.saveCommitPre({ cursor: previousCursor, finalized, rollbackChain, range: { low, high } }),
+            )
+
+            await span.measure('user onData', () =>
+              Promise.resolve(onData({ store, data, ctx: { logger, profiler: span } })),
+            )
+
+            // `getBufferStats` encodes rows lazily and caches the result so the eventual
+            // `commitBatch` doesn't re-encode — single source of truth for both logs.
+            const tableStats = store.getBufferStats()
+            const totalRows = Object.values(tableStats).reduce((s, t) => s + t.rows, 0)
+            const totalBytes = Object.values(tableStats).reduce((s, t) => s + t.bytes, 0)
+            const range =
+              low === high ? `block ${formatBlock(low)}` : `blocks ${formatBlock(low)} → ${formatBlock(high)}`
+
+            logger.debug({
+              message: `in-flight batch: ${formatNumber(totalRows)} rows / ${humanBytes(totalBytes)}, ${range}`,
+              tables: tableStats,
+            })
+
+            await span.measure('commit data tables', () => store.commitBatch())
+
+            await span.measure('wal post-commit', () =>
+              state.saveCommitPost({ logger, cursor: next, finalized, rollbackChain }),
+            )
+
+            logger.info({
+              message: `committed batch: ${formatNumber(totalRows)} rows / ${humanBytes(totalBytes)} across ${Object.keys(tableStats).length} tables, ${range}`,
+              tables: tableStats,
+              totalRows,
+              totalBytes,
+            })
+
+            previousCursor = next
+          } finally {
+            span.end()
+          }
+        }
+      } finally {
+        if (ownsWriter) writer.close()
+      }
+    },
+    fork: async (previousBlocks) => {
+      const { safeCursor, upper } = await state.fork(previousBlocks)
+      if (!safeCursor) return null
+
+      await state.saveRollbackPre({
+        cursor: safeCursor,
+        finalized: undefined,
+        rollbackChain: [],
+        range: { low: safeCursor.number + 1, high: upper },
+      })
+
+      await onBeforeRollback?.({ cursor: safeCursor })
+
+      // Per-table parallel DELETEs.
+      await tracker.fork(safeCursor.number, upper)
+
+      // WAL post-rollback: marks the rollback complete; restart will not re-execute.
+      await state.saveRollbackPost({ cursor: safeCursor, finalized: undefined, rollbackChain: [] })
+
+      await onAfterRollback?.({ cursor: safeCursor })
+
+      return safeCursor
+    },
+  })
+}
