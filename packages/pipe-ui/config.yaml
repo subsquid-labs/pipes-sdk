@@ -1,0 +1,3 @@
+metrics_server_url:
+  - url: http://localhost:9090
+    name: Local Dev

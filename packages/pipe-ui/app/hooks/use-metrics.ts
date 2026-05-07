@@ -68,6 +68,10 @@ export type ApiStats = {
   sdk: {
     version: string
   }
+  runtime?: {
+    name: 'bun' | 'node' | 'deno' | 'unknown'
+    version: string
+  }
   code?: {
     filename: string
   }
@@ -174,6 +178,50 @@ export function useStats(serverIndex: number) {
 
     retry: false,
     refetchInterval: 1000,
+  })
+}
+
+export type ServerStatus = {
+  online: boolean
+  progress?: number
+  syncingCount: number
+  pipeCount: number
+}
+
+export function useServerStatuses(count: number) {
+  return useQuery({
+    queryKey: ['server-statuses', count],
+    queryFn: async (): Promise<Map<number, ServerStatus>> => {
+      const results = await Promise.allSettled(
+        Array.from({ length: count }, async (_, i) => {
+          const res = await fetch(`/api/metrics/stats?_server=${i}`, { signal: AbortSignal.timeout(3000) })
+          if (!res.ok) throw new Error('not ok')
+          const data: HttpResponse<ApiStats> = await res.json()
+          return data.payload
+        }),
+      )
+      const map = new Map<number, ServerStatus>()
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i]
+        if (r.status !== 'fulfilled') {
+          map.set(i, { online: false, syncingCount: 0, pipeCount: 0 })
+          continue
+        }
+        const pipes = r.value.pipes
+        const syncing = pipes.filter((p) => p.progress.percent > 0 && p.progress.etaSeconds >= 1)
+        const progress =
+          syncing.length > 0 ? syncing.reduce((sum, p) => sum + p.progress.percent, 0) / syncing.length : undefined
+        map.set(i, {
+          online: true,
+          progress,
+          syncingCount: syncing.length,
+          pipeCount: pipes.length,
+        })
+      }
+      return map
+    },
+    refetchInterval: 3000,
+    retry: false,
   })
 }
 
