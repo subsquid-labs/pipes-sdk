@@ -80,3 +80,54 @@ describe('TransactionFields accessList validation', () => {
     expect(() => castAccessList([{ address: 'nothex', storageKeys: [] }])).toThrow()
   })
 })
+
+describe('TraceSuicideAction.refundAddress validation', () => {
+  function castSuicideTrace(refundAddress: unknown) {
+    const schema = getBlockSchema({
+      trace: {
+        type: true,
+        transactionIndex: true,
+        traceAddress: true,
+        subtraces: true,
+        error: true,
+        suicideAddress: true,
+        suicideRefundAddress: true,
+        suicideBalance: true,
+      },
+    })
+    const block = {
+      header: {},
+      traces: [
+        {
+          type: 'suicide',
+          transactionIndex: 0,
+          traceAddress: [],
+          subtraces: 0,
+          error: null,
+          action: {
+            address: '0x0000000000000000000000000000000000000001',
+            refundAddress,
+            balance: '0x0',
+          },
+        },
+      ],
+    }
+    return cast(schema, block).traces[0]
+  }
+
+  it('accepts null refundAddress (real SELFDESTRUCT edge case)', () => {
+    const trace = castSuicideTrace(null) as { action: { refundAddress: unknown } }
+    expect(trace.action.refundAddress).toBeNull()
+  })
+
+  it('accepts a valid hex refundAddress', () => {
+    const trace = castSuicideTrace('0x000000000000000000000000000000000000dead') as {
+      action: { refundAddress: unknown }
+    }
+    expect(trace.action.refundAddress).toBe('0x000000000000000000000000000000000000dead')
+  })
+
+  it('rejects a non-hex refundAddress', () => {
+    expect(() => castSuicideTrace('not-hex')).toThrow()
+  })
+})
