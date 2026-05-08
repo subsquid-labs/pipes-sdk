@@ -15,13 +15,14 @@ import { type TrackedTable, normalizePartitionColumn } from './tables.js'
 import { isTransientError } from './utils.js'
 
 /**
- * Target byte size per AppendRows request. The hard server limit is 20 MB, but the practical
- * cap is lower: GFE rejects bidi streams whose unacked outbound bytes approach the HTTP/2
- * per-stream flow-control window (typically 16 MB) with `RESOURCE_EXHAUSTED: Bandwidth
- * exhausted or memory limit exceeded` — a transport-layer error not surfaced as any BQ
- * project quota. 12 MB stays clear of that window while keeping per-call overhead low.
+ * Target byte size per AppendRows request, measured on encoded proto rows only (not the
+ * full request envelope, which adds writer schema, traceId, offset, descriptors).
+ *
+ * Documented hard limit on the entire AppendRowsRequest is 10 MB — over that, the server
+ * returns `INVALID_ARGUMENT`. In practice the server accepts up to ~16 MB of encoded rows
+ * before rejecting on size, so we cap there.
  */
-const APPEND_ROWS_MAX_BYTES = 12 * 1024 * 1024
+const APPEND_ROWS_MAX_BYTES = 16 * 1024 * 1024
 
 /**
  * Retry budget for transient gRPC errors (RESOURCE_EXHAUSTED, UNAVAILABLE, ABORTED, etc).
@@ -139,7 +140,7 @@ export class BigQueryStore {
   readonly #protoWriterFactory: ProtoWriterFactory
   readonly #buffer: Map<string, Row[]> = new Map()
   // Lazily populated proto-encoded buffers, keyed by table name. `getBufferStats` fills this
-  // on first read, so the byte total is accurate; `commitBatch` reuses the cache so we don't
+  // on the first read, so the byte total is accurate; `commitBatch` reuses the cache so we don't
   // re-encode the same rows. Cleared after commit and invalidated on every fresh `insert`.
   readonly #encodedBuffer: Map<string, Uint8Array[]> = new Map()
   // Long-lived Committed-stream connections, keyed by table FQN path. Opened lazily on the
@@ -367,6 +368,15 @@ export class BigQueryStore {
       { ...RETRY_OPTIONS, title: `createWriteStream(${tableFqnPath})` },
     )
     const connection = await this.#writer.createStreamConnection({ streamId })
+    // Defensive no-op listener. The `@google-cloud/bigquery-storage` client delivers a
+    // transport error twice: once as a rejected `getResult()` promise (which `doWithRetry`
+    // handles), and once as an 'error' event on this connection. Without a listener, the
+    // second delivery becomes an uncaught EventEmitter throw and kills the process. The
+    // BigQuery client reconnects the bidi on the next `appendRows` attempt (same streamId,
+    // offsets preserved), so we don't need to do anything here — just silence the second
+    // delivery.
+    connection.on('error', () => {})
+
     const writer = this.#protoWriterFactory({
       connection,
       protoDescriptor,

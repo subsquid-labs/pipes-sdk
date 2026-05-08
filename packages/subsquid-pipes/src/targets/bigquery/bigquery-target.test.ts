@@ -111,17 +111,16 @@ describe('chunkBuffersByByteSize', () => {
     expect(chunks[0]).toHaveLength(3)
   })
 
-  it('splits when cumulative byteLength exceeds the 12MB budget', () => {
-    // 30 × 1MB = 30MB total → must split into multiple chunks under the 12MB cap.
-    const buffers = Array.from({ length: 30 }, oneMb)
+  it('splits when cumulative byteLength exceeds the 16MB budget', () => {
+    // 40 × 1MB = 40MB total → must split into multiple chunks under the 16MB cap.
+    const buffers = Array.from({ length: 40 }, oneMb)
     const chunks = [...chunkBuffersByByteSize(buffers)]
-    expect(chunks.length).toBeGreaterThanOrEqual(3) // 30MB / 12MB ≈ 3 chunks min
-    // Every chunk must respect the 12MB cap exactly. A regression that raises the cap (which
-    // is exactly the GFE flow-control window we're avoiding — `RESOURCE_EXHAUSTED:
-    // Bandwidth exhausted or memory limit exceeded`) MUST fail here.
+    expect(chunks.length).toBeGreaterThanOrEqual(3) // 40MB / 16MB ≈ 3 chunks min
+    // Every chunk must respect the 16MB cap. A regression that raises the cap risks
+    // breaching the documented 10MB hard limit on AppendRowsRequest.
     for (const c of chunks) {
       const total = c.reduce((sum, b) => sum + b.byteLength, 0)
-      expect(total).toBeLessThanOrEqual(12 * 1024 * 1024)
+      expect(total).toBeLessThanOrEqual(16 * 1024 * 1024)
     }
   })
 

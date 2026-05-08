@@ -26,7 +26,7 @@ export type PartitioningOptions = {
  * enabled — a single fork DELETE on a 1B-row unpartitioned table costs $5+ per call.
  *
  * Cluster-without-partition is rare enough that we don't expose it as a separate flag; users
- * who need it can pre-create the table themselves and the validation path will accept any
+ * who need it can pre-create the table themselves, and the validation path will accept any
  * cluster shape.
  */
 export type PartitioningSetting = PartitioningOptions | false

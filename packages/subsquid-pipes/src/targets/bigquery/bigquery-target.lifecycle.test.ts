@@ -39,6 +39,7 @@ const fakeProtoWriterFactory: ProtoWriterFactory = () => ({
 type StreamConnectionStub = {
   finalize: ReturnType<typeof vi.fn>
   close: ReturnType<typeof vi.fn>
+  on: ReturnType<typeof vi.fn>
 }
 
 function makeWriter() {
@@ -64,6 +65,7 @@ function makeWriter() {
           return {}
         }),
         close: vi.fn(),
+        on: vi.fn(),
       }
       return conn
     }),
@@ -386,6 +388,65 @@ describe('BigQueryStore — Committed stream pipeline', () => {
     })
     store.close()
     expect(calls.close).toBe(1)
+  })
+
+  it('attaches an error listener on StreamConnection so transient gRPC errors do not crash the process', async () => {
+    // Regression for the production crash: SDK StreamConnection re-emits transport errors
+    // via emit('error', err) even after the matching getResult() promise has been rejected.
+    // For RESOURCE_EXHAUSTED (code 8) the SDK's own suppress branch is bypassed (code 8 not
+    // in StreamConnection.isRetryableError), so the second emit ALWAYS runs. Without a
+    // listener attached, Node EventEmitter throws synchronously → uncaught exception →
+    // process exits before doWithRetry sees the rejected promise. The store must attach a
+    // no-op listener so the emit is safely consumed.
+    const { EventEmitter } = await import('node:events')
+    const realConnections: import('node:events').EventEmitter[] = []
+
+    const writerFake = {
+      createWriteStream: vi.fn(async ({ destinationTable }: { destinationTable: string }) => {
+        return `${destinationTable}/streams/1`
+      }),
+      createStreamConnection: vi.fn(async () => {
+        const conn = new EventEmitter()
+        realConnections.push(conn)
+        // The store doesn't call finalize/close on the connection in the happy path covered
+        // here, but include them so the type cast still works if call-paths change.
+        ;(conn as unknown as { close: () => void }).close = () => {}
+        return conn
+      }),
+      close: vi.fn(),
+    }
+
+    const { bq } = makeBigQuery()
+    const store = new BigQueryStore(bq, writerFake as unknown as managedwriter.WriterClient, {
+      projectId: 'p',
+      dataset: 'd',
+      trackedTables: TABLES,
+      syncTable: { dataset: 'd', table: 'sync' },
+      protoWriterFactory: fakeProtoWriterFactory,
+    })
+
+    // Trigger stream creation by writing a row.
+    store.insert('events', [{ block_number: 1, tx_hash: '0xa' }])
+    await store.commitBatch()
+
+    expect(realConnections).toHaveLength(1)
+    const conn = realConnections[0]
+
+    // Without an attached 'error' listener, Node EventEmitter throws synchronously here
+    // (see https://nodejs.org/api/events.html#error-events). The store must have attached
+    // a listener inside #getOrCreateStream — assert that this emit is safely consumed.
+    expect(() =>
+      conn.emit('error', { code: 8, message: 'RESOURCE_EXHAUSTED: Bandwidth exhausted or memory limit exceeded' }),
+    ).not.toThrow()
+
+    // The error listener must be present on the connection (proof of contract, not just
+    // accidental absence of throw — the listener should be from our store, not the SDK).
+    expect(conn.listenerCount('error')).toBeGreaterThan(0)
+
+    // Store remains usable after the transient stream error — next batch goes through
+    // the same cached stream (SDK auto-reconnects internally on send()).
+    store.insert('events', [{ block_number: 2, tx_hash: '0xb' }])
+    await expect(store.commitBatch()).resolves.toMatchObject({ events: { rows: 1 } })
   })
 })
 
