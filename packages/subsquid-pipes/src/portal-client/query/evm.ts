@@ -162,7 +162,7 @@ export type TraceSuicideFields = TraceBaseFields & {
 
 export type TraceSuicideActionFields = {
   address: Hex
-  refundAddress: Hex
+  refundAddress: Hex | null
   balance: bigint
 }
 
@@ -618,7 +618,7 @@ const TraceCallResultShape: ObjectValidatorShape<TraceCallResultFields> = {
 
 const TraceSuicideActionShape: ObjectValidatorShape<TraceSuicideActionFields> = {
   address: BYTES,
-  refundAddress: BYTES,
+  refundAddress: nullable(BYTES),
   balance: QTY,
 }
 
