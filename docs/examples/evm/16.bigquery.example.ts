@@ -32,9 +32,13 @@
  *
  * Inspect the result (after a minute or two of indexing):
  * ```sql
- * SELECT block_number, log_index, `from`, `to`, amount
+ * SELECT block_number, log_index, `from`, `to`, amount, amount_raw
  * FROM `my-gcp-project.eth_transfers.transfers`
  * ORDER BY block_number DESC LIMIT 10;
+ *
+ * -- Find rows where the BIGNUMERIC was clamped (the raw decimal didn't fit):
+ * SELECT COUNT(*) FROM `my-gcp-project.eth_transfers.approvals`
+ * WHERE amount_raw != CAST(amount AS STRING);
  *
  * SELECT current
  * FROM `my-gcp-project.eth_transfers.sync`
@@ -46,6 +50,15 @@
 import { BigQuery } from '@google-cloud/bigquery'
 import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 import { bigqueryTarget } from '@subsquid/pipes/targets/bigquery'
+
+// Default BIGNUMERIC is precision 76, scale 38 — i.e. up to 38 integer digits before the
+// decimal point (max ≈ 5.79e38). Pure integer ERC20 amounts ≥ 10^38 overflow; the
+// canonical "infinite approval" sentinel `2^256-1` (~1.16e77) is the obvious offender.
+// We clamp to this cap so the BIGNUMERIC column is always populated, and preserve the
+// exact decimal in `amount_raw` so downstream consumers can detect the clamp.
+const BIGNUMERIC_INT_MAX = 10n ** 38n - 1n
+
+const clampBignumeric = (v: bigint): string => (v > BIGNUMERIC_INT_MAX ? BIGNUMERIC_INT_MAX : v).toString()
 
 const PROJECT = process.env['BIGQUERY_PROJECT']
 const DATASET = process.env['BIGQUERY_DATASET'] ?? 'eth_transfers'
@@ -103,13 +116,12 @@ async function main() {
             { name: 'token', type: 'STRING', mode: 'REQUIRED' },
             { name: 'from', type: 'STRING', mode: 'REQUIRED' },
             { name: 'to', type: 'STRING', mode: 'REQUIRED' },
-            // STRING (not NUMERIC) because the Storage Write API JSONWriter does not encode
-            // NUMERIC/BIGNUMERIC correctly from a JS string — the proto descriptor expects
-            // BYTES with a specific BigDecimal encoding, and a string-typed field hangs
-            // silently on the first AppendRows. STRING avoids the issue at the cost of
-            // arithmetic ergonomics; cast to NUMERIC at query time if needed:
-            //   `SAFE_CAST(amount AS NUMERIC)`.
-            { name: 'amount', type: 'STRING', mode: 'REQUIRED' },
+            // `amount` is BIGNUMERIC for arithmetic (SUM/AVG over transfers), clamped to
+            // ±BIGNUMERIC_INT_MAX so out-of-range uint256 values still upload as a valid
+            // numeric. `amount_raw` keeps the exact decimal — compare the two to detect
+            // clamping (e.g. `WHERE amount_raw != CAST(amount AS STRING)`).
+            { name: 'amount', type: 'BIGNUMERIC', mode: 'NULLABLE' },
+            { name: 'amount_raw', type: 'STRING', mode: 'REQUIRED' },
           ],
           // Cluster on token + from for typical "all transfers of token X from address Y"
           // queries; reduces bytes scanned by 100×+ on filtered reads.
@@ -126,13 +138,10 @@ async function main() {
             { name: 'token', type: 'STRING', mode: 'REQUIRED' },
             { name: 'owner', type: 'STRING', mode: 'REQUIRED' },
             { name: 'spender', type: 'STRING', mode: 'REQUIRED' },
-            // STRING (not NUMERIC) because the Storage Write API JSONWriter does not encode
-            // NUMERIC/BIGNUMERIC correctly from a JS string — the proto descriptor expects
-            // BYTES with a specific BigDecimal encoding, and a string-typed field hangs
-            // silently on the first AppendRows. STRING avoids the issue at the cost of
-            // arithmetic ergonomics; cast to NUMERIC at query time if needed:
-            //   `SAFE_CAST(amount AS NUMERIC)`.
-            { name: 'amount', type: 'STRING', mode: 'REQUIRED' },
+            // See note on `transfers.amount` — Approvals hit the clamp far more often
+            // than Transfers because of the `2^256-1` "infinite approval" idiom.
+            { name: 'amount', type: 'BIGNUMERIC', mode: 'NULLABLE' },
+            { name: 'amount_raw', type: 'STRING', mode: 'REQUIRED' },
           ],
           clusterBy: ['token', 'owner'],
         },
@@ -159,7 +168,8 @@ async function main() {
             token: t.rawEvent.address,
             from: t.event.from,
             to: t.event.to,
-            amount: t.event.value.toString(),
+            amount: clampBignumeric(t.event.value),
+            amount_raw: t.event.value.toString(),
           })),
         )
 
@@ -173,7 +183,8 @@ async function main() {
             token: a.rawEvent.address,
             owner: a.event.owner,
             spender: a.event.spender,
-            amount: a.event.value.toString(),
+            amount: clampBignumeric(a.event.value),
+            amount_raw: a.event.value.toString(),
           })),
         )
       },
