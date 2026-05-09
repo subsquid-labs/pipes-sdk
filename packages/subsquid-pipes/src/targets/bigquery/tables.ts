@@ -279,14 +279,14 @@ export function assertSchemaMatches(metadata: TableMetadata, declared: TableFiel
         `Table ${tableFqn} is missing declared column '${decl.name}' of type ${decl.type}.`,
       )
     }
-    if ((live.type || '').toUpperCase() !== (decl.type || '').toUpperCase()) {
-      // INTEGER ↔ INT64 alias: BigQuery legacy SQL used INTEGER, GoogleSQL uses INT64. They're identical.
-      if (!isIntegerAlias(live.type, decl.type)) {
-        throw new BigQueryTargetError(
-          BQ_ERR.SCHEMA_TYPE_MISMATCH,
-          `Table ${tableFqn} column '${decl.name}' has type ${live.type}, but declared as ${decl.type}.`,
-        )
-      }
+    // Legacy-SQL ↔ GoogleSQL aliases: BQ accepts the modern name in DDL but reports the
+    // legacy name in REST metadata, so a `FLOAT64` column comes back as `FLOAT` and a fresh
+    // round-trip would falsely fail validation. Canonicalize both sides before comparing.
+    if (canonicalType(live.type) !== canonicalType(decl.type)) {
+      throw new BigQueryTargetError(
+        BQ_ERR.SCHEMA_TYPE_MISMATCH,
+        `Table ${tableFqn} column '${decl.name}' has type ${live.type}, but declared as ${decl.type}.`,
+      )
     }
     // Compare mode too (NULLABLE / REQUIRED / REPEATED). Without this, a live `tags STRING
     // REPEATED` passes when declared as a scalar `tags STRING` and the first AppendRows
@@ -303,7 +303,19 @@ export function assertSchemaMatches(metadata: TableMetadata, declared: TableFiel
   }
 }
 
-function isIntegerAlias(a?: string, b?: string): boolean {
-  const ints = new Set(['INT64', 'INTEGER'])
-  return ints.has((a || '').toUpperCase()) && ints.has((b || '').toUpperCase())
+/**
+ * GoogleSQL type names normalised against their legacy-SQL aliases. BigQuery accepts the
+ * modern name in DDL but reports the legacy name in REST metadata, so without this
+ * canonicalisation a `FLOAT64` declaration validates against a live `FLOAT` column as a
+ * mismatch on the second startup — even though the table is exactly what the target wants.
+ */
+const LEGACY_TYPE_ALIASES: Record<string, string> = {
+  INTEGER: 'INT64',
+  FLOAT: 'FLOAT64',
+  BOOLEAN: 'BOOL',
+}
+
+function canonicalType(type?: string): string {
+  const t = (type || '').toUpperCase()
+  return LEGACY_TYPE_ALIASES[t] ?? t
 }

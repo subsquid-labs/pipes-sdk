@@ -10,7 +10,7 @@ import {
   syncTableDdl,
   trackedTableDdl,
 } from './tables.js'
-import { assertInt64NotNull, assertRangePartitionedOn, isNotFoundError, isTransientError } from './utils.js'
+import { assertInt64NotNull, assertRangePartitionedOn, classifyBqError, isNotFoundError, isTransientError } from './utils.js'
 
 /**
  * This file holds ONLY pure-function unit tests:
@@ -192,14 +192,27 @@ describe('BigQueryTargetError', () => {
 })
 
 describe('isNotFoundError', () => {
-  it('detects code: 404', () => {
+  it('detects HTTP 404 (REST client)', () => {
     expect(isNotFoundError({ code: 404 })).toBe(true)
     expect(isNotFoundError({ code: '404' })).toBe(true)
   })
 
-  it('detects "not found" in message (case-insensitive)', () => {
+  it('detects gRPC NOT_FOUND (Storage Write API code 5)', () => {
+    expect(isNotFoundError({ code: 5 })).toBe(true)
+    expect(isNotFoundError({ code: '5' })).toBe(true)
+  })
+
+  it('detects "not found" in message ONLY when no numeric code present', () => {
     expect(isNotFoundError({ message: 'Not found: Table p.d.foo' })).toBe(true)
     expect(isNotFoundError({ message: 'NOT FOUND' })).toBe(true)
+  })
+
+  it('numeric code is authoritative — "not found" in message must not override 5xx', () => {
+    // A 500 with an unfortunate message must NOT classify as not-found, otherwise the
+    // schema validator's NotFound branch would mis-handle a real internal error as
+    // "table missing" and quietly auto-create on top of a real outage.
+    expect(isNotFoundError({ code: 500, message: 'Internal: not found in cache' })).toBe(false)
+    expect(isNotFoundError({ code: 503, message: 'service not found' })).toBe(false)
   })
 
   it('detects errors[].reason === "notFound"', () => {
@@ -207,10 +220,12 @@ describe('isNotFoundError', () => {
     expect(isNotFoundError({ errors: [{ reason: 'invalid' }] })).toBe(false)
   })
 
-  it('walks the cause chain', () => {
+  it('walks the cause chain even past a non-not-found outer code', () => {
     const inner = { code: 404 }
     const outer = { cause: { cause: inner } }
     expect(isNotFoundError(outer)).toBe(true)
+    // Outer 500 wrapping inner 404 — inner wins via cause walk.
+    expect(isNotFoundError({ code: 500, cause: { code: 404 } })).toBe(true)
   })
 
   it('returns false for unrelated errors', () => {
@@ -246,6 +261,45 @@ describe('isTransientError', () => {
     expect(isTransientError({ code: 3 })).toBe(false) // INVALID_ARGUMENT
     expect(isTransientError({ code: 5 })).toBe(false) // NOT_FOUND
     expect(isTransientError({ code: 404 })).toBe(false)
+  })
+})
+
+describe('classifyBqError', () => {
+  it('returns not_found for 404 / gRPC NOT_FOUND / "not found" message', () => {
+    expect(classifyBqError({ code: 404 })).toBe('not_found')
+    expect(classifyBqError({ code: 5 })).toBe('not_found')
+    expect(classifyBqError({ message: 'Not found: Table p.d.foo' })).toBe('not_found')
+  })
+
+  it('returns invalid_argument for gRPC INVALID_ARGUMENT (3) / HTTP 400', () => {
+    expect(classifyBqError({ code: 3 })).toBe('invalid_argument')
+    expect(classifyBqError({ code: 400 })).toBe('invalid_argument')
+  })
+
+  it('returns resource_exhausted for gRPC RESOURCE_EXHAUSTED (8) / HTTP 429', () => {
+    expect(classifyBqError({ code: 8 })).toBe('resource_exhausted')
+    expect(classifyBqError({ code: 429 })).toBe('resource_exhausted')
+  })
+
+  it('returns transient for the remaining retryable family', () => {
+    expect(classifyBqError({ code: 4 })).toBe('transient') // DEADLINE_EXCEEDED
+    expect(classifyBqError({ code: 10 })).toBe('transient') // ABORTED
+    expect(classifyBqError({ code: 13 })).toBe('transient') // INTERNAL
+    expect(classifyBqError({ code: 14 })).toBe('transient') // UNAVAILABLE
+    expect(classifyBqError({ code: 503 })).toBe('transient')
+  })
+
+  it('returns unknown for anything else (and never throws on weird input)', () => {
+    expect(classifyBqError(new Error('boom'))).toBe('unknown')
+    expect(classifyBqError({})).toBe('unknown')
+    expect(classifyBqError(null)).toBe('unknown')
+    expect(classifyBqError(undefined)).toBe('unknown')
+    expect(classifyBqError('string')).toBe('unknown')
+  })
+
+  it('walks the cause chain', () => {
+    expect(classifyBqError({ cause: { code: 8 } })).toBe('resource_exhausted')
+    expect(classifyBqError({ cause: { cause: { code: 404 } } })).toBe('not_found')
   })
 })
 
@@ -585,6 +639,26 @@ describe('assertSchemaMatches', () => {
         [{ name: 'bn', type: 'INTEGER', mode: 'REQUIRED' }],
         fqn,
       ),
+    ).not.toThrow()
+  })
+
+  it('treats FLOAT and FLOAT64 as the same type (BQ reports FLOAT in REST metadata)', () => {
+    // BQ accepts `FLOAT64` in DDL but reports `FLOAT` in REST metadata. Without alias support
+    // a freshly created `FLOAT64` column would falsely fail validation on every restart.
+    expect(() =>
+      assertSchemaMatches(md([{ name: 'price', type: 'FLOAT' }]), [{ name: 'price', type: 'FLOAT64' }], fqn),
+    ).not.toThrow()
+    expect(() =>
+      assertSchemaMatches(md([{ name: 'price', type: 'FLOAT64' }]), [{ name: 'price', type: 'FLOAT' }], fqn),
+    ).not.toThrow()
+  })
+
+  it('treats BOOL and BOOLEAN as the same type (BQ reports BOOLEAN in REST metadata)', () => {
+    expect(() =>
+      assertSchemaMatches(md([{ name: 'active', type: 'BOOLEAN' }]), [{ name: 'active', type: 'BOOL' }], fqn),
+    ).not.toThrow()
+    expect(() =>
+      assertSchemaMatches(md([{ name: 'active', type: 'BOOL' }]), [{ name: 'active', type: 'BOOLEAN' }], fqn),
     ).not.toThrow()
   })
 })
