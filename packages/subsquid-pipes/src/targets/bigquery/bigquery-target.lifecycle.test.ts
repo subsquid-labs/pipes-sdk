@@ -4,7 +4,7 @@ import * as protobuf from 'protobufjs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { BatchContext, BlockCursor } from '~/core/index.js'
-import { createTestLogger } from '~/testing/index.js'
+import { createMockMetricServer, createTestLogger } from '~/testing/index.js'
 
 import { BigQueryState } from './bigquery-state.js'
 import { BigQueryStore, type ProtoWriterFactory } from './bigquery-store.js'
@@ -147,15 +147,22 @@ const TABLES: TrackedTable[] = [
 
 const cursor = (number: number, hash = `0x${number}`): BlockCursor => ({ number, hash })
 
-function makeBatchContext(current: BlockCursor, rollbackChain: BlockCursor[] = [], initial = 0): BatchContext {
+function makeBatchContext(
+  current: BlockCursor,
+  rollbackChain: BlockCursor[] = [],
+  initial = 0,
+  metrics?: ReturnType<typeof createMockMetricServer>,
+): BatchContext {
   const profilerStub: Record<string, unknown> = {
     start: () => profilerStub,
     measure: async (_: unknown, fn: () => unknown) => fn(),
     end: () => {},
   }
   return {
+    id: 'test-pipe',
     logger: createTestLogger(),
     profiler: profilerStub,
+    metrics: (metrics ?? createMockMetricServer()).server.metrics,
     stream: {
       state: { current, rollbackChain, initial },
       head: { finalized: undefined, latest: current },
@@ -685,6 +692,237 @@ describe('bigqueryTarget — write lifecycle', () => {
     } finally {
       Object.defineProperty(managedwriter, 'WriterClient', desc)
     }
+  })
+})
+
+// -----------------------------------------------------------------------------
+// bigqueryTarget — Track 2 metrics (commit lag / commit duration / append errors)
+// -----------------------------------------------------------------------------
+
+describe('bigqueryTarget — commit metrics', () => {
+  let writerSetup: ReturnType<typeof makeWriter>
+  let bqSetup: ReturnType<typeof makeBigQuery>
+
+  beforeEach(() => {
+    writerSetup = makeWriter()
+    bqSetup = makeBigQuery()
+  })
+
+  afterEach(() => {
+    // Restore real timers BEFORE clearing other mocks — `vi.restoreAllMocks` doesn't undo
+    // `vi.useFakeTimers()`. Without this, the lag test below leaves frozen Date.now() in
+    // place and any subsequent test that relies on real wallclock (e.g. the duration test
+    // asserting `>= 0` only by accident) silently degrades.
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  function buildTarget(opts?: {
+    onData?: (ctx: { store: BigQueryStore; data: unknown; ctx: unknown }) => void | Promise<void>
+    protoWriterFactory?: ProtoWriterFactory
+  }) {
+    return bigqueryTarget<unknown>({
+      client: { bigquery: bqSetup.bq, writer: writerSetup.writer },
+      dataset: 'd',
+      tables: TABLES,
+      settings: { protoWriterFactory: opts?.protoWriterFactory ?? fakeProtoWriterFactory },
+      onData: opts?.onData ?? (() => {}),
+    })
+  }
+
+  it('observes block_to_commit_lag using commit-ack wallclock minus block.timestamp (seconds)', async () => {
+    // Pin wallclock so commit_end_ms is deterministic; the lag observation is
+    // commit_end_seconds - cursor.timestamp_seconds. Setting commit_end at epoch 1_700_000_005 and
+    // the block timestamp at 1_700_000_000 should yield exactly 5s of lag.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(1_700_000_005 * 1000))
+
+    const metrics = createMockMetricServer()
+    const target = buildTarget({
+      onData: async ({ store, data }) => {
+        store.insert('events', [data as Record<string, unknown>])
+      },
+    })
+
+    async function* read() {
+      yield {
+        data: { block_number: 10, tx_hash: '0xa' },
+        ctx: makeBatchContext({ number: 10, hash: '0xa', timestamp: 1_700_000_000 }, [], 0, metrics),
+      }
+    }
+    await target.write({ read: read as never, logger: createTestLogger() })
+
+    const histogram = metrics.histogram('sqd_bigquery_block_to_commit_lag_seconds')
+    expect(histogram.observations).toEqual([5])
+  })
+
+  it('skips block_to_commit_lag observation when cursor.timestamp is missing', async () => {
+    // Cursor timestamp is optional — emitting `now − 0` would put a 50+ year lag into the
+    // histogram and ruin the rate(...) bucket counts. Better to skip the observation.
+    const metrics = createMockMetricServer()
+    const target = buildTarget({
+      onData: async ({ store, data }) => {
+        store.insert('events', [data as Record<string, unknown>])
+      },
+    })
+
+    async function* read() {
+      // cursor() helper returns { number, hash } — no timestamp by design.
+      yield { data: { block_number: 10, tx_hash: '0xa' }, ctx: makeBatchContext(cursor(10), [], 0, metrics) }
+    }
+    await target.write({ read: read as never, logger: createTestLogger() })
+
+    const histogram = metrics.histogram('sqd_bigquery_block_to_commit_lag_seconds')
+    expect(histogram.observations).toEqual([])
+  })
+
+  it('observes commit_duration once per batch', async () => {
+    // Two batches → two observations on the same registered histogram. We don't pin values
+    // (that's wallclock-dependent and brittle); we just assert count and non-negativity.
+    const metrics = createMockMetricServer()
+    const target = buildTarget({
+      onData: async ({ store, data }) => {
+        store.insert('events', [data as Record<string, unknown>])
+      },
+    })
+
+    async function* read() {
+      yield { data: { block_number: 10, tx_hash: '0xa' }, ctx: makeBatchContext(cursor(10), [], 0, metrics) }
+      yield { data: { block_number: 11, tx_hash: '0xb' }, ctx: makeBatchContext(cursor(11), [], 0, metrics) }
+    }
+    await target.write({ read: read as never, logger: createTestLogger() })
+
+    const histogram = metrics.histogram('sqd_bigquery_commit_duration_seconds')
+    expect(histogram.observations).toHaveLength(2)
+    for (const v of histogram.observations) expect(v).toBeGreaterThanOrEqual(0)
+  })
+
+  it('classifies AppendRows failures into append_errors_total{kind}', async () => {
+    // Inject a fake writer that rejects with a gRPC RESOURCE_EXHAUSTED (code 8). The
+    // classifier must label this as "resource_exhausted" and the counter must increment by 1.
+    // Using doWithRetry's transient retry: code 8 is retried up to 8 times before bubbling —
+    // we want a NON-transient code here so the failure surfaces immediately to the metric path.
+    // Use code 3 (INVALID_ARGUMENT) which is non-retried and maps to "invalid_argument".
+    const metrics = createMockMetricServer()
+    const failingFactory: ProtoWriterFactory = () => ({
+      appendRows: () => ({
+        getResult: async () => {
+          const err = new Error('schema mismatch') as Error & { code: number }
+          err.code = 3
+          throw err
+        },
+      }),
+      close: () => {},
+    })
+
+    const target = buildTarget({
+      onData: async ({ store, data }) => {
+        store.insert('events', [data as Record<string, unknown>])
+      },
+      protoWriterFactory: failingFactory,
+    })
+
+    async function* read() {
+      yield {
+        data: { block_number: 10, tx_hash: '0xa' },
+        ctx: makeBatchContext({ number: 10, hash: '0xa', timestamp: 1_700_000_000 }, [], 0, metrics),
+      }
+    }
+    await expect(target.write({ read: read as never, logger: createTestLogger() })).rejects.toThrow(/schema mismatch/)
+
+    const counter = metrics.counter('sqd_bigquery_append_errors_total')
+    // Exactly one increment, labeled with the pipe id and the classified kind.
+    expect(counter.calls).toHaveLength(1)
+    expect(counter.calls[0]).toEqual({ labels: { id: 'test-pipe', kind: 'invalid_argument' }, value: 1 })
+
+    // The success-path observations must NOT fire when the commit threw.
+    expect(metrics.histogram('sqd_bigquery_commit_duration_seconds').observations).toEqual([])
+    expect(metrics.histogram('sqd_bigquery_block_to_commit_lag_seconds').observations).toEqual([])
+  })
+
+  it('reuses the same Histogram/Counter handles across batches (lazy registration cached)', async () => {
+    // The metrics-server interface returns the same registered metric on duplicate names; we
+    // also cache the handles in a closure variable so we don't re-resolve on every batch. Two
+    // batches → exactly one registered histogram with two observations on it.
+    const metrics = createMockMetricServer()
+    const target = buildTarget({
+      onData: async ({ store, data }) => {
+        store.insert('events', [data as Record<string, unknown>])
+      },
+    })
+
+    async function* read() {
+      yield {
+        data: { block_number: 10, tx_hash: '0xa' },
+        ctx: makeBatchContext({ number: 10, hash: '0xa', timestamp: 1_700_000_000 }, [], 0, metrics),
+      }
+      yield {
+        data: { block_number: 11, tx_hash: '0xb' },
+        ctx: makeBatchContext({ number: 11, hash: '0xb', timestamp: 1_700_000_001 }, [], 0, metrics),
+      }
+    }
+    await target.write({ read: read as never, logger: createTestLogger() })
+
+    const lag = metrics.histogram('sqd_bigquery_block_to_commit_lag_seconds')
+    expect(lag.observations).toHaveLength(2)
+    // Single registered histogram for the metric name (no duplicates from re-registration).
+    expect(metrics.keys().filter((k) => k === 'sqd_bigquery_block_to_commit_lag_seconds')).toHaveLength(1)
+  })
+
+  it('does not observe duration/lag when WAL post-commit fails (no phantom success)', async () => {
+    // Per-batch AppendRows order:
+    //   1. saveCommitPre  → IN_FLIGHT_COMMIT row on /sync   (call 1)
+    //   2. commitBatch    → data row on /events             (call 2)
+    //   3. saveCommitPost → COMMITTED row on /sync          (call 3)
+    // Failing call 3 leaves the batch uncommitted from the recovery POV (next getCursor()
+    // re-runs the bounded DELETE for the in-flight range). The success metrics MUST NOT
+    // observe — otherwise the dashboard shows a happy commit lag for a batch that wasn't.
+    const metrics = createMockMetricServer()
+    let appendCalls = 0
+    // Use a NON-transient code so doWithRetry doesn't retry past the failure — code 3
+    // (INVALID_ARGUMENT) is fatal in `isTransientError`, so the first throw on call 3
+    // propagates immediately.
+    const failOnPostCommit: ProtoWriterFactory = () => ({
+      appendRows: () => ({
+        getResult: async () => {
+          appendCalls++
+          if (appendCalls === 3) {
+            const err = new Error('post-commit broke') as Error & { code: number }
+            err.code = 3
+            throw err
+          }
+          return { acked: true }
+        },
+      }),
+      close: () => {},
+    })
+
+    const target = buildTarget({
+      onData: async ({ store, data }) => {
+        store.insert('events', [data as Record<string, unknown>])
+      },
+      protoWriterFactory: failOnPostCommit,
+    })
+
+    async function* read() {
+      yield {
+        data: { block_number: 10, tx_hash: '0xa' },
+        ctx: makeBatchContext({ number: 10, hash: '0xa', timestamp: 1_700_000_000 }, [], 0, metrics),
+      }
+    }
+    await expect(target.write({ read: read as never, logger: createTestLogger() })).rejects.toThrow(
+      /post-commit broke/,
+    )
+
+    // Error counter increments — trackBqErrors classifies the post-commit gRPC failure.
+    const counter = metrics.counter('sqd_bigquery_append_errors_total')
+    expect(counter.calls).toEqual([{ labels: { id: 'test-pipe', kind: 'invalid_argument' }, value: 1 }])
+
+    // Success-path histograms stay empty: post-commit never returned, so we never reached
+    // the observe() calls. This is the central regression check — moving observe() before
+    // saveCommitPost would silently fail this test.
+    expect(metrics.histogram('sqd_bigquery_commit_duration_seconds').observations).toEqual([])
+    expect(metrics.histogram('sqd_bigquery_block_to_commit_lag_seconds').observations).toEqual([])
   })
 })
 

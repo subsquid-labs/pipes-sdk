@@ -1,27 +1,24 @@
-import { BigQuery } from '@google-cloud/bigquery'
-import { managedwriter } from '@google-cloud/bigquery-storage'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import type { BigQuery, TableField } from '@google-cloud/bigquery'
+import type { managedwriter } from '@google-cloud/bigquery-storage'
+import { beforeAll, describe, expect, it } from 'vitest'
 
-import type { BatchContext, BlockCursor } from '~/core/index.js'
-import { evmPortalStream } from '~/evm/evm-portal-source.js'
-import {
-  type MockPortal,
-  type MockResponse,
-  blockDecoder,
-  createMockPortal,
-  createTestLogger,
-} from '~/testing/index.js'
+import { createTestLogger } from '~/testing/index.js'
 
 import { BigQueryState } from './bigquery-state.js'
 import { BigQueryStore } from './bigquery-store.js'
 import { bigqueryTarget } from './bigquery-target.js'
 import {
-  type TrackedTable,
-  ensureTrackedTable,
-  partitioningWithDefaults,
-  syncTableDdl,
-  trackedTableDdl,
-} from './tables.js'
+  DATASET,
+  PREFIX,
+  PROJECT,
+  RUN,
+  makeBatchContext,
+  partitioning,
+  projectId,
+  setupIntegrationClients,
+  trackedTable,
+} from './integration-helpers.js'
+import { type TrackedTable, ensureTrackedTable, syncTableDdl, trackedTableDdl } from './tables.js'
 
 /**
  * Integration tests for the BigQuery target — gated by `BIGQUERY_TEST_PROJECT`.
@@ -35,84 +32,18 @@ import {
  *   BIGQUERY_TEST_DATASET=pipes_target_test \
  *   pnpm vitest run src/targets/bigquery/bigquery-target.integration.test.ts
  *
- * What this suite verifies that unit tests cannot:
- *   - Generated DDL is accepted by the live SQL parser (catches reserved-keyword bugs and
- *     clause-ordering mistakes that mocked tests can't surface).
- *   - `BigQueryState.getCursor` round-trips through real REST (Not Found error → CREATE
- *     TABLE → returns undefined).
- *   - Real Storage Write API Pending mode end-to-end (CreateWriteStream → AppendRows →
- *     FinalizeWriteStream → BatchCommitWriteStreams over actual gRPC).
- *   - GA DML on freshly streamed rows: DELETE within seconds of the Pending commit
- *     succeeds — the central correctness claim of this target.
- *   - Partition pruning: `dryRun` bytes-billed for a fork DELETE stays within
- *     partition_width × row_size, proving both bounds in the predicate fire static
- *     partition pruning at the planner.
+ * Scope of this file: schema management, Storage Write API visibility, type-mapping
+ * round-trip. Fork lifecycle lives in `bigquery-target-fork.integration.test.ts`. Shared
+ * scaffolding (env vars, dataset bootstrap, BatchContext stub) lives in `./integration-helpers`.
  */
 
-const PROJECT = process.env['BIGQUERY_TEST_PROJECT']
-const DATASET = process.env['BIGQUERY_TEST_DATASET'] ?? 'pipes_target_test'
-const RUN = !!PROJECT
-
 describe.skipIf(!RUN)('bigquery target — integration', () => {
-  // `describe.skipIf(!RUN)` gates on PROJECT being set, so inside the suite we narrow once.
-  const projectId = PROJECT as string
-
   let bigquery: BigQuery
   let writer: managedwriter.WriterClient
 
-  // Every table this suite creates uses this prefix. Two reasons:
-  //   1. The leftover-sweep in `beforeAll` matches exactly these tables — never the user's
-  //      own data sharing the same dataset.
-  //   2. Easy to spot test artefacts in the BigQuery console.
-  // Each test then appends its own `<purpose>_<timestamp>` so failures leave inspectable
-  // state behind without contaminating sibling tests.
-  const PREFIX = 'e2e_test_'
-  const partitioning = partitioningWithDefaults()
-
-  // Schema template — copied per-test with an overridden `table` name.
-  const trackedTable: TrackedTable = {
-    table: 'unused', // overridden per-test
-    blockNumberColumn: 'block_number',
-    schema: [
-      { name: 'block_number', type: 'INT64', mode: 'REQUIRED' },
-      { name: 'tx_hash', type: 'STRING' },
-    ],
-  }
-
   beforeAll(async () => {
-    bigquery = new BigQuery({ projectId })
-    writer = new managedwriter.WriterClient({ projectId })
-
-    const [exists] = await bigquery.dataset(DATASET).exists()
-    if (!exists) await bigquery.createDataset(DATASET)
-
-    // Drop leftover tables from previous runs. Tests do NOT clean up after themselves on
-    // purpose — we want failed runs to leave their state behind for inspection. The next
-    // run wipes via this prefix-scoped sweep, so leftovers never accumulate beyond one run.
-    const [allTables] = await bigquery.dataset(DATASET).getTables()
-    await Promise.all(
-      allTables
-        .filter((t) => (t.id ?? '').startsWith(PREFIX))
-        .map((t) => t.delete({ ignoreNotFound: true }).catch(() => {})),
-    )
+    ;({ bigquery, writer } = await setupIntegrationClients())
   }, 60_000)
-
-  /** Helper: produce a synthetic BatchContext for direct target.write loops. */
-  function makeBatchContext(current: BlockCursor): BatchContext {
-    const profilerStub: Record<string, unknown> = {
-      start: () => profilerStub,
-      measure: async (_: unknown, fn: () => unknown) => fn(),
-      end: () => {},
-    }
-    return {
-      logger: createTestLogger(),
-      profiler: profilerStub,
-      stream: {
-        state: { current, rollbackChain: [current] },
-        head: { finalized: undefined, latest: current },
-      },
-    } as unknown as BatchContext
-  }
 
   describe('DDL parse — generated SQL is accepted by the live BigQuery parser', () => {
     it('sync-table DDL: backtick-quoted reserved keywords + DEFAULT ordering', async () => {
@@ -213,630 +144,324 @@ describe.skipIf(!RUN)('bigquery target — integration', () => {
     }, 30_000)
   })
 
-  describe('Storage Write API — write + fork end-to-end', () => {
-    // Each test gets its own dedicated events + sync table pair so writes from one test
-    // never contaminate another's row counts. The shared `${PREFIX}` sweep in `beforeAll`
-    // cleans them all up on the next run.
+  // ---------------------------------------------------------------------------------------
+  // Type-mapping coverage — Storage Write API round-trip.
+  //
+  // Verifies what JS shapes the BigQueryStore accepts per BQ column type, and that the value
+  // SQL reads back equals what we wrote. Each column owns one bullet of the matrix (no hidden
+  // coupling) so a regression on, say, NUMERIC fails its own assertion line and not the rest.
+  //
+  // Specifically targets the NUMERIC/BIGNUMERIC claim in the docs example: SDK 5.x maps both
+  // to proto TYPE_STRING (see @google-cloud/bigquery-storage/.../adapt/proto_mappings.js), and
+  // the proto-row encoder turns number/bigint into base-10 strings while passing JS strings
+  // through verbatim. If the older "string hangs silently on AppendRows" still bites, this
+  // suite is where it surfaces — and the docs comment can be retired.
+  // ---------------------------------------------------------------------------------------
 
-    it('completes a write batch end-to-end and advances the cursor', async () => {
-      const localEvents = `${PREFIX}events_write_${Date.now()}`
-      const localSync = `${PREFIX}sync_write_${Date.now()}`
-      const target = bigqueryTarget<{ block_number: number; tx_hash: string }>({
+  describe('type mappings (Storage Write API round-trip)', () => {
+    // Shared values across the auto-DDL and manual-DDL tests so a regression that only affects
+    // one path (e.g. encoder vs DDL emission) is easy to spot — same input, different setup.
+
+    // BIGNUMERIC range is ±5.79e38 — i.e. up to 38 digits before the decimal point, plus 38
+    // after. 38 before is comfortably outside INT64 (~19 digits), so a regression that
+    // quietly truncates to INT64 still surfaces; going past 38 before would overflow the
+    // type itself ("Invalid BIGNUMERIC value" from AppendRows).
+    const bigNumericString = '12345678901234567890123456789012345678.1234567890'
+    // NUMERIC range: ~38 digits, scale 9 — keep well within bounds, with a non-zero fractional
+    // part so a "lost the fraction" bug fails the equality check.
+    const numericFromString = '12345.6789'
+    const dateValue = new Date(Date.UTC(2026, 4, 9)) // 2026-05-09
+    const timestampValue = new Date(Date.UTC(2026, 4, 9, 12, 34, 56, 789))
+
+    const SCALAR_FIELDS = [
+      { name: 'block_number', type: 'INT64', mode: 'REQUIRED' },
+      { name: 'col_int64', type: 'INT64' },
+      { name: 'col_int64_str', type: 'INT64' }, // INT64 written as JS string (max-safe-integer fix)
+      { name: 'col_float64', type: 'FLOAT64' },
+      { name: 'col_bool', type: 'BOOL' },
+      { name: 'col_string', type: 'STRING' },
+      { name: 'col_bytes', type: 'BYTES' },
+      // The whole point of the suite — if these fail, the docs example's STRING workaround is
+      // justified. If they pass, we update the example.
+      { name: 'col_numeric_from_number', type: 'NUMERIC' },
+      { name: 'col_numeric_from_bigint', type: 'NUMERIC' },
+      { name: 'col_numeric_from_string', type: 'NUMERIC' },
+      { name: 'col_bignumeric_from_string', type: 'BIGNUMERIC' },
+      { name: 'col_date', type: 'DATE' }, // expects JS Date per encoder.js:140-145
+      { name: 'col_timestamp', type: 'TIMESTAMP' }, // expects JS Date per encoder.js:140-153
+      { name: 'col_json', type: 'JSON' }, // BQ JSON type — encoder treats as STRING in proto
+    ] as const satisfies readonly TableField[]
+
+    const scalarRow: Record<string, unknown> = {
+      block_number: 1,
+      col_int64: 42,
+      // Numbers above 2^53 must travel as a string-typed field — JS number loses precision
+      // around 9.007e15 and the encoder would silently round.
+      col_int64_str: '9007199254740993',
+      col_float64: 3.14,
+      col_bool: true,
+      col_string: 'hello, мир',
+      col_bytes: Buffer.from([0xde, 0xad, 0xbe, 0xef]),
+      col_numeric_from_number: 1234,
+      col_numeric_from_bigint: 1234567890123456789n,
+      col_numeric_from_string: numericFromString,
+      col_bignumeric_from_string: bigNumericString,
+      col_date: dateValue,
+      col_timestamp: timestampValue,
+      col_json: '{"a":1,"b":[2,3]}',
+    }
+
+    type ScalarReadRow = {
+      col_int64: string
+      col_int64_str: string
+      col_float64: number
+      col_bool: boolean
+      col_string: string
+      col_bytes_hex: string
+      num_number: string
+      num_bigint: string
+      num_string: string
+      bignum_string: string
+      d: string
+      ts: string
+      j: string
+    }
+
+    /**
+     * Cast every non-trivial type to STRING BQ-side so the JS client doesn't surface
+     * Big.js / PreciseDate / Buffer-with-quirks — and so INT64 values past 2^53 round-trip
+     * intact. The default `bigquery.query` returns INT64 as a JS Number, which truncates
+     * `9007199254740993` to `9007199254740992` on the read path even though the stored
+     * value is correct. CAST(... AS STRING) forces lossless transit.
+     */
+    const SCALAR_SELECT = `
+      CAST(col_int64 AS STRING) AS col_int64,
+      CAST(col_int64_str AS STRING) AS col_int64_str,
+      col_float64,
+      col_bool,
+      col_string,
+      TO_HEX(col_bytes) AS col_bytes_hex,
+      CAST(col_numeric_from_number AS STRING) AS num_number,
+      CAST(col_numeric_from_bigint AS STRING) AS num_bigint,
+      CAST(col_numeric_from_string AS STRING) AS num_string,
+      CAST(col_bignumeric_from_string AS STRING) AS bignum_string,
+      CAST(col_date AS STRING) AS d,
+      FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%E3SZ', col_timestamp, 'UTC') AS ts,
+      TO_JSON_STRING(col_json) AS j
+    `
+
+    function assertScalarRow(r: ScalarReadRow): void {
+      expect(Number(r.col_int64)).toBe(42)
+      expect(String(r.col_int64_str)).toBe('9007199254740993')
+      expect(Number(r.col_float64)).toBeCloseTo(3.14, 6)
+      expect(r.col_bool).toBe(true)
+      expect(r.col_string).toBe('hello, мир')
+      expect(r.col_bytes_hex).toBe('deadbeef')
+      // BQ NUMERIC normalizes scale on read — '12345.6789' may come back as '12345.678900000'.
+      // Use Number-equality instead of string-equality so we test the value, not the format.
+      expect(Number(r.num_number)).toBe(1234)
+      expect(String(r.num_bigint)).toBe('1234567890123456789')
+      expect(Number(r.num_string)).toBe(12345.6789)
+      // BIGNUMERIC has 76-digit precision; can't compare via JS Number. Strip trailing zeros
+      // to compare meaningful digits only.
+      expect(r.bignum_string.replace(/0+$/, '')).toBe(bigNumericString.replace(/0+$/, ''))
+      expect(r.d).toBe('2026-05-09')
+      expect(r.ts).toBe('2026-05-09T12:34:56.789Z')
+      // BQ JSON normalizes whitespace; assert structural equality, not byte-equality.
+      expect(JSON.parse(r.j)).toEqual({ a: 1, b: [2, 3] })
+    }
+
+    it('auto-DDL: round-trips every flat scalar type the SDK auto-creates', async () => {
+      // Pure auto-create path. No REPEATED, no RECORD — those are the auto-DDL guard's
+      // responsibility (see assertFlatSchema). Anything in here MUST work end-to-end via
+      // ensureTrackedTable + Storage Write API + SQL read-back.
+      const localEvents = `${PREFIX}types_auto_${Date.now()}`
+      const trackedTableScalars: TrackedTable = {
+        table: localEvents,
+        blockNumberColumn: 'block_number',
+        schema: [...SCALAR_FIELDS],
+      }
+
+      const target = bigqueryTarget<Record<string, unknown>>({
         client: { bigquery, writer },
         dataset: DATASET,
-        tables: [{ ...trackedTable, table: localEvents }],
-        settings: { state: { table: localSync } },
+        tables: [trackedTableScalars],
+        settings: { state: { table: `${PREFIX}types_auto_sync_${Date.now()}` } },
         onData: async ({ store, data }) => {
           store.insert(localEvents, [data])
         },
       })
 
       async function* read() {
-        yield {
-          data: { block_number: 1, tx_hash: '0x1' },
-          ctx: makeBatchContext({ number: 1, hash: '0x1' }),
-        }
+        yield { data: scalarRow, ctx: makeBatchContext({ number: 1, hash: '0x1' }) }
       }
-
       await target.write({ read: read as never, logger: createTestLogger() })
 
       const [rows] = await bigquery.query({
-        query: `SELECT block_number FROM \`${projectId}.${DATASET}.${localEvents}\` WHERE block_number = 1`,
+        query: `SELECT ${SCALAR_SELECT} FROM \`${projectId}.${DATASET}.${localEvents}\` WHERE block_number = 1`,
       })
       expect(rows.length).toBe(1)
-    }, 60_000)
+      assertScalarRow(rows[0] as ScalarReadRow)
+    }, 120_000)
 
-    it('fork DELETE removes forked-block rows from a real BQ table', async () => {
-      // The central claim of this PR: DML on freshly-committed Storage Write rows works.
-      // Write blocks 1..10, fork at block 5, assert blocks 6..10 are gone and 1..5 remain.
-      const localEvents = `${PREFIX}events_fork_${Date.now()}`
-      const localSync = `${PREFIX}sync_fork_${Date.now()}`
-      const target = bigqueryTarget<{ block_number: number; tx_hash: string }>({
+    it('manual DDL: scalar matrix + REPEATED INT64 + nested RECORD round-trip', async () => {
+      // Pre-create the table manually so the schema can carry REPEATED / RECORD — those modes
+      // are blocked by `assertFlatSchema` in the auto-DDL path. The SDK's documented escape
+      // hatch is "create the table yourself and re-run; the target will validate". This test
+      // exercises that path. Partition clause matches `partitioningWithDefaults()` so the
+      // validator accepts.
+      const localEvents = `${PREFIX}types_manual_${Date.now()}`
+
+      if (!partitioning) throw new Error('integration suite assumes default partitioning is enabled')
+      await bigquery.query({
+        query: `
+          CREATE TABLE \`${projectId}.${DATASET}.${localEvents}\` (
+            block_number INT64 NOT NULL,
+            col_int64 INT64,
+            col_int64_str INT64,
+            col_float64 FLOAT64,
+            col_bool BOOL,
+            col_string STRING,
+            col_bytes BYTES,
+            col_numeric_from_number NUMERIC,
+            col_numeric_from_bigint NUMERIC,
+            col_numeric_from_string NUMERIC,
+            col_bignumeric_from_string BIGNUMERIC,
+            col_date DATE,
+            col_timestamp TIMESTAMP,
+            col_json JSON,
+            col_array_int64 ARRAY<INT64>,
+            col_record STRUCT<inner_int INT64, inner_string STRING>
+          )
+          PARTITION BY RANGE_BUCKET(block_number, GENERATE_ARRAY(0, ${partitioning.maxBlocks}, ${partitioning.bucketSize}))
+        `,
+      })
+
+      const trackedTableNested: TrackedTable = {
+        table: localEvents,
+        blockNumberColumn: 'block_number',
+        schema: [
+          ...SCALAR_FIELDS,
+          { name: 'col_array_int64', type: 'INT64', mode: 'REPEATED' },
+          {
+            name: 'col_record',
+            type: 'RECORD',
+            fields: [
+              { name: 'inner_int', type: 'INT64' },
+              { name: 'inner_string', type: 'STRING' },
+            ],
+          },
+        ],
+      }
+
+      const target = bigqueryTarget<Record<string, unknown>>({
         client: { bigquery, writer },
         dataset: DATASET,
-        tables: [{ ...trackedTable, table: localEvents }],
-        settings: { state: { table: localSync } },
+        tables: [trackedTableNested],
+        settings: { state: { table: `${PREFIX}types_manual_sync_${Date.now()}` } },
         onData: async ({ store, data }) => {
           store.insert(localEvents, [data])
         },
       })
 
-      async function* write1To10() {
-        for (let i = 1; i <= 10; i++) {
-          yield {
-            data: { block_number: i, tx_hash: `0x${i.toString(16)}` },
-            ctx: makeBatchContext({ number: i, hash: `0x${i.toString(16)}` }),
-          }
-        }
+      const row: Record<string, unknown> = {
+        ...scalarRow,
+        col_array_int64: [10, 20, 30],
+        col_record: { inner_int: 7, inner_string: 'inside' },
       }
 
-      await target.write({ read: write1To10 as never, logger: createTestLogger() })
+      async function* read() {
+        yield { data: row, ctx: makeBatchContext({ number: 1, hash: '0x1' }) }
+      }
+      await target.write({ read: read as never, logger: createTestLogger() })
 
-      const [pre] = await bigquery.query({
-        query: `SELECT COUNT(*) AS n FROM \`${projectId}.${DATASET}.${localEvents}\` WHERE block_number BETWEEN 1 AND 10`,
+      const [rows] = await bigquery.query({
+        query: `
+          SELECT
+            ${SCALAR_SELECT},
+            col_array_int64,
+            col_record.inner_int AS rec_int,
+            col_record.inner_string AS rec_string
+          FROM \`${projectId}.${DATASET}.${localEvents}\`
+          WHERE block_number = 1
+        `,
       })
-      expect(Number(pre[0].n)).toBe(10)
+      expect(rows.length).toBe(1)
+      type NestedRow = ScalarReadRow & {
+        col_array_int64: unknown[]
+        rec_int: number | string
+        rec_string: string
+      }
+      const r = rows[0] as NestedRow
 
-      const previousBlocks: BlockCursor[] = [
-        { number: 5, hash: '0x5' },
-        { number: 6, hash: 'BAD6' },
-        { number: 7, hash: 'BAD7' },
-        { number: 8, hash: 'BAD8' },
-        { number: 9, hash: 'BAD9' },
-        { number: 10, hash: 'BADA' },
-      ]
-      const safe = await target.fork!(previousBlocks)
-      expect(safe?.number).toBe(5)
+      assertScalarRow(r)
+      expect(r.col_array_int64.map((v) => Number(v))).toEqual([10, 20, 30])
+      expect(Number(r.rec_int)).toBe(7)
+      expect(r.rec_string).toBe('inside')
+    }, 120_000)
 
-      const [post] = await bigquery.query({
-        query: `SELECT COUNT(*) AS n FROM \`${projectId}.${DATASET}.${localEvents}\` WHERE block_number BETWEEN 6 AND 10`,
-      })
-      expect(Number(post[0].n)).toBe(0)
+    it('writes NULL for omitted fields and explicit nulls', async () => {
+      // The encoder skips keys whose value is null/undefined (encoder.js convertRow). For
+      // NULLABLE columns BQ writes NULL — the same behavior whether the key is omitted or
+      // present-and-null. This pins both paths so a future encoder change that, say, writes
+      // empty-string for missing STRING is caught immediately.
+      const localEvents = `${PREFIX}types_null_${Date.now()}`
+      const trackedTableNulls: TrackedTable = {
+        table: localEvents,
+        blockNumberColumn: 'block_number',
+        schema: [
+          { name: 'block_number', type: 'INT64', mode: 'REQUIRED' },
+          { name: 'col_string_nullable', type: 'STRING' },
+          { name: 'col_int64_nullable', type: 'INT64' },
+          { name: 'col_numeric_nullable', type: 'NUMERIC' },
+        ],
+      }
 
-      const [kept] = await bigquery.query({
-        query: `SELECT COUNT(*) AS n FROM \`${projectId}.${DATASET}.${localEvents}\` WHERE block_number BETWEEN 1 AND 5`,
-      })
-      expect(Number(kept[0].n)).toBe(5)
-    }, 180_000)
-  })
-
-  describe('fork-rollback SQL', () => {
-    it('parameterised DELETE with numeric BETWEEN bounds runs cleanly', async () => {
-      const localEvents = `${PREFIX}events_dml_${Date.now()}`
       await ensureTrackedTable({
         bigquery,
         projectId,
         dataset: DATASET,
-        trackedTable: { ...trackedTable, table: localEvents },
+        trackedTable: trackedTableNulls,
         partitioning,
       })
 
-      const [job] = await bigquery.createQueryJob({
-        query: `DELETE FROM \`${projectId}.${DATASET}.${localEvents}\` WHERE block_number BETWEEN @low AND @high`,
-        params: { low: 100, high: 200 },
-      })
-      await job.getQueryResults()
-    }, 30_000)
-
-    it('keeps DELETE bytes-billed within partition width × row size (partition-pruning regression)', async () => {
-      const localEvents = `${PREFIX}events_dryrun_${Date.now()}`
-      await ensureTrackedTable({
-        bigquery,
-        projectId,
-        dataset: DATASET,
-        trackedTable: { ...trackedTable, table: localEvents },
-        partitioning,
-      })
-
-      const [job] = await bigquery.createQueryJob({
-        query: `DELETE FROM \`${projectId}.${DATASET}.${localEvents}\` WHERE block_number > @safe AND block_number <= @upper`,
-        params: { safe: 0, upper: 10 },
-        dryRun: true,
-      })
-      const bytesBilled = Number(job.metadata.statistics?.totalBytesProcessed ?? '0')
-      expect(bytesBilled).toBeLessThan(10 * 1024 * 1024) // <10MB scan for a 10-row range
-    })
-  })
-
-  // ---------------------------------------------------------------------------------------
-  // Fork scenarios driven through the full pipeTo() path with a mock portal.
-  //
-  // These mirror the ClickHouse / Postgres reorg suites: rather than calling target.fork()
-  // directly, we let evmPortalStream replay 409 reorg responses and observe BQ table /
-  // sync-table state after the framework drives target.fork() and re-stream automatically.
-  //
-  // Each test creates a fresh tracked + sync table pair so writes / DELETEs from one test
-  // never bleed into another. Tables are reaped on the next run by the PREFIX sweep in
-  // beforeAll — failed runs deliberately leave the inspectable state behind.
-  // ---------------------------------------------------------------------------------------
-
-  describe('forks (mock portal end-to-end)', () => {
-    let mockPortal: MockPortal | undefined
-
-    afterEach(async () => {
-      await mockPortal?.close()
-      mockPortal = undefined
-    })
-
-    /** Build a tracked-events + sync table pair with unique names for one test. */
-    function uniqueTables(slug: string) {
-      const stamp = Date.now()
-      return {
-        events: `${PREFIX}events_${slug}_${stamp}`,
-        sync: `${PREFIX}sync_${slug}_${stamp}`,
-      }
-    }
-
-    type Header = { number: number; hash: string; timestamp: number }
-
-    /**
-     * Builds a fork-test target. The generic stays explicit so hook callbacks
-     * (`onAfterRollback`, custom `onData`, etc) infer their parameter types
-     * instead of collapsing to `any` through a Parameters<…> spread.
-     */
-    function buildTarget(
-      events: string,
-      sync: string,
-      overrides: {
-        onData?: (ctx: { store: BigQueryStore; data: Header[] }) => Promise<unknown> | unknown
-        onBeforeRollback?: (ctx: { cursor: BlockCursor }) => Promise<unknown> | unknown
-        onAfterRollback?: (ctx: { cursor: BlockCursor }) => Promise<unknown> | unknown
-      } = {},
-    ) {
-      return bigqueryTarget<Header[]>({
+      const target = bigqueryTarget<Record<string, unknown>>({
         client: { bigquery, writer },
         dataset: DATASET,
-        tables: [{ ...trackedTable, table: events }],
-        settings: { state: { table: sync } },
-        onData:
-          overrides.onData ??
-          (({ store, data }) => {
-            store.insert(
-              events,
-              data.map((b) => ({ block_number: b.number, tx_hash: b.hash })),
-            )
-          }),
-        onBeforeRollback: overrides.onBeforeRollback,
-        onAfterRollback: overrides.onAfterRollback,
+        tables: [trackedTableNulls],
+        settings: { state: { table: `${PREFIX}types_null_sync_${Date.now()}` } },
+        onData: async ({ store, data }) => {
+          store.insert(localEvents, [data])
+        },
       })
-    }
 
-    async function readEvents(events: string): Promise<{ block_number: number; tx_hash: string }[]> {
-      const [rows] = await bigquery.query({
-        query: `SELECT block_number, tx_hash FROM \`${projectId}.${DATASET}.${events}\` ORDER BY block_number ASC`,
-      })
-      return rows.map((r: { block_number: number | string; tx_hash: string }) => ({
-        block_number: Number(r.block_number),
-        tx_hash: r.tx_hash,
-      }))
-    }
-
-    async function readSyncCommittedCursors(
-      sync: string,
-    ): Promise<{ current: { number: number; hash: string }; finalized: { number: number; hash: string } | null }[]> {
-      // Project the same shape the ClickHouse suite asserts on: `current` (committed cursor),
-      // `finalized`, ordered by write time. `op='commit'` filters out IN_FLIGHT_ROLLBACK rows
-      // since those carry no meaningful cursor.
-      const [rows] = await bigquery.query({
-        query: `SELECT \`current\`, finalized FROM \`${projectId}.${DATASET}.${sync}\`
-                WHERE op = 'commit' AND committed = TRUE
-                ORDER BY \`timestamp\` ASC`,
-      })
-      return rows.map((r: { current: string | null; finalized: string | null }) => ({
-        current: JSON.parse(r.current ?? 'null'),
-        finalized: r.finalized ? JSON.parse(r.finalized) : null,
-      }))
-    }
-
-    it('handles a simple fork: re-streams forked tail and DELETE removes superseded rows', async () => {
-      const { events, sync } = uniqueTables('simple')
-
-      mockPortal = await createMockPortal([
-        // First batch: blocks 1..5 on the original chain.
-        {
-          statusCode: 200,
-          data: [
-            { header: { number: 1, hash: '0x1', timestamp: 1000 } },
-            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
-            { header: { number: 3, hash: '0x3', timestamp: 3000 } },
-            { header: { number: 4, hash: '0x4', timestamp: 4000 } },
-            { header: { number: 5, hash: '0x5', timestamp: 5000 } },
-          ],
-          head: { finalized: { number: 1, hash: '0x1' } },
-        },
-        // 409 reorg: blocks 4 and 5 forked off the canonical chain.
-        {
-          statusCode: 409,
+      async function* read() {
+        // block 1 omits keys; block 2 sets them to null. Both should land as SQL NULL.
+        yield { data: { block_number: 1 }, ctx: makeBatchContext({ number: 1, hash: '0x1' }) }
+        yield {
           data: {
-            previousBlocks: [
-              { number: 2, hash: '0x2' },
-              { number: 3, hash: '0x3' },
-              { number: 4, hash: '0x4-1' },
-              { number: 5, hash: '0x5-1' },
-            ],
+            block_number: 2,
+            col_string_nullable: null,
+            col_int64_nullable: null,
+            col_numeric_nullable: null,
           },
-        },
-        // Re-stream after the framework drives target.fork() — blocks 4..7 on the new chain.
-        {
-          statusCode: 200,
-          data: [
-            { header: { number: 4, hash: '0x4a', timestamp: 4000 } },
-            { header: { number: 5, hash: '0x5a', timestamp: 5000 } },
-            { header: { number: 6, hash: '0x6a', timestamp: 6000 } },
-            { header: { number: 7, hash: '0x7a', timestamp: 7000 } },
-          ],
-        },
-      ])
-
-      let beforeRollbacks = 0
-      let afterRollbacks = 0
-      await evmPortalStream({
-        id: 'test',
-        portal: mockPortal.url,
-        outputs: blockDecoder({ from: 0, to: 7 }),
-      }).pipeTo(
-        buildTarget(events, sync, {
-          onBeforeRollback: ({ cursor }) => {
-            beforeRollbacks++
-            expect(cursor).toMatchObject({ number: 3, hash: '0x3' })
-          },
-          onAfterRollback: ({ cursor }) => {
-            afterRollbacks++
-            expect(cursor).toMatchObject({ number: 3, hash: '0x3' })
-          },
-        }),
-      )
-
-      expect(beforeRollbacks).toBe(1)
-      expect(afterRollbacks).toBe(1)
-
-      // Rows 1..3 from the original stream survive; 4-5 (orig) are gone; 4a-7a are present.
-      // The unique block_hash per row also proves we didn't accidentally double-insert
-      // (the WAL recovery range is [previousCursor+1, next] — a stale recovery would re-run
-      // a DELETE that wipes the rows we just inserted).
-      expect(await readEvents(events)).toEqual([
-        { block_number: 1, tx_hash: '0x1' },
-        { block_number: 2, tx_hash: '0x2' },
-        { block_number: 3, tx_hash: '0x3' },
-        { block_number: 4, tx_hash: '0x4a' },
-        { block_number: 5, tx_hash: '0x5a' },
-        { block_number: 6, tx_hash: '0x6a' },
-        { block_number: 7, tx_hash: '0x7a' },
-      ])
-    }, 240_000)
-
-    it('handles a fork whose finalized block is missing from the in-flight batch (multi-step rollback)', async () => {
-      const { events, sync } = uniqueTables('missing_finalized')
-
-      mockPortal = await createMockPortal([
-        {
-          statusCode: 200,
-          data: [
-            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
-            { header: { number: 3, hash: '0x3', timestamp: 3000 } },
-            { header: { number: 4, hash: '0x4', timestamp: 4000 } },
-            { header: { number: 5, hash: '0x5', timestamp: 5000 } },
-          ],
-          head: { finalized: { number: 1, hash: '0x1' } },
-        },
-        // First reorg: only blocks 4..5 visible — common ancestor not yet found in this slice.
-        {
-          statusCode: 409,
-          data: {
-            previousBlocks: [
-              { number: 4, hash: '0x4a' },
-              { number: 5, hash: '0x5a' },
-            ],
-          },
-        },
-        // Second reorg: deeper slice surfaces ancestor at block 1.
-        {
-          statusCode: 409,
-          data: {
-            previousBlocks: [
-              { number: 1, hash: '0x1' },
-              { number: 2, hash: '0x2a' },
-              { number: 3, hash: '0x3a' },
-            ],
-          },
-        },
-        {
-          statusCode: 200,
-          data: [
-            { header: { number: 2, hash: '0x2a', timestamp: 2000 } },
-            { header: { number: 3, hash: '0x3a', timestamp: 3000 } },
-            { header: { number: 4, hash: '0x4a', timestamp: 4000 } },
-            { header: { number: 5, hash: '0x5a', timestamp: 5000 } },
-            { header: { number: 6, hash: '0x6a', timestamp: 6000 } },
-            { header: { number: 7, hash: '0x7a', timestamp: 7000 } },
-          ],
-          head: { finalized: { number: 4, hash: '0x4a' } },
-        },
-      ])
-
-      const rollbackCursors: BlockCursor[] = []
-      await evmPortalStream({
-        id: 'test',
-        portal: mockPortal.url,
-        outputs: blockDecoder({ from: 0, to: 7 }),
-      }).pipeTo(
-        buildTarget(events, sync, {
-          onAfterRollback: ({ cursor }) => {
-            rollbackCursors.push(cursor)
-          },
-        }),
-      )
-
-      // First fork resolves to block 3, second resolves all the way to block 1.
-      expect(rollbackCursors).toEqual([
-        expect.objectContaining({ number: 3, hash: '0x3' }),
-        expect.objectContaining({ number: 1, hash: '0x1' }),
-      ])
-
-      expect(await readEvents(events)).toEqual([
-        { block_number: 2, tx_hash: '0x2a' },
-        { block_number: 3, tx_hash: '0x3a' },
-        { block_number: 4, tx_hash: '0x4a' },
-        { block_number: 5, tx_hash: '0x5a' },
-        { block_number: 6, tx_hash: '0x6a' },
-        { block_number: 7, tx_hash: '0x7a' },
-      ])
-    }, 240_000)
-
-    it('handles a deep fork that rolls back to the last finalized block, including a mid-stream crash', async () => {
-      const { events, sync } = uniqueTables('deep_finalized')
-
-      // Two responses for the post-fork range: the first attempt crashes mid-batch (we throw
-      // inside onData), the second is consumed by the resumed pipeTo loop. Both must agree
-      // on parentBlockHash='0x3a' — proving recovery resumed from the persisted cursor.
-      const postForkBatch: MockResponse = {
-        statusCode: 200,
-        data: [
-          { header: { number: 4, hash: '0x4a', timestamp: 4000 } },
-          { header: { number: 5, hash: '0x5a', timestamp: 5000 } },
-          { header: { number: 6, hash: '0x6a', timestamp: 6000 } },
-          { header: { number: 7, hash: '0x7a', timestamp: 7000 } },
-        ],
-        head: { finalized: { number: 4, hash: '0x4a' } },
-      }
-
-      mockPortal = await createMockPortal([
-        {
-          statusCode: 200,
-          data: [
-            { header: { number: 1, hash: '0x1', timestamp: 1000 } },
-            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
-            { header: { number: 3, hash: '0x3', timestamp: 3000 } },
-            { header: { number: 4, hash: '0x4', timestamp: 4000 } },
-            { header: { number: 5, hash: '0x5', timestamp: 5000 } },
-          ],
-          head: { finalized: { number: 1, hash: '0x1' } },
-        },
-        {
-          statusCode: 409,
-          data: {
-            previousBlocks: [
-              { number: 1, hash: '0x1' },
-              { number: 2, hash: '0x2a' },
-              { number: 3, hash: '0x3a' },
-              { number: 4, hash: '0x4a' },
-              { number: 5, hash: '0x5a' },
-            ],
-          },
-        },
-        {
-          statusCode: 200,
-          data: [
-            { header: { number: 2, hash: '0x2a', timestamp: 2000 } },
-            { header: { number: 3, hash: '0x3a', timestamp: 3000 } },
-          ],
-          head: { finalized: { number: 2, hash: '0x2a' } },
-        },
-        postForkBatch,
-        postForkBatch,
-      ])
-
-      let crashes = 0
-      let finished = false
-      while (!finished) {
-        try {
-          await evmPortalStream({
-            id: 'test',
-            portal: mockPortal.url,
-            outputs: blockDecoder({ from: 0, to: 7 }),
-          }).pipeTo(
-            buildTarget(events, sync, {
-              onData: async ({ store, data }) => {
-                if (data[0]?.hash === '0x4a' && crashes === 0) {
-                  crashes++
-                  throw new Error('process failed')
-                }
-                store.insert(
-                  events,
-                  data.map((b: { number: number; hash: string }) => ({
-                    block_number: b.number,
-                    tx_hash: b.hash,
-                  })),
-                )
-                if (data.some((b: { hash: string }) => b.hash === '0x7a')) finished = true
-              },
-            }),
-          )
-          // Stream ended cleanly — done either way.
-          finished = true
-        } catch (e) {
-          if (!(e instanceof Error) || e.message !== 'process failed') throw e
+          ctx: makeBatchContext({ number: 2, hash: '0x2' }),
         }
       }
+      await target.write({ read: read as never, logger: createTestLogger() })
 
-      expect(crashes).toBe(1)
-
-      // After recovery + replay, all canonical-chain blocks landed exactly once. Forked
-      // blocks 0x4 and 0x5 must have been DELETEd by tracker.fork(); the crash must NOT
-      // have left a stale 0x4a row that doubles up after restart.
-      expect(await readEvents(events)).toEqual([
-        { block_number: 1, tx_hash: '0x1' },
-        { block_number: 2, tx_hash: '0x2a' },
-        { block_number: 3, tx_hash: '0x3a' },
-        { block_number: 4, tx_hash: '0x4a' },
-        { block_number: 5, tx_hash: '0x5a' },
-        { block_number: 6, tx_hash: '0x6a' },
-        { block_number: 7, tx_hash: '0x7a' },
-      ])
-    }, 300_000)
-
-    it('handles a deep fork via two cascading rollbacks (no crash)', async () => {
-      const { events, sync } = uniqueTables('deep')
-
-      mockPortal = await createMockPortal([
-        {
-          statusCode: 200,
-          data: [
-            { header: { number: 1, hash: '0x1', timestamp: 1000 } },
-            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
-            { header: { number: 3, hash: '0x3', timestamp: 3000 } },
-            { header: { number: 4, hash: '0x4', timestamp: 4000 } },
-            { header: { number: 5, hash: '0x5', timestamp: 5000 } },
-          ],
-          head: { finalized: { number: 1, hash: '0x1' } },
-        },
-        // Shallow slice — only blocks 4-5 visible, no common ancestor here.
-        {
-          statusCode: 409,
-          data: {
-            previousBlocks: [
-              { number: 4, hash: '0x4a' },
-              { number: 5, hash: '0x5a' },
-            ],
-          },
-        },
-        // Deeper slice — ancestor at block 1.
-        {
-          statusCode: 409,
-          data: {
-            previousBlocks: [
-              { number: 1, hash: '0x1' },
-              { number: 2, hash: '0x2a' },
-              { number: 3, hash: '0x3a' },
-            ],
-          },
-        },
-        {
-          statusCode: 200,
-          data: [
-            { header: { number: 2, hash: '0x2a', timestamp: 2000 } },
-            { header: { number: 3, hash: '0x3a', timestamp: 3000 } },
-            { header: { number: 4, hash: '0x4a', timestamp: 4000 } },
-            { header: { number: 5, hash: '0x5a', timestamp: 5000 } },
-            { header: { number: 6, hash: '0x6a', timestamp: 6000 } },
-            { header: { number: 7, hash: '0x7a', timestamp: 7000 } },
-          ],
-        },
-      ])
-
-      const rollbackCursors: BlockCursor[] = []
-      await evmPortalStream({
-        id: 'test',
-        portal: mockPortal.url,
-        outputs: blockDecoder({ from: 0, to: 7 }),
-      }).pipeTo(
-        buildTarget(events, sync, {
-          onAfterRollback: ({ cursor }) => {
-            rollbackCursors.push(cursor)
-          },
-        }),
-      )
-
-      expect(rollbackCursors.map((c) => c.number)).toEqual([3, 1])
-
-      expect(await readEvents(events)).toEqual([
-        { block_number: 1, tx_hash: '0x1' },
-        { block_number: 2, tx_hash: '0x2a' },
-        { block_number: 3, tx_hash: '0x3a' },
-        { block_number: 4, tx_hash: '0x4a' },
-        { block_number: 5, tx_hash: '0x5a' },
-        { block_number: 6, tx_hash: '0x6a' },
-        { block_number: 7, tx_hash: '0x7a' },
-      ])
-    }, 240_000)
-
-    it('resumes from the last persisted cursor after a clean stop (parentBlockHash threaded through)', async () => {
-      const { events, sync } = uniqueTables('resume')
-
-      mockPortal = await createMockPortal([
-        {
-          statusCode: 200,
-          data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
-        },
-        {
-          statusCode: 200,
-          data: [{ header: { number: 2, hash: '0x2', timestamp: 2000 } }],
-          // The portal contract: after restart, the request must include the parentBlockHash
-          // of the previously persisted cursor so the portal can detect any fork that happened
-          // while we were down.
-          validateRequest: (req) => {
-            expect(req).toMatchObject({
-              type: 'evm',
-              fromBlock: 2,
-              parentBlockHash: '0x1',
-            })
-          },
-        },
-      ])
-
-      // First run: ingest block 1 and stop cleanly.
-      await evmPortalStream({
-        id: 'test',
-        portal: mockPortal.url,
-        outputs: blockDecoder({ from: 0, to: 1 }),
-      }).pipeTo(buildTarget(events, sync))
-
-      // Second run with a fresh stream: the BigQuery sync table holds the previous cursor,
-      // so getCursor() must read it back and the new stream must request block 2 with the
-      // expected parentBlockHash. validateRequest in the mock asserts that.
-      await evmPortalStream({
-        id: 'test',
-        portal: mockPortal.url,
-        outputs: blockDecoder({ from: 1, to: 2 }),
-      }).pipeTo(buildTarget(events, sync))
-
-      expect(await readEvents(events)).toEqual([
-        { block_number: 1, tx_hash: '0x1' },
-        { block_number: 2, tx_hash: '0x2' },
-      ])
-    }, 240_000)
-
-    it('records cursor + finalized for every committed batch in the sync table', async () => {
-      const { events, sync } = uniqueTables('sync_state')
-
-      mockPortal = await createMockPortal([
-        {
-          statusCode: 200,
-          data: [
-            { header: { number: 1, hash: '0x1', timestamp: 1000 } },
-            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
-            { header: { number: 3, hash: '0x3', timestamp: 3000 } },
-          ],
-          head: { finalized: { number: 1, hash: '0x1' } },
-        },
-      ])
-
-      await evmPortalStream({
-        id: 'test',
-        portal: mockPortal.url,
-        outputs: blockDecoder({ from: 0, to: 3 }),
-      }).pipeTo(buildTarget(events, sync))
-
-      // `evmPortalStream` may split a single portal response into multiple per-batch
-      // emissions; assert on the FINAL committed cursor rather than counting rows. What
-      // matters for resumption correctness is that the latest commit reflects the last
-      // block we processed, with the finalized pointer the portal advertised.
-      const rows = await readSyncCommittedCursors(sync)
-      expect(rows.length).toBeGreaterThan(0)
-      expect(rows[rows.length - 1]).toMatchObject({
-        current: { number: 3, hash: '0x3' },
-        finalized: { number: 1, hash: '0x1' },
+      const [rows] = await bigquery.query({
+        query: `SELECT block_number, col_string_nullable, col_int64_nullable, CAST(col_numeric_nullable AS STRING) AS num
+                FROM \`${projectId}.${DATASET}.${localEvents}\`
+                ORDER BY block_number`,
       })
-    }, 180_000)
+      expect(rows.length).toBe(2)
+      type NullRow = { col_string_nullable: string | null; col_int64_nullable: number | null; num: string | null }
+      for (const r of rows as NullRow[]) {
+        expect(r.col_string_nullable).toBeNull()
+        expect(r.col_int64_nullable).toBeNull()
+        expect(r.num).toBeNull()
+      }
+    }, 60_000)
   })
 })

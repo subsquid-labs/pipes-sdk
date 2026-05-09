@@ -3,8 +3,11 @@ import { managedwriter } from '@google-cloud/bigquery-storage'
 
 import {
   type BlockCursor,
+  type Counter,
   type Ctx,
+  type Histogram,
   type Logger,
+  type Metrics,
   createTarget,
   formatBlock,
   formatNumber,
@@ -16,6 +19,7 @@ import { BigQueryStore } from './bigquery-store.js'
 import { BigQueryTracker, type TrackedTableLocation } from './bigquery-tracker.js'
 import { BQ_ERR, BigQueryTargetError } from './errors.js'
 import { type PartitioningSetting, type TrackedTable, ensureTrackedTable, partitioningWithDefaults } from './tables.js'
+import { classifyBqError } from './utils.js'
 
 export type BigQuerySettings = {
   state?: Omit<BigQueryStateOptions, 'projectId' | 'dataset'>
@@ -131,6 +135,12 @@ export function bigqueryTarget<T>(options: {
 
   return createTarget<T>({
     write: async ({ read, logger }) => {
+      // Lazy: registered on the first batch from `ctx.metrics`. The slot is local to
+      // `write()`, but the metrics-server registry caches by name — every call to `write()`
+      // (including re-entries after a crash) resolves to the same Histogram/Counter handles
+      // for a given pipe id, so the in-process state stays consistent across restarts.
+      let metrics: BqTargetMetrics | undefined
+
       // The try/finally wraps the ENTIRE write() body — including ensureTrackedTable,
       // onStart, and getCursor — so the internally-constructed WriterClient is closed
       // even if startup throws. fork() runs inside read()'s generator while this
@@ -160,6 +170,7 @@ export function bigqueryTarget<T>(options: {
         // Recovery: getCursor re-executes any outstanding IN_FLIGHT operation before returning.
         let previousCursor = await state.getCursor({ logger })
         for await (const { data, ctx } of read(previousCursor)) {
+          if (!metrics) metrics = registerBqTargetMetrics(ctx.metrics)
           const span = ctx.profiler.start({ name: 'bigquery', labels: 'db' })
           try {
             const next = ctx.stream.state.current
@@ -174,8 +185,10 @@ export function bigqueryTarget<T>(options: {
             const low = previousCursor ? previousCursor.number + 1 : ctx.stream.state.initial
             const high = next.number
 
-            await span.measure('wal pre-commit', () =>
-              state.saveCommitPre({ cursor: previousCursor, finalized, rollbackChain, range: { low, high } }),
+            await trackBqErrors(metrics, ctx.id, () =>
+              span.measure('wal pre-commit', () =>
+                state.saveCommitPre({ cursor: previousCursor, finalized, rollbackChain, range: { low, high } }),
+              ),
             )
 
             await span.measure('user onData', () =>
@@ -195,11 +208,30 @@ export function bigqueryTarget<T>(options: {
               tables: tableStats,
             })
 
-            await span.measure('commit data tables', () => store.commitBatch())
+            // `commit_duration` measures only the parallel AppendRows phase, not the WAL
+            // bracket — the help text claims this scope, and a wider timer would conflate
+            // commit latency with WAL/onData latency on the dashboard.
+            const commitStartMs = Date.now()
+            await trackBqErrors(metrics, ctx.id, () => span.measure('commit data tables', () => store.commitBatch()))
+            const commitEndMs = Date.now()
 
-            await span.measure('wal post-commit', () =>
-              state.saveCommitPost({ logger, cursor: next, finalized, rollbackChain }),
+            await trackBqErrors(metrics, ctx.id, () =>
+              span.measure('wal post-commit', () =>
+                state.saveCommitPost({ logger, cursor: next, finalized, rollbackChain }),
+              ),
             )
+
+            // Observe AFTER post-commit so a failed WAL post-commit (which leaves the batch
+            // uncommitted from the recovery POV) doesn't emit phantom success observations.
+            // commitEndMs was captured before post-commit so the duration / lag still reflect
+            // the AppendRows ack moment, not the post-commit delay.
+            metrics.commitDuration.observe({ id: ctx.id }, (commitEndMs - commitStartMs) / 1000)
+            if (typeof next.timestamp === 'number') {
+              // Block timestamps are epoch seconds (see cursorFromHeader). Skip the lag
+              // observation when timestamp is missing rather than emit a wildly wrong value
+              // derived from `0`.
+              metrics.blockToCommitLag.observe({ id: ctx.id }, commitEndMs / 1000 - next.timestamp)
+            }
 
             logger.info({
               message: `committed batch: ${formatNumber(totalRows)} rows / ${humanBytes(totalBytes)} across ${Object.keys(tableStats).length} tables, ${range}`,
@@ -241,4 +273,50 @@ export function bigqueryTarget<T>(options: {
       return safeCursor
     },
   })
+}
+
+type BqTargetMetrics = {
+  blockToCommitLag: Histogram<'id'>
+  commitDuration: Histogram<'id'>
+  appendErrors: Counter<'id' | 'kind'>
+}
+
+function registerBqTargetMetrics(metrics: Metrics): BqTargetMetrics {
+  // Buckets cover the operational range per stage — sub-second commits on a healthy pipeline
+  // up to a 10-minute lag where an alert should already be firing. Long tail beyond 10m goes
+  // into the +Inf bucket; count/sum still capture SLO violations.
+  const blockToCommitLagBuckets = [0.5, 1, 2, 5, 10, 30, 60, 120, 300, 600]
+  const commitDurationBuckets = [0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30]
+
+  return {
+    blockToCommitLag: metrics.histogram({
+      name: 'sqd_bigquery_block_to_commit_lag_seconds',
+      help: 'Per-batch lag (seconds) between the last block timestamp and the BQ AppendRows ack. PRIMARY commit-stage SLO.',
+      labelNames: ['id'] as const,
+      buckets: blockToCommitLagBuckets,
+    }),
+    commitDuration: metrics.histogram({
+      name: 'sqd_bigquery_commit_duration_seconds',
+      help: 'Wallclock duration (seconds) of one batch commit (parallel AppendRows across tracked tables).',
+      labelNames: ['id'] as const,
+      buckets: commitDurationBuckets,
+    }),
+    appendErrors: metrics.counter({
+      name: 'sqd_bigquery_append_errors_total',
+      help: 'AppendRows failures classified by kind. Kind ∈ {not_found, invalid_argument, resource_exhausted, transient, unknown}.',
+      labelNames: ['id', 'kind'] as const,
+    }),
+  }
+}
+
+// BQ errors from any of pre/data/post AppendRows go through this classifier so
+// `append_errors_total{kind}` represents end-to-end commit-stage failures, not just the
+// data-table phase. `onData` is excluded — those are user-code throws, not BQ.
+async function trackBqErrors<R>(metrics: BqTargetMetrics, id: string, op: () => Promise<R>): Promise<R> {
+  try {
+    return await op()
+  } catch (error) {
+    metrics.appendErrors.inc({ id, kind: classifyBqError(error) }, 1)
+    throw error
+  }
 }
