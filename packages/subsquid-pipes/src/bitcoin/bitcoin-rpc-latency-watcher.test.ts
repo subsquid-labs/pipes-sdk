@@ -35,6 +35,9 @@ describe('BitcoinRpcLatencyWatcher', () => {
         expect(lookup).toHaveLength(1)
         expect(lookup[0].url).toBe(mock!.url)
         expect(lookup[0].timestamp).toEqual(new Date(time * 1000))
+        // Hash must round-trip through addBlock → lookup() so reorg-aware downstream
+        // consumers (e.g. the BigQuery freshness probe) can match (number, hash).
+        expect(lookup[0].hash).toBe(`hash-${800_000}`)
       },
       { timeout: 1_000, interval: 20 },
     )
