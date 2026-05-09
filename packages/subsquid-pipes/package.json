@@ -1,7 +1,7 @@
 {
   "name": "@subsquid/pipes",
   "type": "module",
-  "version": "1.0.0-alpha.11",
+  "version": "1.0.0-alpha.12",
   "sideEffects": false,
   "author": "Subsquid Team",
   "files": [

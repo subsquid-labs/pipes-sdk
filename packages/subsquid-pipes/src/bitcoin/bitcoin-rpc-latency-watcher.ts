@@ -78,6 +78,7 @@ export class BitcoinRpcLatencyWatcher extends RpcLatencyWatcher {
       // when iterating `this.rpcUrl`).
       this.addBlock(url, {
         number: header.height,
+        hash,
         timestamp: new Date(header.time * 1000),
         receivedAt: new Date(),
       })

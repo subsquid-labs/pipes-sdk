@@ -1,7 +1,10 @@
 import { createTransformer } from '~/core/index.js'
 import { arrayify, last } from '~/internal/array.js'
 
-type RpcHead = { number: number; timestamp: Date; receivedAt: Date }
+// `hash` is optional because Solana's `slotsUpdatesSubscribe` ships only `{ slot, timestamp }`
+// — the hash would require a follow-up `getBlock(slot)` round-trip we don't want on the
+// hot path. EVM (`eth_subscribe newHeads`) and Bitcoin (`getbestblockhash`) both populate it.
+type RpcHead = { number: number; hash?: string; timestamp: Date; receivedAt: Date }
 
 export interface RpcLatencyListener {
   stop(): void
@@ -47,7 +50,7 @@ export abstract class RpcLatencyWatcher {
   }
 
   lookup(number: number) {
-    const res: { url: string; timestamp: Date; receivedAt: Date }[] = []
+    const res: { url: string; hash?: string; timestamp: Date; receivedAt: Date }[] = []
 
     for (const [url, blocks] of this.nodes) {
       const block = blocks.get(number)
@@ -55,6 +58,7 @@ export abstract class RpcLatencyWatcher {
       if (block) {
         res.push({
           url,
+          hash: block.hash,
           timestamp: block.timestamp,
           receivedAt: block.receivedAt,
         })
@@ -82,6 +86,8 @@ type Latency = {
   }
   rpc: {
     url: string
+    /** Block hash as observed by this RPC. Omitted on Solana (no hash on slot updates). */
+    hash?: string
     portalDelayMs: number
     receivedAt?: Date
   }[]
@@ -111,6 +117,7 @@ export function rpcLatencyWatcher({ watcher }: { watcher: RpcLatencyWatcher }) {
         rpc: lookup.map((r) => {
           return {
             url: r.url,
+            hash: r.hash,
             receivedAt: r.receivedAt,
             portalDelayMs: receivedAt.getTime() - r.receivedAt.getTime(),
           }
