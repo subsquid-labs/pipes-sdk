@@ -242,7 +242,7 @@ export class HttpClient implements BaseHttpClient {
     let info: any = {
       retry_reason:
         reason instanceof Error
-          ? reason.toString()
+          ? describeError(reason)
           : `got ${reason.status} response status${statusTexts[reason.status] ? `: ${statusTexts[reason.status]}` : ''}`,
       request_id: req.id,
       http_request: {
@@ -563,6 +563,29 @@ export class HttpBodyTimeoutError extends Error {
   override get name(): string {
     return 'HttpBodyTimeoutError'
   }
+}
+
+export function describeError(error: Error): string {
+  const parts = [error.toString()]
+
+  let cause: unknown = (error as { cause?: unknown }).cause
+  let depth = 0
+  while (cause && depth < 5) {
+    const c = cause as { code?: string; name?: string; message?: string; errors?: unknown[]; cause?: unknown }
+    parts.push(`cause: ${c.code ?? c.name ?? c.message ?? String(cause)}`)
+
+    if (cause instanceof AggregateError) {
+      const inner = cause.errors
+        .map((e: any) => e?.code ?? e?.message ?? String(e))
+        .join(', ')
+      parts.push(`errors: [${inner}]`)
+    }
+
+    cause = c.cause
+    depth += 1
+  }
+
+  return parts.join(' | ')
 }
 
 function isRetryableError(error: HttpResponse | Error, req?: FetchRequest): boolean {
