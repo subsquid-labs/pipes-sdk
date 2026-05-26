@@ -51,6 +51,7 @@ export function evmRpcLatencyWatcher({ rpcUrl }: { rpcUrl: string[] }) {
         timestamp: true,
       },
     })
+    .addRange(from: 'latest')
     .build()
     .pipe(transformer.options)
 }
