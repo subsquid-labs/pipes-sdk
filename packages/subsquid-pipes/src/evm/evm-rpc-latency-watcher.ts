@@ -21,10 +21,11 @@ class EvmRpcLatencyWatcher extends RpcLatencyWatcher {
       payload,
       (message: {
         method: string
-        params: { result: { number: string; hash: string; timestamp: string } }
+        params?: { result?: { number: string; hash: string; timestamp: string } }
       }) => {
         if (message.method !== 'eth_subscription') return
-        const head = message.params.result
+        const head = message.params?.result
+        if (!head) return
 
         this.addBlock(url, {
           number: parseInt(head.number),
