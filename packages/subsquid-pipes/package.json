@@ -82,6 +82,10 @@
     "@google-cloud/bigquery": "8.3.0",
     "@google-cloud/bigquery-storage": "5.1.0",
     "@opentelemetry/api": "^1.9.0",
+    "@subsquid/evm-normalization": "^0.0.2",
+    "@subsquid/evm-rpc": "^0.0.2",
+    "@subsquid/util-internal-json": "^1.2.3",
+    "@subsquid/util-internal-processor-tools": "^4.4.0",
     "better-sqlite3": "12.4.5",
     "drizzle-orm": "0.44.7",
     "pg": "8.16.3",
@@ -89,6 +93,18 @@
   },
   "peerDependenciesMeta": {
     "@dsnp/parquetjs": {
+      "optional": true
+    },
+    "@subsquid/evm-normalization": {
+      "optional": true
+    },
+    "@subsquid/evm-rpc": {
+      "optional": true
+    },
+    "@subsquid/util-internal-json": {
+      "optional": true
+    },
+    "@subsquid/util-internal-processor-tools": {
       "optional": true
     },
     "@opentelemetry/api": {
