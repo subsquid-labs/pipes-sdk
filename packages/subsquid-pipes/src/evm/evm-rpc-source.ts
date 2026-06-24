@@ -18,6 +18,7 @@ import { Block, DataRequest, FieldSelection } from '~/portal-client/query/evm.js
 
 import { decodeBlock, withRequiredFields } from './rpc/decode.js'
 import { Relations, filterBlock, setUpRelations } from './rpc/filter.js'
+import { augmentFields, projectKept, selectionGrew } from './rpc/project.js'
 import { toRequiredData } from './rpc/request.js'
 
 /** RPC method-selection toggles (the per-chain "C1" config) merged into the coarse fetch request. */
@@ -52,7 +53,11 @@ export interface EvmRpcSourceOptions<F extends FieldSelection> {
  */
 export class EvmRpcSource<F extends FieldSelection> {
   readonly #inner: EvmRpcDataSource
-  readonly #fields: FieldSelection
+  /** F + structural required fields — the Portal output shape; the projection target. */
+  readonly #outputFields: FieldSelection
+  /** #outputFields + the fields the request's where-clauses need to be evaluated. */
+  readonly #augmentedFields: FieldSelection
+  readonly #needsProjection: boolean
   readonly #request: DataRequest
   readonly #from: number
   readonly #to?: number
@@ -65,7 +70,9 @@ export class EvmRpcSource<F extends FieldSelection> {
   readonly #rawQuery: unknown
 
   constructor(options: EvmRpcSourceOptions<F>) {
-    this.#fields = withRequiredFields(options.fields)
+    this.#outputFields = withRequiredFields(options.fields)
+    this.#augmentedFields = augmentFields(this.#outputFields, options.request)
+    this.#needsProjection = selectionGrew(this.#augmentedFields, this.#outputFields)
     this.#request = options.request
     this.#from = options.from
     this.#to = options.to
@@ -134,12 +141,20 @@ export class EvmRpcSource<F extends FieldSelection> {
 
   #mapBlock(raw: RpcBlock): Block<F> {
     const normalized = mapRpcBlock(raw, { withTraces: this.#withTraces, withStateDiffs: this.#withStateDiffs })
-    const block = decodeBlock(normalized, this.#fields)
+    const filtered = decodeBlock(normalized, this.#augmentedFields)
 
-    const relations: Relations = setUpRelations(block as any)
-    filterBlock(block as any, this.#request, relations)
+    const relations: Relations = setUpRelations(filtered as any)
+    filterBlock(filtered as any, this.#request, relations)
 
-    return block as Block<F>
+    if (!this.#needsProjection) {
+      return filtered as Block<F>
+    }
+
+    // A where-clause referenced a field not selected for output; project back to exactly the
+    // output shape and keep only the filtered items, matched by their structural index keys.
+    const projected = decodeBlock(normalized, this.#outputFields)
+
+    return projectKept(projected as any, filtered as any) as Block<F>
   }
 
   #buildContext(
