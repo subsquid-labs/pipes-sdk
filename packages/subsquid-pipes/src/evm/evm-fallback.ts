@@ -7,11 +7,13 @@ import {
   FallbackPolicy,
   FallbackSource,
   FallbackUnderlyingSource,
+  MetricsServer,
   PortalBatch,
   createDefaultLogger,
   cursorFromHeader,
   extractRollbackChain,
   noopMetricsServer,
+  registerFallbackMetrics,
 } from '~/core/index.js'
 import { Span } from '~/core/profiling.js'
 import { ApiDataset } from '~/portal-client/client.js'
@@ -34,6 +36,8 @@ export interface EvmFallbackOptions<F extends FieldSelection> {
   finalized?: boolean
   sources: EvmFallbackSourceConfig<F>[]
   policy?: FallbackPolicy
+  /** When provided, fallback health/switch gauges are registered on this metrics server (§4). */
+  metrics?: MetricsServer
 }
 
 /**
@@ -136,7 +140,12 @@ export function createEvmFallback<F extends FieldSelection>(
     return lazyRpcSource(cfg.name ?? `rpc-${i}`, cfg, options)
   })
 
-  return new FallbackSource(underlying, options.policy)
+  const fallback = new FallbackSource(underlying, options.policy)
+  if (options.metrics) {
+    registerFallbackMetrics(options.metrics.metrics, fallback)
+  }
+
+  return fallback
 }
 
 /**
