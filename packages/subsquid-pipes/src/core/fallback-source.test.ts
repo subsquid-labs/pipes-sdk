@@ -128,6 +128,29 @@ describe('FallbackSource — supervisor', () => {
   })
 })
 
+describe('FallbackSource — metrics', () => {
+  it('reports the active source, switch count, and per-source health', async () => {
+    const s0 = source('s0', async function* () {
+      yield pbatch(1)
+      throw new Error('boom')
+    })
+    const s1 = source('s1', async function* () {
+      yield pbatch(2)
+    })
+    const fb = new FallbackSource([s0, s1])
+
+    await collect(fb.read())
+    const m = fb.metrics()
+
+    expect(m.activeIndex).toBe(1)
+    expect(m.switchCount).toBe(1)
+    expect(m.sources).toEqual([
+      { name: 's0', health: 'unhealthy', active: false },
+      { name: 's1', health: 'unknown', active: true },
+    ])
+  })
+})
+
 describe('FallbackSource — pipeTo', () => {
   it('rewinds via target.fork when a source forks, then resumes', async () => {
     let forkedTo: BlockCursor | null = null

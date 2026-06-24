@@ -3,6 +3,7 @@ import { isForkException } from '~/portal-client/index.js'
 import { ForkCursorMissingError, ForkNoPreviousBlocksError, TargetForkNotSupportedError } from './errors.js'
 import {
   AllSourcesDownError,
+  FallbackHealth,
   FallbackPolicy,
   ResolvedFallbackPolicy,
   Selector,
@@ -29,6 +30,13 @@ export interface FallbackUnderlyingSource<T> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** A structured snapshot of the fallback's observable state, for a metrics surface (§4). */
+export interface FallbackMetrics {
+  activeIndex: number | undefined
+  switchCount: number
+  sources: { name: string; health: FallbackHealth; active: boolean }[]
 }
 
 /**
@@ -154,6 +162,19 @@ export class FallbackSource<T> {
     if (this.activeIndex !== i) {
       if (this.activeIndex !== undefined) this.switchCount++
       this.activeIndex = i
+    }
+  }
+
+  /** Snapshot of the observable state for export to a metrics surface (§4). */
+  metrics(): FallbackMetrics {
+    return {
+      activeIndex: this.activeIndex,
+      switchCount: this.switchCount,
+      sources: this.#sources.map((s, i) => ({
+        name: s.name,
+        health: this.#health[i].state,
+        active: this.activeIndex === i,
+      })),
     }
   }
 }
