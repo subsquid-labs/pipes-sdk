@@ -1,5 +1,7 @@
 export * from './cursor-key.js'
 export * from './errors.js'
+export * from './fallback-health.js'
+export * from './fallback-source.js'
 export * from './finalization-buffer.js'
 // Only `coerceFinalized` is consumed across module boundaries (the target state classes). The
 // watermark class is imported directly by the source, and maxFinalized is module-internal — keep
