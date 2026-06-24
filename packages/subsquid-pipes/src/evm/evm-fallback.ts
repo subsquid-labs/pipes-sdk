@@ -1,4 +1,4 @@
-import { Rpc } from '@subsquid/evm-rpc'
+import type { Rpc } from '@subsquid/evm-rpc'
 import { cast } from '@subsquid/util-internal-validation'
 
 import {
@@ -18,7 +18,7 @@ import { ApiDataset } from '~/portal-client/client.js'
 import { PortalClient, PortalClientOptions } from '~/portal-client/index.js'
 import { Block, DataRequest, FieldSelection, getBlockSchema } from '~/portal-client/query/evm.js'
 
-import { EvmRpcSource, RpcMethodOptions } from './evm-rpc-source.js'
+import type { RpcMethodOptions } from './evm-rpc-source.js'
 import { withRequiredFields } from './rpc/decode.js'
 
 /** One EVM source in a fallback. Both kinds share the same `fields` + `request`. */
@@ -133,19 +133,54 @@ export function createEvmFallback<F extends FieldSelection>(
       })
     }
 
-    return new EvmRpcSource({
-      id: cfg.name ?? `rpc-${i}`,
-      rpc: cfg.rpc,
-      fields: options.fields,
-      request: options.request,
-      from: options.from,
-      to: options.to,
-      finalized: options.finalized,
-      method: cfg.method,
-      strideSize: cfg.strideSize,
-      strideConcurrency: cfg.strideConcurrency,
-    })
+    return lazyRpcSource(cfg.name ?? `rpc-${i}`, cfg, options)
   })
 
   return new FallbackSource(underlying, options.policy)
+}
+
+/**
+ * An RPC fallback source whose `@subsquid/evm-rpc` dependency is loaded **lazily** — only when the
+ * source is actually read (i.e. it becomes active). A multi-Portal fallback therefore never
+ * imports the RPC stack, and a misconfigured RPC source fails with a clear, actionable error
+ * instead of an opaque module-not-found at startup. (`@subsquid/evm-rpc` + `evm-normalization` are
+ * optional and currently unpublished — see EXECUTION_STATUS.md.)
+ */
+function lazyRpcSource<F extends FieldSelection>(
+  name: string,
+  cfg: Extract<EvmFallbackSourceConfig<F>, { type: 'rpc' }>,
+  options: EvmFallbackOptions<F>,
+): FallbackUnderlyingSource<Block<F>[]> {
+  let inner: { read(cursor?: BlockCursor): AsyncIterable<PortalBatch<Block<F>[]>> } | undefined
+
+  return {
+    name,
+    read: async function* (cursor?: BlockCursor): AsyncIterable<PortalBatch<Block<F>[]>> {
+      if (!inner) {
+        let mod: typeof import('./evm-rpc-source.js')
+        try {
+          mod = await import('./evm-rpc-source.js')
+        } catch {
+          throw new Error(
+            `RPC fallback source "${name}" requires the optional "@subsquid/evm-rpc" and ` +
+              `"@subsquid/evm-normalization" packages — install them to use RPC sources.`,
+          )
+        }
+        inner = new mod.EvmRpcSource({
+          id: name,
+          rpc: cfg.rpc,
+          fields: options.fields,
+          request: options.request,
+          from: options.from,
+          to: options.to,
+          finalized: options.finalized,
+          method: cfg.method,
+          strideSize: cfg.strideSize,
+          strideConcurrency: cfg.strideConcurrency,
+        })
+      }
+
+      yield* inner.read(cursor)
+    },
+  }
 }

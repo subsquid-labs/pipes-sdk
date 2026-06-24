@@ -287,9 +287,15 @@ importers:
       '@subsquid/util-internal-hex':
         specifier: 0.0.2
         version: 0.0.2
+      '@subsquid/util-internal-json':
+        specifier: ^1.2.3
+        version: 1.2.3
+      '@subsquid/util-internal-processor-tools':
+        specifier: ^4.4.0
+        version: 4.4.0
       '@subsquid/util-internal-validation':
         specifier: 0.8.0
-        version: 0.8.0(@subsquid/logger@1.4.0)
+        version: 0.8.0(@subsquid/logger@1.6.0)
       '@subsquid/util-timeout':
         specifier: ^2.3.2
         version: 2.3.2
@@ -2415,6 +2421,9 @@ packages:
   '@subsquid/logger@1.4.0':
     resolution: {integrity: sha512-Yep4hzpLfmm4pJMXuTnd3n7Hlo18Dce8vwKZduGE9n/p56cHq4BTbAuaXLK50vYKWx7Lyt2obVbJ4otVMWkyYg==}
 
+  '@subsquid/logger@1.6.0':
+    resolution: {integrity: sha512-k33Cw1uO+Boha08arS8nhr0VHfT+bTWGe/hTZDeCDMoa2i0SUgkiDGDkgqTQof6y/N/kl30KzPvAAGqwJ6MJNw==}
+
   '@subsquid/rpc-client@4.13.0':
     resolution: {integrity: sha512-61lY/aaopNyDIaHmwjXH+HW02D1c1LbWQnfY0G/BkCy1sHhhI/4pUX6UyhvZAxMuy09sMep8+tib3a+VJcIAcA==}
 
@@ -2470,6 +2479,9 @@ packages:
   '@subsquid/util-internal-hex@1.2.2':
     resolution: {integrity: sha512-E43HVqf23jP5hvtWF9GsiN8luANjnJ1daR2SVTwaIUAYU/uNjv1Bi6tHz2uexlflBhyxAgBDmHgunXZ45wQTIw==}
 
+  '@subsquid/util-internal-hex@1.2.3':
+    resolution: {integrity: sha512-rGIQKHP+RpriJR56oL/AD43H/KX1EQwsvUy8nP6IHnk/vmaLyC2ECTp5n0jB7kq4NYK4C2VotP3lXHR0vWpa0A==}
+
   '@subsquid/util-internal-http-server@2.0.0':
     resolution: {integrity: sha512-MUAJGMuDjbA3B+KQFZmMkm9FuWVx067pINt+EWuq3fSZqYPr1kRkTCTSJK7uT6Q8omqJtJFRWveyOWlXmixvfg==}
 
@@ -2487,8 +2499,8 @@ packages:
   '@subsquid/util-internal-json@1.2.3':
     resolution: {integrity: sha512-H5qW5kG20IzVMpb7GhPbVRxGuACEf1DPIXE1+LNXYxt8t/GX4zQREQWHRvCB3lck+RORLJD3WJbQUtxN5UYB3Q==}
 
-  '@subsquid/util-internal-processor-tools@4.2.1':
-    resolution: {integrity: sha512-+iNmKZ9u69TsPdF96UlPSUIEYyALcY1SAVlM+tY/e+x5ZPCnZLOFF9jCYRnqDnYLmBtAw4hSEobMFv6d8S5z2g==}
+  '@subsquid/util-internal-processor-tools@4.4.0':
+    resolution: {integrity: sha512-Ov2gFOcaGr7qVhYoqx+EIUjskGLRJRImQaEal5e0uNjX1sLG1bKfz+rXh1YMYCIUFwKd86fAGyLjVWwvnG0V8w==}
 
   '@subsquid/util-internal-prometheus-server@1.3.0':
     resolution: {integrity: sha512-E/ch5mxBg1CIGPsuAqUAQ7vVln2oTPm+Rl+0WYweH8JeZ81rD01XAmxhDuZzZnMMMzfZd9W4NlE4mCXbhSY1Ug==}
@@ -7657,6 +7669,12 @@ snapshots:
       '@subsquid/util-internal-json': 1.2.3
       supports-color: 8.1.1
 
+  '@subsquid/logger@1.6.0':
+    dependencies:
+      '@subsquid/util-internal-hex': 1.2.3
+      '@subsquid/util-internal-json': 1.2.3
+      supports-color: 8.1.1
+
   '@subsquid/rpc-client@4.13.0':
     dependencies:
       '@subsquid/http-client': 1.7.0
@@ -7714,7 +7732,7 @@ snapshots:
       '@subsquid/util-internal-archive-client': 0.1.2(@subsquid/http-client@1.7.0)(@subsquid/logger@1.4.0)
       '@subsquid/util-internal-hex': 1.2.2
       '@subsquid/util-internal-ingest-tools': 1.1.4(@subsquid/util-internal-archive-client@0.1.2(@subsquid/http-client@1.7.0)(@subsquid/logger@1.4.0))
-      '@subsquid/util-internal-processor-tools': 4.2.1
+      '@subsquid/util-internal-processor-tools': 4.4.0
       '@subsquid/util-internal-range': 0.3.0
       '@subsquid/util-internal-validation': 0.8.0(@subsquid/logger@1.4.0)
       bs58: 5.0.0
@@ -7766,9 +7784,11 @@ snapshots:
 
   '@subsquid/util-internal-hex@1.2.2': {}
 
+  '@subsquid/util-internal-hex@1.2.3': {}
+
   '@subsquid/util-internal-http-server@2.0.0':
     dependencies:
-      '@subsquid/logger': 1.4.0
+      '@subsquid/logger': 1.6.0
       stoppable: 1.1.0
 
   '@subsquid/util-internal-ingest-tools@1.1.4(@subsquid/util-internal-archive-client@0.1.2(@subsquid/http-client@1.7.0)(@subsquid/logger@1.4.0))':
@@ -7785,9 +7805,9 @@ snapshots:
     dependencies:
       '@subsquid/util-internal-hex': 1.2.2
 
-  '@subsquid/util-internal-processor-tools@4.2.1':
+  '@subsquid/util-internal-processor-tools@4.4.0':
     dependencies:
-      '@subsquid/logger': 1.4.0
+      '@subsquid/logger': 1.6.0
       '@subsquid/util-internal': 3.2.0
       '@subsquid/util-internal-counters': 1.3.2
       '@subsquid/util-internal-prometheus-server': 1.3.0(prom-client@14.2.0)
@@ -7810,6 +7830,10 @@ snapshots:
   '@subsquid/util-internal-validation@0.8.0(@subsquid/logger@1.4.0)':
     optionalDependencies:
       '@subsquid/logger': 1.4.0
+
+  '@subsquid/util-internal-validation@0.8.0(@subsquid/logger@1.6.0)':
+    optionalDependencies:
+      '@subsquid/logger': 1.6.0
 
   '@subsquid/util-internal@3.2.0': {}
 
