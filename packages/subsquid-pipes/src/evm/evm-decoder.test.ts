@@ -1178,18 +1178,6 @@ describe('evmDecoder multi-output isolation', () => {
   const CONTRACT_A = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as const
   const CONTRACT_B = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as const
 
-  const ERC20_ABI = [
-    {
-      type: 'event' as const,
-      name: 'Transfer',
-      inputs: [
-        { name: 'from', type: 'address', indexed: true },
-        { name: 'to', type: 'address', indexed: true },
-        { name: 'value', type: 'uint256', indexed: false },
-      ],
-    },
-  ] as const
-
   let portal: MockPortal
 
   beforeEach(async () => {
@@ -1204,7 +1192,7 @@ describe('evmDecoder multi-output isolation', () => {
               {
                 logs: [
                   encodeEvent({
-                    abi: ERC20_ABI,
+                    abi: commonAbis.erc20.abi,
                     eventName: 'Transfer',
                     address: CONTRACT_A,
                     args: {
@@ -1218,7 +1206,7 @@ describe('evmDecoder multi-output isolation', () => {
               {
                 logs: [
                   encodeEvent({
-                    abi: ERC20_ABI,
+                    abi: commonAbis.erc20.abi,
                     eventName: 'Transfer',
                     address: CONTRACT_B,
                     args: {
