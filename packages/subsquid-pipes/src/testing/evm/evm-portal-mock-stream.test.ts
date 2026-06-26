@@ -8,27 +8,6 @@ import { MockPortal, readAll } from '../index.js'
 import { evmPortalMockStream } from './evm-portal-mock-stream.js'
 import { encodeEvent, mockBlock, resetMockBlockCounter } from './mock-block.js'
 
-const ERC20_ABI = [
-  {
-    type: 'event' as const,
-    name: 'Transfer',
-    inputs: [
-      { name: 'from', type: 'address', indexed: true },
-      { name: 'to', type: 'address', indexed: true },
-      { name: 'value', type: 'uint256', indexed: false },
-    ],
-  },
-  {
-    type: 'event' as const,
-    name: 'Approval',
-    inputs: [
-      { name: 'owner', type: 'address', indexed: true },
-      { name: 'spender', type: 'address', indexed: true },
-      { name: 'value', type: 'uint256', indexed: false },
-    ],
-  },
-] as const
-
 const WETH_ADDRESS = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2' as const
 const ALICE = '0x7a250d5630b4cf539739df2c5dacb4c659f2488d' as const
 const BOB = '0xc82e11e709deb68f3631fc165ebd8b4e3fc3d18f' as const
@@ -47,7 +26,7 @@ describe('test-evm-data helpers', () => {
   describe('encodeEvent', () => {
     it('should encode an ERC20 Transfer event', () => {
       const log = encodeEvent({
-        abi: ERC20_ABI,
+        abi: commonAbis.erc20.abi,
         eventName: 'Transfer',
         address: WETH_ADDRESS,
         args: { from: ALICE, to: BOB, value: 100n },
@@ -67,7 +46,7 @@ describe('test-evm-data helpers', () => {
 
     it('should infer args types from ABI', () => {
       // Type-level test: args should include from, to, AND value
-      type Args = Parameters<typeof encodeEvent<typeof ERC20_ABI, 'Transfer'>>[0]['args']
+      type Args = Parameters<typeof encodeEvent<typeof commonAbis.erc20.abi, 'Transfer'>>[0]['args']
       expectTypeOf<Args>().toEqualTypeOf<{ from: `0x${string}`; to: `0x${string}`; value: bigint } | undefined>()
     })
   })
@@ -108,14 +87,14 @@ describe('test-evm-data helpers', () => {
 
     it('should create transactions and logs from events', () => {
       const event1 = encodeEvent({
-        abi: ERC20_ABI,
+        abi: commonAbis.erc20.abi,
         eventName: 'Transfer',
         address: WETH_ADDRESS,
         args: { from: ALICE, to: BOB, value: 100n },
       })
 
       const event2 = encodeEvent({
-        abi: ERC20_ABI,
+        abi: commonAbis.erc20.abi,
         eventName: 'Approval',
         address: WETH_ADDRESS,
         args: { owner: ALICE, spender: BOB, value: 200n },
@@ -148,7 +127,7 @@ describe('test-evm-data helpers', () => {
   describe('evmPortalMockStream', () => {
     it('should work end-to-end with evmDecoder', async () => {
       const transfer = encodeEvent({
-        abi: ERC20_ABI,
+        abi: commonAbis.erc20.abi,
         eventName: 'Transfer',
         address: WETH_ADDRESS,
         args: { from: ALICE, to: BOB, value: 100n },
@@ -184,14 +163,14 @@ describe('test-evm-data helpers', () => {
 
     it('should work with multiple events per block', async () => {
       const transfer1 = encodeEvent({
-        abi: ERC20_ABI,
+        abi: commonAbis.erc20.abi,
         eventName: 'Transfer',
         address: WETH_ADDRESS,
         args: { from: ALICE, to: BOB, value: 100n },
       })
 
       const transfer2 = encodeEvent({
-        abi: ERC20_ABI,
+        abi: commonAbis.erc20.abi,
         eventName: 'Transfer',
         address: WETH_ADDRESS,
         args: { from: BOB, to: ALICE, value: 50n },
@@ -225,14 +204,14 @@ describe('test-evm-data helpers', () => {
 
     it('should work with mixed event types', async () => {
       const transfer = encodeEvent({
-        abi: ERC20_ABI,
+        abi: commonAbis.erc20.abi,
         eventName: 'Transfer',
         address: WETH_ADDRESS,
         args: { from: ALICE, to: BOB, value: 100n },
       })
 
       const approval = encodeEvent({
-        abi: ERC20_ABI,
+        abi: commonAbis.erc20.abi,
         eventName: 'Approval',
         address: WETH_ADDRESS,
         args: { owner: ALICE, spender: BOB, value: 200n },
