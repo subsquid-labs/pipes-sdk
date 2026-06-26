@@ -86,6 +86,10 @@ export type TransactionFields = {
   type: number
   status: number
   blobVersionedHashes?: Hex[]
+  accessList?: {
+    address: Hex
+    storageKeys: Hex[]
+  }[]
 
   l1Fee?: bigint
   l1FeeScalar?: number
@@ -469,6 +473,7 @@ const TransactionShape: ObjectValidatorShape<TransactionFields> = {
   type: NAT,
   status: NAT,
   blobVersionedHashes: option(array(BYTES)),
+  accessList: option(array(object({ address: BYTES, storageKeys: array(BYTES) }))),
   l1Fee: option(QTY),
   l1FeeScalar: option(NAT),
   l1GasPrice: option(QTY),

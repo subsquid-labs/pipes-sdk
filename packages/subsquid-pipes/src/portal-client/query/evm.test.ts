@@ -44,3 +44,39 @@ describe('TransactionFields nonce validation', () => {
     expect(() => castNonce(3.14)).toThrow()
   })
 })
+
+function castAccessList(accessList: unknown) {
+  const schema = getBlockSchema({ transaction: { accessList: true } })
+  const block = {
+    header: {},
+    transactions: [{ accessList }],
+  }
+  return cast(schema, block).transactions[0].accessList
+}
+
+describe('TransactionFields accessList validation', () => {
+  const ADDR = `0x${'ab'.repeat(20)}`
+  const KEY = `0x${'cd'.repeat(32)}`
+
+  it('parses entries with address and storage keys', () => {
+    expect(
+      castAccessList([
+        { address: ADDR, storageKeys: [KEY, KEY] },
+        { address: ADDR, storageKeys: [] },
+      ]),
+    ).toEqual([
+      { address: ADDR, storageKeys: [KEY, KEY] },
+      { address: ADDR, storageKeys: [] },
+    ])
+  })
+
+  it('is optional (undefined when the field is absent)', () => {
+    const schema = getBlockSchema({ transaction: { accessList: true } })
+    const out = cast(schema, { header: {}, transactions: [{}] })
+    expect(out.transactions[0].accessList).toBeUndefined()
+  })
+
+  it('rejects a non-hex address', () => {
+    expect(() => castAccessList([{ address: 'nothex', storageKeys: [] }])).toThrow()
+  })
+})
