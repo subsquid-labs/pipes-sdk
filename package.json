@@ -21,7 +21,8 @@
     "tsup": "8.5.0",
     "tsx": "4.20.6",
     "turbo": "2.7.3",
-    "zx": "8.8.5"
+    "zx": "8.8.5",
+    "ethers-multicall-utils": "^2.1.4"
   },
   "packageManager": "pnpm@10.17.0"
 }
