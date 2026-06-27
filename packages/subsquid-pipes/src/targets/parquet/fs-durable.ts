@@ -1,4 +1,27 @@
+import { type WriteStream, createWriteStream } from 'node:fs'
 import { open as fsOpen, stat } from 'node:fs/promises'
+
+/**
+ * Opens a writable file stream and resolves once its fd is actually open (or rejects on an open
+ * error), mirroring `@dsnp/parquetjs`'s internal `osopen`. Owning the stream — instead of letting
+ * `ParquetWriter.openFile` create it internally — lets the caller `destroy()` it to force the fd
+ * shut if `ParquetWriter.close()` fails or hangs mid-footer (the library otherwise leaks it).
+ */
+export function openWriteStream(p: string): Promise<WriteStream> {
+  return new Promise((resolve, reject) => {
+    const stream = createWriteStream(p)
+    const onOpen = () => {
+      stream.off('error', onError)
+      resolve(stream)
+    }
+    const onError = (err: Error) => {
+      stream.off('open', onOpen)
+      reject(err)
+    }
+    stream.once('open', onOpen)
+    stream.once('error', onError)
+  })
+}
 
 /** Whether a path exists (any type). */
 export async function pathExists(p: string): Promise<boolean> {

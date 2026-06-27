@@ -137,7 +137,14 @@ export class ParquetState {
     }
   }
 
-  /** Deletes every published `<min>-<max>.parquet` whose `max` exceeds the committed cursor. */
+  /**
+   * Deletes every published `<min>-<max>.parquet` whose `max` exceeds the committed cursor.
+   *
+   * A surviving over-cursor file is a correctness hazard, not a cosmetic leftover: `read(cursor)`
+   * re-fetches the same blocks and either collides with it (fatal) or, if rotation lands on a
+   * different range, overlaps it (silent duplicate rows). So a failed `unlink` here is fatal —
+   * we surface it with remediation guidance rather than swallowing it and counting it as removed.
+   */
   async #deleteFilesAboveCursor(cursorNumber: number): Promise<void> {
     let removed = 0
     for (const table of this.#tables) {
@@ -148,10 +155,22 @@ export class ParquetState {
         if (!match) continue
 
         const maxBlock = Number.parseInt(match[2], 10)
-        if (maxBlock > cursorNumber) {
-          await unlink(path.join(dir, name)).catch(() => {})
-          removed++
+        if (maxBlock <= cursorNumber) continue
+
+        const filePath = path.join(dir, name)
+        try {
+          await unlink(filePath)
+        } catch (error) {
+          throw new ParquetTargetError(
+            PQ_ERR.RECOVERY_DELETE_FAILED,
+            `Crash recovery could not delete the over-cursor Parquet file '${filePath}' ` +
+              `(its blocks exceed the committed cursor ${formatBlock(cursorNumber)}): ` +
+              `${error instanceof Error ? error.message : String(error)}. Leaving it would duplicate or ` +
+              `overlap re-fetched data — remove it manually and restart.`,
+          )
         }
+
+        removed++
       }
     }
 

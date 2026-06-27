@@ -1,10 +1,11 @@
+import type { WriteStream } from 'node:fs'
 import { rename, stat, unlink } from 'node:fs/promises'
 import path from 'node:path'
 
 import { ParquetSchema, ParquetWriter } from '@dsnp/parquetjs'
 
 import { PQ_ERR, ParquetTargetError } from './errors.js'
-import { fsyncDir, fsyncFile, pathExists } from './fs-durable.js'
+import { fsyncDir, fsyncFile, openWriteStream, pathExists } from './fs-durable.js'
 
 /** Zero-pad block numbers in published filenames so they sort lexically (`0000000042`). */
 export const BLOCK_PAD = 12
@@ -53,6 +54,10 @@ export class ParquetSegmentWriter {
   readonly #tmpPath: string
 
   #writer: ParquetWriter | undefined
+  // We own the underlying stream (rather than ParquetWriter.openFile owning it) so the error path
+  // can force the fd shut — ParquetWriter.close() flips `closed` first and never reaches the
+  // stream's close() if a footer write throws, which would otherwise leak the descriptor.
+  #stream: WriteStream | undefined
   #rowCount = 0
   #minBlock: number | undefined
   #maxBlock: number | undefined
@@ -89,7 +94,16 @@ export class ParquetSegmentWriter {
    */
   async appendRow(row: Record<string, unknown>, blockNumber: number): Promise<void> {
     if (!this.#writer) {
-      this.#writer = await ParquetWriter.openFile(this.#schema, this.#tmpPath, { rowGroupSize: this.#rowGroupSize })
+      const stream = await openWriteStream(this.#tmpPath)
+      try {
+        this.#writer = await ParquetWriter.openStream(this.#schema, stream, { rowGroupSize: this.#rowGroupSize })
+        this.#stream = stream
+      } catch (error) {
+        // openStream writes the header immediately; if that throws, the stream we just opened would
+        // leak — force it shut before propagating.
+        stream.destroy()
+        throw error
+      }
     }
 
     await this.#writer.appendRow(row)
@@ -132,6 +146,9 @@ export class ParquetSegmentWriter {
 
     await this.#writer.close()
     this.#closed = true
+    // close() ended the stream (via the library's envelopeWriter.close → stream.end), so its fd is
+    // already released; drop the reference so discard()/GC don't touch a finished stream.
+    this.#stream = undefined
 
     // fsync the temp file so the footer is durable before the rename makes it visible.
     await fsyncFile(this.#tmpPath)
@@ -157,18 +174,26 @@ export class ParquetSegmentWriter {
   }
 
   /**
-   * Best-effort cleanup of an unpublished segment: closes the writer (if open) and deletes the
-   * temp file. Used on the error path — the temp file holds finalized-but-not-checkpointed rows
-   * that will be regenerated from the portal on the next run, since the cursor never advanced.
+   * Best-effort cleanup of an unpublished segment: releases the open fd and deletes the temp file.
+   * Used on the error path — the temp file holds finalized-but-not-checkpointed rows that will be
+   * regenerated from the portal on the next run, since the cursor never advanced.
+   *
+   * We `destroy()` the stream directly instead of `ParquetWriter.close()`-ing it: the file is about
+   * to be unlinked, so there is no point flushing a footer, and `close()` could leak the fd (it
+   * flips `closed` before the stream is ended, so a throw mid-footer skips the end) or hang on a
+   * footer flush against a full disk. `destroy()` frees the descriptor immediately and can't hang.
    */
   async discard(): Promise<void> {
-    if (this.#writer && !this.#closed) {
-      try {
-        await this.#writer.close()
-      } catch {
-        // best-effort
-      }
+    if (this.#stream && !this.#closed) {
+      this.#closed = true
+      // A destroyed stream can emit 'error' for an in-flight write; swallow it so it never surfaces
+      // as an unhandled rejection on the error path.
+      this.#stream.once('error', () => {})
+      this.#stream.destroy()
     }
+    this.#writer = undefined
+    this.#stream = undefined
+
     try {
       await unlink(this.#tmpPath)
     } catch {

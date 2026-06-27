@@ -37,4 +37,12 @@ export const PQ_ERR = {
   FILE_COLLISION: 'E1209',
   /** Persisted state file exists but could not be parsed. */
   STATE_CORRUPT: 'E1210',
+  /** The block-number column is declared `optional` — it must be present on every row. */
+  BLOCK_COLUMN_OPTIONAL: 'E1211',
+  /** A row carried a missing/non-finite block number (would corrupt finalization & recovery). */
+  BLOCK_VALUE_INVALID: 'E1212',
+  /** A row value does not match its declared column type (dev-mode value check). */
+  VALUE_INVALID: 'E1213',
+  /** Crash recovery could not delete an over-cursor data file (leaving it would duplicate data). */
+  RECOVERY_DELETE_FAILED: 'E1214',
 } as const

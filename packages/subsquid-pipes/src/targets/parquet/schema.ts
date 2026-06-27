@@ -46,8 +46,8 @@ export type ParquetTable = {
   schema: ParquetColumns
   /**
    * Column carrying the block number, used for finalization, file-range naming and recovery.
-   * Must be present in `schema` with an integer type (`INT64`/`INT32`/`TIMESTAMP_MILLIS`).
-   * Defaults to `'blockNumber'`.
+   * Must be present in `schema` as a required (non-optional) integer column (`INT64`/`INT32`)
+   * whose value is the block number itself. Defaults to `'blockNumber'`.
    */
   blockNumberColumn?: string
 }
@@ -68,10 +68,12 @@ const SUPPORTED_TYPES = new Set<string>([
   'DOUBLE',
   'TIMESTAMP_MILLIS',
 ])
-// Block numbers must be integers so file-range naming and `maxBlock > cursor` recovery
-// comparisons are well-defined. TIMESTAMP_MILLIS is int64-backed and accepted for parity
-// with the declared contract, though `INT64` is the natural choice.
-const INTEGER_BLOCK_TYPES = new Set<ParquetColumnType>(['INT64', 'INT32', 'TIMESTAMP_MILLIS'])
+// The block column's value is compared directly against the portal's finalized block NUMBER
+// (`Number(row[col]) <= finalized.number`) and used for `<min>-<max>` file naming and the
+// `maxBlock > cursor` recovery check, so it must hold the block number itself. TIMESTAMP_MILLIS
+// is int64-backed but carries epoch-ms, not a block number — comparing ~1.7e12 against a block
+// number is always false, so no row ever finalizes (silent loss). It is therefore excluded.
+const INTEGER_BLOCK_TYPES = new Set<ParquetColumnType>(['INT64', 'INT32'])
 
 /** The block-number column name for a table, applying the default. */
 export function blockColumnOf(table: ParquetTable): string {
@@ -151,6 +153,15 @@ export function validateTable(table: ParquetTable): void {
       PQ_ERR.BLOCK_COLUMN_TYPE,
       `parquetTarget: table '${table.table}' block-number column '${blockColumn}' has type ` +
         `'${declared.type}', but must be an integer type (${[...INTEGER_BLOCK_TYPES].join(', ')}).`,
+    )
+  }
+  if (declared.optional) {
+    throw new ParquetTargetError(
+      PQ_ERR.BLOCK_COLUMN_OPTIONAL,
+      `parquetTarget: table '${table.table}' block-number column '${blockColumn}' is declared optional, ` +
+        `but it must carry a block number on every row — finalization, file-range naming and crash recovery ` +
+        `all key off it. A null block coerces to 0 (written as an immutable block-0 row) and a missing one to ` +
+        `NaN (buffered forever, silently lost). Remove 'optional: true' from this column.`,
     )
   }
 }

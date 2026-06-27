@@ -16,7 +16,7 @@ import {
 
 import { PQ_ERR, ParquetTargetError } from './errors.js'
 import { ParquetState } from './parquet-state.js'
-import type { ParquetStore } from './parquet-store.js'
+import { ParquetStore } from './parquet-store.js'
 import { parquetTarget } from './parquet-target.js'
 import { type ParquetTable, validateTables } from './schema.js'
 import { ParquetSegmentWriter } from './writer.js'
@@ -204,6 +204,86 @@ describe('parquetTarget', () => {
       } catch (e) {
         expect((e as ParquetTargetError).code).toBe(PQ_ERR.UNSUPPORTED_COMPRESSION)
       }
+    })
+
+    it('rejects TIMESTAMP_MILLIS as the block-number column', () => {
+      // A timestamp is epoch-ms, not a block number, so finalization comparisons never release rows.
+      expect.assertions(1)
+      try {
+        validateTables([{ table: 't', schema: { blockNumber: { type: 'TIMESTAMP_MILLIS' } } }])
+      } catch (e) {
+        expect((e as ParquetTargetError).code).toBe(PQ_ERR.BLOCK_COLUMN_TYPE)
+      }
+    })
+
+    it('rejects an optional block-number column', () => {
+      expect.assertions(1)
+      try {
+        validateTables([{ table: 't', schema: { blockNumber: { type: 'INT64', optional: true } } }])
+      } catch (e) {
+        expect((e as ParquetTargetError).code).toBe(PQ_ERR.BLOCK_COLUMN_OPTIONAL)
+      }
+    })
+  })
+
+  describe('block-number value guard', () => {
+    it('fails loudly instead of coercing a null block number to 0, even in production', async () => {
+      // Disable the dev-mode value check so the always-on block guard is what trips.
+      const prev = process.env.NODE_ENV
+      process.env.NODE_ENV = 'production'
+      mockPortal = await createMockPortal([blocksResponse([1], 1)])
+
+      try {
+        await expect(
+          evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 1 }) }).pipeTo(
+            parquetTarget({
+              dir,
+              tables: [BLOCKS_TABLE],
+              onData: ({ store }) => {
+                store.insert('blocks', [{ blockNumber: null as unknown as number, hash: '0x1', timestamp: 1000 }])
+              },
+            }),
+          ),
+        ).rejects.toThrowError(/finite integer/)
+      } finally {
+        if (prev === undefined) delete process.env.NODE_ENV
+        else process.env.NODE_ENV = prev
+      }
+
+      // No bogus block-0 file was published.
+      expect(await listDataFiles(dir, 'blocks')).toEqual([])
+    })
+  })
+
+  describe('dev-mode value validation', () => {
+    const bytesTable: ParquetTable = {
+      table: 't',
+      schema: { blockNumber: { type: 'INT64' }, raw: { type: 'BYTE_ARRAY' } },
+    }
+
+    it('rejects a hex string handed to a BYTE_ARRAY column', () => {
+      const store = new ParquetStore({ dir, tables: [bytesTable], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      expect.assertions(1)
+      try {
+        store.insert('t', [{ blockNumber: 1, raw: '0xdeadbeef' }])
+      } catch (e) {
+        expect((e as ParquetTargetError).code).toBe(PQ_ERR.VALUE_INVALID)
+      }
+    })
+
+    it('rejects an INT64 number above 2^53 (precision already lost)', () => {
+      const store = new ParquetStore({ dir, tables: [BLOCKS_TABLE], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      expect.assertions(1)
+      try {
+        store.insert('blocks', [{ blockNumber: 2 ** 53, hash: '0x1', timestamp: 1 }])
+      } catch (e) {
+        expect((e as ParquetTargetError).code).toBe(PQ_ERR.VALUE_INVALID)
+      }
+    })
+
+    it('accepts a Buffer for BYTE_ARRAY and a bigint for INT64', () => {
+      const store = new ParquetStore({ dir, tables: [bytesTable], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      expect(() => store.insert('t', [{ blockNumber: 1n, raw: Buffer.from('deadbeef', 'hex') }])).not.toThrow()
     })
   })
 
@@ -580,6 +660,20 @@ describe('parquetTarget', () => {
 
       expect((await readdir(segDir)).filter((f) => f.startsWith('.tmp-'))).toEqual([])
     })
+
+    it('discard() releases the stream and is safe to call twice', async () => {
+      // Exercises the error-path fd cleanup: destroy the owned stream, idempotently, with no throw.
+      const segDir = path.join(dir, 'seg')
+      await mkdir(segDir, { recursive: true })
+      const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
+
+      const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
+      await writer.appendRow({ blockNumber: 1 }, 1)
+      await writer.discard()
+      await writer.discard()
+
+      expect((await readdir(segDir)).filter((f) => f.startsWith('.tmp-'))).toEqual([])
+    })
   })
 
   describe('ParquetState', () => {
@@ -595,6 +689,21 @@ describe('parquetTarget', () => {
 
       expect(await state.getCursor()).toBeUndefined()
       expect(await listAll(dir, 'blocks')).toEqual([])
+    })
+
+    it('throws (does not silently leave overlap) when an over-cursor file cannot be deleted', async () => {
+      await writeFile(path.join(dir, '_sqd_parquet_state.json'), JSON.stringify({ cursor: { number: 2, hash: '0x2' } }))
+      // A *directory* named like a data file cannot be unlink()-ed (EISDIR/EPERM, even as root),
+      // forcing the recovery delete to fail; it must surface rather than leave a duplicate-causing file.
+      await mkdir(path.join(dir, 'blocks', '000000000003-000000000005.parquet'), { recursive: true })
+      const state = new ParquetState({ dir, tables: ['blocks'], logger: createTestLogger() })
+
+      expect.assertions(1)
+      try {
+        await state.getCursor()
+      } catch (e) {
+        expect((e as ParquetTargetError).code).toBe(PQ_ERR.RECOVERY_DELETE_FAILED)
+      }
     })
   })
 })
