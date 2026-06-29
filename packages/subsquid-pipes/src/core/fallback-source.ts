@@ -10,9 +10,10 @@ import {
   SourceHealth,
   resolveFallbackPolicy,
 } from './fallback-health.js'
+import { FinalizedWatermark } from './finalized-watermark.js'
 import { Logger, createDefaultLogger } from './logger.js'
 import { PortalBatch } from './portal-source.js'
-import { Target } from './target.js'
+import { Target, TargetState } from './target.js'
 import { BlockCursor } from './types.js'
 
 /**
@@ -43,8 +44,13 @@ export interface FallbackMetrics {
  * A meta-source over an ordered list of sources. It drives the lowest-index healthy (or
  * optimistically `unknown`) source and, on a non-fork error, resumes the next source from the
  * last committed cursor. A `ForkException` is propagated untouched so a fork straddling a switch
- * is handled by the same `pipeTo` rewind path as an ordinary reorg; `finalizedHead` rides through
- * each `PortalBatch` unchanged (the finalized high-watermark is enforced by the target).
+ * is handled by the same `pipeTo` rewind path as an ordinary reorg.
+ *
+ * Like `PortalSource`, it owns the single monotonic finalized high-watermark for the pipe (the
+ * targets no longer do): it seeds the floor from the target's persisted finalized head and clamps
+ * every batch's finalized head through it before yielding. This is what makes a source *switch*
+ * safe — a new source reporting a deeper/transiently-missing finalized head can never un-finalize
+ * already-committed data.
  *
  * Drop-in for a `PortalSource`: it exposes the same `AsyncIterable<PortalBatch<T>>` + `pipeTo`.
  */
@@ -54,6 +60,8 @@ export class FallbackSource<T> {
   readonly #health: SourceHealth[]
   readonly #selector: Selector
   readonly #logger: Logger
+  /** Single monotonic finalized high-watermark for the whole pipe, seeded from the target's floor. */
+  readonly #watermark = new FinalizedWatermark()
 
   /** Observable state (for metrics). */
   activeIndex: number | undefined
@@ -90,6 +98,13 @@ export class FallbackSource<T> {
         for await (const batch of this.#sources[active].read(last)) {
           this.#health[active].onBatch()
 
+          // Clamp the source's finalized head through the shared monotonic watermark before it
+          // reaches the target, so a source switch reporting a deeper/transiently-missing finalized
+          // head can never un-finalize already-committed data. (The rollback chain is left as the
+          // source derived it; the clamp can only raise the head, so the chain stays a safe superset
+          // of the unfinalized tail.)
+          batch.ctx.stream.head.finalized = this.#watermark.clamp(batch.ctx.stream.head.finalized)
+
           yield batch
           last = batch.ctx.stream.state.current
 
@@ -114,7 +129,13 @@ export class FallbackSource<T> {
 
     return target.write({
       logger: this.#logger,
-      read: async function* (cursor?: BlockCursor) {
+      read: async function* (state?: TargetState) {
+        // Seed the monotonic floor from the target's persisted finalized head so the watermark
+        // survives an unclean restart mid-fork (null ⇒ no floor ⇒ no-finality passthrough). The
+        // floor then persists in `self.#watermark` across fork re-invocations below.
+        self.#watermark.seed(state?.finalized ?? undefined)
+
+        let cursor = state?.latest
         while (true) {
           try {
             for await (const batch of self.read(cursor)) {
