@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
-import { type BlockCursor, type Logger, formatBlock } from '~/core/index.js'
+import { type BlockCursor, type Logger, type TargetState, formatBlock } from '~/core/index.js'
 
 import { PQ_ERR, ParquetTargetError } from './errors.js'
 import { fsyncDir, fsyncFile } from './fs-durable.js'
@@ -16,8 +16,14 @@ const DATA_FILE_RE = /^(\d+)-(\d+)\.parquet$/
 type PersistedState = {
   /** Optional pipe namespace, mirrored from `settings.id`. */
   id?: string
-  /** Last durably-checkpointed cursor — `read(cursor)` resumes from `cursor.number + 1`. */
+  /** Last durably-checkpointed cursor — `read` resumes from `cursor.number + 1`. */
   cursor: BlockCursor
+  /**
+   * Finalized head observed at the checkpoint, persisted so the source can re-seed its monotonic
+   * finalized watermark after an unclean restart mid-fork. Absent in state written before this
+   * field existed (treated as "no persisted finalized head").
+   */
+  finalized?: BlockCursor
 }
 
 export type ParquetStateOptions = {
@@ -68,7 +74,7 @@ export class ParquetState {
    * committed cursor exists, additionally delete every published data file whose `maxBlock`
    * exceeds it (incomplete-checkpoint remnants).
    */
-  async getCursor(): Promise<BlockCursor | undefined> {
+  async getCursor(): Promise<TargetState | undefined> {
     await mkdir(this.#baseDir, { recursive: true })
     for (const table of this.#tables) {
       await mkdir(path.join(this.#baseDir, table), { recursive: true })
@@ -83,7 +89,9 @@ export class ParquetState {
 
     await this.#deleteFilesAboveCursor(state.cursor.number)
 
-    return state.cursor
+    // Hand the persisted finalized head back as resume state so the source can re-seed its
+    // monotonic watermark (explicit `null` when no finalized head was stored).
+    return { latest: state.cursor, finalized: state.finalized ?? null }
   }
 
   /**
@@ -91,8 +99,15 @@ export class ParquetState {
    * state file, then fsync the directory so the rename is durable. Called only after every open
    * writer for the checkpoint has been published.
    */
-  async saveCursor(cursor: BlockCursor): Promise<void> {
-    const payload: PersistedState = this.#id ? { id: this.#id, cursor } : { cursor }
+  async saveCursor(cursor: BlockCursor, finalized?: BlockCursor): Promise<void> {
+    const payload: PersistedState = { cursor }
+    if (this.#id) {
+      payload.id = this.#id
+    }
+    if (finalized) {
+      payload.finalized = finalized
+    }
+
     const tmpPath = path.join(this.#baseDir, `${TMP_PREFIX}state-${path.basename(this.#statePath)}`)
 
     await writeFile(tmpPath, JSON.stringify(payload))

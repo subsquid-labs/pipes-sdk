@@ -125,7 +125,8 @@ export function parquetTarget<T>(options: {
       // temp files. fork() runs inside read()'s generator while this for-await is suspended, so no
       // write races with it and close-in-finally is race-free.
       try {
-        const startCursor = await state.getCursor()
+        const resumeState = await state.getCursor()
+        const startCursor = resumeState?.latest
         lastCheckpointBlock = startCursor?.number ?? -1
 
         await onStart?.({ store, logger })
@@ -133,11 +134,14 @@ export function parquetTarget<T>(options: {
         // Captured for the checkpoint closure's metric labels — assigned on the first batch.
         let metricsId = ''
         let lastBoundary: BlockCursor | undefined = startCursor
+        // Latest (source-clamped) finalized head, persisted alongside the cursor at each checkpoint
+        // so the source can re-seed its watermark after an unclean restart. Seeded from resume state.
+        let lastFinalized: BlockCursor | undefined = resumeState?.finalized ?? undefined
 
         const checkpoint = async (cursor: BlockCursor | undefined, reason: string): Promise<void> => {
           const startedMs = Date.now()
           const published = await store.publishAll()
-          if (cursor) await state.saveCursor(cursor)
+          if (cursor) await state.saveCursor(cursor, lastFinalized)
 
           if (metrics) {
             for (const file of published) {
@@ -162,7 +166,7 @@ export function parquetTarget<T>(options: {
           }
         }
 
-        for await (const { data, ctx } of read(startCursor)) {
+        for await (const { data, ctx } of read(resumeState)) {
           if (!metrics) {
             metrics = registerParquetMetrics(ctx.metrics)
             metricsId = ctx.id
@@ -173,8 +177,12 @@ export function parquetTarget<T>(options: {
 
           // 2. finalization + the cursor this batch could checkpoint to. The boundary carries the
           //    HASH needed for resume; boundary.number = min(finalized, current), correct for
-          //    backfill / tip / no-finality / straddling batches.
+          //    backfill / tip / no-finality / straddling batches. `finalized` is already clamped by
+          //    the source, so it never regresses — persist it as the restart-seed floor.
           const finalized = ctx.stream.head.finalized
+          if (finalized) {
+            lastFinalized = finalized
+          }
           const current = ctx.stream.state.current
           const finalization: Finalization = { finalized, rollbackChain: ctx.stream.state.rollbackChain }
           const boundaryCursor = finalized && finalized.number <= current.number ? finalized : current

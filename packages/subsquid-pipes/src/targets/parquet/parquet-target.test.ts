@@ -1,10 +1,11 @@
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { ParquetReader, ParquetSchema, ParquetWriter } from '@dsnp/parquetjs'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { createTarget } from '~/core/index.js'
 import { evmPortalStream } from '~/evm/index.js'
 import {
   type MockPortal,
@@ -407,6 +408,49 @@ describe('parquetTarget', () => {
     })
   })
 
+  describe('finalized watermark (persist + restart)', () => {
+    it('persists the source-clamped finalized head through the loop at checkpoint', async () => {
+      mockPortal = await createMockPortal([blocksResponse([1, 2, 3], 3)])
+
+      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 3 }) }).pipeTo(
+        parquetTarget({ dir, tables: [BLOCKS_TABLE], onData: insertBlocks }),
+      )
+
+      // The loop threads the finalized head into saveCursor, so the state file carries it for the
+      // source to re-seed its watermark on restart.
+      const persisted = JSON.parse(await readFile(path.join(dir, '_sqd_parquet_state.json'), 'utf8'))
+      expect(persisted.cursor).toEqual({ number: 3, hash: '0x3' })
+      expect(persisted.finalized).toEqual({ number: 3, hash: '0x3' })
+    })
+
+    it('re-seeds the watermark from a real persisted finalized head and clamps a regression below it', async () => {
+      // A real ParquetState persists a finalized head of 5, exactly as the target loop would.
+      const persistState = new ParquetState({ dir, tables: ['blocks'], logger: createTestLogger() })
+      await persistState.getCursor()
+      await persistState.saveCursor({ number: 5, hash: '0x5' }, { number: 5, hash: '0x5f' })
+
+      // Restart: a real getCursor hands that finalized head back as resume state.
+      const resume = await new ParquetState({ dir, tables: ['blocks'], logger: createTestLogger() }).getCursor()
+      expect(resume).toEqual({ latest: { number: 5, hash: '0x5' }, finalized: { number: 5, hash: '0x5f' } })
+
+      // The source seeds its floor from the persisted finalized and clamps a lower reported head.
+      mockPortal = await createMockPortal([blocksResponse([6], 3)])
+      const seen: unknown[] = []
+      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 6 }) }).pipeTo(
+        createTarget({
+          write: async ({ read }) => {
+            for await (const { ctx } of read(resume)) {
+              seen.push(ctx.stream.head.finalized)
+            }
+          },
+        }) as any,
+      )
+
+      // The persisted floor (5) survives the restart and clamps the lower reported head (3).
+      expect(seen).toEqual([{ number: 5, hash: '0x5f' }])
+    })
+  })
+
   describe('fork', () => {
     it('drops buffered forked rows and leaves the pre-fork published file intact', async () => {
       mockPortal = await createMockPortal([
@@ -689,6 +733,39 @@ describe('parquetTarget', () => {
 
       expect(await state.getCursor()).toBeUndefined()
       expect(await listAll(dir, 'blocks')).toEqual([])
+    })
+
+    it('returns the persisted cursor and finalized head as resume state', async () => {
+      await writeFile(
+        path.join(dir, '_sqd_parquet_state.json'),
+        JSON.stringify({ cursor: { number: 5, hash: '0x5' }, finalized: { number: 5, hash: '0x5f' } }),
+      )
+      const state = new ParquetState({ dir, tables: ['blocks'], logger: createTestLogger() })
+
+      expect(await state.getCursor()).toEqual({
+        latest: { number: 5, hash: '0x5' },
+        finalized: { number: 5, hash: '0x5f' },
+      })
+    })
+
+    it('returns finalized: null for state written before the finalized field existed', async () => {
+      await writeFile(path.join(dir, '_sqd_parquet_state.json'), JSON.stringify({ cursor: { number: 5, hash: '0x5' } }))
+      const state = new ParquetState({ dir, tables: ['blocks'], logger: createTestLogger() })
+
+      expect(await state.getCursor()).toEqual({ latest: { number: 5, hash: '0x5' }, finalized: null })
+    })
+
+    it('persists the finalized head alongside the cursor so the source can re-seed on restart', async () => {
+      const state = new ParquetState({ dir, tables: ['blocks'], logger: createTestLogger() })
+      await state.getCursor()
+
+      await state.saveCursor({ number: 7, hash: '0x7' }, { number: 7, hash: '0x7f' })
+
+      const persisted = JSON.parse(await readFile(path.join(dir, '_sqd_parquet_state.json'), 'utf8'))
+      expect(persisted).toMatchObject({
+        cursor: { number: 7, hash: '0x7' },
+        finalized: { number: 7, hash: '0x7f' },
+      })
     })
 
     it('throws (does not silently leave overlap) when an over-cursor file cannot be deleted', async () => {
