@@ -1,6 +1,15 @@
 import { sql } from 'drizzle-orm'
 
-import { BatchContext, BlockCursor, Logger, Profiler, RollbackRecord, resolveForkCursor } from '~/core/index.js'
+import {
+  BatchContext,
+  BlockCursor,
+  Logger,
+  Profiler,
+  RollbackRecord,
+  TargetState,
+  coerceFinalized,
+  resolveForkCursor,
+} from '~/core/index.js'
 import { doWithRetry } from '~/internal/function.js'
 import { parseNumber } from '~/internal/number.js'
 import { Transaction } from '~/targets/drizzle/node-postgres/drizzle-target.js'
@@ -121,6 +130,9 @@ export class PostgresState {
     }: BatchContext,
     parentSpan: Profiler = profiler,
   ) {
+    // The source has already clamped this finalized head + rollback chain through the
+    // pipe's monotonic watermark, so persist them verbatim — the stored finalized floor
+    // stays non-regressing without a target-local clamp.
     const finalizedBlock = head.finalized?.number
 
     logger.debug(`Saving cursor at block ${current.number} for ${this.options.id} row...`)
@@ -168,7 +180,7 @@ export class PostgresState {
     }
   }
 
-  async getCursor({ logger }: { logger: Logger }): Promise<BlockCursor | undefined> {
+  async getCursor({ logger }: { logger: Logger }): Promise<TargetState | undefined> {
     try {
       const { rows } = await this.client.query<StateSelect>(
         `SELECT * FROM ${this.#sync.fqnName} WHERE id = $1 ORDER BY "current_number" DESC LIMIT 1`,
@@ -177,10 +189,19 @@ export class PostgresState {
       const [row] = rows
       if (!row) return
 
+      // Hand the persisted finalized head back as resume state so the source can seed its
+      // monotonic watermark (survives an unclean restart mid-fork). Taken from the resume row
+      // (the latest by current_number), so `latest` and `finalized` stay consistent. In steady
+      // state that row carries the highest finalized; right after a fork it can briefly hold an
+      // older finalized, but the source re-clamps the floor from the live head on the first batch
+      // (and re-forks off the stale `latest`), so it self-heals. `null` when none was stored.
       return {
-        number: parseNumber(row.current_number),
-        hash: row.current_hash,
-        timestamp: row.current_timestamp ? row.current_timestamp.getTime() / 1000 : undefined,
+        latest: {
+          number: parseNumber(row.current_number),
+          hash: row.current_hash,
+          timestamp: row.current_timestamp ? row.current_timestamp.getTime() / 1000 : undefined,
+        },
+        finalized: coerceFinalized(row.finalized) ?? null,
       }
     } catch (e) {
       if (!tableNotExists(e)) {
@@ -193,6 +214,20 @@ export class PostgresState {
     }
 
     return
+  }
+
+  /**
+   * Drop sync rows above the fork's safe cursor. Their cursors describe the now-dead chain, so
+   * keeping them would (a) let `getCursor` resume from a stale `current_number` (it is not
+   * monotonic in write order while reprocessing climbs back to the pre-fork height) and (b)
+   * collide with the primary key when reprocessing re-writes those block numbers. Runs inside the
+   * fork transaction so the rollback and this cleanup commit atomically.
+   */
+  async removeForkedRows(tx: Transaction, cursor: BlockCursor): Promise<void> {
+    await tx.execute(sql`
+      DELETE FROM ${sql.raw(this.#sync.fqnName)}
+      WHERE "id" = ${this.options.id} AND "current_number" > ${cursor.number}
+    `)
   }
 
   async fork(previousBlocks: BlockCursor[]): Promise<BlockCursor | null> {
