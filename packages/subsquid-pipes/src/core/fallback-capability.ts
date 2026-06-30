@@ -1,11 +1,18 @@
 import { isForkException } from '~/portal-client/index.js'
 
+import { SourceErrorInfo, classifyError, freshnessFailure } from './fallback-diagnostics.js'
 import { FallbackUnderlyingSource } from './fallback-source.js'
 import { BlockCursor } from './types.js'
 
 export interface CapabilityProbeOptions {
   /** Report not-capable if the probe slice stays outstanding longer than this. Default 30s. */
   timeoutMs?: number
+}
+
+/** A capability probe's verdict: `ok`, plus *why* it failed (for logs + metrics) when it didn't. */
+export interface ProbeResult {
+  ok: boolean
+  cause?: SourceErrorInfo
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000
@@ -25,7 +32,8 @@ const DEFAULT_TIMEOUT_MS = 30_000
  *
  * Capable iff the slice yields a batch or the stream ends without a non-fork error. A
  * `ForkException` counts as capable — the source served data and detected a reorg, a chain event
- * rather than an inability to serve. Any other error, or exceeding `timeoutMs`, reports not-capable.
+ * rather than an inability to serve. Any other error, or exceeding `timeoutMs`, reports not-capable,
+ * with the cause (classified for logs + metrics) attached.
  *
  * (Unlike the Squid probe, which requests a one-block `{from, to}` slice, the Pipes `read` contract
  * is unbounded — so the probe takes only the first batch and closes the stream.)
@@ -33,25 +41,31 @@ const DEFAULT_TIMEOUT_MS = 30_000
 export function makeCapabilityProbe<T>(
   source: FallbackUnderlyingSource<T>,
   options: CapabilityProbeOptions = {},
-): (atCursor?: BlockCursor) => Promise<boolean> {
+): (atCursor?: BlockCursor) => Promise<ProbeResult> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
 
-  return async (atCursor?: BlockCursor): Promise<boolean> => {
+  return async (atCursor?: BlockCursor): Promise<ProbeResult> => {
     const iterator = source.read(atCursor)[Symbol.asyncIterator]()
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
       const next = iterator.next()
       next.catch(() => {}) // a late rejection after a timeout must not surface as unhandled
       const timeout = new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => reject(new Error('capability probe timed out')), timeoutMs)
+        timer = setTimeout(
+          () => reject(freshnessFailure('capability', 'stale', `probe timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        )
       })
 
       // One batch (or a clean stream end) is enough: it proves the source served the slice.
       await Promise.race([next, timeout])
 
-      return true
+      return { ok: true }
     } catch (e) {
-      return isForkException(e)
+      if (isForkException(e)) return { ok: true }
+      // The timeout rejects with a ready-made cause; a thrown error gets classified.
+      const cause = isErrorInfo(e) ? e : classifyError('capability', e)
+      return { ok: false, cause }
     } finally {
       if (timer) clearTimeout(timer)
       // Don't await: closing the probe stream must not block, and a stalled source's `return()`
@@ -66,4 +80,8 @@ export function makeCapabilityProbe<T>(
       }
     }
   }
+}
+
+function isErrorInfo(e: unknown): e is SourceErrorInfo {
+  return typeof e === 'object' && e != null && 'reason' in e && 'check' in e
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { ForkException } from '~/portal-client/index.js'
 
 import { FallbackSource, FallbackUnderlyingSource } from './fallback-source.js'
+import { createDefaultLogger } from './logger.js'
 import { PortalBatch } from './portal-source.js'
 import { Target } from './target.js'
 import { BlockCursor } from './types.js'
@@ -12,6 +13,9 @@ import { BlockCursor } from './types.js'
  * yielding `PortalBatch`es) — the meta-source analog of the Squid SDK's MockSource. No HTTP is
  * mocked here; the Portal/RPC adapters are exercised separately.
  */
+
+/** Keep the default cause-logging (warn) out of the test output. */
+const silent = createDefaultLogger({ level: 'silent' })
 
 function cursor(n: number, hash = `0x${n}`): BlockCursor {
   return { number: n, hash }
@@ -56,7 +60,7 @@ describe('FallbackSource — supervisor', () => {
     const s1 = source('s1', async function* () {
       yield pbatch(99)
     })
-    const fb = new FallbackSource([s0, s1])
+    const fb = new FallbackSource([s0, s1], undefined, silent)
 
     expect(await collect(fb.read())).toEqual([1, 2])
     expect(s1.reads).toHaveLength(0)
@@ -72,7 +76,7 @@ describe('FallbackSource — supervisor', () => {
       expect(c).toEqual(cursor(2)) // resume just after the last committed block
       yield pbatch(3)
     })
-    const fb = new FallbackSource([s0, s1])
+    const fb = new FallbackSource([s0, s1], undefined, silent)
 
     expect(await collect(fb.read())).toEqual([1, 2, 3])
     expect(s1.reads).toEqual([cursor(2)])
@@ -90,7 +94,7 @@ describe('FallbackSource — supervisor', () => {
       expect(c).toEqual(cursor(1))
       yield pbatch(2)
     })
-    const fb = new FallbackSource([s0, s1, s2])
+    const fb = new FallbackSource([s0, s1, s2], undefined, silent)
 
     expect(await collect(fb.read())).toEqual([1, 2])
   })
@@ -103,7 +107,7 @@ describe('FallbackSource — supervisor', () => {
     const s1 = source('s1', async function* () {
       yield pbatch(99)
     })
-    const fb = new FallbackSource([s0, s1])
+    const fb = new FallbackSource([s0, s1], undefined, silent)
 
     const seen: number[] = []
     await expect(
@@ -126,7 +130,7 @@ describe('FallbackSource — supervisor', () => {
     let probes = 0
     s0.probeCapability = async () => {
       probes++
-      return true
+      return { ok: true }
     }
 
     const s1 = source('s1', async function* () {
@@ -136,12 +140,16 @@ describe('FallbackSource — supervisor', () => {
       }
     })
 
-    const fb = new FallbackSource([s0, s1], {
-      clock: () => now,
-      cooldownMs: 50,
-      capabilityProbeIntervalMs: 0,
-      livenessRecoverThreshold: 1, // one successful probe is enough to confirm + recover
-    })
+    const fb = new FallbackSource(
+      [s0, s1],
+      {
+        clock: () => now,
+        cooldownMs: 50,
+        capabilityProbeIntervalMs: 0,
+        livenessRecoverThreshold: 1, // one successful probe is enough to confirm + recover
+      },
+      silent,
+    )
 
     const out = await collect(fb.read())
 
@@ -158,7 +166,8 @@ describe('FallbackSource — supervisor', () => {
     let probes = 0
     s0.probeCapability = async () => {
       probes++
-      return false // reachable-but-incapable: never confirms
+      // reachable-but-incapable: never confirms, and reports a classified cause
+      return { ok: false, cause: { check: 'capability' as const, reason: 'http' as const, code: 400, detail: 'x' } }
     }
 
     const s1 = source('s1', async function* () {
@@ -168,12 +177,16 @@ describe('FallbackSource — supervisor', () => {
       }
     })
 
-    const fb = new FallbackSource([s0, s1], {
-      clock: () => now,
-      cooldownMs: 50,
-      capabilityProbeIntervalMs: 0,
-      livenessRecoverThreshold: 1,
-    })
+    const fb = new FallbackSource(
+      [s0, s1],
+      {
+        clock: () => now,
+        cooldownMs: 50,
+        capabilityProbeIntervalMs: 0,
+        livenessRecoverThreshold: 1,
+      },
+      silent,
+    )
 
     const out = await collect(fb.read())
 
@@ -186,10 +199,11 @@ describe('FallbackSource — supervisor', () => {
     const down: ReadFn = async function* () {
       throw new Error('down')
     }
-    const fb = new FallbackSource([source('s0', down), source('s1', down)], {
-      allDownTimeoutMs: 0,
-      allDownPollMs: 1,
-    })
+    const fb = new FallbackSource(
+      [source('s0', down), source('s1', down)],
+      { allDownTimeoutMs: 0, allDownPollMs: 1 },
+      silent,
+    )
 
     await expect(collect(fb.read())).rejects.toThrowError(/all fallback data sources/)
   })
@@ -204,17 +218,21 @@ describe('FallbackSource — metrics', () => {
     const s1 = source('s1', async function* () {
       yield pbatch(2)
     })
-    const fb = new FallbackSource([s0, s1])
+    const fb = new FallbackSource([s0, s1], undefined, silent)
 
     await collect(fb.read())
     const m = fb.metrics()
 
     expect(m.activeIndex).toBe(1)
     expect(m.switchCount).toBe(1)
-    expect(m.sources).toEqual([
+    expect(m.sources).toMatchObject([
       { name: 's0', health: 'unhealthy', active: false },
       { name: 's1', health: 'unknown', active: true },
     ])
+    // The unhealthy source carries its classified cause; the healthy/unknown one does not.
+    expect(m.sources[0].cause).toMatchObject({ check: 'stream', reason: 'unknown' })
+    expect(m.sources[0].cause?.detail).toContain('boom')
+    expect(m.sources[1].cause).toBeUndefined()
   })
 })
 
@@ -243,7 +261,7 @@ describe('FallbackSource — pipeTo', () => {
       },
     }
 
-    const fb = new FallbackSource([s0])
+    const fb = new FallbackSource([s0], undefined, silent)
     await fb.pipeTo(target)
 
     expect(forkedTo).toEqual(cursor(1))

@@ -20,7 +20,12 @@ describe('registerFallbackMetrics', () => {
       activeIndex: 1,
       switchCount: 2,
       sources: [
-        { name: 'portal', health: 'unhealthy', active: false },
+        {
+          name: 'portal',
+          health: 'unhealthy',
+          active: false,
+          cause: { check: 'capability', reason: 'http', code: 400, detail: 'capability check failed: http 400, …' },
+        },
         { name: 'rpc', health: 'unknown', active: true },
       ],
     }
@@ -35,9 +40,20 @@ describe('registerFallbackMetrics', () => {
     ])
 
     const health = captured.get('sqd_fallback_source_health')!.gauge
-    expect(health.calls).toContainEqual({ labels: { source: 'portal', state: 'unhealthy' }, value: 1 })
-    expect(health.calls).toContainEqual({ labels: { source: 'portal', state: 'healthy' }, value: 0 })
-    expect(health.calls).toContainEqual({ labels: { source: 'rpc', state: 'unknown' }, value: 1 })
+    // The unhealthy row carries the cause as bounded labels; the request detail is never a label.
+    expect(health.calls).toContainEqual({
+      labels: { source: 'portal', state: 'unhealthy', check: 'capability', reason: 'http', code: '400' },
+      value: 1,
+    })
+    expect(health.calls).toContainEqual({
+      labels: { source: 'portal', state: 'healthy', check: '', reason: '', code: '' },
+      value: 0,
+    })
+    expect(health.calls).toContainEqual({
+      labels: { source: 'rpc', state: 'unknown', check: '', reason: '', code: '' },
+      value: 1,
+    })
+    expect(health.calls.every((c) => !JSON.stringify(c).includes('capability check failed'))).toBe(true)
 
     expect(captured.get('sqd_fallback_switches_total')!.gauge.calls).toEqual([{ value: 2 }])
   })

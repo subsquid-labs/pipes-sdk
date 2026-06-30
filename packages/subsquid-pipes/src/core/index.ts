@@ -1,6 +1,7 @@
 export * from './cursor-key.js'
 export * from './errors.js'
 export * from './fallback-capability.js'
+export * from './fallback-diagnostics.js'
 export * from './fallback-health.js'
 export * from './fallback-metrics.js'
 export * from './fallback-source.js'

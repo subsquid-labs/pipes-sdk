@@ -57,6 +57,18 @@ describe('SourceHealth', () => {
     expect(health.state).toBe('unhealthy')
   })
 
+  it('exposes the cause while unhealthy and clears it on recovery', () => {
+    const { health, advance } = setup({ cooldownMs: 1000 })
+    const cause = { check: 'stream' as const, reason: 'http' as const, code: 400, detail: 'boom' }
+
+    health.onStreamError(cause)
+    expect(health.cause).toEqual(cause)
+
+    advance(1000) // cooldown elapses → unknown, cause cleared
+    expect(health.state).toBe('unknown')
+    expect(health.cause).toBeUndefined()
+  })
+
   it('a probed source cannot recover on liveness alone after going unhealthy — capability must be re-proved', () => {
     const { health, advance } = setup({ hasCapabilityProbe: true, cooldownMs: 1000 })
 

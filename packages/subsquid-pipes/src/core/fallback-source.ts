@@ -1,6 +1,8 @@
 import { isForkException } from '~/portal-client/index.js'
 
 import { ForkCursorMissingError, ForkNoPreviousBlocksError, TargetForkNotSupportedError } from './errors.js'
+import type { ProbeResult } from './fallback-capability.js'
+import { SourceErrorInfo, classifyError, freshnessFailure } from './fallback-diagnostics.js'
 import {
   AllSourcesDownError,
   FallbackHealth,
@@ -28,9 +30,10 @@ export interface FallbackUnderlyingSource<T> {
   /**
    * Full, infrequent capability probe — verifies the source can still serve the query's data.
    * `atCursor` is the indexing frontier (last committed cursor); the probe should confirm the
-   * source can serve the configured data just past it and resolve `false` if it cannot.
+   * source can serve the configured data just past it and resolve not-`ok` (with a cause) if it
+   * cannot.
    */
-  probeCapability?: (atCursor?: BlockCursor) => Promise<boolean>
+  probeCapability?: (atCursor?: BlockCursor) => Promise<ProbeResult>
 }
 
 function sleep(ms: number): Promise<void> {
@@ -41,7 +44,7 @@ function sleep(ms: number): Promise<void> {
 export interface FallbackMetrics {
   activeIndex: number | undefined
   switchCount: number
-  sources: { name: string; health: FallbackHealth; active: boolean }[]
+  sources: { name: string; health: FallbackHealth; active: boolean; cause?: SourceErrorInfo }[]
 }
 
 /**
@@ -133,7 +136,7 @@ export class FallbackSource<T> {
       } catch (e) {
         if (isForkException(e)) throw e // propagate; do NOT switch
 
-        this.#health[active].onStreamError()
+        this.#failSource(active, classifyError('stream', e))
         // re-select and resume from `last` on the next iteration
       }
     }
@@ -211,19 +214,46 @@ export class FallbackSource<T> {
       this.#capabilityProbing[i] = true
       probe(last)
         .then(
-          (ok) => {
-            if (ok) {
+          (r) => {
+            if (r.ok) {
               this.#health[i].onLivenessPass()
               this.#health[i].onCapability(true)
             } else {
-              this.#health[i].onCapability(false)
+              this.#failSource(i, r.cause ?? freshnessFailure('capability', 'stale', 'probe reported not-capable'))
             }
           },
-          () => this.#health[i].onCapability(false),
+          (e) => this.#failSource(i, classifyError('capability', e)),
         )
         .finally(() => {
           this.#capabilityProbing[i] = false
         })
+    }
+  }
+
+  /**
+   * Feed a failure to a source's health (the `check` selects the signal), then log *why* — but only
+   * when it actually flips the source unhealthy, so a log line always marks a real transition
+   * (liveness fails are noisy until they trip the threshold). The bounded `reason`/`code`/`check`
+   * also reach {@link metrics}; the full `detail` (incl. the request) is logged, never a label.
+   */
+  #failSource(i: number, cause: SourceErrorInfo): void {
+    const before = this.#health[i].state
+    switch (cause.check) {
+      case 'stream':
+        this.#health[i].onStreamError(cause)
+        break
+      case 'liveness':
+        this.#health[i].onLivenessFail(cause)
+        break
+      case 'capability':
+        this.#health[i].onCapability(false, cause)
+        break
+    }
+    if (before !== 'unhealthy' && this.#health[i].state === 'unhealthy') {
+      this.#logger.warn(
+        { source: this.#sources[i].name, check: cause.check, reason: cause.reason, code: cause.code },
+        `fallback source "${this.#sources[i].name}" marked unhealthy: ${cause.detail}`,
+      )
     }
   }
 
@@ -253,6 +283,7 @@ export class FallbackSource<T> {
         name: s.name,
         health: this.#health[i].state,
         active: this.activeIndex === i,
+        cause: this.#health[i].cause,
       })),
     }
   }
