@@ -68,8 +68,8 @@ export function clickhouseTarget<T>({
         await onRollback?.({
           type: 'offset_check',
           store,
-          cursor,
-          safeCursor: cursor,
+          cursor: cursor.latest,
+          safeCursor: cursor.latest,
         })
       }
 
