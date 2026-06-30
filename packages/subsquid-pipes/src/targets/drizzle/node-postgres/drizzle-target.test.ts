@@ -395,6 +395,12 @@ describe('Drizzle target', () => {
           },
         ]
       `)
+
+      // The fork drops the rolled-back sync row (block 5) above the safe cursor, so only the
+      // reprocessed write (block 7) remains — getCursor then resumes from the last write rather
+      // than a stale higher block.
+      const sync = await getAllFromSyncTable()
+      expect(sync.map((r) => Number(r['current_number']))).toEqual([7])
     })
 
     it('should rollback updates', async () => {
