@@ -10,12 +10,13 @@ import {
 
 import { last } from '../internal/array.js'
 import { ForkCursorMissingError, ForkNoPreviousBlocksError, TargetForkNotSupportedError } from './errors.js'
+import { FinalizedWatermark } from './finalized-watermark.js'
 import { LogLevel, Logger, createDefaultLogger, formatWarning } from './logger.js'
 import { Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
 import { Profiler, Span, SpanHooks } from './profiling.js'
 import { ProgressEvent, StartEvent } from './progress-tracker.js'
 import { QueryBuilder, hashQuery } from './query-builder.js'
-import { Target } from './target.js'
+import { Target, TargetState } from './target.js'
 import { QueryAwareTransformer, Transformer, TransformerArgs, TransformerOptions } from './transformer.js'
 import { BlockCursor, Ctx } from './types.js'
 
@@ -122,6 +123,12 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   readonly #portal: PortalClient
   readonly #metricServer: MetricsServer
   readonly #transformers: Transformer<any, any>[] = []
+  // Single monotonic finalized high-watermark for the whole pipe. Owned here (not
+  // per-target) so a source-switch reporting a deeper/transiently-missing finalized
+  // head can never un-finalize already-committed data, and every consumer — the
+  // finalization buffer AND the targets' saveCursor path — gets one consistent,
+  // never-regressing finalized head. Seeded from the target's persisted floor.
+  readonly #watermark = new FinalizedWatermark()
   #started = false
 
   constructor({ portal, id, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
@@ -163,7 +170,15 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     this.#metricServer.registerPipe(this.#id)
   }
 
-  private async *read(cursor?: BlockCursor): AsyncIterable<PortalBatch<T>> {
+  private async *read(state?: TargetState): AsyncIterable<PortalBatch<T>> {
+    // Seed the monotonic finalized watermark from the target's persisted finalized
+    // head so it survives an unclean restart mid-fork. Seeding only from the
+    // dedicated `finalized` field (never from `latest`) keeps no-finality datasets
+    // correct: the floor stays undefined → Infinity-threshold passthrough.
+    this.#watermark.seed(state?.finalized ?? undefined)
+
+    const cursor = state?.latest
+
     /*
      Calculates query ranges while excluding blocks that were previously fetched to avoid duplicate processing
      */
@@ -210,11 +225,17 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
         const blocks = batch.blocks
 
         if (blocks.length > 0) {
+          // Clamp the portal's finalized head through the monotonic watermark before it
+          // reaches any consumer, so a regressed or transiently-missing finalized head can
+          // never un-finalize already-committed data. The rollback chain is derived from the
+          // CLAMPED head so the two stay consistent (clamp can only raise finalized).
+          const finalized = this.#watermark.clamp(batch.head.finalized)
+
           // TODO WTF with any?
           const lastBatchBlock = last(blocks as { header: { number: number } }[])
 
           const lastBlockNumber = Math.max(
-            Math.min(last(bounded)?.range?.to || batch.head.latest?.number || batch.head.finalized?.number || Infinity),
+            Math.min(last(bounded)?.range?.to || batch.head.latest?.number || finalized?.number || Infinity),
             lastBatchBlock.header?.number || -Infinity,
           )
 
@@ -226,7 +247,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             stream: {
               dataset: datasetMetadata,
               head: {
-                finalized: batch.head.finalized,
+                finalized,
                 latest: batch.head.latest,
               },
               query: {
@@ -240,7 +261,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
                 last: lastBlockNumber,
                 rollbackChain: extractRollbackChain({
                   blocks: batch.blocks,
-                  head: batch.head.finalized,
+                  head: finalized,
                 }),
               },
             },
@@ -384,12 +405,12 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     return target.write({
       logger: this.#logger,
-      read: async function* (cursor?: BlockCursor) {
+      read: async function* (state?: TargetState) {
         await self.configure()
 
         while (true) {
           try {
-            for await (const batch of self.read(cursor)) {
+            for await (const batch of self.read(state)) {
               yield batch as PortalBatch<T>
               self.batchEnd(batch.ctx)
             }
@@ -417,7 +438,10 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
             await self.forkTransformers(forkProfiler, forkedCursor)
 
-            cursor = forkedCursor
+            // Resume from the forked cursor; the finalized floor persists in the
+            // instance #watermark across read() re-invocation, so re-seeding with the
+            // same state.finalized is a harmless monotonic no-op.
+            state = { latest: forkedCursor, finalized: state?.finalized ?? null }
           } finally {
             await self.stop()
           }

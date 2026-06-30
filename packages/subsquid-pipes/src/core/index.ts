@@ -1,5 +1,9 @@
 export * from './errors.js'
 export * from './finalization-buffer.js'
+// Only `coerceFinalized` is consumed across module boundaries (the target state classes). The
+// watermark class is imported directly by the source, and maxFinalized is module-internal — keep
+// them out of the package's public surface.
+export { coerceFinalized } from './finalized-watermark.js'
 export * from './fork.js'
 export * from './formatters.js'
 export * from './logger.js'
