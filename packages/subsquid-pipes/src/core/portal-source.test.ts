@@ -386,6 +386,83 @@ describe('Portal abstract stream', () => {
       `)
     })
   })
+
+  describe('finalized watermark (centralized clamp)', () => {
+    it('clamps a transient missing finalized head up to the persisted floor', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 6, hash: '0x6', timestamp: 6000 } }],
+          // finalized header dropped on this batch
+        },
+      ])
+
+      const stream = evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 6 }) })
+
+      const seen: unknown[] = []
+      const target = createTarget({
+        write: async ({ read }) => {
+          for await (const { ctx } of read({ latest: { number: 5, hash: '0x5' }, finalized: { number: 5, hash: '0x5f' } })) {
+            seen.push(ctx.stream.head.finalized)
+          }
+        },
+      })
+      await stream.pipeTo(target as any)
+
+      // The dropped header must not leak as `undefined` (which would collapse the buffer threshold
+      // to Infinity and release unfinalized rows); it clamps back up to the persisted floor (5).
+      expect(seen).toEqual([{ number: 5, hash: '0x5f' }])
+    })
+
+    it('seeds the floor from the target resume state and clamps a regression below it (restart-mid-fork)', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 6, hash: '0x6', timestamp: 6000 } }],
+          // first batch after restart reports a finalized head (3) below the persisted floor (5)
+          head: { finalized: { number: 3, hash: '0x3f' }, latest: { number: 10 } },
+        },
+      ])
+
+      const stream = evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 6 }) })
+
+      const seen: unknown[] = []
+      const target = createTarget({
+        write: async ({ read }) => {
+          for await (const { ctx } of read({ latest: { number: 5, hash: '0x5' }, finalized: { number: 5, hash: '0x5f' } })) {
+            seen.push(ctx.stream.head.finalized)
+          }
+        },
+      })
+      await stream.pipeTo(target as any)
+
+      // The persisted floor (5) survives the restart and clamps the lower reported head (3).
+      expect(seen).toEqual([{ number: 5, hash: '0x5f' }])
+    })
+
+    it('leaves finalized undefined for a no-finality dataset (passthrough)', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [
+            { header: { number: 1, hash: '0x1', timestamp: 1000 } },
+            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
+          ],
+          // no head at all → no finality
+        },
+      ])
+
+      const stream = evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 2 }) })
+
+      const finalizedPerBatch = []
+      for await (const { ctx } of stream) {
+        finalizedPerBatch.push(ctx.stream.head.finalized)
+      }
+
+      // Floor is never seeded (only from a real finalized head), so it stays undefined.
+      expect(finalizedPerBatch).toEqual([undefined])
+    })
+  })
 })
 
 describe('pipe/pipeTo type guards', () => {
