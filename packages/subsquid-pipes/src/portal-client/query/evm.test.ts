@@ -131,3 +131,94 @@ describe('TraceSuicideAction.refundAddress validation', () => {
     expect(() => castSuicideTrace('not-hex')).toThrow()
   })
 })
+
+function castLogsBloom(logsBloom: unknown) {
+  const schema = getBlockSchema({ transaction: { logsBloom: true } })
+  return cast(schema, { header: {}, transactions: [{ logsBloom }] }).transactions[0].logsBloom
+}
+
+describe('TransactionFields logsBloom validation', () => {
+  const BLOOM = `0x${'00'.repeat(255)}01` // 256-byte receipt bloom
+
+  it('parses a hex bloom', () => {
+    expect(castLogsBloom(BLOOM)).toBe(BLOOM)
+  })
+
+  it('is optional (undefined when the field is absent)', () => {
+    const schema = getBlockSchema({ transaction: { logsBloom: true } })
+    const out = cast(schema, { header: {}, transactions: [{}] })
+    expect(out.transactions[0].logsBloom).toBeUndefined()
+  })
+
+  it('rejects a non-hex value', () => {
+    expect(() => castLogsBloom('nothex')).toThrow()
+  })
+})
+
+function castUncles(uncles: unknown) {
+  const schema = getBlockSchema({ block: { uncles: true } })
+  return cast(schema, { header: { uncles } }).header.uncles
+}
+
+describe('BlockHeaderFields uncles validation', () => {
+  const HASH = `0x${'ab'.repeat(32)}`
+
+  it('parses an array of uncle hashes', () => {
+    expect(castUncles([HASH, HASH])).toEqual([HASH, HASH])
+  })
+
+  it('is optional (undefined when the field is absent)', () => {
+    const schema = getBlockSchema({ block: { uncles: true } })
+    expect(cast(schema, { header: {} }).header.uncles).toBeUndefined()
+  })
+
+  it('rejects a non-hex entry', () => {
+    expect(() => castUncles(['nothex'])).toThrow()
+  })
+})
+
+function castWithdrawalsRoot(withdrawalsRoot: unknown) {
+  const schema = getBlockSchema({ block: { withdrawalsRoot: true } })
+  return cast(schema, { header: { withdrawalsRoot } }).header.withdrawalsRoot
+}
+
+describe('BlockHeaderFields withdrawalsRoot validation', () => {
+  const ROOT = `0x${'ef'.repeat(32)}`
+
+  it('parses a hex root', () => {
+    expect(castWithdrawalsRoot(ROOT)).toBe(ROOT)
+  })
+
+  it('is optional (undefined when the field is absent)', () => {
+    const schema = getBlockSchema({ block: { withdrawalsRoot: true } })
+    expect(cast(schema, { header: {} }).header.withdrawalsRoot).toBeUndefined()
+  })
+
+  it('rejects a non-hex value', () => {
+    expect(() => castWithdrawalsRoot('nothex')).toThrow()
+  })
+})
+
+function castWithdrawals(withdrawals: unknown) {
+  const schema = getBlockSchema({ block: { withdrawals: true } })
+  return cast(schema, { header: { withdrawals } }).header.withdrawals
+}
+
+describe('BlockHeaderFields withdrawals validation', () => {
+  const ADDR = `0x${'12'.repeat(20)}`
+
+  it('parses entries and casts QTY fields to bigint', () => {
+    expect(castWithdrawals([{ index: '0x1', validatorIndex: '0x2', address: ADDR, amount: '0x3b9aca00' }])).toEqual([
+      { index: 1n, validatorIndex: 2n, address: ADDR, amount: 1000000000n },
+    ])
+  })
+
+  it('is optional (undefined when the field is absent)', () => {
+    const schema = getBlockSchema({ block: { withdrawals: true } })
+    expect(cast(schema, { header: {} }).header.withdrawals).toBeUndefined()
+  })
+
+  it('rejects a non-hex address', () => {
+    expect(() => castWithdrawals([{ index: '0x1', validatorIndex: '0x2', address: 'nothex', amount: '0x3' }])).toThrow()
+  })
+})

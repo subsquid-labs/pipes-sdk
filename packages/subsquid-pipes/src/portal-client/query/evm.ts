@@ -59,6 +59,14 @@ export type BlockHeaderFields = {
   blobGasUsed: bigint
   excessBlobGas: bigint
   l1BlockNumber?: number
+  uncles?: Hex[]
+  withdrawalsRoot?: Hex
+  withdrawals?: {
+    index: bigint
+    validatorIndex: bigint
+    address: Hex
+    amount: bigint
+  }[]
 }
 
 export type TransactionFields = {
@@ -85,6 +93,7 @@ export type TransactionFields = {
   effectiveGasPrice: bigint
   type: number
   status: number
+  logsBloom?: Hex
   blobVersionedHashes?: Hex[]
   accessList?: {
     address: Hex
@@ -437,6 +446,9 @@ const BlockHeaderShape: ObjectValidatorShape<BlockHeaderFields> = {
   blobGasUsed: QTY,
   excessBlobGas: QTY,
   l1BlockNumber: option(NAT),
+  uncles: option(array(BYTES)),
+  withdrawalsRoot: option(BYTES),
+  withdrawals: option(array(object({ index: QTY, validatorIndex: QTY, address: BYTES, amount: QTY }))),
 }
 
 const LogShape: ObjectValidatorShape<LogFields> = {
@@ -472,6 +484,7 @@ const TransactionShape: ObjectValidatorShape<TransactionFields> = {
   effectiveGasPrice: QTY,
   type: NAT,
   status: NAT,
+  logsBloom: option(BYTES),
   blobVersionedHashes: option(array(BYTES)),
   accessList: option(array(object({ address: BYTES, storageKeys: array(BYTES) }))),
   l1Fee: option(QTY),
