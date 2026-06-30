@@ -1,4 +1,12 @@
-import { BatchContext, BlockCursor, Profiler, RollbackRecord, resolveForkCursor } from '~/core/index.js'
+import {
+  BatchContext,
+  BlockCursor,
+  Profiler,
+  RollbackRecord,
+  TargetState,
+  coerceFinalized,
+  resolveForkCursor,
+} from '~/core/index.js'
 
 import { ClickhouseStore } from './clickhouse-store.js'
 
@@ -67,9 +75,9 @@ export class ClickhouseState {
     this.options = {
       database: client.connectionParams?.database || 'default',
       table: 'sync',
-      id: 'stream',
       ...options,
-      // override after spread so an explicit `undefined` cannot clobber the default
+      // override after spread so an explicit `undefined` cannot clobber the defaults
+      id: options.id ?? 'stream',
       maxRows,
     }
 
@@ -102,6 +110,9 @@ export class ClickhouseState {
           {
             id: this.options.id,
             current: this.encodeCursor(current),
+            // The source has already clamped this finalized head + rollback chain through the
+            // pipe's monotonic watermark, so persisting them verbatim keeps the stored floor
+            // non-regressing without any target-local clamp.
             finalized: head.finalized ? this.encodeCursor(head.finalized) : '',
             rollback_chain: JSON.stringify(rollbackChain),
             sign: 1,
@@ -139,7 +150,7 @@ export class ClickhouseState {
     }
   }
 
-  async getCursor(): Promise<BlockCursor | undefined> {
+  async getCursor(): Promise<TargetState | undefined> {
     try {
       const res = await this.store.query({
         query: `SELECT * FROM ${this.#qualifiedName} WHERE id = {id:String} ORDER BY timestamp DESC LIMIT 1`,
@@ -147,9 +158,17 @@ export class ClickhouseState {
         query_params: { id: this.options.id },
       })
 
-      const [row] = await res.json<{ current: string; initial: string }>()
+      const [row] = await res.json<{ current: string; finalized: string }>()
       if (row) {
-        return this.decodeCursor(row.current)
+        // Hand the persisted finalized head back as resume state so the source can seed its
+        // monotonic watermark (survives an unclean restart mid-fork). It is the newest row's
+        // floor — a higher finalized left by a pre-fix regression in an older row is not
+        // recovered; defensive max-across-rows seed is deferred (PR #88 review). Explicit `null`
+        // when no finalized head was ever stored.
+        return {
+          latest: this.decodeCursor(row.current),
+          finalized: coerceFinalized(row.finalized ? this.decodeCursor(row.finalized) : undefined) ?? null,
+        }
       }
 
       return
@@ -165,9 +184,13 @@ export class ClickhouseState {
   }
 
   async fork(previousBlocks: BlockCursor[]): Promise<BlockCursor | null> {
+    // Filter by id (like getCursor and cleanup do): when multiple streams share one sync table,
+    // an unfiltered scan would mix other streams' rollback chains into this fork's resolution and
+    // could resolve to a foreign cursor, corrupting the rollback.
     const res = await this.store.query({
-      query: `SELECT * FROM ${this.#qualifiedName} ORDER BY "timestamp" DESC`,
+      query: `SELECT * FROM ${this.#qualifiedName} WHERE id = {id:String} ORDER BY "timestamp" DESC`,
       format: 'JSONEachRow',
+      query_params: { id: this.options.id },
     })
 
     async function* records(): AsyncIterable<RollbackRecord> {
@@ -176,7 +199,11 @@ export class ClickhouseState {
           const raw = row.json()
           yield {
             rollbackChain: JSON.parse(raw.rollback_chain) as BlockCursor[],
-            finalized: JSON.parse(raw.finalized) as BlockCursor,
+            // A row persisted before the source reported any finalized head stores '' (and always
+            // an empty rollback chain). Decode it to `undefined` so resolveForkCursor skips it
+            // gracefully — matching the postgres/bigquery targets — instead of crashing on
+            // JSON.parse('').
+            finalized: raw.finalized ? (JSON.parse(raw.finalized) as BlockCursor) : undefined,
           }
         }
       }
