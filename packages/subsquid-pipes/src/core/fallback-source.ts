@@ -126,6 +126,8 @@ export class FallbackSource<T> {
   readonly #headCache: ({ value: number | undefined; at: number } | undefined)[] = []
   /** Lag failover arms only once the tip is first reached, so a deep backfill never trips it. */
   #lagArmed = false
+  /** The last source actually driven — survives the all-down gap so switch counting stays correct. */
+  #lastActive: number | undefined
 
   constructor(sources: FallbackUnderlyingSource<T>[], policy?: FallbackPolicy, logger?: Logger) {
     if (sources.length === 0) {
@@ -150,6 +152,7 @@ export class FallbackSource<T> {
     while (true) {
       const active = this.#selector.pickForFailover()
       if (active === undefined) {
+        this.#clearActive()
         if (await this.#waitAllDown(allDownSince ?? (allDownSince = this.#policy.clock()))) continue
 
         throw new AllSourcesDownError()
@@ -482,18 +485,31 @@ export class FallbackSource<T> {
   }
 
   #setActive(i: number): void {
-    if (this.activeIndex !== i) {
-      if (this.activeIndex !== undefined) {
-        this.switchCount++
-        // The freshness gauges describe the *active* source; on a switch the previous source's
-        // values are stale, so clear them until the new source's next batch/head poll repopulates.
-        this.lag = 0
-        this.staleness = 0
-        this.chainStalled = false
-        this.chainHead = undefined
-      }
-      this.activeIndex = i
+    // Count a switch against the last source we drove (not `activeIndex`, which is cleared to
+    // `undefined` during an all-down gap) so resuming on a *different* source after the gap still
+    // registers, and resuming on the *same* one does not.
+    if (this.#lastActive !== undefined && this.#lastActive !== i) {
+      this.switchCount++
+      // The freshness gauges describe the *active* source; on a switch the previous source's
+      // values are stale, so clear them until the new source's next batch/head poll repopulates.
+      this.lag = 0
+      this.staleness = 0
+      this.chainStalled = false
+      this.chainHead = undefined
     }
+    this.#lastActive = i
+    this.activeIndex = i
+  }
+
+  /** No source is eligible (all unhealthy): nothing is being driven, so report no active source. */
+  #clearActive(): void {
+    this.activeIndex = undefined
+    // The freshness gauges describe the active source; with none, they would otherwise keep
+    // reporting the last source's lag/staleness/stall, so clear them for the all-down gap.
+    this.lag = 0
+    this.staleness = 0
+    this.chainStalled = false
+    this.chainHead = undefined
   }
 
   /** Snapshot of the observable state for export to a metrics surface (§4). */
