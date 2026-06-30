@@ -23,10 +23,23 @@ export interface FallbackPolicy {
   livenessRecoverThreshold?: number
   /**
    * Minimum gap between capability probes of the same standby source. The probe is a full query
-   * slice (unlike Squid, Pipes has no cheap head poll, so the probe doubles as the liveness signal),
-   * so it is throttled to keep recovery from re-running it on every batch boundary. Default 5s.
+   * slice, so it is throttled to keep recovery from re-running it on every batch boundary. For a
+   * source with `getHead`, a cheap head poll carries liveness and the probe only confirms capability;
+   * for a source without it, the probe doubles as the liveness signal. Default 5s.
    */
   capabilityProbeIntervalMs?: number
+  /**
+   * Staleness/lag detection needs an independent chain-head reference, so it only runs for sources
+   * that implement `getHead`. `null` disables each check.
+   */
+  /** Fail a stalled source over (to a fresher one) if a batch stays outstanding this long. Default 3min. */
+  maxStalenessMs?: number | null
+  /** Fail the active over once it falls this many blocks behind the independent head. Default 10. */
+  maxLagBlocks?: number | null
+  /** How often, while a request is outstanding, to re-check staleness. Default 1s. */
+  freshnessTickMs?: number
+  /** Cache an independent head poll this long, to bound the head-query rate. Default 5s. */
+  headTtlMs?: number
   /** Injectable clock (ms) for deterministic tests. Defaults to `Date.now`. */
   clock?: () => number
 }
@@ -39,6 +52,10 @@ export interface ResolvedFallbackPolicy {
   livenessFailThreshold: number
   livenessRecoverThreshold: number
   capabilityProbeIntervalMs: number
+  maxStalenessMs: number | null
+  maxLagBlocks: number | null
+  freshnessTickMs: number
+  headTtlMs: number
   clock: () => number
 }
 
@@ -50,18 +67,30 @@ const DEFAULTS: ResolvedFallbackPolicy = {
   livenessFailThreshold: 2,
   livenessRecoverThreshold: 3,
   capabilityProbeIntervalMs: 5000,
+  maxStalenessMs: 180_000,
+  maxLagBlocks: 10,
+  freshnessTickMs: 1000,
+  headTtlMs: 5000,
   clock: () => Date.now(),
+}
+
+function orDefault<T>(value: T | undefined, fallback: T): T {
+  return value === undefined ? fallback : value
 }
 
 export function resolveFallbackPolicy(p?: FallbackPolicy): ResolvedFallbackPolicy {
   return {
     preferPrimary: p?.preferPrimary ?? DEFAULTS.preferPrimary,
-    allDownTimeoutMs: p?.allDownTimeoutMs === undefined ? DEFAULTS.allDownTimeoutMs : p.allDownTimeoutMs,
+    allDownTimeoutMs: orDefault(p?.allDownTimeoutMs, DEFAULTS.allDownTimeoutMs),
     allDownPollMs: p?.allDownPollMs ?? DEFAULTS.allDownPollMs,
     cooldownMs: p?.cooldownMs ?? DEFAULTS.cooldownMs,
     livenessFailThreshold: p?.livenessFailThreshold ?? DEFAULTS.livenessFailThreshold,
     livenessRecoverThreshold: p?.livenessRecoverThreshold ?? DEFAULTS.livenessRecoverThreshold,
     capabilityProbeIntervalMs: p?.capabilityProbeIntervalMs ?? DEFAULTS.capabilityProbeIntervalMs,
+    maxStalenessMs: orDefault(p?.maxStalenessMs, DEFAULTS.maxStalenessMs),
+    maxLagBlocks: orDefault(p?.maxLagBlocks, DEFAULTS.maxLagBlocks),
+    freshnessTickMs: p?.freshnessTickMs ?? DEFAULTS.freshnessTickMs,
+    headTtlMs: p?.headTtlMs ?? DEFAULTS.headTtlMs,
     clock: p?.clock ?? DEFAULTS.clock,
   }
 }

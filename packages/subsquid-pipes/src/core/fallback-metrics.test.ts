@@ -19,6 +19,10 @@ describe('registerFallbackMetrics', () => {
     const snapshot: FallbackMetrics = {
       activeIndex: 1,
       switchCount: 2,
+      lag: 7,
+      staleness: 1500,
+      chainHead: 100,
+      chainStalled: true,
       sources: [
         {
           name: 'portal',
@@ -56,5 +60,8 @@ describe('registerFallbackMetrics', () => {
     expect(health.calls.every((c) => !JSON.stringify(c).includes('capability check failed'))).toBe(true)
 
     expect(captured.get('sqd_fallback_switches_total')!.gauge.calls).toEqual([{ value: 2 }])
+    expect(captured.get('sqd_fallback_lag_blocks')!.gauge.calls).toEqual([{ value: 7 }])
+    expect(captured.get('sqd_fallback_staleness_ms')!.gauge.calls).toEqual([{ value: 1500 }])
+    expect(captured.get('sqd_fallback_chain_stalled')!.gauge.calls).toEqual([{ value: 1 }])
   })
 })

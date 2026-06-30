@@ -66,4 +66,28 @@ export function registerFallbackMetrics(
       this.set(source.metrics().switchCount)
     },
   })
+
+  metrics.gauge({
+    name: `${prefix}_lag_blocks`,
+    help: 'Blocks the active source is behind the independent chain-head reference',
+    collect() {
+      this.set(source.metrics().lag)
+    },
+  })
+
+  metrics.gauge({
+    name: `${prefix}_staleness_ms`,
+    help: 'Duration the active source has had a batch request outstanding (ms)',
+    collect() {
+      this.set(source.metrics().staleness)
+    },
+  })
+
+  metrics.gauge({
+    name: `${prefix}_chain_stalled`,
+    help: 'Whether every source is stuck at the same head (1 = stalled)',
+    collect() {
+      this.set(source.metrics().chainStalled ? 1 : 0)
+    },
+  })
 }

@@ -74,8 +74,15 @@ export function evmPortalReadSource<F extends FieldSelection>(
   const metrics = noopMetricsServer().metrics
   const rawQuery = { type: 'evm', fields: options.fields, ...options.request }
 
+  const finalized = options.finalized ?? true
+
   return {
     name,
+    // Independent head poll (no stream) that powers staleness/lag detection + standby liveness.
+    getHead: async (): Promise<BlockCursor | undefined> => {
+      const head = await portal.getHead({ finalized })
+      return head ? { number: head.number, hash: head.hash } : undefined
+    },
     read: async function* (cursor?: BlockCursor): AsyncIterable<PortalBatch<Block<F>[]>> {
       const from = cursor ? cursor.number + 1 : options.from
       const query: any = {
@@ -87,7 +94,7 @@ export function evmPortalReadSource<F extends FieldSelection>(
         parentBlockHash: cursor?.hash,
       }
 
-      for await (const batch of portal.getStream(query, { finalized: options.finalized ?? true })) {
+      for await (const batch of portal.getStream(query, { finalized })) {
         const data = batch.blocks.map((raw) => cast(schema, raw)) as unknown as Block<F>[]
         if (data.length === 0) continue
 
@@ -179,36 +186,46 @@ function lazyRpcSource<F extends FieldSelection>(
   cfg: Extract<EvmFallbackSourceConfig<F>, { type: 'rpc' }>,
   options: EvmFallbackOptions<F>,
 ): FallbackUnderlyingSource<Block<F>[]> {
-  let inner: { read(cursor?: BlockCursor): AsyncIterable<PortalBatch<Block<F>[]>> } | undefined
+  let inner:
+    | {
+        read(cursor?: BlockCursor): AsyncIterable<PortalBatch<Block<F>[]>>
+        getHead(): Promise<BlockCursor | undefined>
+      }
+    | undefined
+
+  const load = async () => {
+    if (inner) return inner
+    let mod: typeof import('./evm-rpc-source.js')
+    try {
+      mod = await import('./evm-rpc-source.js')
+    } catch {
+      throw new Error(
+        `RPC fallback source "${name}" requires the optional "@subsquid/evm-rpc" and ` +
+          `"@subsquid/evm-normalization" packages — install them to use RPC sources.`,
+      )
+    }
+    inner = new mod.EvmRpcSource({
+      id: name,
+      rpc: cfg.rpc,
+      fields: options.fields,
+      request: options.request,
+      from: options.from,
+      to: options.to,
+      finalized: options.finalized,
+      method: cfg.method,
+      strideSize: cfg.strideSize,
+      strideConcurrency: cfg.strideConcurrency,
+    })
+    return inner
+  }
 
   return {
     name,
+    // Head-polling a standby RPC source loads the RPC stack — that is fine/desirable: it is exactly
+    // when we want to confirm the source is loadable and viable before switching up to it.
+    getHead: async () => (await load()).getHead(),
     read: async function* (cursor?: BlockCursor): AsyncIterable<PortalBatch<Block<F>[]>> {
-      if (!inner) {
-        let mod: typeof import('./evm-rpc-source.js')
-        try {
-          mod = await import('./evm-rpc-source.js')
-        } catch {
-          throw new Error(
-            `RPC fallback source "${name}" requires the optional "@subsquid/evm-rpc" and ` +
-              `"@subsquid/evm-normalization" packages — install them to use RPC sources.`,
-          )
-        }
-        inner = new mod.EvmRpcSource({
-          id: name,
-          rpc: cfg.rpc,
-          fields: options.fields,
-          request: options.request,
-          from: options.from,
-          to: options.to,
-          finalized: options.finalized,
-          method: cfg.method,
-          strideSize: cfg.strideSize,
-          strideConcurrency: cfg.strideConcurrency,
-        })
-      }
-
-      yield* inner.read(cursor)
+      yield* (await load()).read(cursor)
     },
   }
 }

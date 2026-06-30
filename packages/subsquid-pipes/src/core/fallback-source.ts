@@ -34,16 +34,54 @@ export interface FallbackUnderlyingSource<T> {
    * cannot.
    */
   probeCapability?: (atCursor?: BlockCursor) => Promise<ProbeResult>
+  /**
+   * Optional independent chain-head query (not tied to the stream). When present, it powers
+   * staleness/lag detection — failing a stalled or far-behind source over to one that is ahead —
+   * and serves as a cheap liveness signal for standby sources. Without it, a source still works but
+   * gets neither (a silently-stalled source can only be left once it errors). `PortalSource` and the
+   * RPC source both provide it.
+   */
+  getHead?: () => Promise<BlockCursor | undefined>
 }
+
+/** Returned by the staleness-aware fetch when the active source must be failed over. */
+const STALE = Symbol('stale')
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function delay(ms: number): { promise: Promise<void>; cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout>
+  const promise = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms)
+  })
+  return { promise, cancel: () => clearTimeout(timer) }
+}
+
+function safeReturn(it: AsyncIterator<unknown>): void {
+  try {
+    // Don't await: closing a *stalled* source's iterator can itself hang on the same unresolved
+    // fetch, and failover must not wait on it.
+    it.return?.()?.then(
+      () => {},
+      () => {},
+    )
+  } catch {
+    /* ignore */
+  }
 }
 
 /** A structured snapshot of the fallback's observable state, for a metrics surface (§4). */
 export interface FallbackMetrics {
   activeIndex: number | undefined
   switchCount: number
+  /** Blocks the active source is behind the independent head; ms its current request has been pending. */
+  lag: number
+  staleness: number
+  chainHead: number | undefined
+  /** Set when every source is stuck at the same head (no fresher alternative to switch to). */
+  chainStalled: boolean
   sources: { name: string; health: FallbackHealth; active: boolean; cause?: SourceErrorInfo }[]
 }
 
@@ -73,11 +111,21 @@ export class FallbackSource<T> {
   /** Observable state (for metrics). */
   activeIndex: number | undefined
   switchCount = 0
+  /** Freshness gauges (only populated for sources that implement `getHead`). */
+  lag = 0
+  staleness = 0
+  chainHead: number | undefined
+  /** Set when every source is stuck at the same head (no fresher alternative to switch to). */
+  chainStalled = false
 
   /** Guards against firing a second capability probe for a source while one is still in flight. */
   readonly #capabilityProbing: boolean[] = []
   /** Clock of the last capability probe per source — throttles the (full-query) standby probe. */
   readonly #lastProbeAt: number[] = []
+  /** Cached independent head per source, with the clock it was fetched at (TTL `headTtlMs`). */
+  readonly #headCache: ({ value: number | undefined; at: number } | undefined)[] = []
+  /** Lag failover arms only once the tip is first reached, so a deep backfill never trips it. */
+  #lagArmed = false
 
   constructor(sources: FallbackUnderlyingSource<T>[], policy?: FallbackPolicy, logger?: Logger) {
     if (sources.length === 0) {
@@ -95,6 +143,10 @@ export class FallbackSource<T> {
     let last = cursor
     let allDownSince: number | undefined
 
+    // Re-arm the lag trigger per stream: a reused instance starting a later (far-behind-head)
+    // backfill must not inherit "reached the tip" from a previous run and false-fire on lag.
+    this.#lagArmed = false
+
     while (true) {
       const active = this.#selector.pickForFailover()
       if (active === undefined) {
@@ -105,34 +157,58 @@ export class FallbackSource<T> {
       allDownSince = undefined
       this.#setActive(active)
 
-      let switchedUp = false
       try {
-        for await (const batch of this.#sources[active].read(last)) {
-          this.#health[active].onBatch()
-
-          // Clamp the source's finalized head through the shared monotonic watermark before it
-          // reaches the target, so a source switch reporting a deeper/transiently-missing finalized
-          // head can never un-finalize already-committed data. (The rollback chain is left as the
-          // source derived it; the clamp can only raise the head, so the chain stays a safe superset
-          // of the unfinalized tail.)
-          batch.ctx.stream.head.finalized = this.#watermark.clamp(batch.ctx.stream.head.finalized)
-
-          yield batch
-          last = batch.ctx.stream.state.current
-
-          // Eager switch-up: reclaim a recovered higher-preference source at the batch boundary
-          // (never mid-batch). Probe those candidates first so a recovered one can re-prove its
-          // capability and reach `healthy` — switch-up only ever promotes to a `healthy` source.
-          if (this.#policy.preferPrimary === 'eager') {
-            this.#probeHigherPreference(active, last)
-            if (this.#selector.pickSwitchUp(active) !== undefined) {
-              switchedUp = true
+        const iterator = this.#sources[active].read(last)[Symbol.asyncIterator]()
+        try {
+          while (true) {
+            const next = await this.#nextWithStaleness(iterator, active, last)
+            if (next === STALE) {
+              // Source stopped delivering while a fresher source is ahead.
+              this.#failSource(
+                active,
+                freshnessFailure('stream', 'stale', 'no batch progress while a fresher source was ahead'),
+              )
               break
             }
-          }
-        }
+            if (next.done) return // source completed (bounded stream)
+            const batch = next.value
 
-        if (!switchedUp) return // source completed (bounded stream)
+            this.#health[active].onBatch()
+
+            // Clamp the source's finalized head through the shared monotonic watermark before it
+            // reaches the target, so a source switch reporting a deeper/transiently-missing finalized
+            // head can never un-finalize already-committed data. (The rollback chain is left as the
+            // source derived it; the clamp can only raise the head, so the chain stays a safe superset
+            // of the unfinalized tail.)
+            batch.ctx.stream.head.finalized = this.#watermark.clamp(batch.ctx.stream.head.finalized)
+
+            yield batch
+            last = batch.ctx.stream.state.current
+
+            // Lag-based freshness: the active fell too far behind the independent head.
+            if (await this.#laggingTooFar(active, last)) {
+              this.#failSource(
+                active,
+                freshnessFailure(
+                  'stream',
+                  'lag',
+                  `fell behind the chain head by more than ${this.#policy.maxLagBlocks} blocks`,
+                ),
+              )
+              break
+            }
+
+            // Eager switch-up: reclaim a recovered higher-preference source at the batch boundary
+            // (never mid-batch). Probe those candidates first so a recovered one can re-prove its
+            // capability and reach `healthy` — switch-up only ever promotes to a `healthy` source.
+            if (this.#policy.preferPrimary === 'eager') {
+              await this.#probeHigherPreference(active, last)
+              if (this.#selector.pickSwitchUp(active) !== undefined) break
+            }
+          }
+        } finally {
+          safeReturn(iterator)
+        }
       } catch (e) {
         if (isForkException(e)) throw e // propagate; do NOT switch
 
@@ -188,46 +264,184 @@ export class FallbackSource<T> {
   }
 
   /**
-   * Drive capability (and, with it, liveness) for the not-yet-active *higher-preference* sources,
-   * so a recovered one can re-prove it can serve the query and be reclaimed by eager switch-up.
-   * When the active source is the primary (index 0) there are none, so this is a no-op on the hot
-   * path; it only does work after a failover — exactly when a recovered primary needs noticing.
-   *
-   * Fire-and-forget (a full query slice must not block the boundary) and never concurrently for the
-   * same source. Unlike Squid, Pipes has no cheap head poll, so a successful probe is the liveness
-   * signal too: it counts a liveness pass *and* confirms capability, so after `M` throttled probes
-   * the source reaches `healthy`. The probe is anchored to the frontier (`last`) so it verifies the
-   * depth the source is about to read. The gating in {@link SourceHealth} means a probe failure (or
-   * a later stream error) drops the confirmation, so the source must re-prove before recovering.
+   * The highest head reported by the *other* eligible sources — an independent reference that avoids
+   * the circular-lag trap (a source that stalls head and data together reads lag ≈ 0 against its own
+   * head). Excludes `unhealthy` sources so a flagged-bad one can't define the tip, and sources
+   * without `getHead` (they contribute no head). Heads are cached for `headTtlMs`.
    */
-  #probeHigherPreference(active: number, last?: BlockCursor): void {
-    for (let i = 0; i < active; i++) {
-      const probe = this.#sources[i].probeCapability
-      // Only probe a candidate that is eligible to recover: `unhealthy` is still cooling down, and
-      // `healthy` is already confirmed (the gating drops it back to `unknown`-eligible on failure).
-      if (!probe || this.#health[i].state !== 'unknown' || this.#capabilityProbing[i]) continue
+  async #chainHeadOthers(active: number, last?: BlockCursor): Promise<number | undefined> {
+    const results = await Promise.all(
+      this.#sources.map((_, i) =>
+        i === active || this.#health[i].state === 'unhealthy'
+          ? Promise.resolve(undefined)
+          : this.#getCachedHead(i, last),
+      ),
+    )
+    const vals = results.filter((h): h is number => h != null)
 
-      const now = this.#policy.clock()
-      if (now - (this.#lastProbeAt[i] ?? 0) < this.#policy.capabilityProbeIntervalMs) continue
+    return vals.length ? Math.max(...vals) : undefined
+  }
 
-      this.#lastProbeAt[i] = now
-      this.#capabilityProbing[i] = true
-      probe(last)
-        .then(
-          (r) => {
-            if (r.ok) {
-              this.#health[i].onLivenessPass()
-              this.#health[i].onCapability(true)
-            } else {
-              this.#failSource(i, r.cause ?? freshnessFailure('capability', 'stale', 'probe reported not-capable'))
-            }
-          },
-          (e) => this.#failSource(i, classifyError('capability', e)),
-        )
-        .finally(() => {
-          this.#capabilityProbing[i] = false
-        })
+  /**
+   * Poll a source's independent head (cached for `headTtlMs`). The poll doubles as a liveness probe
+   * — a fresh head promotes a standby toward `healthy` — and is when we (re)fire its capability
+   * probe. A source without `getHead` contributes no head, but still has its capability probe driven
+   * here so a probe-only source can recover (for it, the probe also carries liveness).
+   */
+  async #getCachedHead(i: number, last?: BlockCursor): Promise<number | undefined> {
+    const src = this.#sources[i]
+    if (!src.getHead) {
+      this.#maybeProbeCapability(i, last)
+      return undefined
     }
+
+    const now = this.#policy.clock()
+    const cached = this.#headCache[i]
+    if (cached && now - cached.at < this.#policy.headTtlMs) return cached.value
+
+    try {
+      const head = await src.getHead()
+      const value = head?.number
+      this.#headCache[i] = { value, at: now }
+      if (value != null) this.#health[i].onLivenessPass()
+      this.#maybeProbeCapability(i, last)
+      return value
+    } catch (e) {
+      this.#headCache[i] = { value: undefined, at: now }
+      this.#failSource(i, classifyError('liveness', e))
+      return undefined
+    }
+  }
+
+  /**
+   * Fire a source's optional capability probe once it is reachable, feeding the result into health.
+   * A source that declares a `probeCapability` cannot become `healthy` on liveness alone — capability
+   * must be confirmed — so without this it could never be switched up to. Fire-and-forget (a full
+   * query slice must not block the boundary), throttled by `capabilityProbeIntervalMs`, and never
+   * concurrent for the same source. The gating in {@link SourceHealth} drops the confirmation when a
+   * source goes unhealthy, so it must re-prove before recovering.
+   */
+  #maybeProbeCapability(i: number, last?: BlockCursor): void {
+    const probe = this.#sources[i].probeCapability
+    if (!probe || this.#health[i].capabilityConfirmed || this.#capabilityProbing[i]) return
+
+    const now = this.#policy.clock()
+    if (now - (this.#lastProbeAt[i] ?? 0) < this.#policy.capabilityProbeIntervalMs) return
+
+    this.#lastProbeAt[i] = now
+    this.#capabilityProbing[i] = true
+    probe(last)
+      .then(
+        (r) => {
+          if (r.ok) {
+            this.#health[i].onLivenessPass()
+            this.#health[i].onCapability(true)
+          } else {
+            this.#failSource(i, r.cause ?? freshnessFailure('capability', 'stale', 'probe reported not-capable'))
+          }
+        },
+        (e) => this.#failSource(i, classifyError('capability', e)),
+      )
+      .finally(() => {
+        this.#capabilityProbing[i] = false
+      })
+  }
+
+  /**
+   * Drive head/liveness/capability for the not-yet-active *higher-preference* sources, so a recovered
+   * one can reach `healthy` and be reclaimed by eager switch-up. When the active source is the primary
+   * (index 0) there are none, so this is a no-op on the hot path; it only does work after a failover —
+   * exactly when a recovered primary needs noticing.
+   */
+  async #probeHigherPreference(active: number, last?: BlockCursor): Promise<void> {
+    await Promise.all(
+      this.#sources.map((_, i) =>
+        i < active && this.#health[i].state !== 'unhealthy' ? this.#getCachedHead(i, last) : Promise.resolve(undefined),
+      ),
+    )
+  }
+
+  /**
+   * `iterator.next()` with the source-pending staleness clock. While the request is outstanding, a
+   * ticker checks how long it has been pending; past `maxStalenessMs` it fails the source over **iff**
+   * a fresher source is ahead. If every source sits at the same stale head, it is a global chain
+   * stall: hold the active source (re-arm and keep waiting + probing) and flag `chainStalled` rather
+   * than churn through sources that are all equally stuck. Disabled (plain `next()`) when
+   * `maxStalenessMs` is null.
+   */
+  async #nextWithStaleness(
+    iterator: AsyncIterator<PortalBatch<T>>,
+    active: number,
+    last?: BlockCursor,
+  ): Promise<IteratorResult<PortalBatch<T>> | typeof STALE> {
+    if (this.#policy.maxStalenessMs == null) {
+      this.staleness = 0
+      return iterator.next()
+    }
+
+    const lastNumber = last?.number ?? -1
+    let start = this.#policy.clock()
+    const nextP = iterator.next()
+    nextP.catch(() => {}) // a later abandon must not surface as an unhandled rejection
+    const settled = nextP.then(
+      (v) => ({ type: 'next' as const, v }),
+      (e) => ({ type: 'error' as const, e }),
+    )
+
+    while (true) {
+      const tick = delay(this.#policy.freshnessTickMs)
+      const r = await Promise.race([settled, tick.promise.then(() => ({ type: 'tick' as const }))])
+      tick.cancel()
+
+      if (r.type === 'next') {
+        this.staleness = 0
+        this.chainStalled = false
+        return r.v
+      }
+      if (r.type === 'error') {
+        this.staleness = 0
+        this.chainStalled = false
+        throw r.e
+      }
+
+      const elapsed = this.#policy.clock() - start
+      this.staleness = elapsed
+      if (elapsed > this.#policy.maxStalenessMs) {
+        // Re-polling the other sources both decides failover and (re)probes their liveness/capability,
+        // so a held source keeps noticing when the chain comes back.
+        const others = await this.#chainHeadOthers(active, last)
+        if (others != null && others > lastNumber) {
+          this.chainStalled = false
+          return STALE
+        }
+        this.chainStalled = true
+        start = this.#policy.clock() // hold; re-arm and keep waiting
+      }
+    }
+  }
+
+  /** Boundary-evaluated lag trigger (armed only once the tip is first reached). */
+  async #laggingTooFar(active: number, last?: BlockCursor): Promise<boolean> {
+    if (this.#policy.maxLagBlocks == null) return false
+
+    const lastNumber = last?.number ?? -1
+    const others = await this.#chainHeadOthers(active, last)
+    this.chainHead = others != null ? Math.max(others, lastNumber) : lastNumber
+    if (others == null) {
+      this.lag = 0 // no independent reference ⇒ lag is not computable; don't report a stale value
+      return false
+    }
+
+    const lag = others - lastNumber
+    this.lag = Math.max(0, lag)
+    if (lag <= this.#policy.maxLagBlocks) this.#lagArmed = true // arm at tip (latched)
+
+    if (this.#lagArmed && lag > this.#policy.maxLagBlocks) {
+      this.chainStalled = false
+      return true
+    }
+
+    return false
   }
 
   /**
@@ -269,7 +483,15 @@ export class FallbackSource<T> {
 
   #setActive(i: number): void {
     if (this.activeIndex !== i) {
-      if (this.activeIndex !== undefined) this.switchCount++
+      if (this.activeIndex !== undefined) {
+        this.switchCount++
+        // The freshness gauges describe the *active* source; on a switch the previous source's
+        // values are stale, so clear them until the new source's next batch/head poll repopulates.
+        this.lag = 0
+        this.staleness = 0
+        this.chainStalled = false
+        this.chainHead = undefined
+      }
       this.activeIndex = i
     }
   }
@@ -279,6 +501,10 @@ export class FallbackSource<T> {
     return {
       activeIndex: this.activeIndex,
       switchCount: this.switchCount,
+      lag: this.lag,
+      staleness: this.staleness,
+      chainHead: this.chainHead,
+      chainStalled: this.chainStalled,
       sources: this.#sources.map((s, i) => ({
         name: s.name,
         health: this.#health[i].state,

@@ -110,6 +110,12 @@ export class EvmRpcSource<F extends FieldSelection> {
     return this.#id
   }
 
+  /** Independent head poll (no stream) — the same commitment the stream reads toward. */
+  async getHead(): Promise<BlockCursor | undefined> {
+    const head = this.#finalized ? await this.#inner.getFinalizedHead() : await this.#inner.getHead()
+    return head ? { number: head.number, hash: head.hash } : undefined
+  }
+
   async *read(cursor?: BlockCursor): AsyncIterable<PortalBatch<Block<F>[]>> {
     const from = cursor ? cursor.number + 1 : this.#from
     const streamReq = { from, to: this.#to, parentHash: cursor?.hash }

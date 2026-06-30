@@ -51,6 +51,27 @@ async function collect(stream: AsyncIterable<PortalBatch<number[]>>): Promise<nu
   return out
 }
 
+/** Never resolves — models a source whose request hangs forever. */
+const hang = (): Promise<never> => new Promise<never>(() => {})
+/** Resolves after `ms` — models a slow request / a bounded delay before an error. */
+const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+type HeadFn = () => Promise<BlockCursor | undefined>
+type ProbeFn = () => Promise<{ ok: boolean }>
+
+/** A mock source with an independent head poll (and, optionally, a capability probe). */
+function headSource(
+  name: string,
+  read: ReadFn,
+  getHead: HeadFn,
+  probeCapability?: ProbeFn,
+): FallbackUnderlyingSource<number[]> & { reads: (BlockCursor | undefined)[] } {
+  return Object.assign(source(name, read), {
+    getHead,
+    ...(probeCapability ? { probeCapability: probeCapability as any } : {}),
+  })
+}
+
 describe('FallbackSource — supervisor', () => {
   it('drives the lowest-index source; standbys are untouched', async () => {
     const s0 = source('s0', async function* () {
@@ -266,5 +287,205 @@ describe('FallbackSource — pipeTo', () => {
 
     expect(forkedTo).toEqual(cursor(1))
     expect(written).toEqual([1, 2, 2]) // 2-bad yielded, rewound, 2-good re-served
+  })
+})
+
+describe('FallbackSource — freshness', () => {
+  it('(a) lag: fails over once it falls behind the independent head (after arming at the tip)', async () => {
+    const s1heads = [95, 110] // first boundary arms (lag 5), second trips (lag 19)
+    const s0 = source('s0', async function* () {
+      yield pbatch(90)
+      yield pbatch(91)
+      yield pbatch(92) // not reached
+    })
+    const s1 = headSource(
+      's1',
+      async function* () {
+        yield pbatch(92)
+        yield pbatch(93)
+      },
+      async () => cursor(s1heads.shift() ?? 110),
+    )
+    const fb = new FallbackSource([s0, s1], { maxLagBlocks: 10, maxStalenessMs: null, headTtlMs: 0 }, silent)
+
+    expect(await collect(fb)).toEqual([90, 91, 92, 93])
+    expect(fb.activeIndex).toBe(1)
+    expect(s1.reads[0]).toEqual(cursor(91)) // resumed just after the last committed block
+  })
+
+  it('(b) historical sync: a huge lag during backfill never fails over (never armed)', async () => {
+    const s0 = source('s0', async function* () {
+      yield pbatch(1)
+      yield pbatch(2)
+      yield pbatch(3)
+    })
+    const s1 = headSource(
+      's1',
+      async function* () {},
+      async () => cursor(1_000_000),
+    )
+    const fb = new FallbackSource([s0, s1], { maxLagBlocks: 10, maxStalenessMs: null, headTtlMs: 0 }, silent)
+
+    expect(await collect(fb)).toEqual([1, 2, 3])
+    expect(fb.activeIndex).toBe(0)
+  })
+
+  it('(c) staleness: fails over a stalled source when a fresher source is ahead', async () => {
+    const s0 = source('s0', async function* () {
+      yield pbatch(1)
+      await hang()
+    })
+    const s1 = headSource(
+      's1',
+      async function* () {
+        yield pbatch(2)
+      },
+      async () => cursor(100),
+    )
+    const fb = new FallbackSource(
+      [s0, s1],
+      { maxStalenessMs: 30, freshnessTickMs: 5, headTtlMs: 0, maxLagBlocks: null },
+      silent,
+    )
+
+    expect(await collect(fb)).toEqual([1, 2])
+    expect(fb.activeIndex).toBe(1)
+  }, 5000)
+
+  it('(d) global stall: no fresher source → holds + flags chainStalled, no churn', async () => {
+    const s0 = source('s0', async function* () {
+      yield pbatch(50)
+      await wait(120)
+      throw new Error('client timeout') // eventually errors, like a real client
+    })
+    const s1 = headSource(
+      's1',
+      async function* () {
+        yield pbatch(51)
+      },
+      async () => cursor(50), // same head → global stall
+    )
+    const fb = new FallbackSource(
+      [s0, s1],
+      { maxStalenessMs: 30, freshnessTickMs: 5, headTtlMs: 0, maxLagBlocks: null },
+      silent,
+    )
+
+    const it = fb[Symbol.asyncIterator]()
+    expect((await it.next()).value.data).toEqual([50])
+
+    const pending = it.next() // hangs; staleness climbs but no fresher source exists
+    await wait(80)
+    expect(fb.chainStalled).toBe(true)
+    expect(fb.activeIndex).toBe(0) // held — did NOT churn
+
+    // s0 finally errors → ordinary failover to s1
+    expect((await pending).value.data).toEqual([51])
+    expect(fb.activeIndex).toBe(1)
+    expect(fb.chainStalled).toBe(false) // cleared once progress resumed on the new source
+  }, 5000)
+
+  it('(d2) global stall: keeps probing the held source, and recovers when one becomes fresher', async () => {
+    // The active hangs forever; recovery must come from continued probing of the other source.
+    const s0 = source('s0', async function* () {
+      yield pbatch(50)
+      await hang()
+    })
+
+    const s1heads = [50, 50, 50] // global stall (same head) for a while...
+    let probedCapability = 0
+    const s1 = headSource(
+      's1',
+      async function* () {
+        yield pbatch(51)
+      },
+      async () => cursor(s1heads.shift() ?? 51), // ...then it advances to 51
+      async () => (probedCapability++, { ok: true }),
+    )
+    const fb = new FallbackSource(
+      [s0, s1],
+      { maxStalenessMs: 30, freshnessTickMs: 5, headTtlMs: 0, maxLagBlocks: null },
+      silent,
+    )
+
+    const it = fb[Symbol.asyncIterator]()
+    expect((await it.next()).value.data).toEqual([50])
+
+    // While held, the supervisor keeps polling the other source — liveness *and* capability —
+    // so it is positioned to notice recovery.
+    const next = it.next()
+    await wait(60)
+    expect(fb.chainStalled).toBe(true)
+    expect(s1heads.length).toBeLessThan(3) // s1's head was (re)polled during the hold (liveness)
+    expect(probedCapability).toBeGreaterThan(0) // capability probe fired during the hold
+
+    // s1's head advances past us → fail over to it, recovering without the active ever resolving.
+    expect((await next).value.data).toEqual([51])
+    expect(fb.activeIndex).toBe(1)
+    expect(fb.chainStalled).toBe(false)
+  }, 5000)
+
+  it('(f) thresholds disabled: neither lag nor staleness fires', async () => {
+    const s0 = source('s0', async function* () {
+      yield pbatch(1)
+      yield pbatch(2)
+    })
+    const s1 = headSource(
+      's1',
+      async function* () {},
+      async () => cursor(1_000_000),
+    )
+    const fb = new FallbackSource([s0, s1], { maxLagBlocks: null, maxStalenessMs: null, headTtlMs: 0 }, silent)
+
+    expect(await collect(fb)).toEqual([1, 2])
+    expect(fb.activeIndex).toBe(0)
+  })
+
+  it('(g) resets freshness gauges on a switch (no stale lag from the old source)', async () => {
+    const s1heads = [95, 110] // arm at lag 5, then trip at lag 19
+    const s0 = source('s0', async function* () {
+      yield pbatch(90)
+      yield pbatch(91)
+    })
+    // Empty standby: after failover the stream ends immediately, so no boundary recomputes
+    // freshness — exposing whether the switch itself cleared the old source's lag.
+    const s1 = headSource(
+      's1',
+      async function* () {},
+      async () => cursor(s1heads.shift() ?? 110),
+    )
+    const fb = new FallbackSource([s0, s1], { maxLagBlocks: 10, maxStalenessMs: null, headTtlMs: 0 }, silent)
+
+    expect(await collect(fb)).toEqual([90, 91])
+    expect(fb.activeIndex).toBe(1)
+    expect(fb.lag).toBe(0) // not the stale 19 the lag trigger recorded against s0
+  })
+
+  it('(h) re-arms lag per stream: a reused instance does not inherit "at tip" for a backfill', async () => {
+    let phase = 1
+    const s0 = source('s0', async function* () {
+      if (phase === 1) {
+        yield pbatch(100)
+      } else {
+        yield pbatch(1)
+        yield pbatch(2)
+      }
+    })
+    // Phase 1: head sits at s0 (arms the lag trigger). Phase 2: head is far ahead (backfill).
+    const s1 = headSource(
+      's1',
+      async function* () {},
+      async () => cursor(phase === 1 ? 100 : 1_000_000),
+    )
+    const fb = new FallbackSource([s0, s1], { maxLagBlocks: 10, maxStalenessMs: null, headTtlMs: 0 }, silent)
+
+    // Stream 1 reaches the tip → arms the lag trigger on the instance.
+    expect(await collect(fb.read(cursor(99)))).toEqual([100])
+
+    // Stream 2 on the SAME instance backfills far behind head. If the armed state leaked, the first
+    // boundary would trip (lag ~1e6 > 10) and fail over; a per-stream reset prevents that.
+    phase = 2
+    expect(await collect(fb.read())).toEqual([1, 2])
+    expect(fb.activeIndex).toBe(0) // stayed on s0 — no spurious failover
   })
 })
