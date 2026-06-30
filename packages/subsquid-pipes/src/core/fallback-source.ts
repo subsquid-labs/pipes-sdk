@@ -437,7 +437,11 @@ export class FallbackSource<T> {
 
     const lag = others - lastNumber
     this.lag = Math.max(0, lag)
-    if (lag <= this.#policy.maxLagBlocks) this.#lagArmed = true // arm at tip (latched)
+    // Arm only once we are genuinely at/near the tip: within the threshold *and* not ahead of the
+    // reference (`lag >= 0`). A negative lag means the independent reference is itself behind us
+    // (stale/lagging) — arming on that would let a later-recovering source's head trip a spurious
+    // failover while we are still backfilling.
+    if (lag >= 0 && lag <= this.#policy.maxLagBlocks) this.#lagArmed = true // arm at tip (latched)
 
     if (this.#lagArmed && lag > this.#policy.maxLagBlocks) {
       this.chainStalled = false

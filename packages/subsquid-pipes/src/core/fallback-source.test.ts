@@ -523,4 +523,25 @@ describe('FallbackSource — freshness', () => {
     expect(await collect(fb.read())).toEqual([1, 2])
     expect(fb.activeIndex).toBe(0) // stayed on s0 — no spurious failover
   })
+
+  it('(i) does not arm lag while the reference is behind us (stale standby) — no spurious failover', async () => {
+    // The standby is first *behind* the active (negative lag), then jumps to the real tip while the
+    // active is still backfilling. Arming on the negative lag would let that jump trip a spurious
+    // failover; gating arming on `lag >= 0` keeps us on the active.
+    const s1heads = [40, 1_000] // behind us at 50 (lag -10), then far ahead
+    const s0 = source('s0', async function* () {
+      yield pbatch(50)
+      yield pbatch(51)
+      yield pbatch(52)
+    })
+    const s1 = headSource(
+      's1',
+      async function* () {},
+      async () => cursor(s1heads.shift() ?? 1_000),
+    )
+    const fb = new FallbackSource([s0, s1], { maxLagBlocks: 10, maxStalenessMs: null, headTtlMs: 0 }, silent)
+
+    expect(await collect(fb.read(cursor(49)))).toEqual([50, 51, 52])
+    expect(fb.activeIndex).toBe(0) // never armed (was ahead of the reference) ⇒ no lag failover
+  })
 })
