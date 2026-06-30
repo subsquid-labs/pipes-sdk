@@ -944,6 +944,7 @@ describe('BigQueryState — crash recovery on getCursor', () => {
     range_low: number | null
     range_high: number | null
     cursorBlock?: number
+    finalized?: { number: number; hash: string } | null
   }) {
     const writer = makeWriter().writer
     const { bq, dmlCalls } = makeBigQuery({
@@ -952,7 +953,7 @@ describe('BigQueryState — crash recovery on getCursor', () => {
           id: 'stream',
           op: latestRow.op,
           current: latestRow.cursorBlock != null ? JSON.stringify(cursor(latestRow.cursorBlock)) : null,
-          finalized: null,
+          finalized: latestRow.finalized != null ? JSON.stringify(latestRow.finalized) : null,
           rollback_chain: '[]',
           range_low: latestRow.range_low,
           range_high: latestRow.range_high,
@@ -1000,7 +1001,27 @@ describe('BigQueryState — crash recovery on getCursor', () => {
       expect(call.params).toMatchObject({ low: 100, high: 199 })
     }
     // Cursor returned is the PRE-batch position (99), not the in-flight high (199).
-    expect(cur?.number).toBe(99)
+    expect(cur?.latest?.number).toBe(99)
+    // No finalized head was stored on this in-flight row.
+    expect(cur?.finalized).toBeNull()
+  })
+
+  it('on (commit, false): hands the persisted finalized head back on the recovery path', async () => {
+    const { state } = makeRecoveryFixture({
+      op: 'commit',
+      committed: false,
+      range_low: 100,
+      range_high: 199,
+      cursorBlock: 99,
+      finalized: { number: 90, hash: '0x90' },
+    })
+
+    const cur = await state.getCursor({ logger: createTestLogger() })
+
+    // The recovery branch returns the same TargetState shape as the committed branch, including
+    // the persisted finalized head so the source can re-seed its watermark after the crash.
+    expect(cur?.latest?.number).toBe(99)
+    expect(cur?.finalized).toEqual({ number: 90, hash: '0x90' })
   })
 
   it('on (rollback, false): re-runs the bounded DELETEs idempotently and returns the safe cursor', async () => {
@@ -1018,7 +1039,7 @@ describe('BigQueryState — crash recovery on getCursor', () => {
     for (const call of dmlCalls) {
       expect(call.params).toMatchObject({ low: 51, high: 100 })
     }
-    expect(cur?.number).toBe(50)
+    expect(cur?.latest?.number).toBe(50)
   })
 
   it('throws CORRUPT_INFLIGHT_ROW when the in-flight row has NULL range_low / range_high', async () => {

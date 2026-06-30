@@ -1,6 +1,14 @@
 import type { BigQuery, TableField } from '@google-cloud/bigquery'
 
-import { type BlockCursor, type Logger, type RollbackRecord, formatBlock, resolveForkCursor } from '~/core/index.js'
+import {
+  type BlockCursor,
+  type Logger,
+  type RollbackRecord,
+  type TargetState,
+  coerceFinalized,
+  formatBlock,
+  resolveForkCursor,
+} from '~/core/index.js'
 
 import type { BigQueryStore } from './bigquery-store.js'
 import type { TrackedTableLocation } from './bigquery-tracker.js'
@@ -139,7 +147,7 @@ export class BigQueryState {
    *   - latest is IN_FLIGHT_ROLLBACK → re-DELETE [range_low, range_high] (idempotent), write
    *                                    rollback marker, return cursor (safe block).
    */
-  async getCursor({ logger }: { logger: Logger }): Promise<BlockCursor | undefined> {
+  async getCursor({ logger }: { logger: Logger }): Promise<TargetState | undefined> {
     let row: SyncRow | undefined
     try {
       row = await this.#fetchLatestRow()
@@ -179,9 +187,16 @@ export class BigQueryState {
 
     const cursor = decodeCursor(row.current)
 
+    // Hand the persisted finalized head back as resume state so the source can seed its
+    // monotonic watermark (survives an unclean restart mid-fork). It is the latest WAL row's
+    // floor; a higher finalized left by a pre-fix regression in an older row is not recovered
+    // — defensive max-across-rows seed is deferred (PR #88 review). Explicit `null` when no
+    // finalized head was ever stored.
+    const finalized = coerceFinalized(decodeCursor(row.finalized)) ?? null
+
     if (row.committed) {
       this.#lastCommittedCursor = cursor
-      return cursor
+      return cursor ? { latest: cursor, finalized } : undefined
     }
 
     // Recovery path — clean the in-flight range across every tracked table.
@@ -223,7 +238,7 @@ export class BigQueryState {
     })
 
     this.#lastCommittedCursor = cursor ?? undefined
-    return cursor ?? undefined
+    return cursor ? { latest: cursor, finalized } : undefined
   }
 
   /**
