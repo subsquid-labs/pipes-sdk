@@ -56,6 +56,45 @@ describe('SourceHealth', () => {
     health.onLivenessFail()
     expect(health.state).toBe('unhealthy')
   })
+
+  it('a probed source cannot recover on liveness alone after going unhealthy — capability must be re-proved', () => {
+    const { health, advance } = setup({ hasCapabilityProbe: true, cooldownMs: 1000 })
+
+    // Confirm capability once and reach healthy.
+    health.onCapability(true)
+    health.onLivenessPass()
+    health.onLivenessPass()
+    health.onLivenessPass()
+    expect(health.state).toBe('healthy')
+
+    // It fails the real query and goes unhealthy; cooldown returns it to unknown.
+    health.onStreamError()
+    advance(1000)
+    expect(health.state).toBe('unknown')
+
+    // Liveness recovers but capability is no longer confirmed — it must NOT flap back to healthy
+    // without a fresh probe, or we get the churn loop.
+    health.onLivenessPass()
+    health.onLivenessPass()
+    health.onLivenessPass()
+    expect(health.state).toBe('unknown')
+
+    // A fresh successful probe is what finally promotes it.
+    health.onCapability(true)
+    expect(health.state).toBe('healthy')
+  })
+
+  it('a probe-less source still recovers on liveness alone after cooldown', () => {
+    const { health, advance } = setup({ hasCapabilityProbe: false, cooldownMs: 1000 })
+    health.onStreamError()
+    advance(1000)
+    expect(health.state).toBe('unknown')
+
+    health.onLivenessPass()
+    health.onLivenessPass()
+    health.onLivenessPass()
+    expect(health.state).toBe('healthy')
+  })
 })
 
 describe('Selector', () => {

@@ -25,8 +25,12 @@ import { BlockCursor } from './types.js'
 export interface FallbackUnderlyingSource<T> {
   name: string
   read: (cursor?: BlockCursor) => AsyncIterable<PortalBatch<T>>
-  /** Full, infrequent capability probe — verifies the source can still serve the query. */
-  probeCapability?: () => Promise<boolean>
+  /**
+   * Full, infrequent capability probe — verifies the source can still serve the query's data.
+   * `atCursor` is the indexing frontier (last committed cursor); the probe should confirm the
+   * source can serve the configured data just past it and resolve `false` if it cannot.
+   */
+  probeCapability?: (atCursor?: BlockCursor) => Promise<boolean>
 }
 
 function sleep(ms: number): Promise<void> {
@@ -66,6 +70,11 @@ export class FallbackSource<T> {
   /** Observable state (for metrics). */
   activeIndex: number | undefined
   switchCount = 0
+
+  /** Guards against firing a second capability probe for a source while one is still in flight. */
+  readonly #capabilityProbing: boolean[] = []
+  /** Clock of the last capability probe per source — throttles the (full-query) standby probe. */
+  readonly #lastProbeAt: number[] = []
 
   constructor(sources: FallbackUnderlyingSource<T>[], policy?: FallbackPolicy, logger?: Logger) {
     if (sources.length === 0) {
@@ -108,9 +117,15 @@ export class FallbackSource<T> {
           yield batch
           last = batch.ctx.stream.state.current
 
-          if (this.#policy.preferPrimary === 'eager' && this.#selector.pickSwitchUp(active) !== undefined) {
-            switchedUp = true
-            break
+          // Eager switch-up: reclaim a recovered higher-preference source at the batch boundary
+          // (never mid-batch). Probe those candidates first so a recovered one can re-prove its
+          // capability and reach `healthy` — switch-up only ever promotes to a `healthy` source.
+          if (this.#policy.preferPrimary === 'eager') {
+            this.#probeHigherPreference(active, last)
+            if (this.#selector.pickSwitchUp(active) !== undefined) {
+              switchedUp = true
+              break
+            }
           }
         }
 
@@ -167,6 +182,49 @@ export class FallbackSource<T> {
 
   async *[Symbol.asyncIterator](): AsyncIterator<PortalBatch<T>> {
     yield* this.read()
+  }
+
+  /**
+   * Drive capability (and, with it, liveness) for the not-yet-active *higher-preference* sources,
+   * so a recovered one can re-prove it can serve the query and be reclaimed by eager switch-up.
+   * When the active source is the primary (index 0) there are none, so this is a no-op on the hot
+   * path; it only does work after a failover — exactly when a recovered primary needs noticing.
+   *
+   * Fire-and-forget (a full query slice must not block the boundary) and never concurrently for the
+   * same source. Unlike Squid, Pipes has no cheap head poll, so a successful probe is the liveness
+   * signal too: it counts a liveness pass *and* confirms capability, so after `M` throttled probes
+   * the source reaches `healthy`. The probe is anchored to the frontier (`last`) so it verifies the
+   * depth the source is about to read. The gating in {@link SourceHealth} means a probe failure (or
+   * a later stream error) drops the confirmation, so the source must re-prove before recovering.
+   */
+  #probeHigherPreference(active: number, last?: BlockCursor): void {
+    for (let i = 0; i < active; i++) {
+      const probe = this.#sources[i].probeCapability
+      // Only probe a candidate that is eligible to recover: `unhealthy` is still cooling down, and
+      // `healthy` is already confirmed (the gating drops it back to `unknown`-eligible on failure).
+      if (!probe || this.#health[i].state !== 'unknown' || this.#capabilityProbing[i]) continue
+
+      const now = this.#policy.clock()
+      if (now - (this.#lastProbeAt[i] ?? 0) < this.#policy.capabilityProbeIntervalMs) continue
+
+      this.#lastProbeAt[i] = now
+      this.#capabilityProbing[i] = true
+      probe(last)
+        .then(
+          (ok) => {
+            if (ok) {
+              this.#health[i].onLivenessPass()
+              this.#health[i].onCapability(true)
+            } else {
+              this.#health[i].onCapability(false)
+            }
+          },
+          () => this.#health[i].onCapability(false),
+        )
+        .finally(() => {
+          this.#capabilityProbing[i] = false
+        })
+    }
   }
 
   /** Returns true if it waited (retry), false if the all-down timeout elapsed. */

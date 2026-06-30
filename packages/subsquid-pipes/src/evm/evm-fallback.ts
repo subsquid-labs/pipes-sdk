@@ -4,6 +4,7 @@ import { cast } from '@subsquid/util-internal-validation'
 import {
   BatchContext,
   BlockCursor,
+  CapabilityProbeOptions,
   FallbackPolicy,
   FallbackSource,
   FallbackUnderlyingSource,
@@ -12,6 +13,7 @@ import {
   createDefaultLogger,
   cursorFromHeader,
   extractRollbackChain,
+  makeCapabilityProbe,
   noopMetricsServer,
   registerFallbackMetrics,
 } from '~/core/index.js'
@@ -36,6 +38,14 @@ export interface EvmFallbackOptions<F extends FieldSelection> {
   finalized?: boolean
   sources: EvmFallbackSourceConfig<F>[]
   policy?: FallbackPolicy
+  /**
+   * Attach a generic capability probe to every source (default `true`): a source counts as
+   * `healthy` only once it confirms it can serve the configured data at the indexing frontier —
+   * catching a reachable-but-incapable source (trace/`debug_` disabled, pruned state, a Portal
+   * answering HTTP 400 to a type-valid query) before a switch-up promotes it. Pass `false` to govern
+   * health by liveness alone, or `{timeoutMs}` to tune the probe.
+   */
+  capabilityProbe?: boolean | CapabilityProbeOptions
   /** When provided, fallback health/switch gauges are registered on this metrics server (§4). */
   metrics?: MetricsServer
 }
@@ -125,19 +135,28 @@ export function createEvmFallback<F extends FieldSelection>(
   options: EvmFallbackOptions<F>,
 ): FallbackSource<Block<F>[]> {
   const underlying: FallbackUnderlyingSource<Block<F>[]>[] = options.sources.map((cfg, i) => {
-    if (cfg.type === 'portal') {
-      return evmPortalReadSource({
-        name: cfg.name ?? `portal-${i}`,
-        portal: cfg.portal,
-        fields: options.fields,
-        request: options.request,
-        from: options.from,
-        to: options.to,
-        finalized: options.finalized,
-      })
-    }
+    const source =
+      cfg.type === 'portal'
+        ? evmPortalReadSource({
+            name: cfg.name ?? `portal-${i}`,
+            portal: cfg.portal,
+            fields: options.fields,
+            request: options.request,
+            from: options.from,
+            to: options.to,
+            finalized: options.finalized,
+          })
+        : lazyRpcSource(cfg.name ?? `rpc-${i}`, cfg, options)
 
-    return lazyRpcSource(cfg.name ?? `rpc-${i}`, cfg, options)
+    if (options.capabilityProbe === false) return source
+
+    return {
+      ...source,
+      probeCapability: makeCapabilityProbe(
+        source,
+        options.capabilityProbe === true ? undefined : options.capabilityProbe,
+      ),
+    }
   })
 
   const fallback = new FallbackSource(underlying, options.policy)

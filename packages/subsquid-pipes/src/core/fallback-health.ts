@@ -20,6 +20,12 @@ export interface FallbackPolicy {
   livenessFailThreshold?: number
   /** `M` — consecutive liveness passes (capability confirmed) required to become `healthy`. */
   livenessRecoverThreshold?: number
+  /**
+   * Minimum gap between capability probes of the same standby source. The probe is a full query
+   * slice (unlike Squid, Pipes has no cheap head poll, so the probe doubles as the liveness signal),
+   * so it is throttled to keep recovery from re-running it on every batch boundary. Default 5s.
+   */
+  capabilityProbeIntervalMs?: number
   /** Injectable clock (ms) for deterministic tests. Defaults to `Date.now`. */
   clock?: () => number
 }
@@ -31,6 +37,7 @@ export interface ResolvedFallbackPolicy {
   cooldownMs: number
   livenessFailThreshold: number
   livenessRecoverThreshold: number
+  capabilityProbeIntervalMs: number
   clock: () => number
 }
 
@@ -41,6 +48,7 @@ const DEFAULTS: ResolvedFallbackPolicy = {
   cooldownMs: 30_000,
   livenessFailThreshold: 2,
   livenessRecoverThreshold: 3,
+  capabilityProbeIntervalMs: 5000,
   clock: () => Date.now(),
 }
 
@@ -52,6 +60,7 @@ export function resolveFallbackPolicy(p?: FallbackPolicy): ResolvedFallbackPolic
     cooldownMs: p?.cooldownMs ?? DEFAULTS.cooldownMs,
     livenessFailThreshold: p?.livenessFailThreshold ?? DEFAULTS.livenessFailThreshold,
     livenessRecoverThreshold: p?.livenessRecoverThreshold ?? DEFAULTS.livenessRecoverThreshold,
+    capabilityProbeIntervalMs: p?.capabilityProbeIntervalMs ?? DEFAULTS.capabilityProbeIntervalMs,
     clock: p?.clock ?? DEFAULTS.clock,
   }
 }
@@ -67,11 +76,18 @@ export class AllSourcesDownError extends Error {
 /**
  * Per-source trinary health state machine. Pure and timer-free: fed signals (`onStreamError`,
  * `onBatch`, liveness/capability probe results); cooldown expiry resolves lazily on `state` read.
+ *
+ * A source without a capability probe treats capability as always-confirmed, so liveness alone
+ * promotes it. A source *with* a probe drops its confirmation whenever it goes unhealthy, so it can
+ * never return to `healthy` until a fresh probe succeeds — liveness alone cannot resurrect a node
+ * that keeps failing the real query (e.g. a Portal answering HTTP 400 to a query that passed
+ * type-level validation), which would otherwise recover, get re-promoted, and fail again (churn).
  */
 export class SourceHealth {
   #state: FallbackHealth = 'unknown'
   #livenessPass = 0
   #livenessFail = 0
+  #hasCapabilityProbe: boolean
   #capabilityOk: boolean
   #cooldownUntil = 0
 
@@ -79,6 +95,7 @@ export class SourceHealth {
     private policy: ResolvedFallbackPolicy,
     hasCapabilityProbe: boolean,
   ) {
+    this.#hasCapabilityProbe = hasCapabilityProbe
     this.#capabilityOk = !hasCapabilityProbe
   }
 
@@ -88,6 +105,11 @@ export class SourceHealth {
     }
 
     return this.#state
+  }
+
+  /** True once capability has been confirmed — or always, for a source with no capability probe. */
+  get capabilityConfirmed(): boolean {
+    return this.#capabilityOk
   }
 
   onStreamError(): void {
@@ -138,6 +160,10 @@ export class SourceHealth {
     this.#cooldownUntil = this.policy.clock() + this.policy.cooldownMs
     this.#livenessPass = 0
     this.#livenessFail = 0
+    // A probed source must re-prove it can serve the query before it can recover; otherwise a node
+    // that stays reachable but keeps failing the real query would flap back to healthy on liveness
+    // alone, get re-promoted, and fail again — the churn loop.
+    this.#capabilityOk = !this.#hasCapabilityProbe
   }
 
   #toUnknown(): void {

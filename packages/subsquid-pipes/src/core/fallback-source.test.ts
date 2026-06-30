@@ -115,6 +115,73 @@ describe('FallbackSource — supervisor', () => {
     expect(s1.reads).toHaveLength(0)
   })
 
+  it('reclaims a recovered higher-preference source once its capability probe confirms it', async () => {
+    let now = 0
+    let s0reads = 0
+    const s0 = source('s0', async function* () {
+      s0reads++
+      if (s0reads === 1) throw new Error('s0 down') // initial failure → fail over to s1
+      yield pbatch(50) // reclaimed after the probe confirms capability
+    })
+    let probes = 0
+    s0.probeCapability = async () => {
+      probes++
+      return true
+    }
+
+    const s1 = source('s1', async function* () {
+      for (let n = 1; n <= 6; n++) {
+        yield pbatch(n)
+        now += 100 // advance the (injected) clock so s0's cooldown elapses between batches
+      }
+    })
+
+    const fb = new FallbackSource([s0, s1], {
+      clock: () => now,
+      cooldownMs: 50,
+      capabilityProbeIntervalMs: 0,
+      livenessRecoverThreshold: 1, // one successful probe is enough to confirm + recover
+    })
+
+    const out = await collect(fb.read())
+
+    expect(probes).toBeGreaterThan(0) // the standby s0 was probed
+    expect(out).toContain(50) // and reclaimed once healthy
+    expect(fb.metrics().switchCount).toBe(2) // s0 → s1 (failover) → s0 (switch-up)
+  })
+
+  it('does not switch up to a standby whose capability probe keeps failing', async () => {
+    let now = 0
+    const s0 = source('s0', async function* () {
+      throw new Error('s0 down') // always fails the real query
+    })
+    let probes = 0
+    s0.probeCapability = async () => {
+      probes++
+      return false // reachable-but-incapable: never confirms
+    }
+
+    const s1 = source('s1', async function* () {
+      for (let n = 1; n <= 4; n++) {
+        yield pbatch(n)
+        now += 100
+      }
+    })
+
+    const fb = new FallbackSource([s0, s1], {
+      clock: () => now,
+      cooldownMs: 50,
+      capabilityProbeIntervalMs: 0,
+      livenessRecoverThreshold: 1,
+    })
+
+    const out = await collect(fb.read())
+
+    expect(probes).toBeGreaterThan(0) // s0 was probed but never confirmed
+    expect(out).toEqual([1, 2, 3, 4]) // stayed on s1 the whole time
+    expect(fb.metrics().switchCount).toBe(1) // only the initial failover — no churn back to s0
+  })
+
   it('throws AllSourcesDown after a finite timeout', async () => {
     const down: ReadFn = async function* () {
       throw new Error('down')
