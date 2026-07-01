@@ -1186,4 +1186,106 @@ describe('bigqueryTarget — fork lifecycle', () => {
     await target.fork!([cursor(5, 'BAD')])
     expect(onAfterRollback).not.toHaveBeenCalled()
   })
+
+  it('after a fork, the first reprocessed batch anchors its WAL range/cursor to the safe cursor, not the stale pre-fork cursor', async () => {
+    // Regression (data integrity): fork() rewinds the stream to a safe cursor S below the pre-fork
+    // committed cursor P and DELETEs (S, upper]. write() tracks previousCursor in a closure fork()
+    // cannot reach; if it stays at P, the first reprocessed batch writes an IN_FLIGHT_COMMIT row
+    // with current=P and range_low=P+1. On a crash mid-batch, getCursor recovery then rewinds to P
+    // and — since range_low > range_high — skips the cleanup DELETE, permanently gapping blocks
+    // S+1..P and orphaning the partial write. The fix makes write() adopt the fork's safe cursor,
+    // so the row anchors to S (current=S, range_low=S+1, range_low <= range_high).
+
+    // Committed row: getCursor resumes at P=10, and its rollback chain lets the fork resolve a
+    // common ancestor at S=5.
+    const chain = [
+      cursor(5, '0x5'),
+      cursor(6, '0x6'),
+      cursor(7, '0x7'),
+      cursor(8, '0x8'),
+      cursor(9, '0x9'),
+      cursor(10, '0x10'),
+    ]
+    bqSetup = makeBigQuery({
+      queryRows: [
+        {
+          id: 'stream',
+          op: 'commit',
+          current: JSON.stringify(cursor(10, '0x10')),
+          finalized: null,
+          rollback_chain: JSON.stringify(chain),
+          range_low: null,
+          range_high: null,
+          committed: true,
+          timestamp: '2025-01-01T00:00:00Z',
+        },
+      ],
+    })
+
+    // Capture every WAL sync row appended (the `op` field is present on sync rows, absent on data
+    // rows) so we can inspect the reprocessed batch's IN_FLIGHT_COMMIT row.
+    const syncRows: Record<string, unknown>[] = []
+    const target = bigqueryTarget<unknown>({
+      client: { bigquery: bqSetup.bq, writer: writerSetup.writer },
+      dataset: 'd',
+      tables: TABLES,
+      settings: {
+        protoWriterFactory: ({ protoDescriptor }) => ({
+          appendRows: ({ serializedRows }) => {
+            for (const row of decodeProtoRows(serializedRows, protoDescriptor)) {
+              if ('op' in row) syncRows.push(row)
+            }
+            return { getResult: async () => ({}) }
+          },
+          close: () => {},
+        }),
+      },
+      onData: async ({ store, data }) => {
+        store.insert('events', [data as Record<string, unknown>])
+      },
+    })
+
+    // The new canonical chain diverges from ours above block 5 (hashes 0xB6..0xB10), so the fork
+    // resolves the safe cursor to block 5.
+    const previousBlocks = [
+      cursor(5, '0x5'),
+      cursor(6, '0xB6'),
+      cursor(7, '0xB7'),
+      cursor(8, '0xB8'),
+      cursor(9, '0xB9'),
+      cursor(10, '0xB10'),
+    ]
+
+    async function* read() {
+      // The reorg fires while write()'s for-await is suspended, before the first reprocessed batch.
+      const safe = await target.fork!(previousBlocks)
+      expect(safe?.number).toBe(5) // fork resolved to S=5
+
+      // First reprocessed batch on the new chain, ending at block 7 (S=5 < 7 <= P=10).
+      yield {
+        data: { block_number: 6, tx_hash: '0x6-new' },
+        ctx: makeBatchContext(cursor(7, '0x7-new'), [cursor(6, '0x6-new'), cursor(7, '0x7-new')], 0),
+      }
+    }
+
+    await target.write({ read: read as never, logger: createTestLogger() })
+
+    // Among the sync rows (fork's rollback pair, then the batch's commit pair), the first
+    // op='commit' row is the reprocessed batch's IN_FLIGHT_COMMIT (pre-commit) row.
+    const inFlight = syncRows.find((r) => r['op'] === 'commit') as {
+      current: string
+      range_low: string | number
+      range_high: string | number
+    }
+    expect(inFlight).toBeDefined()
+
+    // Anchored to the safe cursor S=5, NOT the stale pre-fork P=10.
+    expect(JSON.parse(inFlight.current).number).toBe(5)
+    // Range floor is S+1=6 (INT64 decodes as a string via protobufjs — coerce to compare).
+    expect(Number(inFlight.range_low)).toBe(6)
+    expect(Number(inFlight.range_high)).toBe(7)
+    // And not inverted: low <= high, so recovery's bounded DELETE actually runs (the bug produced
+    // range_low=11 > range_high=7, which recovery skips → the gap).
+    expect(Number(inFlight.range_low)).toBeLessThanOrEqual(Number(inFlight.range_high))
+  })
 })

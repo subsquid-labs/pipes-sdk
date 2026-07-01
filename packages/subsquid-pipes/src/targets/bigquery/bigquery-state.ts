@@ -133,6 +133,16 @@ export class BigQueryState {
   }
 
   /**
+   * The last durably persisted cursor — advanced by `saveCommitPost`, rewound by
+   * `saveRollbackPost` on a fork, and restored by `getCursor` on recovery. The write loop reads
+   * this as the single source of truth for the pre-batch cursor, so a reorg cannot leave a stale
+   * copy behind.
+   */
+  get lastCommittedCursor(): BlockCursor | undefined {
+    return this.#lastCommittedCursor
+  }
+
+  /**
    * Reads the last committed cursor and runs crash recovery if needed.
    *
    * Lazy auto-creates the sync table on Not Found — `getCursor` may be called by the framework

@@ -169,9 +169,6 @@ export function bigqueryTarget<T>(options: {
 
         // Recovery: getCursor re-executes any outstanding IN_FLIGHT operation before returning.
         const resumeState = await state.getCursor({ logger })
-        // The resume cursor doubles as the WAL pre-commit "previous cursor"; keep it as a plain
-        // BlockCursor (separate from the TargetState handed to read()) for the range arithmetic.
-        let previousCursor = resumeState?.latest
         for await (const { data, ctx } of read(resumeState)) {
           if (!metrics) metrics = registerBqTargetMetrics(ctx.metrics)
           const span = ctx.profiler.start({ name: 'bigquery', labels: 'db' })
@@ -182,6 +179,10 @@ export function bigqueryTarget<T>(options: {
             // IN_FLIGHT and COMMITTED rows agree.
             const finalized = ctx.stream.head.finalized
             const rollbackChain = ctx.stream.state.rollbackChain
+            // Pre-batch cursor = the last durably persisted position. `state` is the single source
+            // of truth: saveCommitPost advances it, saveRollbackPost rewinds it on a fork, so after
+            // a reorg it already points at the safe cursor — no separate copy in write() to drift.
+            const previousCursor = state.lastCommittedCursor
             // Range of new blocks this batch is about to write: [low, next.number].
             //   - Subsequent batches: low = previousCursor.number + 1.
             //   - Very first batch (no previousCursor): low = stream.state.initial — the
@@ -245,8 +246,6 @@ export function bigqueryTarget<T>(options: {
               totalRows,
               totalBytes,
             })
-
-            previousCursor = next
           } finally {
             span.end()
           }
