@@ -22,10 +22,25 @@ export type FinalizationBuffer<Row> = {
   push(rows: Row[], finalization: Finalization): Row[]
 
   /**
-   * Resolve the safe cursor for a reorg from the accumulated rollback chain and
-   * the portal's `previousBlocks`, drop every buffered row above it, and return
-   * that cursor (or `null` on a dead-end fork). Drive this straight from the
-   * target's `fork` handler.
+   * Resolve the safe cursor for a reorg from the accumulated rollback chain and the portal's
+   * `previousBlocks`, WITHOUT mutating the buffer. Returns that cursor (or `null` on a dead-end
+   * fork). Pair with {@link dropAbove}, or use {@link fork} to do both in one call.
+   *
+   * Sibling buffers advanced in lockstep carry an identical chain, so a caller with many buffers
+   * can resolve the cursor once and apply it to all of them via {@link dropAbove} instead of
+   * re-resolving the same walk per buffer.
+   */
+  resolveFork(previousBlocks: BlockCursor[]): Promise<BlockCursor | null>
+
+  /**
+   * Drop every buffered row above `safe` and trim the rollback chain to it — or, on a `null`
+   * dead-end fork, keep the rows and reset the chain. Feed it a cursor from {@link resolveFork}.
+   */
+  dropAbove(safe: BlockCursor | null): void
+
+  /**
+   * Resolve the safe cursor and drop every buffered row above it — {@link resolveFork} then
+   * {@link dropAbove} in one call. Convenient for a single-buffer target's `fork` handler.
    */
   fork(previousBlocks: BlockCursor[]): Promise<BlockCursor | null>
 
@@ -67,6 +82,19 @@ export function createFinalizationBuffer<Row>({
   let rollbackChain: BlockCursor[] = []
   let finalized: BlockCursor | undefined
 
+  const resolveFork = (previousBlocks: BlockCursor[]): Promise<BlockCursor | null> =>
+    resolveForkCursor([{ rollbackChain, finalized }], previousBlocks)
+
+  const dropAbove = (safe: BlockCursor | null): void => {
+    if (safe) {
+      const boundary = safe.number
+      rollbackChain = rollbackChain.filter((block) => block.number <= boundary)
+      buffered = buffered.filter((row) => getBlockNumber(row) <= boundary)
+    } else {
+      rollbackChain = []
+    }
+  }
+
   return {
     push(rows, finalization) {
       rollbackChain.push(...(finalization.rollbackChain ?? []))
@@ -98,16 +126,13 @@ export function createFinalizationBuffer<Row>({
       return released
     },
 
-    async fork(previousBlocks) {
-      const safe = await resolveForkCursor([{ rollbackChain, finalized }], previousBlocks)
+    resolveFork,
 
-      if (safe) {
-        const boundary = safe.number
-        rollbackChain = rollbackChain.filter((block) => block.number <= boundary)
-        buffered = buffered.filter((row) => getBlockNumber(row) <= boundary)
-      } else {
-        rollbackChain = []
-      }
+    dropAbove,
+
+    async fork(previousBlocks) {
+      const safe = await resolveFork(previousBlocks)
+      dropAbove(safe)
 
       return safe
     },

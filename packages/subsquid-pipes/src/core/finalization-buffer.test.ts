@@ -175,6 +175,58 @@ describe('createFinalizationBuffer', () => {
     })
   })
 
+  describe('resolveFork / dropAbove (split fork for shared-chain buffers)', () => {
+    it('resolveFork resolves the safe cursor without mutating the buffer', async () => {
+      const buffer = make()
+      buffer.push([row(5), row(6), row(7)], head(4, [block(5), block(6), block(7)]))
+
+      const safe = await buffer.resolveFork([block(5), block(6, '0x6a'), block(7, '0x7a')])
+
+      expect(safe).toEqual(block(5))
+      // Side-effect-free (unlike fork): rows stay buffered…
+      expect(buffer.size).toBe(3)
+      // …and a second resolve on the untouched chain returns the same cursor.
+      expect(await buffer.resolveFork([block(5), block(6, '0x6a'), block(7, '0x7a')])).toEqual(block(5))
+      expect(buffer.size).toBe(3)
+    })
+
+    it('dropAbove drops every buffered row above the given cursor', () => {
+      const buffer = make()
+      buffer.push([row(5), row(6), row(7)], head(4, [block(5), block(6), block(7)]))
+
+      buffer.dropAbove(block(5))
+
+      expect(buffer.size).toBe(1) // only row(5) survives
+    })
+
+    it('dropAbove(null) keeps rows for a dead-end fork', () => {
+      const buffer = make()
+      buffer.push([row(5), row(6)], head(4, [block(5), block(6)]))
+
+      buffer.dropAbove(null)
+
+      expect(buffer.size).toBe(2)
+    })
+
+    it('resolves once and drops across sibling buffers that share the chain (ParquetStore pattern)', async () => {
+      // Buffers advanced in lockstep carry identical chains, so the cursor is resolved from one
+      // and applied to every buffer — no per-buffer re-resolution.
+      const a = make()
+      const b = make()
+      const fin = head(4, [block(5), block(6), block(7)])
+      a.push([row(5), row(6), row(7)], fin)
+      b.push([row(5), row(6), row(7)], fin)
+
+      const safe = await a.resolveFork([block(5), block(6, '0x6a'), block(7, '0x7a')])
+      a.dropAbove(safe)
+      b.dropAbove(safe)
+
+      expect(safe).toEqual(block(5))
+      expect(a.size).toBe(1)
+      expect(b.size).toBe(1)
+    })
+  })
+
   describe('size', () => {
     it('reflects the number of buffered rows after each push', () => {
       const buffer = make()

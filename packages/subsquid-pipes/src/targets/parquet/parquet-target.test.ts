@@ -504,6 +504,70 @@ describe('parquetTarget', () => {
       // The block-1 file was published before the reorg and must survive it untouched.
       expect(await listDataFiles(dir, 'blocks')).toContain('000000000001-000000000001.parquet')
     })
+
+    it('drops forked rows in every table buffer, not just the first (multi-table)', async () => {
+      const logsTable: ParquetTable = {
+        table: 'logs',
+        schema: {
+          blockNumber: { type: 'INT64' },
+          logIndex: { type: 'INT32' },
+          address: { type: 'UTF8' },
+        },
+      }
+      mockPortal = await createMockPortal([
+        blocksResponse([1, 2, 3, 4, 5], 1),
+        {
+          statusCode: 409,
+          data: {
+            previousBlocks: [
+              { number: 2, hash: '0x2' },
+              { number: 3, hash: '0x3' },
+              { number: 4, hash: '0x4-1' },
+              { number: 5, hash: '0x5-1' },
+            ],
+          },
+        },
+        {
+          statusCode: 200,
+          data: [
+            { header: { number: 4, hash: '0x4a', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5a', timestamp: 5000 } },
+            { header: { number: 6, hash: '0x6a', timestamp: 6000 } },
+            { header: { number: 7, hash: '0x7a', timestamp: 7000 } },
+          ],
+          head: { finalized: { number: 7, hash: '0x7a' } },
+        },
+      ])
+
+      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 7 }) }).pipeTo(
+        parquetTarget({
+          dir,
+          tables: [BLOCKS_TABLE, logsTable],
+          onData: ({ store, data }) => {
+            store.insert(
+              'blocks',
+              data.map((b) => ({ blockNumber: b.number, hash: b.hash, timestamp: b.timestamp })),
+            )
+            // One log row per block, tagged with the block hash so the forked chain (0x4-1 / 0x5-1)
+            // is distinguishable from the replacement chain (0x4a / 0x5a).
+            store.insert(
+              'logs',
+              data.map((b) => ({ blockNumber: b.number, logIndex: 0, address: b.hash })),
+            )
+          },
+        }),
+      )
+
+      // Both tables dropped the forked rows: no duplicate block 4/5 in either. If fork() had
+      // dropped rows in only the first buffer, the logs table would still carry the stale forked
+      // rows (blockNumbers [1, 2, 3, 4, 4, 5, 5, 6, 7]).
+      expect((await readBlocks(dir)).map((r) => r.blockNumber)).toEqual([1, 2, 3, 4, 5, 6, 7])
+      const logs = await readLogs(dir)
+      expect(logs.map((r) => r.blockNumber)).toEqual([1, 2, 3, 4, 5, 6, 7])
+      // Blocks 4 & 5 in the logs table carry the replacement-chain hash, proving the drop happened.
+      expect(logs.find((r) => r.blockNumber === 4)?.address).toBe('0x4a')
+      expect(logs.find((r) => r.blockNumber === 5)?.address).toBe('0x5a')
+    })
   })
 
   describe('empty table', () => {

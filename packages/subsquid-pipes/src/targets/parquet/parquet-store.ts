@@ -161,14 +161,19 @@ export class ParquetStore {
    * Open writers and published files are never touched — they hold only finalized rows, which
    * can never reorg.
    *
-   * Every buffer carries the same rollback chain (advanced on every batch), so each resolves the
-   * same safe cursor; we drop rows in all of them and return the agreed result.
+   * Every buffer carries an identical rollback chain (`flushBatch` advances them all in lockstep
+   * with the same finalization), so resolve the safe cursor ONCE and reuse it to drop rows in
+   * each buffer — resolving per buffer would repeat the identical walk N times.
    */
   async fork(previousBlocks: BlockCursor[]): Promise<BlockCursor | null> {
-    let safe: BlockCursor | null = null
+    const buffers = [...this.#buffers.values()]
+    if (buffers.length === 0) {
+      return null
+    }
 
-    for (const buffer of this.#buffers.values()) {
-      safe = await buffer.fork(previousBlocks)
+    const safe = await buffers[0].resolveFork(previousBlocks)
+    for (const buffer of buffers) {
+      buffer.dropAbove(safe)
     }
 
     return safe
