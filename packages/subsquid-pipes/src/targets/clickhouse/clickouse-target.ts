@@ -22,9 +22,17 @@ export type Settings = {
 
   /**
    * Stream identifier used to isolate offset records within the same table.
-   * Defaults to "stream" if not provided.
+   * Defaults to the pipe's source `id`. Set explicitly only to pin a cursor key
+   * independent of the source id (e.g. several pipes writing to one table).
    */
   id?: string
+
+  /**
+   * One-time migration: set to `"stream"` when upgrading a pipe from an SDK version that keyed
+   * progress by the default `"stream"` id, to resume once from that cursor and migrate forward.
+   * Off by default so a new pipe never inherits a foreign cursor left in a shared table.
+   */
+  migrateFromId?: string
 
   /**
    * Maximum number of rows to retain per unique stream id in the offset table.
@@ -60,7 +68,11 @@ export function clickhouseTarget<T>({
   const state = new ClickhouseState(store, settings)
 
   return createTarget<T>({
-    write: async ({ read, logger }) => {
+    write: async ({ read, logger, id }) => {
+      // Key the cursor by the pipe's source id (unless an explicit settings.id was given), so
+      // progress is isolated per pipe. Must run before getCursor so read and write agree.
+      state.bindCursorKey(id, logger)
+
       await onStart?.({ store, logger })
       const cursor = await state.getCursor()
 
