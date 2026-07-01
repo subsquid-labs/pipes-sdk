@@ -6,6 +6,7 @@ import * as evm from './evm.js'
 import * as hyperliquidFills from './hyperliquid-fills.js'
 import * as solana from './solana.js'
 import * as substrate from './substrate.js'
+import * as tron from './tron.js'
 
 export type { Block as BitcoinBlock, FieldSelection as BitcoinFieldSelection } from './bitcoin.js'
 export type { PortalBlock, PortalQuery } from './common.js'
@@ -16,13 +17,15 @@ export type {
 } from './hyperliquid-fills.js'
 export type { Block as SolanaBlock, FieldSelection as SolanaFieldSelection } from './solana.js'
 export type { Block as SubstrateBlock, FieldSelection as SubstrateFieldSelection } from './substrate.js'
+export type { Block as TronBlock, FieldSelection as TronFieldSelection } from './tron.js'
 
 export type SolanaQuery = solana.Query
 export type EvmQuery = evm.Query
 export type HyperliquidFillsQuery = hyperliquidFills.Query
 export type SubstrateQuery = substrate.Query
 export type BitcoinQuery = bitcoin.Query
-export type Query = evm.Query | hyperliquidFills.Query | solana.Query | substrate.Query | bitcoin.Query
+export type TronQuery = tron.Query
+export type Query = evm.Query | hyperliquidFills.Query | solana.Query | substrate.Query | bitcoin.Query | tron.Query
 
 export type GetBlock<Q extends Query> = Q extends evm.Query
   ? evm.Block<Q['fields']>
@@ -32,7 +35,9 @@ export type GetBlock<Q extends Query> = Q extends evm.Query
       ? substrate.Block<Q['fields']>
       : Q extends bitcoin.Query
         ? bitcoin.Block<Q['fields']>
-        : hyperliquidFills.Block<Q['fields']>
+        : Q extends tron.Query
+          ? tron.Block<Q['fields']>
+          : hyperliquidFills.Block<Q['fields']>
 
 const BLOCK_SCHEMAS = new WeakMap<Query, Validator<any, any>>()
 
@@ -56,6 +61,9 @@ export function getBlockSchema<Block>(query: Query): Validator<Block, any> {
       break
     case 'bitcoin':
       schema = bitcoin.getBlockSchema(query.fields)
+      break
+    case 'tron':
+      schema = tron.getBlockSchema(query.fields)
       break
     default:
       throw unexpectedCase(query['type'])

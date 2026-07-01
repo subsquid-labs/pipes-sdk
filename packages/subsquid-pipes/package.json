@@ -126,6 +126,11 @@
       "import": "./dist/bitcoin/index.js",
       "require": "./dist/bitcoin/index.cjs"
     },
+    "./tron": {
+      "types": "./dist/tron/index.d.ts",
+      "import": "./dist/tron/index.js",
+      "require": "./dist/tron/index.cjs"
+    },
     "./portal-client": {
       "types": "./dist/portal-client/index.d.ts",
       "import": "./dist/portal-client/index.js",
@@ -204,6 +209,9 @@
       ],
       "bitcoin": [
         "./dist/bitcoin/index.d.ts"
+      ],
+      "tron": [
+        "./dist/tron/index.d.ts"
       ],
       "portal-client": [
         "./dist/portal-client/index.d.ts"
