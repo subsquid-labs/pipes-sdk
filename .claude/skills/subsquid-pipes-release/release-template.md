@@ -1,6 +1,8 @@
 # Release notes template
 
-For **stable** `@subsquid/pipes` releases. Prereleases keep the workflow's auto-generated notes — see the "Prereleases" section in [SKILL.md](SKILL.md).
+For `@subsquid/pipes` releases — stable and prereleases alike (prereleases can be leaner; see the "Prereleases" section in [SKILL.md](SKILL.md)).
+
+**Scope: `@subsquid/pipes` only.** Never list `@subsquid/pipes-cli` or `@subsquid/pipes-ui` changes here — they are separate packages with separate releases.
 
 Two shapes — pick by version delta.
 

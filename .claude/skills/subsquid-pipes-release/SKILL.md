@@ -5,7 +5,7 @@ description: Cut a new @subsquid/pipes release — bump the version, tag, push, 
 
 # @subsquid/pipes release
 
-End-to-end release procedure for **`@subsquid/pipes`** (the core SDK). Bumps `packages/subsquid-pipes/package.json`, tags `pipes-v<version>`, pushes, watches the `Release @subsquid/pipes` workflow ([release-subsquid-pipes.yml](../../../.github/workflows/release-subsquid-pipes.yml)), then rewrites the auto-generated GitHub release notes for stable releases.
+End-to-end release procedure for **`@subsquid/pipes`** (the core SDK). Bumps `packages/subsquid-pipes/package.json`, tags `pipes-v<version>`, pushes, watches the `Release @subsquid/pipes` workflow ([release-subsquid-pipes.yml](../../../.github/workflows/release-subsquid-pipes.yml)), then replaces the auto-generated GitHub release notes with curated, `@subsquid/pipes`-scoped highlights.
 
 Publishing runs on **npm Trusted Publishing** (OIDC + provenance, no `NPM_TOKEN`). The tagged commit is the source of truth: the workflow refuses to publish unless `package.json` already carries the version in the tag.
 
@@ -16,7 +16,7 @@ Supports **prereleases** (`1.0.0-alpha.14`, `1.0.0-beta.1`, `1.0.0-rc.1`) as wel
 ## Preconditions
 
 Confirm before starting:
-- `git status` is clean on `main` (or the version bump is staged deliberately).
+- `git status` is clean on `design/sdk1` — the branch the 1.0 alpha line is cut from (or the version bump is staged deliberately). Releases are **not** cut from `main`: `main` trails `design/sdk1`, and the tag-triggered workflow builds and publishes the code from the tagged commit, so the tag must sit on `design/sdk1`.
 - The user named a target version, e.g. `1.0.0-alpha.14` (prerelease) or `1.0.0` (stable). If not, ask. See [Choosing the next version](#choosing-the-next-version).
 - A **trusted publisher** for `@subsquid/pipes` is configured on npmjs.com pointing at `subsquid-labs/pipes-sdk` → `.github/workflows/release-subsquid-pipes.yml`. This is a one-time setup on npm (Package → Settings → Trusted Publishing). Without it, the `publish` job 404s. See [First-time setup](#first-time-setup-trusted-publishing).
 
@@ -34,7 +34,7 @@ The workflow's `Verify version` step compares the exact string — including any
 git add packages/subsquid-pipes/package.json
 git commit -m "chore(release): @subsquid/pipes <version>"
 git tag pipes-v<version>
-git push origin main
+git push origin design/sdk1
 git push origin pipes-v<version>
 ```
 
@@ -57,9 +57,9 @@ Three jobs: `check` → `publish` → `github-release`. If `publish` fails on np
 
 ### 4. Rewrite release notes
 
-**Stable releases only.** For a prerelease, skip this step — the workflow already flags it as a pre-release and its auto-generated notes stay as-is. See [Prereleases (alpha/beta)](#prereleases-alphabeta).
+Applies to **every** release, prereleases included. The `github-release` job creates the release with `generate_release_notes: true`, but those auto-notes are unreliable — when there is **no previous `pipes-v*` tag to diff against, GitHub dumps the entire repo history** (dozens of PRs). Replace them with curated highlights from [release-template.md](release-template.md).
 
-The `github-release` job creates the release with `generate_release_notes: true` (auto-generated bullet list). Replace it with the standardized format from [release-template.md](release-template.md).
+**Scope: `@subsquid/pipes` only.** Do **not** list changes from `@subsquid/pipes-cli` or `@subsquid/pipes-ui` — they are separate packages with their own releases (and their own tag prefixes). Notes cover the core SDK: streaming/core, targets, chains. A `pipe-ui` redesign or a CLI feature does **not** belong here.
 
 Source the highlights from the commits since the previous release; pick the user-visible changes rather than restating every commit.
 
@@ -88,19 +88,15 @@ Cut a prerelease exactly like a stable release (steps 1–3), but name a prerele
 
 ### Release notes for prereleases
 
-Keep it light. **Do not** run the standardized template — leave the workflow's auto-generated notes in place. Optionally prepend a 1–2 sentence "what to test" lead so testers know where to focus:
+Prereleases get the same curated, `@subsquid/pipes`-scoped highlights as a stable release (step 4) — the `github-release` job already marks them `prerelease: true`, so there is no manual flag. They can be leaner than a stable cut (drop the lead paragraph, group only what changed), and you may add a one-line "what to test" note.
+
+Write the notes to a file and apply with `--notes-file` (avoids heredoc escaping around code fences):
 
 ```sh
-BODY=$(gh release view pipes-v1.0.0-alpha.14 --repo subsquid-labs/pipes-sdk --json body --jq '.body')
-gh release edit pipes-v1.0.0-alpha.14 --repo subsquid-labs/pipes-sdk --notes "$(cat <<EOF
-Prerelease for testing <feature>. Install with \`npm i @subsquid/pipes@alpha\`. Please report issues against <area>.
-
-$BODY
-EOF
-)"
+gh release edit pipes-v1.0.0-alpha.14 --repo subsquid-labs/pipes-sdk --notes-file notes.md
 ```
 
-Save the polished, sectioned notes (step 4 + [release-template.md](release-template.md)) for the stable release that follows.
+Keep the install line minimal — a bare `npm i @subsquid/pipes@alpha`. **Skip** the "published to the `@alpha` dist-tag / `@latest` is unaffected" prose: it's obvious and just noise.
 
 ## Choosing the next version
 
@@ -128,5 +124,7 @@ The workflow requests `id-token: write` and publishes with `--provenance`, so re
 - **Tag exists**: `git tag pipes-v<version>` fails. Either the release was already started or a previous attempt didn't finish. Check `gh release view pipes-v<version>` and `gh run list --workflow=release-subsquid-pipes.yml`. Don't force-delete tags without confirming.
 - **`Verify version` fails in CI**: `packages/subsquid-pipes/package.json` doesn't match the tag. Fix locally, commit, retag, repush. Don't reuse a tag that already published.
 - **Publish fails on Trusted Publishing**: the trusted publisher for `@subsquid/pipes` is missing or points at the wrong repo/workflow. See [First-time setup](#first-time-setup-trusted-publishing). Don't fall back to a manual `npm publish` with a token unless the user explicitly asks — that bypasses provenance.
+- **`check` fails with "Multiple versions of pnpm specified"**: `pnpm/action-setup` in the workflow must **not** pass a `version:` — the root `package.json` pins pnpm through `packageManager` (`pnpm@10.17.0`), and setting both aborts the step. If the workflow drifted and re-added `version:`, remove it.
+- **`publish` fails `E422 … "repository.url" is ""`**: `--provenance` refuses to publish unless `packages/subsquid-pipes/package.json` has a `repository` field resolving to `https://github.com/subsquid-labs/pipes-sdk`. Add `"repository": { "type": "git", "url": "git+https://github.com/subsquid-labs/pipes-sdk.git", "directory": "packages/subsquid-pipes" }`. The publish is rejected before anything lands, so just fix, retag, repush.
 - **Prerelease served to a plain `npm i`**: shouldn't happen — the `Resolve npm dist-tag` step routes alpha/beta/rc off `latest`. If a tester reports a bare install pulling a prerelease, inspect the tags: `npm view @subsquid/pipes dist-tags`. `latest` must point at the newest *stable*; if it drifted, repoint it with `npm dist-tag add @subsquid/pipes@<stable> latest` (requires npm auth — this recovery is manual, outside the OIDC workflow).
 - **Wrong package**: if the user meant the CLI (`@subsquid/pipes-cli`), stop and use the `deploy-pipes-cli` skill instead — different tag prefix and publish path.
