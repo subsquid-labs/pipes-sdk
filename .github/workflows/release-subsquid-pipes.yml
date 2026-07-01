@@ -1,0 +1,192 @@
+name: Release @subsquid/pipes
+
+# Publishes @subsquid/pipes to npm via Trusted Publishing (OIDC, no NPM_TOKEN).
+# Trigger by pushing a `pipes-v<version>` tag, or run manually with a version.
+# Prereleases (…-alpha.N / -beta.N / -rc.N) publish to a matching dist-tag
+# instead of `latest` and are flagged as GitHub pre-releases.
+
+on:
+  push:
+    tags: ['pipes-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 1.0.0-alpha.14, or a stable 1.0.0)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      # Build is the publish gate — the package must compile before we ship.
+      # The full test suite (ClickHouse + Postgres services) runs in
+      # test-subsquid-pipes.yml on push to main/develop, so the tagged commit
+      # has already been tested; re-running the services here would only add
+      # flakiness to the release path.
+      - run: pnpm --filter @subsquid/pipes build
+
+  publish:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance + Trusted Publishing OIDC
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm 10+ is required for Trusted Publishing's OIDC auth — pnpm 9
+      # delegates auth to the bundled npm, which can sign provenance but can't
+      # exchange the OIDC token for a publish credential.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      # Node 24 ships with npm 11+, required for the OIDC token-exchange that
+      # backs Trusted Publishing. Node 22 (npm 10.x) signs provenance fine but
+      # 404s on the publish PUT because it can't mint a publish credential.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @subsquid/pipes build
+
+      # Resolve the version from the tag (pipes-v1.0.0-alpha.14 → 1.0.0-alpha.14)
+      # or manual input. User-controlled values flow through env: — never
+      # interpolated into the run: script.
+      - name: Resolve version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION="${GITHUB_REF_NAME#pipes-v}"
+          fi
+          # Strict semver-ish validation — reject anything that could smuggle
+          # shell metacharacters into later steps.
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "Invalid version: $VERSION" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # Require the package version to already be committed in source so the
+      # tagged commit is the source of truth for what was published.
+      - name: Verify version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          PACKAGE_VERSION=$(jq -r '.version' packages/subsquid-pipes/package.json)
+          if [ "$PACKAGE_VERSION" != "$VERSION" ]; then
+            echo "packages/subsquid-pipes/package.json is $PACKAGE_VERSION, expected $VERSION."
+            echo "Bump and commit the version before tagging the release."
+            exit 1
+          fi
+
+      # Prereleases must not land on the default `latest` dist-tag, or a plain
+      # `npm i @subsquid/pipes` would serve an alpha. Derive the channel from
+      # the prerelease identifier: 1.0.0-alpha.14 → alpha, -beta.1 → beta,
+      # -rc.1 → rc; stable X.Y.Z → latest; any other suffix → next.
+      - name: Resolve npm dist-tag
+        id: disttag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # `case` globbing (not grep) so the hyphen test can't be mistaken for
+          # a grep option across grep implementations.
+          case "$VERSION" in
+            *-*)
+              LABEL="${VERSION#*-}"   # strip up to the first dash → alpha.14
+              LABEL="${LABEL%%.*}"    # strip the numeric suffix    → alpha
+              case "$LABEL" in
+                alpha|beta|rc) TAG="$LABEL" ;;
+                *) TAG="next" ;;
+              esac
+              ;;
+            *)
+              TAG="latest"
+              ;;
+          esac
+          echo "Publishing to dist-tag: $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      # Auth happens via npm Trusted Publishing (OIDC) — no NPM_TOKEN.
+      # @subsquid/pipes must have a trusted publisher configured on npmjs.com
+      # pointing at this workflow
+      # (subsquid-labs/pipes-sdk → .github/workflows/release-subsquid-pipes.yml).
+      #
+      # DIST_TAG flows through env: (never interpolated into run:) to preserve
+      # the "derived/user values never touch the shell" invariant.
+      - name: Publish @subsquid/pipes
+        env:
+          DIST_TAG: ${{ steps.disttag.outputs.tag }}
+        run: pnpm publish packages/subsquid-pipes --access public --provenance --no-git-checks --tag "$DIST_TAG"
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION="${GITHUB_REF_NAME#pipes-v}"
+          fi
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "Invalid version: $VERSION" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=pipes-v$VERSION" >> "$GITHUB_OUTPUT"
+          # A hyphen only appears in the prerelease part (the version regex
+          # keeps it out of the X.Y.Z core), so it cleanly flags alpha/beta/rc.
+          # Prereleases are marked pre-release and kept off the "Latest" slot.
+          case "$VERSION" in
+            *-*)
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
+              echo "make_latest=false" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
+              echo "make_latest=true" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: '@subsquid/pipes v${{ steps.version.outputs.version }}'
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          make_latest: ${{ steps.version.outputs.make_latest }}
