@@ -22,6 +22,7 @@ export type MockResponse =
         transactions?: any[]
         inputs?: any[]
         outputs?: any[]
+        internalTransactions?: any[]
       }[]
       head?: {
         finalized?: { number: number; hash: string }
