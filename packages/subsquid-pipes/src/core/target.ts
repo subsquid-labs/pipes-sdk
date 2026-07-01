@@ -20,6 +20,14 @@ export type TargetState = {
 
 export type Target<In> = {
   write: (writer: {
+    /**
+     * Globally unique, stable identifier for this pipe (the source `id`). Targets use it as
+     * the default cursor key, so progress is isolated per pipe even when several pipes share
+     * one offset table. A per-target override (e.g. ClickHouse `settings.id`) still wins.
+     * Optional only so test harnesses can drive `write()` without a source; `pipeTo` always
+     * supplies it.
+     */
+    id?: string
     read: (state?: TargetState) => AsyncIterableIterator<PortalBatch<In>>
     logger: Logger
   }) => Promise<void>

@@ -404,6 +404,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     const self = this
 
     return target.write({
+      id: this.#id,
       logger: this.#logger,
       read: async function* (state?: TargetState) {
         await self.configure()
