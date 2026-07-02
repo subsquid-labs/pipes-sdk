@@ -217,12 +217,15 @@ describe('ClickhouseState — cursor key binding & legacy migration', () => {
     await expect(state.getCursor()).resolves.toEqual({ latest: block(99), finalized: block(90) })
     expect(warn).toHaveBeenCalledOnce()
 
-    // The legacy rows are physically re-keyed: re-inserted under the pipe id and the
-    // originals cancelled, so fork resolution and later starts see only the pipe's key.
+    // The legacy rows are physically re-keyed in ONE atomic insert per batch: the copy under the
+    // pipe id plus the sign=-1 cancellation of the original, so fork resolution and later starts
+    // see only the pipe's key and a crash cannot leave the rows duplicated under both keys.
     expect(inserts).toHaveLength(1)
-    expect(inserts[0].values).toEqual([expect.objectContaining({ id: 'pipe-x' })])
-    expect(removals).toHaveLength(1)
-    expect(removals[0].params).toEqual({ id: 'stream' })
+    expect(inserts[0].values).toEqual([
+      expect.objectContaining({ id: 'pipe-x' }),
+      expect.objectContaining({ id: 'stream', sign: -1 }),
+    ])
+    expect(removals).toHaveLength(0)
   })
 
   it("prefers the pipe's own cursor and leaves the legacy rows alone once it exists", async () => {

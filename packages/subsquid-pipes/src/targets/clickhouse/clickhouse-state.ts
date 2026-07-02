@@ -1,6 +1,8 @@
 import {
   BatchContext,
   BlockCursor,
+  CursorKey,
+  LEGACY_DEFAULT_CURSOR_ID,
   Logger,
   Profiler,
   RollbackRecord,
@@ -25,14 +27,6 @@ CREATE TABLE IF NOT EXISTS ${table}
 ) ENGINE = CollapsingMergeTree(sign)
   ORDER BY (timestamp, id)
 `
-
-/**
- * The static id every cursor was keyed by before the SDK keyed cursors by the pipe's source id.
- * Also the key `options.id` falls back to when `bindCursorKey` never runs (e.g. unit tests that
- * drive the state directly). A cursor left under this id by an older SDK is migrated to the
- * pipe's own key automatically on first resume — see `getCursor`.
- */
-const LEGACY_DEFAULT_ID = 'stream'
 
 /**
  * Configuration options for ClickhouseState.
@@ -71,9 +65,8 @@ export class ClickhouseState {
   #saves = 0
 
   // The id every cursor row is keyed by: an explicit `settings.id`, else the pipe's source id
-  // once `bindCursorKey` runs, else the default (e.g. when bind never runs in unit tests).
-  #cursorKey: string
-  readonly #explicitId: boolean
+  // once `bindCursorKey` runs, else the legacy default (e.g. when bind never runs in unit tests).
+  readonly #key: CursorKey
   #logger?: Logger
 
   constructor(
@@ -93,14 +86,11 @@ export class ClickhouseState {
       table: 'sync',
       ...options,
       // override after spread so an explicit `undefined` cannot clobber the defaults
-      id: options.id ?? LEGACY_DEFAULT_ID,
+      id: options.id ?? LEGACY_DEFAULT_CURSOR_ID,
       maxRows,
     }
 
-    // An explicit id is honoured verbatim; otherwise the source id (bound later) becomes the key,
-    // falling back to the default if `bindCursorKey` never runs.
-    this.#explicitId = options.id !== undefined
-    this.#cursorKey = this.options.id
+    this.#key = new CursorKey(options.id)
 
     this.#qualifiedName = `"${this.options.database}"."${this.options.table}"`
   }
@@ -112,15 +102,12 @@ export class ClickhouseState {
    */
   bindCursorKey(sourceId: string | undefined, logger?: Logger): void {
     this.#logger = logger
-
-    if (this.#explicitId || !sourceId) return
-
-    this.#cursorKey = sourceId
+    this.#key.bind(sourceId)
   }
 
   /** The id every cursor row is keyed by. Exposed for tests. */
   get cursorKey(): string {
-    return this.#cursorKey
+    return this.#key.value
   }
 
   encodeCursor(cursor: BlockCursor | { number: number }): string {
@@ -147,7 +134,7 @@ export class ClickhouseState {
         table: this.#qualifiedName,
         values: [
           {
-            id: this.#cursorKey,
+            id: this.#key.value,
             current: this.encodeCursor(current),
             // The source has already clamped this finalized head + rollback chain through the
             // pipe's monotonic watermark, so persisting them verbatim keeps the stored floor
@@ -183,7 +170,7 @@ export class ClickhouseState {
             ORDER BY "timestamp" DESC
             OFFSET ${this.options.maxRows}
           `,
-          params: { id: this.#cursorKey },
+          params: { id: this.#key.value },
         })
       })
     }
@@ -191,7 +178,7 @@ export class ClickhouseState {
 
   async getCursor(): Promise<TargetState | undefined> {
     try {
-      const primary = await this.#readLatest(this.#cursorKey)
+      const primary = await this.#readLatest(this.#key.value)
       if (primary) return primary
 
       return await this.#migrateLegacyCursor()
@@ -214,19 +201,32 @@ export class ClickhouseState {
    *
    * Skipped when an explicit `settings.id` is set: an explicitly pinned key either already holds
    * its own rows or deliberately names a fresh cursor, and inheriting the shared legacy cursor
-   * would be wrong. When several source-keyed pipes share one offset table, the first pipe to
-   * start consumes the legacy rows; the others start fresh — under the legacy shared key only one
-   * cursor ever existed anyway.
+   * would be wrong.
+   *
+   * Caveats when several source-keyed pipes share one offset table (ClickHouse has no advisory
+   * lock, so nothing serializes this migration):
+   * - The first pipe to start consumes the legacy rows — but under the shared legacy key only one
+   *   cursor ever survived, and it belonged to only ONE of those pipes. The winner may inherit a
+   *   foreign block position and a foreign finalized floor (the source's watermark is monotonic,
+   *   so a too-high floor does not self-correct). Pin explicit `settings.id`s before upgrading
+   *   such setups, or reset the migrated cursor if the resumed position looks foreign.
+   * - Two pipes starting concurrently can both read the legacy rows before either re-keys them
+   *   and both resume from the same cursor. The warning below fires in each pipe's log either
+   *   way, so the overlap is visible.
    */
   async #migrateLegacyCursor(): Promise<TargetState | undefined> {
-    if (this.#explicitId || this.#cursorKey === LEGACY_DEFAULT_ID) return
+    if (this.#key.isExplicit || this.#key.value === LEGACY_DEFAULT_CURSOR_ID) return
 
-    const legacy = await this.#readLatest(LEGACY_DEFAULT_ID)
+    const legacy = await this.#readLatest(LEGACY_DEFAULT_CURSOR_ID)
     if (!legacy) return
 
     this.#logger?.warn(
-      `Found a ClickHouse cursor under the legacy default id "${LEGACY_DEFAULT_ID}"; migrating its rows ` +
-        `to this pipe's id "${this.#cursorKey}" and resuming from the migrated cursor.`,
+      `Found a ClickHouse cursor under the legacy default id "${LEGACY_DEFAULT_CURSOR_ID}" in ` +
+        `${this.#qualifiedName}; migrating its rows to this pipe's id "${this.#key.value}" and resuming ` +
+        `from the migrated cursor (block ${legacy.latest.number}). If several pipes shared this offset ` +
+        `table under the legacy default, this cursor belonged to only one of them — pin an explicit ` +
+        `settings.id per pipe before upgrading the rest, and reset this pipe's cursor if the resumed ` +
+        `position looks foreign.`,
     )
 
     await this.#rekeyLegacyRows()
@@ -235,16 +235,17 @@ export class ClickhouseState {
   }
 
   /**
-   * Physically move every legacy row to the current cursor key: re-insert each row with the new id
-   * (same timestamp/sign), then cancel the originals via CollapsingMergeTree sign=-1 rows. A crash
-   * between the two steps leaves the rows duplicated under both keys — harmless, since the next
-   * start finds the primary cursor and never reads the legacy key again.
+   * Physically move every legacy row to the current cursor key. Each streamed batch is written as
+   * ONE insert carrying both the re-keyed copy (same timestamp, sign=+1 under the pipe's id) and
+   * the CollapsingMergeTree cancellation of the original (sign=-1 under the legacy id), so the
+   * re-key and the cancel land together — a crash cannot leave the rows duplicated under both
+   * keys, and the legacy chain is scanned once instead of twice.
    */
   async #rekeyLegacyRows(): Promise<void> {
     const res = await this.store.query({
       query: `SELECT * FROM ${this.#qualifiedName} FINAL WHERE id = {id:String}`,
       format: 'JSONEachRow',
-      query_params: { id: LEGACY_DEFAULT_ID },
+      query_params: { id: LEGACY_DEFAULT_CURSOR_ID },
       clickhouse_settings: {
         date_time_output_format: 'iso',
         output_format_json_quote_64bit_floats: 1,
@@ -255,19 +256,20 @@ export class ClickhouseState {
     for await (const rows of res.stream<Record<string, unknown>>()) {
       await this.store.insert({
         table: this.#qualifiedName,
-        values: rows.map((row) => ({ ...(row.json() as Record<string, unknown>), id: this.#cursorKey })),
+        values: rows.flatMap((r) => {
+          const row = r.json() as Record<string, unknown>
+
+          return [
+            { ...row, id: this.#key.value },
+            { ...row, sign: -1 },
+          ]
+        }),
         format: 'JSONEachRow',
         clickhouse_settings: {
           date_time_input_format: 'best_effort',
         },
       })
     }
-
-    await this.store.removeAllRowsByQuery({
-      table: this.#qualifiedName,
-      query: `SELECT * FROM ${this.#qualifiedName} FINAL WHERE id = {id:String}`,
-      params: { id: LEGACY_DEFAULT_ID },
-    })
   }
 
   async #readLatest(id: string): Promise<TargetState | undefined> {
@@ -293,7 +295,7 @@ export class ClickhouseState {
   async fork(previousBlocks: BlockCursor[]): Promise<BlockCursor | null> {
     // Only the pipe's own rows participate: getCursor migrated any legacy-keyed rows to the
     // current key before the first read, so by fork time no other key can hold our chain.
-    return resolveForkCursor(this.#records(this.#cursorKey), previousBlocks)
+    return resolveForkCursor(this.#records(this.#key.value), previousBlocks)
   }
 
   async *#records(id: string): AsyncIterable<RollbackRecord> {

@@ -226,6 +226,59 @@ describe('Drizzle target', () => {
         }),
       )
     })
+
+    it('migrates a legacy "stream" cursor to the pipe id and resumes from it', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
+        },
+        {
+          statusCode: 200,
+          data: [{ header: { number: 2, hash: '0x2', timestamp: 2000 } }],
+          validateRequest: (req) => {
+            // Resumes where the legacy cursor left off, not from the stream beginning.
+            expect(req).toMatchObject({ fromBlock: 2, parentBlockHash: '0x1' })
+          },
+        },
+      ])
+
+      // An older SDK keyed every sync row by the static "stream" id — reproduce that state by
+      // pinning the legacy key explicitly for the first run.
+      await evmPortalStream({
+        id: 'test',
+        portal: mockPortal.url,
+        outputs: blockDecoder({ from: 0, to: 1 }),
+      }).pipeTo(
+        drizzleTarget({
+          db,
+          tables: [],
+          settings: { state: { schema: 'test', id: 'stream' } },
+          onData: async () => {},
+        }),
+      )
+
+      // Restart without an explicit id: the cursor key becomes the pipe id, the legacy rows are
+      // re-keyed to it in a single atomic UPDATE, and indexing continues from the migrated cursor.
+      await evmPortalStream({
+        id: 'test',
+        portal: mockPortal.url,
+        outputs: blockDecoder({ from: 0, to: 2 }),
+      }).pipeTo(
+        drizzleTarget({
+          db,
+          tables: [],
+          settings: { state: { schema: 'test' } },
+          onData: async () => {},
+        }),
+      )
+
+      // Every surviving sync row is keyed by the pipe id — nothing is left under "stream".
+      const rows = await getAllFromSyncTable('test')
+      expect(rows.length).toBeGreaterThan(0)
+      expect(rows.map((r) => r.id)).toEqual(rows.map(() => 'test'))
+      expect(rows.at(-1)?.current_number).toBe('2')
+    })
   })
 
   describe('forks', () => {

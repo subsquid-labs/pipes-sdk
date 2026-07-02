@@ -132,6 +132,13 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   #started = false
 
   constructor({ portal, id, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
+    // Targets key their persisted cursor by this id, and every state class treats an empty id as
+    // "not bound" and falls back to the shared legacy "stream" key — which would silently put
+    // this pipe back into the cross-pipe cursor collision the id exists to prevent.
+    if (!id?.trim()) {
+      throw new Error('PortalSource requires a non-empty "id": targets use it as the cursor key to persist progress')
+    }
+
     this.#id = id
     this.#logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ id: this.#id, level: logger })
 
