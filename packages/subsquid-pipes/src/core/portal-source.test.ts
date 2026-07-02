@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, expectTypeOf, it } from 'vitest'
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import { createTarget } from '~/core/target.js'
 import { Target } from '~/core/target.js'
-import { TransformerArgs } from '~/core/transformer.js'
+import { TransformerArgs, createTransformer } from '~/core/transformer.js'
 import { evmPortalStream } from '~/evm/index.js'
 import {
   MockPortal,
@@ -474,6 +474,81 @@ describe('Portal abstract stream', () => {
       // Floor is never seeded (only from a real finalized head), so it stays undefined.
       expect(finalizedPerBatch).toEqual([undefined])
     })
+  })
+})
+
+describe('stop lifecycle', () => {
+  let mockPortal: MockPortal
+
+  afterEach(async () => {
+    await mockPortal?.close()
+  })
+
+  it('invokes transformer stop hook exactly once on normal completion', async () => {
+    mockPortal = await createMockPortal([
+      {
+        statusCode: 200,
+        data: [
+          { header: { number: 1, hash: '0x123', timestamp: 1000 } },
+          { header: { number: 2, hash: '0x456', timestamp: 2000 } },
+        ],
+      },
+    ])
+
+    const stopSpy = vi.fn()
+
+    const stream = evmPortalStream({
+      id: 'test',
+      portal: mockPortal.url,
+      outputs: blockDecoder({ from: 0, to: 2 }),
+    }).pipe(
+      createTransformer({
+        profiler: { name: 'spy' },
+        transform: (data) => data,
+        stop: stopSpy,
+      }),
+    )
+
+    await readAll(stream)
+
+    expect(stopSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs stop hook cleanup when a transformer start hook fails', async () => {
+    mockPortal = await createMockPortal([
+      {
+        statusCode: 200,
+        data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
+      },
+    ])
+
+    const stopSpy = vi.fn()
+
+    const stream = evmPortalStream({
+      id: 'test',
+      portal: mockPortal.url,
+      outputs: blockDecoder({ from: 0, to: 1 }),
+    })
+      .pipe(
+        createTransformer({
+          profiler: { name: 'cleanup' },
+          transform: (data) => data,
+          stop: stopSpy,
+        }),
+      )
+      .pipe(
+        createTransformer({
+          profiler: { name: 'boom' },
+          transform: (data) => data,
+          start: () => {
+            throw new Error('start failed')
+          },
+        }),
+      )
+
+    await expect(readAll(stream)).rejects.toThrow('start failed')
+
+    expect(stopSpy).toHaveBeenCalledTimes(1)
   })
 })
 
