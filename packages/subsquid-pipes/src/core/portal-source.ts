@@ -290,7 +290,9 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       }
     }
 
-    await this.stop()
+    // Cleanup is owned by the callers (pipeTo/[Symbol.asyncIterator]), which run stop() in a
+    // finally on every exit path. Calling it here too is what caused the double stop() on normal
+    // completion; the idempotency guard in stop() remains as a safety net.
   }
 
   pipe<Out>(options: TransformerArgs<T, Out>): PortalSource<Q, Out> {
@@ -369,6 +371,11 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       return
     }
 
+    // Mark the stream as started before invoking user start hooks. If a transformer `start`
+    // hook rejects, the outer finally still calls stop(), and the idempotency guard there must
+    // let cleanup run for the partially-started stream instead of skipping it.
+    this.#started = true
+
     this.#logger.debug(`invoking <start> hook...`)
 
     const profiler = Span.root('start', this.#options.profiler).addLabels('core')
@@ -388,11 +395,14 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     profiler.end()
 
     this.#logger.debug(`<start> hook invoked`)
-    this.#started = true
   }
 
   /** @internal */
   async stop() {
+    if (!this.#started) {
+      this.#logger.debug(`stream is not started, skipping "stop" hook...`)
+      return
+    }
     this.#started = false
 
     const profiler = Span.root('stop', this.#options.profiler).addLabels('core')
@@ -471,8 +481,6 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
         yield batch
         this.batchEnd(batch.ctx)
       }
-    } catch (e) {
-      throw e
     } finally {
       await this.stop()
     }
