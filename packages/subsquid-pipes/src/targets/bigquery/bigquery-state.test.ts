@@ -59,3 +59,62 @@ describe('BigQueryState — resume state', () => {
     expect(resume).toEqual({ latest: block(50), finalized: null })
   })
 })
+
+describe('BigQueryState — cursor key binding', () => {
+  function keyedState(options: { id?: string } = {}) {
+    const queryParams: any[] = []
+    const walRows: any[] = []
+    const store = {
+      query: async (_sql: string, params?: Record<string, unknown>) => {
+        queryParams.push(params)
+
+        return []
+      },
+      commitSyncRow: async (_schema: unknown, row: Record<string, unknown>) => {
+        walRows.push(row)
+      },
+      executeDml: async () => ({ rowCount: 0 }),
+    }
+
+    const state = new BigQueryState({
+      store: store as any,
+      bigquery: {} as any,
+      trackedTables: [],
+      options: { projectId: 'p', dataset: 'd', ...options },
+    })
+
+    return { state, queryParams, walRows }
+  }
+
+  it('keys reads and WAL writes by the source id when no explicit id is set', async () => {
+    const { state, queryParams, walRows } = keyedState()
+    state.bindCursorKey('pipe-x')
+
+    expect(state.cursorKey).toBe('pipe-x')
+
+    await state.getCursor({ logger: createTestLogger() })
+    expect(queryParams[0]).toEqual({ id: 'pipe-x' })
+
+    await state.saveCommitPost({
+      logger: createTestLogger(),
+      cursor: block(1),
+      finalized: undefined,
+      rollbackChain: [],
+    })
+    expect(walRows[0].id).toBe('pipe-x')
+  })
+
+  it('lets an explicit options.id override the source id', () => {
+    const { state } = keyedState({ id: 'pinned' })
+    state.bindCursorKey('pipe-x')
+
+    expect(state.cursorKey).toBe('pinned')
+  })
+
+  it('falls back to the default key when no source id is bound', () => {
+    const { state } = keyedState()
+    state.bindCursorKey(undefined)
+
+    expect(state.cursorKey).toBe('stream')
+  })
+})

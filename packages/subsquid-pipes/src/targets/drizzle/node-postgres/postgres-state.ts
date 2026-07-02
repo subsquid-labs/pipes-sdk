@@ -58,7 +58,8 @@ export type StateOptions = {
 
   /**
    * Stream identifier used to isolate offset records within the same table.
-   * Defaults to "stream" if not provided.
+   * Defaults to the pipe's source `id`. Set explicitly only to pin a cursor key
+   * independent of the source id (e.g. several pipes writing to one table).
    */
   id?: string
 
@@ -73,6 +74,11 @@ export class PostgresState {
   /** Internal counter to track the number of saves for cleanup operations. */
   #saves = 0
 
+  // The id every sync row is keyed by: an explicit `options.id`, else the pipe's source id
+  // once `bindCursorKey` runs, else the default (e.g. when bind never runs in unit tests).
+  #cursorKey: string
+  readonly #explicitId: boolean
+
   constructor(
     private client: PgClient,
     options?: StateOptions,
@@ -80,20 +86,42 @@ export class PostgresState {
     this.options = {
       schema: 'public',
       table: 'sync',
-      id: 'stream',
       unfinalizedBlocksRetention: 1000,
       ...options,
+      // override after spread so an explicit `undefined` cannot clobber the default
+      id: options?.id ?? 'stream',
     }
 
     if (this.options?.unfinalizedBlocksRetention && this.options?.unfinalizedBlocksRetention <= 0) {
       throw new Error('Retention strategy must be greater than 0')
     }
 
+    // An explicit id is honoured verbatim; otherwise the source id (bound later) becomes the key,
+    // falling back to the default if `bindCursorKey` never runs.
+    this.#explicitId = options?.id !== undefined
+    this.#cursorKey = this.options.id
+
     this.#sync = {
       name: this.options.table,
       schema: this.options.schema,
       fqnName: `"${this.options.schema}"."${this.options.table}"`,
     }
+  }
+
+  /**
+   * Resolve the cursor key from the pipe's source id, unless an explicit `options.id` was given
+   * (explicit always wins). Called once by the target before any read so getCursor, saveCursor,
+   * fork and the advisory lock all key by the same value.
+   */
+  bindCursorKey(sourceId: string | undefined): void {
+    if (this.#explicitId || !sourceId) return
+
+    this.#cursorKey = sourceId
+  }
+
+  /** The id every sync row is keyed by. Exposed for tests. */
+  get cursorKey(): string {
+    return this.#cursorKey
   }
 
   /**
@@ -104,14 +132,14 @@ export class PostgresState {
    */
   async acquireLock(tx: Transaction): Promise<void> {
     const res = await tx.execute<{ got_lock: boolean }>(
-      sql`SELECT pg_try_advisory_xact_lock(hashtext(${this.options.id})::bigint) AS got_lock;`,
+      sql`SELECT pg_try_advisory_xact_lock(hashtext(${this.#cursorKey})::bigint) AS got_lock;`,
     )
 
     if (res.rows[0]?.got_lock) return
 
     throw new Error(
       [
-        `Could not acquire advisory lock for state id "${this.options.id}".`,
+        `Could not acquire advisory lock for state id "${this.#cursorKey}".`,
         `Another process might be holding the lock.`,
         `Please ensure that only one process is writing to this state at a time.`,
       ].join(' '),
@@ -135,7 +163,7 @@ export class PostgresState {
     // stays non-regressing without a target-local clamp.
     const finalizedBlock = head.finalized?.number
 
-    logger.debug(`Saving cursor at block ${current.number} for ${this.options.id} row...`)
+    logger.debug(`Saving cursor at block ${current.number} for ${this.#cursorKey} row...`)
     await parentSpan.measure({ name: 'insert cursor', labels: 'db' }, async () => {
       await tx.execute(
         sql`
@@ -143,7 +171,7 @@ export class PostgresState {
              id, current_number, current_hash, "current_timestamp", finalized, rollback_chain
           )
           VALUES (
-              ${this.options.id},
+              ${this.#cursorKey},
               ${current.number},
               ${current.hash},
               ${current.timestamp ? new Date(current.timestamp * 1000) : sql.raw('NULL')},
@@ -161,12 +189,12 @@ export class PostgresState {
         0,
       )
 
-      logger.info(`Cleaning up old offsets less than ${safeBlockNumber} block for ${this.options.id} row...`)
+      logger.info(`Cleaning up old offsets less than ${safeBlockNumber} block for ${this.#cursorKey} row...`)
 
       const res = await parentSpan.measure({ name: 'cleanup cursors', labels: 'db' }, async () => {
         return tx.execute<DeleteResult>(sql`
           DELETE FROM ${sql.raw(this.#sync.fqnName)}
-          WHERE "id" = ${this.options.id} AND "current_number" <= ${safeBlockNumber}
+          WHERE "id" = ${this.#cursorKey} AND "current_number" <= ${safeBlockNumber}
         `)
       })
 
@@ -184,7 +212,7 @@ export class PostgresState {
     try {
       const { rows } = await this.client.query<StateSelect>(
         `SELECT * FROM ${this.#sync.fqnName} WHERE id = $1 ORDER BY "current_number" DESC LIMIT 1`,
-        [this.options.id],
+        [this.#cursorKey],
       )
       const [row] = rows
       if (!row) return
@@ -226,7 +254,7 @@ export class PostgresState {
   async removeForkedRows(tx: Transaction, cursor: BlockCursor): Promise<void> {
     await tx.execute(sql`
       DELETE FROM ${sql.raw(this.#sync.fqnName)}
-      WHERE "id" = ${this.options.id} AND "current_number" > ${cursor.number}
+      WHERE "id" = ${this.#cursorKey} AND "current_number" > ${cursor.number}
     `)
   }
 
@@ -234,7 +262,7 @@ export class PostgresState {
     const PAGE_SIZE = 1000
     const client = this.client
     const fqnName = this.#sync.fqnName
-    const id = this.options.id
+    const id = this.#cursorKey
 
     async function* records(): AsyncIterable<RollbackRecord> {
       let offset = 0

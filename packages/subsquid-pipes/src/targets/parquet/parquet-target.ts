@@ -39,7 +39,10 @@ export type ParquetSettings = {
   rowGroupSize?: number
   /** Default per-column compression. Default `'SNAPPY'`. */
   compression?: Codec
-  /** Optional namespace for the state file, if multiple pipes must share one `dir`. */
+  /**
+   * Namespace for the state file, so multiple pipes can share one `dir`. Defaults to the
+   * pipe's source `id`; set explicitly only to pin the state file independent of the source id.
+   */
   id?: string
 }
 
@@ -87,7 +90,8 @@ type ParquetTargetMetrics = {
  *   goes fatal (same as the memory target).
  *
  * @param options.dir - Output directory. It is the isolation unit — **one pipe per dir**. Holds a
- *   `<table>/` sub-directory per table plus a `_sqd_parquet_state.json` cursor file.
+ *   `<table>/` sub-directory per table plus a `_sqd_parquet_state.<pipe-id>.json` cursor file
+ *   (namespaced by the pipe's source id, or by `settings.id` when set explicitly).
  * @param options.tables - Declared tables with explicit schemas; the block-number column must be
  *   present and integer-typed. Writing to an undeclared table from `onData` throws.
  * @param options.onData - Per-batch handler; call `store.insert(table, rows)` to stage rows.
@@ -111,11 +115,13 @@ export function parquetTarget<T>(options: {
   const store = new ParquetStore({ dir, tables, rowGroupSize, defaultCodec })
 
   return createTarget<T>({
-    write: async ({ read, logger }) => {
+    write: async ({ read, logger, id }) => {
       // Lazy: registered on the first batch from `ctx.metrics`.
       let metrics: ParquetTargetMetrics | undefined
 
-      const state = new ParquetState({ dir, tables: tables.map((t) => t.table), id: settings.id, logger })
+      // Namespace the state file by the pipe's source id (an explicit settings.id wins), so
+      // several pipes can share one dir without clobbering each other's cursor.
+      const state = new ParquetState({ dir, tables: tables.map((t) => t.table), id: settings.id ?? id, logger })
 
       // Tracks checkpoint progress; the closure below mutates it.
       let lastCheckpointMs = Date.now()

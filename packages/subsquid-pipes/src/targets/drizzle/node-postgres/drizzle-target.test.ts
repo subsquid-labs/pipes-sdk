@@ -131,7 +131,7 @@ describe('Drizzle target', () => {
               "hash": "0x2",
               "number": 2,
             },
-            "id": "stream",
+            "id": "test",
             "rollback_chain": [
               {
                 "hash": "0x3",
@@ -148,7 +148,7 @@ describe('Drizzle target', () => {
               "hash": "0x2",
               "number": 2,
             },
-            "id": "stream",
+            "id": "test",
             "rollback_chain": [
               {
                 "hash": "0x4",
@@ -165,7 +165,7 @@ describe('Drizzle target', () => {
               "hash": "0x2",
               "number": 2,
             },
-            "id": "stream",
+            "id": "test",
             "rollback_chain": [
               {
                 "hash": "0x5",
