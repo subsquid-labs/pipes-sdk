@@ -1,16 +1,20 @@
-# Subsquid Pipes SDK
+# SQD Pipes SDK
 
-> ⚠️ The SDK is experimental. Expect rapid iteration and occasional breaking changes.
+[![npm](https://img.shields.io/npm/v/@subsquid/pipes.svg)](https://www.npmjs.com/package/@subsquid/pipes)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
+[![docs](https://img.shields.io/badge/docs-docs.sqd.dev-3b82f6)](https://docs.sqd.dev)
 
-Subsquid Pipes is a TypeScript-first toolkit for streaming blockchain data, transforming it in-flight, and delivering the results to your own systems. It glues together:
+Documentation: https://docs.sqd.dev  ·  Website: https://sqd.dev
 
-- **Sources** that tap into managed Subsquid Portal datasets for chains like Ethereum and Solana.
+SQD Pipes is a TypeScript-first toolkit for streaming blockchain data, transforming it in-flight, and delivering the results to your own systems. It glues together:
+
+- **Sources** that tap into managed SQD Portal datasets for chains like Ethereum and Solana.
 - **Transforms/decoders** that turn raw blocks and logs into strongly-typed objects.
 - **Targets** that persist or forward processed data (ClickHouse today, with community hooks for more sinks).
 - **Observability** utilities such as profiling, structured logging, and Prometheus metrics.
 
 Every pipeline is described as a composition of these pieces via the `pipe()` helper.
-You can run the same code in CLIs, backend services
+You can run the same code in CLIs, backend services, or long-running workers.
 
 
 ---
@@ -27,9 +31,9 @@ npm install @subsquid/pipes
 
 ---
 
-## 3. Create your first pipeline
+## 2. Create your first pipeline
 
-The snippet below streams ERC-20 transfers from Ethereum Mainnet via the Subsquid Portal and prints them to the console.
+The snippet below streams ERC-20 transfers from Ethereum Mainnet via the SQD Portal and prints them to the console.
 
 Create `src/erc20-transfers.ts`:
 
@@ -67,33 +71,33 @@ You should see logs as transfers are decoded.
 
 ---
 
-## 4. Persist data (optional)
+## 3. Persist data (optional)
 
 ### ClickHouse target
 
-If you have ClickHouse and want automatic offset management, read the new guide at `docs/examples/evm/04.clickhouse.example.ts`.
+If you have ClickHouse and want automatic offset management, read the [ClickHouse example](https://github.com/subsquid-labs/pipes-sdk/blob/main/docs/examples/evm/04.clickhouse.example.ts).
 It uses the `createClickhouseTarget` from the core package to batch writes and handle forks gracefully.
 
 ### PostgreSQL with Drizzle
 
-If you prefer PostgreSQL, check out `docs/examples/evm/08.drizzle.example.ts`,
+If you prefer PostgreSQL, check out the [Drizzle example](https://github.com/subsquid-labs/pipes-sdk/blob/main/docs/examples/evm/08.drizzle.example.ts),
 which demonstrates how to use Drizzle ORM to define your schema and persist decoded data.
 
 ---
 
-## 5. Explore more examples
+## 4. Explore more examples
 
-- `docs/examples/evm` — combining sources, decoders, and targets for EVM chains.
-- `docs/examples/solana` — Solana Portal pipelines, including the new token balance over-fetch and parallel processing demos.
+- [`docs/examples/evm`](https://github.com/subsquid-labs/pipes-sdk/tree/main/docs/examples/evm): combining sources, decoders, and targets for EVM chains.
+- [`docs/examples/solana`](https://github.com/subsquid-labs/pipes-sdk/tree/main/docs/examples/solana): Solana Portal pipelines, including token balance over-fetch and parallel processing demos.
 
 From the repository root you can run any example with `pnpm tsx <path/to/example.ts>`.
 
 ---
 
-## 6. Next steps
+## 5. Next steps
 
 1. Wire your own sinks by implementing `createTarget` (see `packages/subsquid-pipes/src/targets` for references).
 2. Add instrumentation with the built-in profiler and Prometheus metrics (`packages/subsquid-pipes/src/core`).
-3. Try the UI tooling shipped in `@sqd-pipes/pipe-ui`, which now includes shared UI primitives like the Radix-based separator component.
+3. Try the UI tooling in `@sqd-pipes/pipe-ui`.
 
 Need help or found a bug? Open an issue or discussion on the repository. Happy hacking!
