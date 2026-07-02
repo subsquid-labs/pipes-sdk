@@ -26,7 +26,9 @@ export type Settings = {
    * independent of the source id (e.g. several pipes writing to one table).
    *
    * When left to default, a cursor written by an older SDK under the legacy static
-   * `"stream"` id is migrated to the pipe's id automatically on first resume.
+   * `"stream"` id is migrated to the pipe's id automatically on first resume. If several
+   * pipes shared one offset table under that legacy default, only one of them owned the
+   * surviving cursor — pin an explicit id per pipe before upgrading such setups.
    */
   id?: string
 

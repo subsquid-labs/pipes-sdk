@@ -1,5 +1,5 @@
 import { PgDialect } from 'drizzle-orm/pg-core'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { BatchContext } from '~/core/index.js'
 import { createTestLogger } from '~/testing/index.js'
@@ -163,6 +163,7 @@ describe('PostgresState — cursor key binding', () => {
     const tx = {
       execute: async (sql: any) => {
         executed.push(sql)
+
         return { rowCount: 0 }
       },
     }
@@ -182,6 +183,103 @@ describe('PostgresState — cursor key binding', () => {
     state.bindCursorKey(undefined)
 
     expect(state.cursorKey).toBe('stream')
+  })
+})
+
+describe('PostgresState — legacy cursor migration', () => {
+  // In-memory sync table keyed by id. SELECTs answer for the id they were queried with; the
+  // migration UPDATE re-keys the legacy rows atomically, honouring its NOT EXISTS guard.
+  function keyedClient(rowsById: Record<string, any[]>) {
+    const updates: { params?: unknown[] }[] = []
+    const client = {
+      query: async (text: string, params?: unknown[]) => {
+        if (text.startsWith('UPDATE')) {
+          const [newId, oldId] = params as [string, string]
+          const legacy = rowsById[oldId] ?? []
+
+          if (rowsById[newId]?.length || !legacy.length) return { rowCount: 0 }
+
+          updates.push({ params })
+          rowsById[newId] = legacy.map((r) => ({ ...r, id: newId }))
+          delete rowsById[oldId]
+
+          return { rowCount: legacy.length }
+        }
+
+        const id = params?.[0] as string
+
+        return { rows: rowsById[id] ?? [] }
+      },
+    }
+
+    return { client, updates }
+  }
+
+  const syncRow = (n: number) => ({
+    id: 'stream',
+    current_number: String(n),
+    current_hash: `0x${n}`,
+    current_timestamp: null,
+    finalized: {},
+    rollback_chain: [],
+  })
+
+  it('automatically migrates legacy "stream" rows to the pipe id, and warns', async () => {
+    const { client, updates } = keyedClient({ stream: [syncRow(50)] })
+    const warn = vi.fn()
+    const state = new PostgresState(client as any, {})
+    state.bindCursorKey('pipe-x')
+
+    const resume = await state.getCursor({ logger: { warn, debug: () => {} } as any })
+
+    expect(resume).toEqual({ latest: { number: 50, hash: '0x50' }, finalized: null })
+    expect(updates).toHaveLength(1)
+    expect(updates[0].params).toEqual(['pipe-x', 'stream'])
+    expect(warn).toHaveBeenCalledOnce()
+  })
+
+  it("prefers the pipe's own cursor and leaves the legacy rows alone once it exists", async () => {
+    const { client, updates } = keyedClient({ 'pipe-x': [{ ...syncRow(200), id: 'pipe-x' }], stream: [syncRow(50)] })
+    const state = new PostgresState(client as any, {})
+    state.bindCursorKey('pipe-x')
+
+    const resume = await state.getCursor({ logger: createTestLogger() })
+
+    expect(resume).toEqual({ latest: { number: 200, hash: '0x200' }, finalized: null })
+    expect(updates).toHaveLength(0)
+  })
+
+  it('does not migrate the legacy cursor onto an explicit options.id', async () => {
+    // An explicitly pinned key deliberately names its own cursor — inheriting the shared
+    // legacy cursor could resume a fresh pipe from a foreign position.
+    const { client, updates } = keyedClient({ stream: [syncRow(50)] })
+    const state = new PostgresState(client as any, { id: 'pinned' })
+    state.bindCursorKey('pipe-x')
+
+    await expect(state.getCursor({ logger: createTestLogger() })).resolves.toBeUndefined()
+    expect(updates).toHaveLength(0)
+  })
+
+  it('reads the legacy key in place when the cursor key IS the legacy id', async () => {
+    const { client, updates } = keyedClient({ stream: [syncRow(50)] })
+    const state = new PostgresState(client as any, {})
+    state.bindCursorKey('stream')
+
+    const resume = await state.getCursor({ logger: createTestLogger() })
+
+    expect(resume).toEqual({ latest: { number: 50, hash: '0x50' }, finalized: null })
+    expect(updates).toHaveLength(0)
+  })
+
+  it('starts fresh when neither the pipe key nor the legacy key holds a cursor', async () => {
+    const { client, updates } = keyedClient({})
+    const warn = vi.fn()
+    const state = new PostgresState(client as any, {})
+    state.bindCursorKey('pipe-x')
+
+    await expect(state.getCursor({ logger: { warn, debug: () => {} } as any })).resolves.toBeUndefined()
+    expect(updates).toHaveLength(0)
+    expect(warn).not.toHaveBeenCalled()
   })
 })
 

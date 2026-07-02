@@ -1,3 +1,4 @@
+export * from './cursor-key.js'
 export * from './errors.js'
 export * from './finalization-buffer.js'
 // Only `coerceFinalized` is consumed across module boundaries (the target state classes). The

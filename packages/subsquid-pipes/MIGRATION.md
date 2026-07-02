@@ -76,9 +76,9 @@ The `data` shape is unchanged — `data.transfers`, `data.swaps` etc. still work
 
 ## 3. Add a pipe `id` (now required)
 
-Every portal stream now requires an `id`. It must be **globally unique and stable** — targets use it as a cursor key to persist progress. Two pipes that share the same `id` will overwrite each other's cursor. The `id` is also used to scope log lines and Prometheus metric labels.
+Every portal stream now requires an `id`. It must be **globally unique, stable and non-empty** — targets use it as a cursor key to persist progress (see section 10). Two pipes that share the same `id` will overwrite each other's cursor. The `id` is also used to scope log lines and Prometheus metric labels.
 
-Calling `.pipeTo()` without an `id` throws `DefaultPipeIdError` (E0001) at startup.
+Calling `.pipeTo()` without an `id` throws `DefaultPipeIdError` (E0001) at startup; an empty or blank `id` throws at stream construction.
 
 ```ts
 // before
@@ -274,6 +274,45 @@ evmPortalStream({
 
 ---
 
+## 10. Target cursors are now keyed by the pipe `id`
+
+Previously every target persisted its cursor under the static default key `"stream"`, no matter
+which pipe wrote it — two pipes sharing one offset table silently overwrote each other's progress.
+Cursors are now keyed by the pipe's `id`. An explicit per-target id still wins and disables
+everything described below:
+
+```ts
+clickhouseTarget({ settings: { id: 'my-key' } })   // ClickHouse
+drizzleTarget({ settings: { state: { id: 'my-key' } } })  // Postgres
+bigqueryTarget({ settings: { state: { id: 'my-key' } } }) // BigQuery
+parquetTarget({ settings: { id: 'my-key' } })      // Parquet
+```
+
+### What happens on the first restart after upgrading
+
+| Target | Behaviour |
+|---|---|
+| **ClickHouse** | Sync rows left under the legacy `"stream"` key are re-keyed to the pipe `id` automatically (one-time, logged as a warning), and indexing resumes from the migrated cursor. |
+| **Postgres (Drizzle)** | Same — the legacy `"stream"` sync rows are re-keyed to the pipe `id` in a single atomic `UPDATE` and indexing resumes from the migrated cursor. |
+| **BigQuery** | **No automatic migration.** A deployment with WAL rows under `"stream"` and data in tracked tables refuses to start with `ORPHAN_TRACKED_DATA` (a deliberate guard against silent re-processing). To resume the old cursor, pin the legacy key explicitly: `settings: { state: { id: 'stream' } }`. |
+| **Parquet** | **No automatic migration.** The state file moved from `_sqd_parquet_state.json` to `_sqd_parquet_state.<pipe-id>.json`. Rename the file on disk to the new name before restarting — otherwise the pipe restarts from the beginning and fails on colliding parquet file names. (Deployments that already set an explicit `settings.id` were using the suffixed name before and are unaffected.) |
+
+### Several pipes sharing one offset table under the old default
+
+Under the shared `"stream"` key only one cursor ever survived, and it belonged to only **one** of
+those pipes. After the upgrade, the first pipe to start consumes the legacy rows — including a
+finalized watermark that is monotonic and cannot be lowered afterwards. For such setups:
+
+1. Pin an explicit per-target id on the pipe that should keep the cursor **before** upgrading.
+2. Let the other pipes start fresh under their own ids (or backfill them deliberately).
+3. Avoid starting the upgraded pipes concurrently on the very first run — the migration itself is
+   not serialized on ClickHouse.
+
+Single-pipe deployments (the common case) need no action: the cursor migrates automatically and a
+one-time warning is logged.
+
+---
+
 ## 11. Rename types
 
 | Before | After |
@@ -313,7 +352,9 @@ evmPortalStream({
 - [ ] `hyperliquidFillsPortalSource` → `hyperliquidFillsPortalStream`
 - [ ] `.pipe(decoder)` → `outputs: decoder`
 - [ ] `.pipeComposite({ ... })` → `outputs: { ... }`
-- [ ] Add a globally unique `id` to every portal stream
+- [ ] Add a globally unique, non-empty `id` to every portal stream
+- [ ] Cursor re-keying: nothing to do for single-pipe ClickHouse/Postgres (auto-migrated); BigQuery: pin `state: { id: 'stream' }` to keep the old cursor; Parquet: rename `_sqd_parquet_state.json` to `_sqd_parquet_state.<pipe-id>.json`
+- [ ] Pipes sharing one offset table under the old default: pin explicit per-target ids before upgrading
 - [ ] `factory()` → `contractFactory()`
 - [ ] `factorySqliteDatabase()` → `contractFactoryStore()`
 - [ ] `parameter` → `childAddressField` in factory options

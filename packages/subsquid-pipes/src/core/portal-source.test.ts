@@ -20,6 +20,18 @@ describe('Portal abstract stream', () => {
   })
 
   describe('common', () => {
+    it('rejects an empty source id', async () => {
+      // Targets key their persisted cursor by the source id, and an empty id would silently fall
+      // back to the shared legacy "stream" key — reintroducing cross-pipe cursor collisions.
+      expect(() =>
+        evmPortalStream({
+          id: '  ',
+          portal: 'http://localhost:1',
+          outputs: blockDecoder({ from: 0, to: 1 }),
+        }),
+      ).toThrow(/non-empty "id"/)
+    })
+
     it('should expose finalization headers', async () => {
       mockPortal = await createMockPortal([
         {
