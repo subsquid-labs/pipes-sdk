@@ -64,7 +64,11 @@ export type BigQueryStateOptions = {
   dataset: string
   /** Sync table name. Defaults to 'sync'. */
   table?: string
-  /** Stream identifier — isolates multiple logical streams sharing the same sync table. */
+  /**
+   * Stream identifier — isolates multiple logical streams sharing the same sync table.
+   * Defaults to the pipe's source `id`. Set explicitly only to pin a cursor key independent
+   * of the source id.
+   */
   id?: string
   /** Maximum number of sync rows to retain per stream id. Defaults to 10_000. */
   maxRows?: number
@@ -107,6 +111,11 @@ export class BigQueryState {
   #saves = 0
   #lastCommittedCursor: BlockCursor | undefined
 
+  // The id every WAL row is keyed by: an explicit `options.id`, else the pipe's source id once
+  // `bindCursorKey` runs, else the default (e.g. when bind never runs in unit tests).
+  #cursorKey: string
+  readonly #explicitId: boolean
+
   constructor({
     store,
     bigquery,
@@ -130,6 +139,27 @@ export class BigQueryState {
       cleanupEverySaves: options.cleanupEverySaves ?? 25,
     }
     this.#fqn = `${this.options.projectId}.${this.options.dataset}.${this.options.table}`
+
+    // An explicit id is honoured verbatim; otherwise the source id (bound later) becomes the key,
+    // falling back to the default if `bindCursorKey` never runs.
+    this.#explicitId = options.id !== undefined
+    this.#cursorKey = this.options.id
+  }
+
+  /**
+   * Resolve the cursor key from the pipe's source id, unless an explicit `options.id` was given
+   * (explicit always wins). Called once by the target before any read so getCursor, the WAL
+   * writes, fork and cleanup all key by the same value.
+   */
+  bindCursorKey(sourceId: string | undefined): void {
+    if (this.#explicitId || !sourceId) return
+
+    this.#cursorKey = sourceId
+  }
+
+  /** The id every WAL row is keyed by. Exposed for tests. */
+  get cursorKey(): string {
+    return this.#cursorKey
   }
 
   /**
@@ -206,21 +236,21 @@ export class BigQueryState {
       throw new BigQueryTargetError(
         BQ_ERR.CORRUPT_INFLIGHT_ROW,
         `Internal: sync row in ${row.op} IN_FLIGHT state has NULL range_low/range_high; ` +
-          `cannot recover. Manual intervention needed: inspect ${this.#fqn} for id=${this.options.id}.`,
+          `cannot recover. Manual intervention needed: inspect ${this.#fqn} for id=${this.#cursorKey}.`,
       )
     }
 
     const range = low === high ? `block ${formatBlock(low)}` : `blocks ${formatBlock(low)} → ${formatBlock(high)}`
     const action = row.op === 'commit' ? 'unfinished write' : 'unfinished rollback'
     logger.warn(
-      `Crash recovery (id=${this.options.id}): previous run left an ${action}; ` +
+      `Crash recovery (id=${this.#cursorKey}): previous run left an ${action}; ` +
         `cleaning up ${range} from ${this.#trackedTables.length} tracked table(s) before resuming.`,
     )
 
     if (low <= high) await this.#recoveryDeleteRange(low, high)
 
     await this.#writeRow({
-      id: this.options.id,
+      id: this.#cursorKey,
       op: 'rollback',
       current: cursor ? encodeCursor(cursor) : null,
       finalized: row.finalized,
@@ -260,7 +290,7 @@ export class BigQueryState {
     range,
   }: WalCommitArgs & { range: { low: number; high: number } }): Promise<void> {
     await this.#writeRow({
-      id: this.options.id,
+      id: this.#cursorKey,
       op: 'commit',
       current: cursor ? encodeCursor(cursor) : null,
       finalized: finalized ? encodeCursor(finalized) : null,
@@ -283,7 +313,7 @@ export class BigQueryState {
     rollbackChain,
   }: WalCommitArgs & { logger: Logger; cursor: BlockCursor }): Promise<void> {
     await this.#writeRow({
-      id: this.options.id,
+      id: this.#cursorKey,
       op: 'commit',
       current: encodeCursor(cursor),
       finalized: finalized ? encodeCursor(finalized) : null,
@@ -312,7 +342,7 @@ export class BigQueryState {
     range,
   }: WalCommitArgs & { cursor: BlockCursor; range: { low: number; high: number } }): Promise<void> {
     await this.#writeRow({
-      id: this.options.id,
+      id: this.#cursorKey,
       op: 'rollback',
       current: encodeCursor(cursor),
       finalized: finalized ? encodeCursor(finalized) : null,
@@ -329,7 +359,7 @@ export class BigQueryState {
    */
   async saveRollbackPost({ cursor, finalized, rollbackChain }: WalCommitArgs & { cursor: BlockCursor }): Promise<void> {
     await this.#writeRow({
-      id: this.options.id,
+      id: this.#cursorKey,
       op: 'rollback',
       current: encodeCursor(cursor),
       finalized: finalized ? encodeCursor(finalized) : null,
@@ -389,7 +419,7 @@ export class BigQueryState {
         )
     `
     try {
-      const { rowCount } = await this.#store.executeDml(sql, { id: this.options.id, keep: this.options.maxRows })
+      const { rowCount } = await this.#store.executeDml(sql, { id: this.#cursorKey, keep: this.options.maxRows })
       if (rowCount > 0) logger.debug(`Cleaned ${rowCount} old sync rows from ${this.#fqn}`)
     } catch (e) {
       logger.warn(`Sync cleanup failed (non-fatal): ${e instanceof Error ? e.message : String(e)}`)
@@ -427,7 +457,7 @@ export class BigQueryState {
       if (probe.length > 0) {
         throw new BigQueryTargetError(
           BQ_ERR.ORPHAN_TRACKED_DATA,
-          `Sync table \`${this.#fqn}\` has no rows for id='${this.options.id}', but tracked ` +
+          `Sync table \`${this.#fqn}\` has no rows for id='${this.#cursorKey}', but tracked ` +
             `table \`${t.fqn}\` still holds data from a prior run. Refusing to restart from the ` +
             `initial cursor — that would re-process every block and duplicate every row.\n\n` +
             `If this is intentional (you manually reset the sync table and want a fresh run), ` +
@@ -440,7 +470,7 @@ export class BigQueryState {
   async #fetchLatestRow(): Promise<SyncRow | undefined> {
     const rows = await this.#store.query<SyncRow>(
       `SELECT * FROM \`${this.#fqn}\` WHERE \`id\` = @id ORDER BY \`timestamp\` DESC LIMIT 1`,
-      { id: this.options.id },
+      { id: this.#cursorKey },
     )
     return rows[0]
   }
@@ -470,7 +500,7 @@ export class BigQueryState {
     const PAGE_SIZE = 1000
     let cutoff: string | number | undefined
     while (true) {
-      const params: Record<string, unknown> = { id: this.options.id, limit: PAGE_SIZE }
+      const params: Record<string, unknown> = { id: this.#cursorKey, limit: PAGE_SIZE }
       let where = `\`id\` = @id AND \`committed\` = TRUE`
       if (cutoff !== undefined) {
         params['cutoff'] = cutoff

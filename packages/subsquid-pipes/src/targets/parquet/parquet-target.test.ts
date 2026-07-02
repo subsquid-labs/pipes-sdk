@@ -376,7 +376,11 @@ describe('parquetTarget', () => {
   describe('recovery', () => {
     it('removes over-cursor and temp files, resumes from the cursor, stays duplicate-free', async () => {
       // Seed a committed cursor at block 2, a stale data file above it, and an orphan temp file.
-      await writeFile(path.join(dir, '_sqd_parquet_state.json'), JSON.stringify({ cursor: { number: 2, hash: '0x2' } }))
+      // The state file is namespaced by the pipe id ('test') the runs below use.
+      await writeFile(
+        path.join(dir, '_sqd_parquet_state.test.json'),
+        JSON.stringify({ cursor: { number: 2, hash: '0x2' } }),
+      )
       const blocksDir = path.join(dir, 'blocks')
       await mkdir(blocksDir, { recursive: true })
       await seedParquetFile(path.join(blocksDir, '000000000003-000000000005.parquet'), [
@@ -416,9 +420,9 @@ describe('parquetTarget', () => {
         parquetTarget({ dir, tables: [BLOCKS_TABLE], onData: insertBlocks }),
       )
 
-      // The loop threads the finalized head into saveCursor, so the state file carries it for the
-      // source to re-seed its watermark on restart.
-      const persisted = JSON.parse(await readFile(path.join(dir, '_sqd_parquet_state.json'), 'utf8'))
+      // The loop threads the finalized head into saveCursor, so the state file (namespaced by the
+      // pipe id) carries it for the source to re-seed its watermark on restart.
+      const persisted = JSON.parse(await readFile(path.join(dir, '_sqd_parquet_state.test.json'), 'utf8'))
       expect(persisted.cursor).toEqual({ number: 3, hash: '0x3' })
       expect(persisted.finalized).toEqual({ number: 3, hash: '0x3' })
     })
@@ -649,8 +653,9 @@ describe('parquetTarget', () => {
       expect(await listDataFiles(dir, 'blocks')).toEqual([])
       // ...no temp file leaked...
       expect((await listAll(dir, 'blocks')).filter((f) => f.startsWith('.tmp-'))).toEqual([])
-      // ...and the cursor was never persisted (no checkpoint happened).
-      expect((await listAll(dir, '')).includes('_sqd_parquet_state.json')).toBe(false)
+      // ...and the cursor was never persisted (no checkpoint happened). The pipe runs with
+      // id 'test', so the namespaced state file is the one that must be absent.
+      expect((await listAll(dir, '')).includes('_sqd_parquet_state.test.json')).toBe(false)
     })
   })
 

@@ -141,6 +141,50 @@ describe('PostgresState — fork', () => {
   })
 })
 
+describe('PostgresState — cursor key binding', () => {
+  it('keys reads and saves by the source id when no explicit id is set', async () => {
+    const queries: { params?: unknown[] }[] = []
+    const client = {
+      query: async (_text: string, params?: unknown[]) => {
+        queries.push({ params })
+
+        return { rows: [] }
+      },
+    }
+    const state = new PostgresState(client as any, {})
+    state.bindCursorKey('pipe-x')
+
+    expect(state.cursorKey).toBe('pipe-x')
+
+    await state.getCursor({ logger: createTestLogger() })
+    expect(queries[0].params).toEqual(['pipe-x'])
+
+    const executed: any[] = []
+    const tx = {
+      execute: async (sql: any) => {
+        executed.push(sql)
+        return { rowCount: 0 }
+      },
+    }
+    await state.saveCursor(tx as any, ctxFor(block(130), block(120), []))
+    expect(paramsOf(executed[0])).toContain('pipe-x')
+  })
+
+  it('lets an explicit options.id override the source id', () => {
+    const state = new PostgresState({ query: async () => ({ rows: [] }) } as any, { id: 'pinned' })
+    state.bindCursorKey('pipe-x')
+
+    expect(state.cursorKey).toBe('pinned')
+  })
+
+  it('falls back to the default key when no source id is bound', () => {
+    const state = new PostgresState({ query: async () => ({ rows: [] }) } as any, {})
+    state.bindCursorKey(undefined)
+
+    expect(state.cursorKey).toBe('stream')
+  })
+})
+
 describe('PostgresState — fork cleanup', () => {
   it('deletes the now-dead sync rows above the fork cursor', async () => {
     const state = await seededState(block(100))

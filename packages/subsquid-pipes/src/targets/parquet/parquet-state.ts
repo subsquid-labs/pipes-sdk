@@ -31,7 +31,10 @@ export type ParquetStateOptions = {
   dir: string
   /** Declared table names; their sub-directories are created on startup. */
   tables: string[]
-  /** Optional namespace so multiple pipes can share a dir (separate state files). */
+  /**
+   * Namespace so multiple pipes can share a dir (separate state files). The target passes the
+   * pipe's source id unless an explicit `settings.id` pins it.
+   */
   id?: string
   logger: Logger
 }
@@ -39,9 +42,10 @@ export type ParquetStateOptions = {
 /**
  * Durable cursor + crash recovery for the Parquet target.
  *
- * The output directory is the isolation unit — one pipe per dir — which removes any dependency
- * on `ctx.id` being available before the first batch. The cursor is persisted to a single JSON
- * file written atomically (temp + fsync + rename + dir fsync).
+ * The output directory is the primary isolation unit — one pipe per dir — and the state file is
+ * additionally namespaced by the pipe's id, so several pipes can share a dir with separate
+ * cursors. The cursor is persisted to a single JSON file written atomically (temp + fsync +
+ * rename + dir fsync).
  *
  * Recovery on startup reconciles the on-disk files with the committed cursor: any published file
  * holding blocks above the cursor is a remnant of a checkpoint that published files but crashed

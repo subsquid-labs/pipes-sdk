@@ -72,7 +72,11 @@ export function drizzleTarget<T>({
   }
 
   return createTarget<T>({
-    write: async ({ read, logger }) => {
+    write: async ({ read, logger, id }) => {
+      // Key the cursor by the pipe's source id (unless an explicit settings.state.id was given),
+      // so progress is isolated per pipe. Must run before getCursor so read and write agree.
+      state.bindCursorKey(id)
+
       const cursor = await state.getCursor({
         logger,
       })
