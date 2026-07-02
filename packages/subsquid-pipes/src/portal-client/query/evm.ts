@@ -1,29 +1,31 @@
 import {
-  array,
+  ANY_NAT,
   BYTES,
-  constant,
   NAT,
+  QTY,
+  STRING,
+  Validator,
+  array,
+  constant,
   nullable,
   object,
   oneOf,
   option,
-  QTY,
-  STRING,
   taggedUnion,
-  Validator,
   withDefault,
 } from '@subsquid/util-internal-validation'
+
 import {
   ConditionalOmit,
   Hex,
   type ObjectValidatorShape,
   PortalQuery,
-  project,
   Select,
   type Selected,
   Selector,
   Simplify,
   Trues,
+  project,
 } from './common.js'
 
 type AddPrefix<Prefix extends string, S> = S extends string ? `${Prefix}${Capitalize<S>}` : never
@@ -57,12 +59,20 @@ export type BlockHeaderFields = {
   blobGasUsed: bigint
   excessBlobGas: bigint
   l1BlockNumber?: number
+  uncles?: Hex[]
+  withdrawalsRoot?: Hex
+  withdrawals?: {
+    index: bigint
+    validatorIndex: bigint
+    address: Hex
+    amount: bigint
+  }[]
 }
 
 export type TransactionFields = {
   transactionIndex: number
   hash: Hex
-  nonce: number
+  nonce: bigint
   from: Hex
   to?: Hex
   input: Hex
@@ -83,7 +93,12 @@ export type TransactionFields = {
   effectiveGasPrice: bigint
   type: number
   status: number
+  logsBloom?: Hex
   blobVersionedHashes?: Hex[]
+  accessList?: {
+    address: Hex
+    storageKeys: Hex[]
+  }[]
 
   l1Fee?: bigint
   l1FeeScalar?: number
@@ -156,7 +171,7 @@ export type TraceSuicideFields = TraceBaseFields & {
 
 export type TraceSuicideActionFields = {
   address: Hex
-  refundAddress: Hex
+  refundAddress: Hex | null
   balance: bigint
 }
 
@@ -431,6 +446,9 @@ const BlockHeaderShape: ObjectValidatorShape<BlockHeaderFields> = {
   blobGasUsed: QTY,
   excessBlobGas: QTY,
   l1BlockNumber: option(NAT),
+  uncles: option(array(BYTES)),
+  withdrawalsRoot: option(BYTES),
+  withdrawals: option(array(object({ index: QTY, validatorIndex: QTY, address: BYTES, amount: QTY }))),
 }
 
 const LogShape: ObjectValidatorShape<LogFields> = {
@@ -445,7 +463,7 @@ const LogShape: ObjectValidatorShape<LogFields> = {
 const TransactionShape: ObjectValidatorShape<TransactionFields> = {
   transactionIndex: NAT,
   hash: BYTES,
-  nonce: NAT,
+  nonce: ANY_NAT,
   from: BYTES,
   to: option(BYTES),
   input: BYTES,
@@ -466,7 +484,9 @@ const TransactionShape: ObjectValidatorShape<TransactionFields> = {
   effectiveGasPrice: QTY,
   type: NAT,
   status: NAT,
+  logsBloom: option(BYTES),
   blobVersionedHashes: option(array(BYTES)),
+  accessList: option(array(object({ address: BYTES, storageKeys: array(BYTES) }))),
   l1Fee: option(QTY),
   l1FeeScalar: option(NAT),
   l1GasPrice: option(QTY),
@@ -611,7 +631,7 @@ const TraceCallResultShape: ObjectValidatorShape<TraceCallResultFields> = {
 
 const TraceSuicideActionShape: ObjectValidatorShape<TraceSuicideActionFields> = {
   address: BYTES,
-  refundAddress: BYTES,
+  refundAddress: nullable(BYTES),
   balance: QTY,
 }
 

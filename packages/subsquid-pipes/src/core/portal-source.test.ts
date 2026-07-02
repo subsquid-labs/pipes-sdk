@@ -1,28 +1,42 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, expectTypeOf, it } from 'vitest'
 
-import { evmPortalSource } from '~/evm/index.js'
+import { createTarget } from '~/core/target.js'
+import { Target } from '~/core/target.js'
+import { TransformerArgs } from '~/core/transformer.js'
+import { evmPortalStream } from '~/evm/index.js'
 import {
   MockPortal,
-  blockTransformer,
-  closeMockPortal,
+  blockDecoder,
   createFinalizedMockPortal,
   createMockPortal,
   readAll,
-} from '~/tests/index.js'
+} from '~/testing/index.js'
 
 describe('Portal abstract stream', () => {
   let mockPortal: MockPortal
 
   afterEach(async () => {
-    await closeMockPortal(mockPortal)
+    await mockPortal?.close()
   })
 
   describe('common', () => {
+    it('rejects an empty source id', async () => {
+      // Targets key their persisted cursor by the source id, and an empty id would silently fall
+      // back to the shared legacy "stream" key — reintroducing cross-pipe cursor collisions.
+      expect(() =>
+        evmPortalStream({
+          id: '  ',
+          portal: 'http://localhost:1',
+          outputs: blockDecoder({ from: 0, to: 1 }),
+        }),
+      ).toThrow(/non-empty "id"/)
+    })
+
     it('should expose finalization headers', async () => {
       mockPortal = await createMockPortal([
         {
           statusCode: 200,
-          data: [{ header: { number: 2, hash: '0x456' } }],
+          data: [{ header: { number: 2, hash: '0x456', timestamp: 2000 } }],
           head: {
             finalized: { number: 10, hash: '0xfinalized' },
             latest: { number: 12 },
@@ -30,16 +44,17 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
-        query: { from: 0, to: 2 },
-      }).pipe(blockTransformer())
+        outputs: blockDecoder({ from: 0, to: 2 }),
+      })
 
       let firstCtx
       for await (const { ctx } of stream) {
         firstCtx = {
-          head: ctx.head,
-          progress_state: ctx.state.progress?.state,
+          head: ctx.stream.head,
+          progress_state: ctx.stream.progress?.state,
         }
       }
 
@@ -69,7 +84,7 @@ describe('Portal abstract stream', () => {
       mockPortal = await createMockPortal([
         {
           statusCode: 200,
-          data: [{ header: { number: 14, hash: '0x456' } }], // latest block is 14 in data
+          data: [{ header: { number: 14, hash: '0x456', timestamp: 14000 } }], // latest block is 14 in data
           head: {
             finalized: { number: 10, hash: '0xfinalized' },
             latest: { number: 12 }, // but 12 in header
@@ -77,16 +92,17 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
-        query: { from: 0, to: 2 },
-      }).pipe(blockTransformer())
+        outputs: blockDecoder({ from: 0, to: 2 }),
+      })
 
       let firstCtx
       for await (const { ctx } of stream) {
         firstCtx = {
-          head: ctx.head,
-          progress_state: ctx.state.progress?.state,
+          head: ctx.stream.head,
+          progress_state: ctx.stream.progress?.state,
         }
       }
 
@@ -125,20 +141,22 @@ describe('Portal abstract stream', () => {
         },
         {
           statusCode: 200,
-          data: [{ header: { number: 1, hash: '0x123' } }],
+          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
-        query: { from: 0, to: 1 },
-      }).pipe(blockTransformer())
+        outputs: blockDecoder({ from: 0, to: 1 }),
+      })
 
       expect(await readAll(stream)).toMatchInlineSnapshot(`
         [
           {
             "hash": "0x123",
             "number": 1,
+            "timestamp": 1000,
           },
         ]
       `)
@@ -150,66 +168,72 @@ describe('Portal abstract stream', () => {
       mockPortal = await createMockPortal([
         {
           statusCode: 200,
-          data: [{ header: { number: 1, hash: '0x123' } }, { header: { number: 2, hash: '0x456' } }],
+          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }, { header: { number: 2, hash: '0x456', timestamp: 2000 } }],
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: mockPortal.url,
-        query: { from: 0, to: 2 },
-      }).pipe(blockTransformer())
+        outputs: blockDecoder({ from: 0, to: 2 }),
+      })
 
       const res = await readAll(stream)
 
       expect(res).toMatchInlineSnapshot(`
-      [
-        {
-          "hash": "0x123",
-          "number": 1,
-        },
-        {
-          "hash": "0x456",
-          "number": 2,
-        },
-      ]
-    `)
+        [
+          {
+            "hash": "0x123",
+            "number": 1,
+            "timestamp": 1000,
+          },
+          {
+            "hash": "0x456",
+            "number": 2,
+            "timestamp": 2000,
+          },
+        ]
+      `)
     })
 
     it('should retries 10 by default', async () => {
       mockPortal = await createMockPortal([
         {
           statusCode: 200,
-          data: [{ header: { number: 1, hash: '0x123' } }],
+          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
         },
         ...new Array(10).fill({ statusCode: 503 }),
         {
           statusCode: 200,
-          data: [{ header: { number: 2, hash: '0x456' } }],
+          data: [{ header: { number: 2, hash: '0x456', timestamp: 2000 } }],
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: {
           url: mockPortal.url,
           http: { retrySchedule: [0] },
         },
-        query: { from: 0, to: 2 },
-      }).pipe(blockTransformer())
+        outputs: blockDecoder({ from: 0, to: 2 }),
+      })
 
       const res = await readAll(stream)
 
       expect(res).toMatchInlineSnapshot(`
-      [
-        {
-          "hash": "0x123",
-          "number": 1,
-        },
-        {
-          "hash": "0x456",
-          "number": 2,
-        },
-      ]
-    `)
+        [
+          {
+            "hash": "0x123",
+            "number": 1,
+            "timestamp": 1000,
+          },
+          {
+            "hash": "0x456",
+            "number": 2,
+            "timestamp": 2000,
+          },
+        ]
+      `)
     })
 
     it('should throw an error after max retries', async () => {
@@ -221,7 +245,8 @@ describe('Portal abstract stream', () => {
         ...new Array(2).fill({ statusCode: 503 }),
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: {
           url: mockPortal.url,
           http: {
@@ -229,8 +254,8 @@ describe('Portal abstract stream', () => {
             retrySchedule: [0],
           },
         },
-        query: { from: 0, to: 2 },
-      }).pipe(blockTransformer())
+        outputs: blockDecoder({ from: 0, to: 2 }),
+      })
 
       await expect(readAll(stream)).rejects.toThrow(`Got 503 from ${mockPortal.url}`)
       await stream.stop()
@@ -245,6 +270,7 @@ describe('Portal abstract stream', () => {
               header: {
                 number: 100_000_000,
                 hash: '0x100000000',
+                timestamp: 100_000_000_000,
               },
             },
           ],
@@ -273,13 +299,14 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: {
           url: mockPortal.url,
           http: { retryAttempts: 0, retrySchedule: [0] },
         },
-        query: { from: 0, to: 100_000_001 },
-      }).pipe(blockTransformer())
+        outputs: blockDecoder({ from: 0, to: 100_000_001 }),
+      })
 
       await expect(readAll(stream)).rejects.toThrow(
         [
@@ -295,37 +322,169 @@ describe('Portal abstract stream', () => {
     })
   })
 
+  describe('pipe/pipeTo', () => {
+    it('should not throw when a transform function is passed to .pipe()', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
+        },
+      ])
+
+      const stream = evmPortalStream({
+        id: 'test',
+        portal: mockPortal.url,
+        outputs: blockDecoder({ from: 0, to: 1 }),
+      })
+
+      expect(() => stream.pipe((data: any) => data)).not.toThrow()
+    })
+
+    it('should not throw when a target is passed to .pipeTo()', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
+        },
+      ])
+
+      const stream = evmPortalStream({
+        id: 'test',
+        portal: mockPortal.url,
+        outputs: blockDecoder({ from: 0, to: 1 }),
+      })
+
+      const target = createTarget({
+        write: async () => {},
+      })
+
+      expect(() => stream.pipeTo(target as any)).not.toThrow()
+    })
+  })
+
   describe('finalized', () => {
     it('should receive all finalized data and stop', async () => {
       mockPortal = await createFinalizedMockPortal([
         {
           statusCode: 200,
-          data: [{ header: { number: 1, hash: '0x123' } }, { header: { number: 2, hash: '0x456' } }],
+          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }, { header: { number: 2, hash: '0x456', timestamp: 2000 } }],
         },
       ])
 
-      const stream = evmPortalSource({
+      const stream = evmPortalStream({
+        id: 'test',
         portal: {
           url: mockPortal.url,
           finalized: true,
         },
-        query: { from: 0, to: 2 },
-      }).pipe(blockTransformer())
+        outputs: blockDecoder({ from: 0, to: 2 }),
+      })
 
       const res = await readAll(stream)
 
       expect(res).toMatchInlineSnapshot(`
-      [
-        {
-          "hash": "0x123",
-          "number": 1,
-        },
-        {
-          "hash": "0x456",
-          "number": 2,
-        },
-      ]
-    `)
+        [
+          {
+            "hash": "0x123",
+            "number": 1,
+            "timestamp": 1000,
+          },
+          {
+            "hash": "0x456",
+            "number": 2,
+            "timestamp": 2000,
+          },
+        ]
+      `)
     })
+  })
+
+  describe('finalized watermark (centralized clamp)', () => {
+    it('clamps a transient missing finalized head up to the persisted floor', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 6, hash: '0x6', timestamp: 6000 } }],
+          // finalized header dropped on this batch
+        },
+      ])
+
+      const stream = evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 6 }) })
+
+      const seen: unknown[] = []
+      const target = createTarget({
+        write: async ({ read }) => {
+          for await (const { ctx } of read({ latest: { number: 5, hash: '0x5' }, finalized: { number: 5, hash: '0x5f' } })) {
+            seen.push(ctx.stream.head.finalized)
+          }
+        },
+      })
+      await stream.pipeTo(target as any)
+
+      // The dropped header must not leak as `undefined` (which would collapse the buffer threshold
+      // to Infinity and release unfinalized rows); it clamps back up to the persisted floor (5).
+      expect(seen).toEqual([{ number: 5, hash: '0x5f' }])
+    })
+
+    it('seeds the floor from the target resume state and clamps a regression below it (restart-mid-fork)', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 6, hash: '0x6', timestamp: 6000 } }],
+          // first batch after restart reports a finalized head (3) below the persisted floor (5)
+          head: { finalized: { number: 3, hash: '0x3f' }, latest: { number: 10 } },
+        },
+      ])
+
+      const stream = evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 6 }) })
+
+      const seen: unknown[] = []
+      const target = createTarget({
+        write: async ({ read }) => {
+          for await (const { ctx } of read({ latest: { number: 5, hash: '0x5' }, finalized: { number: 5, hash: '0x5f' } })) {
+            seen.push(ctx.stream.head.finalized)
+          }
+        },
+      })
+      await stream.pipeTo(target as any)
+
+      // The persisted floor (5) survives the restart and clamps the lower reported head (3).
+      expect(seen).toEqual([{ number: 5, hash: '0x5f' }])
+    })
+
+    it('leaves finalized undefined for a no-finality dataset (passthrough)', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [
+            { header: { number: 1, hash: '0x1', timestamp: 1000 } },
+            { header: { number: 2, hash: '0x2', timestamp: 2000 } },
+          ],
+          // no head at all → no finality
+        },
+      ])
+
+      const stream = evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 2 }) })
+
+      const finalizedPerBatch = []
+      for await (const { ctx } of stream) {
+        finalizedPerBatch.push(ctx.stream.head.finalized)
+      }
+
+      // Floor is never seeded (only from a real finalized head), so it stays undefined.
+      expect(finalizedPerBatch).toEqual([undefined])
+    })
+  })
+})
+
+describe('pipe/pipeTo type guards', () => {
+  it('pipe() should not accept objects with a write() method (Target)', () => {
+    type SinkLike = { write: () => void }
+    expectTypeOf<SinkLike>().not.toMatchTypeOf<TransformerArgs<any, any>>()
+  })
+
+  it('pipeTo() should not accept plain functions', () => {
+    type Fn = (data: any) => any
+    expectTypeOf<Fn>().not.toMatchTypeOf<Target<any>>()
   })
 })

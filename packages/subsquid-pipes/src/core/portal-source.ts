@@ -1,5 +1,5 @@
-import { CompositePipe, compositeTransformer } from '~/core/composite-transformer.js'
 import {
+  ApiDataset,
   GetBlock,
   PortalClient,
   PortalClientOptions,
@@ -9,13 +9,15 @@ import {
 } from '~/portal-client/index.js'
 
 import { last } from '../internal/array.js'
-import { Logger, formatWarning } from './logger.js'
+import { ForkCursorMissingError, ForkNoPreviousBlocksError, TargetForkNotSupportedError } from './errors.js'
+import { FinalizedWatermark } from './finalized-watermark.js'
+import { LogLevel, Logger, createDefaultLogger, formatWarning } from './logger.js'
 import { Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
-import { Profiler, Span } from './profiling.js'
-import { ProgressState, StartState } from './progress-tracker.js'
+import { Profiler, Span, SpanHooks } from './profiling.js'
+import { ProgressEvent, StartEvent } from './progress-tracker.js'
 import { QueryBuilder, hashQuery } from './query-builder.js'
-import { Target } from './target.js'
-import { Transformer, TransformerOptions } from './transformer.js'
+import { Target, TargetState } from './target.js'
+import { QueryAwareTransformer, Transformer, TransformerArgs, TransformerOptions } from './transformer.js'
 import { BlockCursor, Ctx } from './types.js'
 
 const NOT_REAL_TIME_WARNING = (name: string) => {
@@ -32,7 +34,8 @@ export interface PortalCache {
   getStream<Q extends Query>(options: { portal: PortalClient; query: Q; logger: Logger }): PortalStream<GetBlock<Q>>
 }
 
-export type BatchCtx = {
+export type BatchStreamContext = {
+  dataset: ApiDataset
   head: {
     finalized?: BlockCursor
     latest?: BlockCursor
@@ -47,25 +50,28 @@ export type BatchCtx = {
      * and enabling rollback to a valid chain state when a fork is detected.
      */
     rollbackChain: BlockCursor[]
-    /**
-     * Current progress state of batch processing. Contains information about
-     * the completion percentage, processed blocks count, and other metrics
-     * that help track the indexing progress.
-     */
-    progress?: ProgressState
   }
-  meta: {
-    bytesSize: number
-    requests: Record<number, number>
-    lastBlockReceivedAt: Date
-  }
+  progress?: ProgressEvent['progress']
   query: { url: string; hash: string; raw: any }
+}
+
+export type BatchMetadata = {
+  blocksCount: number
+  bytesSize: number
+  requests: Record<number, number>
+  lastBlockReceivedAt: Date
+}
+
+export type BatchContext = {
+  id: string
   profiler: Profiler
   metrics: Metrics
   logger: Logger
+  stream: BatchStreamContext
+  batch: BatchMetadata
 }
 
-export type PortalBatch<T = any> = { data: T; ctx: BatchCtx }
+export type PortalBatch<T = any> = { data: T; ctx: BatchContext }
 
 type PartialBlock = { header: { number: number; hash: string; timestamp?: number } }
 
@@ -86,34 +92,56 @@ export function extractRollbackChain({ blocks, head }: { blocks: PartialBlock[];
 }
 
 export type PortalSourceOptions<Query> = {
+  /**
+   * Globally unique, stable identifier for this pipe.
+   * Targets use it as a cursor key to persist progress — two pipes with the
+   * same `id` will share (and overwrite) each other's cursor.
+   */
+  id: string
   portal: string | PortalClientOptions | PortalClient
   query: Query
-  logger: Logger
-  profiler?: boolean
+  logger?: Logger | LogLevel
+  profiler?: boolean | SpanHooks
   cache?: PortalCache
   transformers?: Transformer<any, any>[]
   metrics?: MetricsServer
   progress?: {
     interval?: number
-    onStart?: (data: StartState) => void
-    onProgress?: (progress: ProgressState) => void
+    onStart?: (data: StartEvent) => void
+    onProgress?: (progress: ProgressEvent) => void
   }
 }
 
 export class PortalSource<Q extends QueryBuilder<any>, T = any> {
+  readonly #id: string
   readonly #options: {
-    profiler: boolean
+    profiler: boolean | SpanHooks
     cache?: PortalCache
   }
   readonly #queryBuilder: Q
   readonly #logger: Logger
   readonly #portal: PortalClient
   readonly #metricServer: MetricsServer
-  readonly #transformers: Transformer<any, any>[]
-
+  readonly #transformers: Transformer<any, any>[] = []
+  // Single monotonic finalized high-watermark for the whole pipe. Owned here (not
+  // per-target) so a source-switch reporting a deeper/transiently-missing finalized
+  // head can never un-finalize already-committed data, and every consumer — the
+  // finalization buffer AND the targets' saveCursor path — gets one consistent,
+  // never-regressing finalized head. Seeded from the target's persisted floor.
+  readonly #watermark = new FinalizedWatermark()
   #started = false
 
-  constructor({ portal, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
+  constructor({ portal, id, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
+    // Targets key their persisted cursor by this id, and every state class treats an empty id as
+    // "not bound" and falls back to the shared legacy "stream" key — which would silently put
+    // this pipe back into the cross-pipe cursor collision the id exists to prevent.
+    if (!id?.trim()) {
+      throw new Error('PortalSource requires a non-empty "id": targets use it as the cursor key to persist progress')
+    }
+
+    this.#id = id
+    this.#logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ id: this.#id, level: logger })
+
     this.#portal =
       portal instanceof PortalClient
         ? portal
@@ -122,14 +150,14 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
               ? {
                   url: portal,
                   http: {
-                    logger,
+                    logger: this.#logger,
                     retryAttempts: Number.MAX_SAFE_INTEGER,
                   },
                 }
               : {
                   ...portal,
                   http: {
-                    logger,
+                    logger: this.#logger,
                     retryAttempts: Number.MAX_SAFE_INTEGER,
                     ...portal.http,
                   },
@@ -137,24 +165,26 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
           )
 
     this.#queryBuilder = query
-    this.#logger = logger
+
     this.#options = {
       cache: options.cache,
       profiler: typeof options.profiler === 'undefined' ? process.env.NODE_ENV !== 'production' : options.profiler,
     }
-    this.#metricServer = options.metrics ?? noopMetricsServer()
-    this.#metricServer.setLogger?.(this.#logger)
 
+    this.#metricServer = options.metrics ?? noopMetricsServer()
     this.#transformers = options.transformers || []
+
+    this.#metricServer.registerPipe(this.#id)
   }
 
-  private async *read(cursor?: BlockCursor): AsyncIterable<PortalBatch<T>> {
-    /*
-     Ensure that block hash and number are always included in the query for proper cursor management
-     */
-    this.#queryBuilder.addFields({
-      block: { hash: true, number: true },
-    })
+  private async *read(state?: TargetState): AsyncIterable<PortalBatch<T>> {
+    // Seed the monotonic finalized watermark from the target's persisted finalized
+    // head so it survives an unclean restart mid-fork. Seeding only from the
+    // dedicated `finalized` field (never from `latest`) keeps no-finality datasets
+    // correct: the floor stays undefined → Infinity-threshold passthrough.
+    this.#watermark.seed(state?.finalized ?? undefined)
+
+    const cursor = state?.latest
 
     /*
      Calculates query ranges while excluding blocks that were previously fetched to avoid duplicate processing
@@ -170,9 +200,9 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     await this.start({ initial, current: cursor })
 
-    const metadata = await this.#portal.getMetadata()
-    if (!metadata.real_time) {
-      this.#logger.warn(NOT_REAL_TIME_WARNING(metadata.dataset))
+    const datasetMetadata = await this.#portal.getMetadata()
+    if (!datasetMetadata.real_time) {
+      this.#logger.warn(NOT_REAL_TIME_WARNING(datasetMetadata.dataset))
     }
 
     for (const { range, request } of bounded) {
@@ -194,94 +224,79 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
           })
         : this.#portal.getStream(query)
 
-      let batchSpan = Span.root('batch', this.#options.profiler)
-      let readSpan = batchSpan.start('fetch data')
+      let batchSpan = Span.root('batch', this.#options.profiler).addLabels('core')
+      let readSpan = batchSpan.start('fetch data').addLabels('core')
       for await (const batch of source) {
         readSpan.end()
 
         const blocks = batch.blocks
 
         if (blocks.length > 0) {
+          // Clamp the portal's finalized head through the monotonic watermark before it
+          // reaches any consumer, so a regressed or transiently-missing finalized head can
+          // never un-finalize already-committed data. The rollback chain is derived from the
+          // CLAMPED head so the two stay consistent (clamp can only raise finalized).
+          const finalized = this.#watermark.clamp(batch.head.finalized)
+
           // TODO WTF with any?
           const lastBatchBlock = last(blocks as { header: { number: number } }[])
 
           const lastBlockNumber = Math.max(
-            Math.min(last(bounded)?.range?.to || batch.head.latest?.number || batch.head.finalized?.number || Infinity),
+            Math.min(last(bounded)?.range?.to || batch.head.latest?.number || finalized?.number || Infinity),
             lastBatchBlock.header?.number || -Infinity,
           )
 
-          const ctx: BatchCtx = {
-            // Batch metadata
-            meta: {
+          const ctx: BatchContext = {
+            id: this.#id,
+            profiler: batchSpan,
+            metrics: this.#metricServer.metrics,
+            logger: this.#logger,
+            stream: {
+              dataset: datasetMetadata,
+              head: {
+                finalized,
+                latest: batch.head.latest,
+              },
+              query: {
+                url: this.#portal.getUrl(),
+                hash: await hashQuery(query),
+                raw: query,
+              },
+              state: {
+                initial,
+                current: cursorFromHeader(lastBatchBlock as any),
+                last: lastBlockNumber,
+                rollbackChain: extractRollbackChain({
+                  blocks: batch.blocks,
+                  head: finalized,
+                }),
+              },
+            },
+            batch: {
+              blocksCount: batch.blocks.length,
               bytesSize: batch.meta.bytes,
               requests: batch.meta.requests,
               lastBlockReceivedAt: batch.meta.lastBlockReceivedAt,
             },
-            head: {
-              finalized: batch.head.finalized,
-              latest: batch.head.latest,
-            },
-            query: {
-              url: this.#portal.getUrl(),
-              hash: await hashQuery(query),
-              raw: query,
-            },
-
-            // State of the stream at the moment of this batch processing
-            state: {
-              initial,
-              current: cursorFromHeader(lastBatchBlock as any),
-              last: lastBlockNumber,
-              rollbackChain: extractRollbackChain({
-                blocks: batch.blocks,
-                head: batch.head.finalized,
-              }),
-            },
-
-            // Context for transformers
-            profiler: batchSpan,
-            metrics: this.#metricServer.metrics,
-            logger: this.#logger,
           }
 
-          const data = await this.applyTransformers(ctx, { blocks: batch.blocks } as T)
+          const data = await this.applyTransformers(ctx, batch.blocks as T)
 
           yield { data, ctx }
         }
 
-        batchSpan = Span.root('batch', this.#options.profiler)
-        readSpan = batchSpan.start('fetch data')
+        batchSpan = Span.root('batch', this.#options.profiler).addLabels('core')
+        readSpan = batchSpan.start('fetch data').addLabels('core')
       }
     }
 
     await this.stop()
   }
 
-  pipe<Out>(
-    transformerOrOptions: /*
-        Simplified usage - just the transform function that processes data
-        .pipe((data) => data)
-      */
-      | TransformerOptions<T, Out, Q>['transform']
-      /*
-        Complete transformer configuration object with transform function and additional options
-        .pipe({ profiler: { id: 'my transformer' }, transform: (data) => data })
-       */
-      | TransformerOptions<T, Out, Q>
-      /*
-        Pre-configured transformer instance with all required methods implemented
-        .pipe(new MyCustomTransformer())
-       */
-      | Transformer<T, Out, Q>,
-  ): PortalSource<Q, Out> {
+  pipe<Out>(options: TransformerArgs<T, Out>): PortalSource<Q, Out> {
     if (this.#started) throw new Error('Source is closed')
 
-    const transformer =
-      transformerOrOptions instanceof Transformer
-        ? transformerOrOptions
-        : typeof transformerOrOptions === 'function'
-          ? new Transformer({ transform: transformerOrOptions })
-          : new Transformer(transformerOrOptions)
+    const transformer = options instanceof Transformer ? options : new Transformer(options)
 
     const id = transformer.id()
 
@@ -294,6 +309,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     }
 
     return new PortalSource<Q, Out>({
+      id: this.#id,
       portal: this.#portal,
       query: this.#queryBuilder,
       logger: this.#logger,
@@ -304,17 +320,11 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     })
   }
 
-  pipeComposite<Arg extends Record<string, Transformer<any, any>>>(
-    composite: Arg,
-  ): PortalSource<Q, CompositePipe<Arg>> {
-    return this.pipe(compositeTransformer(composite))
-  }
-
-  private async applyTransformers(ctx: BatchCtx, data: T) {
-    const span = ctx.profiler.start('apply transformers')
+  private async applyTransformers(ctx: BatchContext, data: T) {
+    const span = ctx.profiler.start('apply transformers').addLabels('core')
 
     for (const transformer of this.#transformers) {
-      data = await transformer.transform(data, {
+      data = await transformer.run(data, {
         ...ctx,
         profiler: span,
         logger: this.#logger,
@@ -334,24 +344,23 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   }
 
   private async forkTransformers(profiler: Profiler, cursor: BlockCursor) {
-    const span = profiler.start('transformers_rollback')
+    const span = profiler.start({ name: 'transformers_rollback', labels: 'core' })
     const ctx = this.context(span)
     await Promise.all(this.#transformers.map((t) => t.fork(cursor, ctx)))
     span.end()
   }
 
   private async configure() {
-    const profiler = Span.root('configure', this.#options.profiler)
-    const span = profiler.start('transformers')
-    const ctx = this.context(span, {
-      queryBuilder: this.#queryBuilder,
-      portal: this.#portal,
-      logger: this.#logger,
-    })
-    await Promise.all(this.#transformers.map((t) => t.query(ctx)))
-    span.end()
-
-    profiler.end()
+    await Promise.all(
+      this.#transformers
+        .filter((t) => t instanceof QueryAwareTransformer)
+        .map((t) =>
+          t.setupQuery({
+            query: this.#queryBuilder,
+            logger: this.#logger,
+          }),
+        ),
+    )
   }
 
   private async start(state: { initial: number; current?: BlockCursor }) {
@@ -362,12 +371,14 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     this.#logger.debug(`invoking <start> hook...`)
 
-    const profiler = Span.root('start', this.#options.profiler)
+    const profiler = Span.root('start', this.#options.profiler).addLabels('core')
 
-    const span = profiler.start('transformers')
+    const span = profiler.start({ name: 'transformers', labels: 'core' })
     const ctx = this.context(span, {
+      id: this.#id,
       metrics: this.#metricServer.metrics,
       state,
+      portal: this.#portal,
     })
     await Promise.all(this.#transformers.map((t) => t.start(ctx)))
     span.end()
@@ -384,9 +395,9 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   async stop() {
     this.#started = false
 
-    const profiler = Span.root('stop', this.#options.profiler)
+    const profiler = Span.root('stop', this.#options.profiler).addLabels('core')
 
-    const span = profiler.start('transformers')
+    const span = profiler.start({ name: 'transformers', labels: 'core' })
     const ctx = this.context(span)
     await Promise.all(this.#transformers.map((t) => t.stop(ctx)))
     span.end()
@@ -400,13 +411,14 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     const self = this
 
     return target.write({
+      id: this.#id,
       logger: this.#logger,
-      read: async function* (cursor?: BlockCursor) {
+      read: async function* (state?: TargetState) {
         await self.configure()
 
         while (true) {
           try {
-            for await (const batch of self.read(cursor)) {
+            for await (const batch of self.read(state)) {
               yield batch as PortalBatch<T>
               self.batchEnd(batch.ctx)
             }
@@ -415,29 +427,29 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
             if (!isForkException(e)) throw e
 
             if (!e.previousBlocks.length) {
-              // TODO how to explain this error? what to do next?
-              throw new Error('Previous blocks are empty, but fork is detected')
+              throw new ForkNoPreviousBlocksError()
             }
 
             if (!target.fork) {
-              // TODO add docs about fork and how to implement it
-              throw new Error('Target does not support fork')
+              throw new TargetForkNotSupportedError()
             }
 
-            const forkProfiler = Span.root('fork', self.#options.profiler)
+            const forkProfiler = Span.root('fork', self.#options.profiler).addLabels('core')
 
-            const span = forkProfiler.start('target_rollback')
+            const span = forkProfiler.start({ name: 'target_rollback', labels: 'core' })
             const forkedCursor = await target.fork(e.previousBlocks)
             span.end()
 
             if (!forkedCursor) {
-              // TODO how to explain this error? what to do next?
-              throw Error(`Fork detected, but target did not return a new cursor`)
+              throw new ForkCursorMissingError()
             }
 
             await self.forkTransformers(forkProfiler, forkedCursor)
 
-            cursor = forkedCursor
+            // Resume from the forked cursor; the finalized floor persists in the
+            // instance #watermark across read() re-invocation, so re-seeding with the
+            // same state.finalized is a harmless monotonic no-op.
+            state = { latest: forkedCursor, finalized: state?.finalized ?? null }
           } finally {
             await self.stop()
           }
@@ -446,9 +458,9 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     })
   }
 
-  private batchEnd(ctx: BatchCtx) {
+  private batchEnd(ctx: BatchContext) {
     ctx.profiler.end()
-    this.#metricServer.addBatchContext(ctx)
+    this.#metricServer.batchProcessed(ctx)
   }
 
   async *[Symbol.asyncIterator](): AsyncIterator<PortalBatch<T>> {

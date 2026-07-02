@@ -1,5 +1,5 @@
 import { createClient } from '@clickhouse/client'
-import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
+import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
 
 /**
@@ -16,30 +16,28 @@ async function cli() {
     url: 'http://localhost:10123',
   })
 
-  await evmPortalSource({
+  await evmPortalStream({
+    id: 'base-erc20-transfers',
     portal: 'https://portal.sqd.dev/datasets/base-mainnet',
-  })
-    .pipe(
-      evmDecoder({
-        range: { from: 'latest' },
-        events: {
-          transfers: commonAbis.erc20.events.Transfer,
-        },
-      }),
-    )
-    .pipeTo(
-      clickhouseTarget({
-        client,
-        onRollback: async () => {},
-        onData: async ({ data, ctx }) => {
-          const span = ctx.profiler.start('my measure')
-          console.log('batch')
-          console.log(`parsed ${data.transfers.length} transfers`)
-          console.log('----------------------------------')
-          span.end()
-        },
-      }),
-    )
+    outputs: evmDecoder({
+      range: { from: 'latest' },
+      events: {
+        transfers: commonAbis.erc20.events.Transfer,
+      },
+    }),
+  }).pipeTo(
+    clickhouseTarget({
+      client,
+      onRollback: async () => {},
+      onData: async ({ data, ctx }) => {
+        const span = ctx.profiler.start('my measure')
+        console.log('batch')
+        console.log(`parsed ${data.transfers.length} transfers`)
+        console.log('----------------------------------')
+        span.end()
+      },
+    }),
+  )
 }
 
 void cli()

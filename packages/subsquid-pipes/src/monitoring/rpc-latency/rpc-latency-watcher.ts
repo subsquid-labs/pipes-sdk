@@ -1,16 +1,30 @@
 import { createTransformer } from '~/core/index.js'
 import { arrayify, last } from '~/internal/array.js'
-import { WebSocketListener } from '~/monitoring/rpc-latency/ws-client.js'
 
-type RpcHead = { number: number; timestamp: Date; receivedAt: Date }
+// `hash` is optional because Solana's `slotsUpdatesSubscribe` ships only `{ slot, timestamp }`
+// — the hash would require a follow-up `getBlock(slot)` round-trip we don't want on the
+// hot path. EVM (`eth_subscribe newHeads`) and Bitcoin (`getbestblockhash`) both populate it.
+type RpcHead = { number: number; hash?: string; timestamp: Date; receivedAt: Date }
+
+export interface RpcLatencyListener {
+  stop(): void
+}
 
 export abstract class RpcLatencyWatcher {
   nodes: Map<string, Map<number, RpcHead>> = new Map()
-  watchers: WebSocketListener[] = []
+  watchers: RpcLatencyListener[] = []
 
   constructor(protected rpcUrl: string | string[]) {
     this.rpcUrl = arrayify(rpcUrl)
+  }
 
+  /**
+   * Subscribes each configured URL via `watch()`. Subclasses **must** call this
+   * from their constructor *after* their own fields are initialized — otherwise
+   * `watch()` would observe undefined subclass state, since `super()` runs
+   * before subclass field initializers.
+   */
+  protected attach() {
     for (const url of this.rpcUrl) {
       this.nodes.set(url, new Map())
       this.watchers.push(this.watch(url))
@@ -36,7 +50,7 @@ export abstract class RpcLatencyWatcher {
   }
 
   lookup(number: number) {
-    const res: { url: string; timestamp: Date; receivedAt: Date }[] = []
+    const res: { url: string; hash?: string; timestamp: Date; receivedAt: Date }[] = []
 
     for (const [url, blocks] of this.nodes) {
       const block = blocks.get(number)
@@ -44,6 +58,7 @@ export abstract class RpcLatencyWatcher {
       if (block) {
         res.push({
           url,
+          hash: block.hash,
           timestamp: block.timestamp,
           receivedAt: block.receivedAt,
         })
@@ -60,7 +75,7 @@ export abstract class RpcLatencyWatcher {
     chain.set(block.number, block)
   }
 
-  abstract watch(url: string): WebSocketListener
+  abstract watch(url: string): RpcLatencyListener
 }
 
 type Latency = {
@@ -71,36 +86,25 @@ type Latency = {
   }
   rpc: {
     url: string
+    /** Block hash as observed by this RPC. Omitted on Solana (no hash on slot updates). */
+    hash?: string
     portalDelayMs: number
     receivedAt?: Date
   }[]
 }
 
-export function rpcLatencyWatcher(watcher: RpcLatencyWatcher) {
+export function rpcLatencyWatcher({ watcher }: { watcher: RpcLatencyWatcher }) {
   return createTransformer<
     {
-      blocks: {
-        header: {
-          number: number
-          timestamp: number
-        }
-      }[]
-    },
+      header: { number: number; timestamp: number }
+    }[],
     Latency | null
   >({
-    profiler: { id: 'rpc latency' },
-    query: ({ queryBuilder }) => {
-      queryBuilder.addFields({
-        block: {
-          number: true,
-          timestamp: true,
-        },
-      })
-    },
+    profiler: { name: 'rpc latency' },
     transform: (data, ctx): Latency | null => {
-      const receivedAt = ctx.meta.lastBlockReceivedAt
+      const receivedAt = ctx.batch.lastBlockReceivedAt
 
-      const block = last(data.blocks)
+      const block = last(data)
       if (!block) return null
 
       const lookup = watcher.lookup(block.header.number)
@@ -113,6 +117,7 @@ export function rpcLatencyWatcher(watcher: RpcLatencyWatcher) {
         rpc: lookup.map((r) => {
           return {
             url: r.url,
+            hash: r.hash,
             receivedAt: r.receivedAt,
             portalDelayMs: receivedAt.getTime() - r.receivedAt.getTime(),
           }

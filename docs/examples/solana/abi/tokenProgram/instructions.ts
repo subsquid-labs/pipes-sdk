@@ -1,4 +1,5 @@
-import { address, option, string, struct, u8, u64, unit } from '@subsquid/borsh'
+import { address, option, string, struct, u64, u8, unit } from '@subsquid/borsh'
+
 import { instruction } from '../abi.support.js'
 import { AuthorityType } from './types.js'
 

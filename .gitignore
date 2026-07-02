@@ -36,3 +36,8 @@ local/
 **/*.sqlite
 **/*.sqlite-shm
 **/*.sqlite-wal
+
+.cursor
+.agents
+
+scaffolds/

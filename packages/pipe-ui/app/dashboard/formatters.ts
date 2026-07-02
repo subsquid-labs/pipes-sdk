@@ -1,3 +1,5 @@
+import { type Pipe, PipeStatus } from '~/hooks/use-metrics'
+
 export function humanBytes(bytes: number) {
   const sizes = ['bytes', 'KB', 'MB', 'GB', 'TB']
   let i = 0
@@ -16,21 +18,19 @@ export function formatBlock(value: number | string) {
   return typeof value === 'number' ? formatNumber(value) : value
 }
 
-export function displayEstimatedTime(seconds?: number) {
-  if (typeof seconds === 'undefined' || Number.isNaN(seconds) || !Number.isFinite(seconds)) {
-    return '' // unknown
+export function displayEstimatedTime(pipe: Pipe, { etaLabel = 'ETA: ' }: { etaLabel?: string } = {}) {
+  if (pipe.status !== PipeStatus.Syncing) {
+    return pipe.status // unknown
   }
 
-  if (seconds < 1) {
-    return 'Synced'
-  }
+  const seconds = pipe.progress.etaSeconds
 
   // less than an hour
   if (seconds < 3600) {
     const minutes = Math.floor(seconds / 60)
     const remainingSeconds = Math.floor(seconds % 60)
 
-    return `ETA: ${minutes}m ${remainingSeconds}s`
+    return `${etaLabel}${minutes}m ${remainingSeconds}s`
   }
 
   // less than a day
@@ -38,12 +38,12 @@ export function displayEstimatedTime(seconds?: number) {
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
 
-    return `ETA: ${hours}h ${minutes}m`
+    return `${etaLabel}${hours}h ${minutes}m`
   }
 
   // days....:(
   const days = Math.floor(seconds / 86400)
   const hours = Math.floor((seconds % 86400) / 3600)
 
-  return `ETA: ${days}d ${hours}h`
+  return `${etaLabel}${days}d ${hours}h`
 }

@@ -1,11 +1,18 @@
-export * from './composite-transformer.js'
+export * from './cursor-key.js'
+export * from './errors.js'
+export * from './finalization-buffer.js'
+// Only `coerceFinalized` is consumed across module boundaries (the target state classes). The
+// watermark class is imported directly by the source, and maxFinalized is module-internal — keep
+// them out of the package's public surface.
+export { coerceFinalized } from './finalized-watermark.js'
 export * from './fork.js'
 export * from './formatters.js'
 export * from './logger.js'
 export * from './metrics-server.js'
+export * from './output.js'
 export * from './portal-range.js'
 export * from './portal-source.js'
-export type { ProfilerOptions } from './profiling.js'
+export type { Profiler, ProfilerOptions, SpanHooks } from './profiling.js'
 export * from './target.js'
 export * from './transformer.js'
 export * from './types.js'

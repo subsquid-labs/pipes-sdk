@@ -1,8 +1,13 @@
-import { RpcLatencyWatcher, rpcLatencyWatcher } from '~/monitoring/index.js'
-import { WebSocketListener } from '~/monitoring/rpc-latency/ws-client.js'
+import { evmQuery } from '~/evm/evm-query-builder.js'
+import { RpcLatencyWatcher, WebSocketListener, rpcLatencyWatcher } from '~/monitoring/index.js'
 
 class EvmRpcLatencyWatcher extends RpcLatencyWatcher {
-  watch(url: string) {
+  constructor(rpcUrl: string | string[]) {
+    super(rpcUrl)
+    this.attach()
+  }
+
+  watch(url: string): WebSocketListener {
     const listener = new WebSocketListener(url)
 
     const payload = {
@@ -12,21 +17,42 @@ class EvmRpcLatencyWatcher extends RpcLatencyWatcher {
       params: ['newHeads'],
     }
 
-    listener.subscribe(payload, (message) => {
-      if (message.method !== 'eth_subscription') return
-      const head = message.params.result
+    listener.subscribe(
+      payload,
+      (message: {
+        method: string
+        params?: { result?: { number: string; hash: string; timestamp: string } }
+      }) => {
+        if (message.method !== 'eth_subscription') return
+        const head = message.params?.result
+        if (!head) return
 
-      this.addBlock(url, {
-        number: parseInt(head.number),
-        timestamp: new Date(parseInt(head.timestamp) * 1000),
-        receivedAt: new Date(),
-      })
-    })
+        this.addBlock(url, {
+          number: parseInt(head.number),
+          hash: head.hash,
+          timestamp: new Date(parseInt(head.timestamp) * 1000),
+          receivedAt: new Date(),
+        })
+      },
+    )
 
     return listener
   }
 }
 
 export function evmRpcLatencyWatcher({ rpcUrl }: { rpcUrl: string[] }) {
-  return rpcLatencyWatcher(new EvmRpcLatencyWatcher(rpcUrl))
+  const transformer = rpcLatencyWatcher({
+    watcher: new EvmRpcLatencyWatcher(rpcUrl),
+  })
+
+  return evmQuery()
+    .addFields({
+      block: {
+        number: true,
+        timestamp: true,
+      },
+    })
+    .addRange({from: 'latest'})
+    .build()
+    .pipe(transformer.options)
 }

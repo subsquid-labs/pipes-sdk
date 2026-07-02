@@ -1,6 +1,7 @@
 import type { ClickHouseClient } from '@clickhouse/client'
 
-import { BlockCursor, Ctx, createTarget, Logger } from '~/core/index.js'
+import { BlockCursor, Ctx, Logger, createTarget } from '~/core/index.js'
+
 import { ClickhouseState } from './clickhouse-state.js'
 import { ClickhouseStore } from './clickhouse-store.js'
 
@@ -21,7 +22,13 @@ export type Settings = {
 
   /**
    * Stream identifier used to isolate offset records within the same table.
-   * Defaults to "stream" if not provided.
+   * Defaults to the pipe's source `id`. Set explicitly only to pin a cursor key
+   * independent of the source id (e.g. several pipes writing to one table).
+   *
+   * When left to default, a cursor written by an older SDK under the legacy static
+   * `"stream"` id is migrated to the pipe's id automatically on first resume. If several
+   * pipes shared one offset table under that legacy default, only one of them owned the
+   * surviving cursor — pin an explicit id per pipe before upgrading such setups.
    */
   id?: string
 
@@ -59,7 +66,11 @@ export function clickhouseTarget<T>({
   const state = new ClickhouseState(store, settings)
 
   return createTarget<T>({
-    write: async ({ read, logger }) => {
+    write: async ({ read, logger, id }) => {
+      // Key the cursor by the pipe's source id (unless an explicit settings.id was given), so
+      // progress is isolated per pipe. Must run before getCursor so read and write agree.
+      state.bindCursorKey(id, logger)
+
       await onStart?.({ store, logger })
       const cursor = await state.getCursor()
 
@@ -67,24 +78,30 @@ export function clickhouseTarget<T>({
         await onRollback?.({
           type: 'offset_check',
           store,
-          cursor,
-          safeCursor: cursor,
+          cursor: cursor.latest,
+          safeCursor: cursor.latest,
         })
       }
 
       for await (const { data, ctx } of read(cursor)) {
-        await ctx.profiler.measure('db data handler', async (profiler) => {
-          await onData({
-            store,
-            data: data,
-            ctx: {
-              logger,
-              profiler,
-            },
-          })
-        })
+        const target = ctx.profiler.start({ name: 'clickhouse', labels: 'db' })
 
-        await ctx.profiler.measure('db state save', () => state.saveCursor(ctx))
+        try {
+          await target.measure('data handler', async (profiler) => {
+            await onData({
+              store,
+              data: data,
+              ctx: {
+                logger,
+                profiler,
+              },
+            })
+          })
+
+          await state.saveCursor(ctx, target)
+        } finally {
+          target.end()
+        }
       }
 
       await store.close()

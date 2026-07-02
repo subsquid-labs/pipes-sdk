@@ -1,17 +1,17 @@
 import {
+  Codec,
   address,
   bool,
-  Codec,
   f64,
   fixedArray,
   option,
   ref,
   struct,
   sum,
-  u8,
+  u128,
   u32,
   u64,
-  u128,
+  u8,
   unit,
 } from '@subsquid/borsh'
 
