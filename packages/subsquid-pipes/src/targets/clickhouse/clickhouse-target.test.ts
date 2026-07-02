@@ -325,6 +325,57 @@ describe('Clickhouse state', () => {
       )
     })
 
+    it('migrates a legacy "stream" cursor to the pipe id and resumes from it', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
+        },
+        {
+          statusCode: 200,
+          data: [{ header: { number: 2, hash: '0x2', timestamp: 2000 } }],
+          validateRequest: (req) => {
+            // Resumes where the legacy cursor left off, not from the stream beginning.
+            expect(req).toMatchObject({ fromBlock: 2, parentBlockHash: '0x1' })
+          },
+        },
+      ])
+
+      // An older SDK keyed every cursor by the static "stream" id — reproduce that state by
+      // pinning the legacy key explicitly for the first run.
+      await evmPortalStream({
+        id: 'test',
+        portal: mockPortal.url,
+        outputs: blockDecoder({ from: 0, to: 1 }),
+      }).pipeTo(
+        clickhouseTarget({
+          client,
+          settings: { id: 'stream' },
+          onData: () => {},
+        }),
+      )
+
+      // Restart without an explicit id: the cursor key becomes the pipe id, the legacy rows are
+      // migrated to it automatically, and indexing continues from the migrated cursor.
+      await evmPortalStream({
+        id: 'test',
+        portal: mockPortal.url,
+        outputs: blockDecoder({ from: 0, to: 2 }),
+      }).pipeTo(
+        clickhouseTarget({
+          client,
+          onData: () => {},
+        }),
+      )
+
+      // Every surviving sync row is keyed by the pipe id — the legacy rows were re-keyed,
+      // and their originals cancelled, so nothing is left under "stream".
+      const rows = (await getAllFromSyncTable()) as { id: string; current: string }[]
+      expect(rows.length).toBeGreaterThan(0)
+      expect(rows.map((r) => r.id)).toEqual(rows.map(() => 'test'))
+      expect(JSON.parse(rows.at(-1)!.current)).toMatchObject({ number: 2, hash: '0x2' })
+    })
+
     it('should write to a non-default database when settings.database is set', async () => {
       // The ClickHouse client is connected to the default database, but we tell the
       // target to use a different one via settings.database. Previously the INSERT

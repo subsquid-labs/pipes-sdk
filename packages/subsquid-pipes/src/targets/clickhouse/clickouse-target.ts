@@ -24,15 +24,11 @@ export type Settings = {
    * Stream identifier used to isolate offset records within the same table.
    * Defaults to the pipe's source `id`. Set explicitly only to pin a cursor key
    * independent of the source id (e.g. several pipes writing to one table).
+   *
+   * When left to default, a cursor written by an older SDK under the legacy static
+   * `"stream"` id is migrated to the pipe's id automatically on first resume.
    */
   id?: string
-
-  /**
-   * One-time migration: set to `"stream"` when upgrading a pipe from an SDK version that keyed
-   * progress by the default `"stream"` id, to resume once from that cursor and migrate forward.
-   * Off by default so a new pipe never inherits a foreign cursor left in a shared table.
-   */
-  migrateFromId?: string
 
   /**
    * Maximum number of rows to retain per unique stream id in the offset table.
