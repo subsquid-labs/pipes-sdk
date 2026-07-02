@@ -27,9 +27,10 @@ CREATE TABLE IF NOT EXISTS ${table}
 `
 
 /**
- * The key `options.id` falls back to, and the key used before `bindCursorKey` resolves the source
- * id (e.g. unit tests that drive the state directly). Migrating an old cursor stored under this id
- * is opt-in via `migrateFromId` — it is never read automatically.
+ * The static id every cursor was keyed by before the SDK keyed cursors by the pipe's source id.
+ * Also the key `options.id` falls back to when `bindCursorKey` never runs (e.g. unit tests that
+ * drive the state directly). A cursor left under this id by an older SDK is migrated to the
+ * pipe's own key automatically on first resume — see `getCursor`.
  */
 const LEGACY_DEFAULT_ID = 'stream'
 
@@ -56,14 +57,6 @@ export type Options = {
   id?: string
 
   /**
-   * One-time migration: if set, and no cursor exists yet under this pipe's key, resume once from a
-   * cursor stored under this (older) id and migrate progress forward. Set to `"stream"` when
-   * upgrading a pipe from an SDK version that keyed progress by the default `"stream"` id. Off by
-   * default so a new pipe never inherits a foreign cursor left in a shared table.
-   */
-  migrateFromId?: string
-
-  /**
    * Maximum number of rows to retain per unique stream id in the offset table.
    * Older rows beyond this count will be removed.
    * Default is 10,000.
@@ -81,7 +74,6 @@ export class ClickhouseState {
   // once `bindCursorKey` runs, else the default (e.g. when bind never runs in unit tests).
   #cursorKey: string
   readonly #explicitId: boolean
-  readonly #migrateFromId?: string
   #logger?: Logger
 
   constructor(
@@ -109,7 +101,6 @@ export class ClickhouseState {
     // falling back to the default if `bindCursorKey` never runs.
     this.#explicitId = options.id !== undefined
     this.#cursorKey = this.options.id
-    this.#migrateFromId = options.migrateFromId
 
     this.#qualifiedName = `"${this.options.database}"."${this.options.table}"`
   }
@@ -117,7 +108,7 @@ export class ClickhouseState {
   /**
    * Resolve the cursor key from the pipe's source id, unless an explicit `settings.id` was given
    * (explicit always wins). Called once by the target before any read so getCursor, saveCursor and
-   * fork all key by the same value. Legacy-cursor migration is separate and opt-in — see `migrateFromId`.
+   * fork all key by the same value.
    */
   bindCursorKey(sourceId: string | undefined, logger?: Logger): void {
     this.#logger = logger
@@ -203,22 +194,7 @@ export class ClickhouseState {
       const primary = await this.#readLatest(this.#cursorKey)
       if (primary) return primary
 
-      // Opt-in migration: when `migrateFromId` is set and this pipe has no cursor of its own yet,
-      // resume once from the older id and let the next saveCursor rewrite under the current key.
-      // Off by default, so a new pipe never inherits a foreign cursor left in a shared table.
-      if (this.#migrateFromId && this.#migrateFromId !== this.#cursorKey) {
-        const previous = await this.#readLatest(this.#migrateFromId)
-        if (previous) {
-          this.#logger?.warn(
-            `No ClickHouse cursor under id "${this.#cursorKey}"; resuming once from the cursor stored ` +
-              `under "${this.#migrateFromId}" (migrateFromId) and migrating progress to "${this.#cursorKey}".`,
-          )
-
-          return previous
-        }
-      }
-
-      return
+      return await this.#migrateLegacyCursor()
     } catch (e: unknown) {
       if (e instanceof Error && 'type' in e && e.type === 'UNKNOWN_TABLE') {
         await this.store.command({ query: table(this.#qualifiedName) })
@@ -228,6 +204,70 @@ export class ClickhouseState {
 
       throw e
     }
+  }
+
+  /**
+   * Automatic one-time migration from the legacy default key. A pipe upgraded from an SDK version
+   * that keyed every cursor by the static "stream" id finds its progress there — re-key those rows
+   * under the pipe's own cursor key (timestamps preserved, so the rollback chain stays ordered for
+   * fork resolution) and resume from the migrated cursor.
+   *
+   * Skipped when an explicit `settings.id` is set: an explicitly pinned key either already holds
+   * its own rows or deliberately names a fresh cursor, and inheriting the shared legacy cursor
+   * would be wrong. When several source-keyed pipes share one offset table, the first pipe to
+   * start consumes the legacy rows; the others start fresh — under the legacy shared key only one
+   * cursor ever existed anyway.
+   */
+  async #migrateLegacyCursor(): Promise<TargetState | undefined> {
+    if (this.#explicitId || this.#cursorKey === LEGACY_DEFAULT_ID) return
+
+    const legacy = await this.#readLatest(LEGACY_DEFAULT_ID)
+    if (!legacy) return
+
+    this.#logger?.warn(
+      `Found a ClickHouse cursor under the legacy default id "${LEGACY_DEFAULT_ID}"; migrating its rows ` +
+        `to this pipe's id "${this.#cursorKey}" and resuming from the migrated cursor.`,
+    )
+
+    await this.#rekeyLegacyRows()
+
+    return legacy
+  }
+
+  /**
+   * Physically move every legacy row to the current cursor key: re-insert each row with the new id
+   * (same timestamp/sign), then cancel the originals via CollapsingMergeTree sign=-1 rows. A crash
+   * between the two steps leaves the rows duplicated under both keys — harmless, since the next
+   * start finds the primary cursor and never reads the legacy key again.
+   */
+  async #rekeyLegacyRows(): Promise<void> {
+    const res = await this.store.query({
+      query: `SELECT * FROM ${this.#qualifiedName} FINAL WHERE id = {id:String}`,
+      format: 'JSONEachRow',
+      query_params: { id: LEGACY_DEFAULT_ID },
+      clickhouse_settings: {
+        date_time_output_format: 'iso',
+        output_format_json_quote_64bit_floats: 1,
+        output_format_json_quote_64bit_integers: 1,
+      },
+    })
+
+    for await (const rows of res.stream<Record<string, unknown>>()) {
+      await this.store.insert({
+        table: this.#qualifiedName,
+        values: rows.map((row) => ({ ...(row.json() as Record<string, unknown>), id: this.#cursorKey })),
+        format: 'JSONEachRow',
+        clickhouse_settings: {
+          date_time_input_format: 'best_effort',
+        },
+      })
+    }
+
+    await this.store.removeAllRowsByQuery({
+      table: this.#qualifiedName,
+      query: `SELECT * FROM ${this.#qualifiedName} FINAL WHERE id = {id:String}`,
+      params: { id: LEGACY_DEFAULT_ID },
+    })
   }
 
   async #readLatest(id: string): Promise<TargetState | undefined> {
@@ -251,25 +291,12 @@ export class ClickhouseState {
   }
 
   async fork(previousBlocks: BlockCursor[]): Promise<BlockCursor | null> {
-    let primaryHadRows = false
-    const resolved = await resolveForkCursor(
-      this.#records(this.#cursorKey, () => {
-        primaryHadRows = true
-      }),
-      previousBlocks,
-    )
-
-    // Found a safe cursor, or the pipe's own rows just didn't resolve one — either way don't fall
-    // back. Only with opt-in `migrateFromId`, and only when this pipe has no rows yet (mid-migration,
-    // before its first save under the current key), do we scan the older rollback chain instead.
-    if (resolved !== null || primaryHadRows || !this.#migrateFromId || this.#migrateFromId === this.#cursorKey) {
-      return resolved
-    }
-
-    return resolveForkCursor(this.#records(this.#migrateFromId), previousBlocks)
+    // Only the pipe's own rows participate: getCursor migrated any legacy-keyed rows to the
+    // current key before the first read, so by fork time no other key can hold our chain.
+    return resolveForkCursor(this.#records(this.#cursorKey), previousBlocks)
   }
 
-  async *#records(id: string, onRow?: () => void): AsyncIterable<RollbackRecord> {
+  async *#records(id: string): AsyncIterable<RollbackRecord> {
     // Filter by id (like getCursor and cleanup do): when multiple streams share one sync table,
     // an unfiltered scan would mix other streams' rollback chains into this fork's resolution and
     // could resolve to a foreign cursor, corrupting the rollback.
@@ -282,7 +309,6 @@ export class ClickhouseState {
     for await (const rows of res.stream<{ rollback_chain: string; finalized: string }>()) {
       for (const row of rows) {
         const raw = row.json()
-        onRow?.()
 
         yield {
           rollbackChain: JSON.parse(raw.rollback_chain) as BlockCursor[],
