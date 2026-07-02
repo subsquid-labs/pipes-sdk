@@ -300,12 +300,18 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
 
     const id = transformer.id()
 
-    // If there are multiple transformers with the same ID, we append a numeric suffix to make them unique
+    // If there are multiple transformers with the same ID, we append a numeric suffix to make them unique.
     // This is important for profiling and logging to avoid confusion between transformers
-    // when analyzing performance or debugging issues
-    const exists = this.#transformers.filter((t) => t.id() === id)
-    if (exists.length) {
-      transformer.setId(`${id} ${exists.length + 1}`)
+    // when analyzing performance or debugging issues. We keep incrementing the suffix until the
+    // candidate id is unused across the whole transformer list, so that previously-renamed
+    // transformers (e.g. `foo 2`) do not cause a new incoming `foo` to collide with them.
+    let candidate = id
+    let n = 2
+    while (this.#transformers.some((t) => t.id() === candidate)) {
+      candidate = `${id} ${n++}`
+    }
+    if (candidate !== id) {
+      transformer.setId(candidate)
     }
 
     return new PortalSource<Q, Out>({

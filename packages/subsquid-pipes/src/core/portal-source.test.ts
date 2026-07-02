@@ -2,7 +2,7 @@ import { afterEach, describe, expect, expectTypeOf, it } from 'vitest'
 
 import { createTarget } from '~/core/target.js'
 import { Target } from '~/core/target.js'
-import { TransformerArgs } from '~/core/transformer.js'
+import { createTransformer, TransformerArgs } from '~/core/transformer.js'
 import { evmPortalStream } from '~/evm/index.js'
 import {
   MockPortal,
@@ -359,6 +359,39 @@ describe('Portal abstract stream', () => {
       })
 
       expect(() => stream.pipeTo(target as any)).not.toThrow()
+    })
+
+    it('should assign unique ids when 3+ transformers share the same base id', async () => {
+      mockPortal = await createMockPortal([
+        {
+          statusCode: 200,
+          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
+        },
+      ])
+
+      const stream = evmPortalStream({
+        id: 'test',
+        portal: mockPortal.url,
+        outputs: blockDecoder({ from: 0, to: 1 }),
+      })
+
+      const makeT = () =>
+        createTransformer<any, any>({
+          profiler: { name: 'dup' },
+          transform: (data) => data,
+        })
+
+      const t1 = makeT()
+      const t2 = makeT()
+      const t3 = makeT()
+      const t4 = makeT()
+
+      stream.pipe(t1).pipe(t2).pipe(t3).pipe(t4)
+
+      const ids = [t1.id(), t2.id(), t3.id(), t4.id()]
+
+      expect(new Set(ids).size).toBe(ids.length)
+      expect(ids).toEqual(['dup', 'dup 2', 'dup 3', 'dup 4'])
     })
   })
 
