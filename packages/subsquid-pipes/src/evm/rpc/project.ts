@@ -1,4 +1,4 @@
-import { Block, DataRequest, FieldSelection } from '~/portal-client/query/evm.js'
+import { DataRequest, FieldSelection } from '~/portal-client/query/evm.js'
 
 /**
  * Augment a field selection with the fields a request's where-clauses need to *evaluate* — even
@@ -48,20 +48,15 @@ export function selectionGrew(augmented: FieldSelection, original: FieldSelectio
   return false
 }
 
-const traceKey = (t: any) => `${t.transactionIndex}:${(t.traceAddress ?? []).join(',')}`
-const stateDiffKey = (d: any) => `${d.transactionIndex}:${d.address}:${d.key}`
+/**
+ * Keep the items of `projected` whose positionally-aligned item in `pre` (the pre-filter decode of
+ * the same block) survived filtering into `kept`. `projected[i]` and `pre[i]` are the same on-chain
+ * item decoded at two field selections, so a surviving `pre[i]` means keep `projected[i]`. Position
+ * + identity — not a synthesized structural key — so items that would share such a key (block-reward
+ * traces carry no `transactionIndex`) can't collide. Mirrors the Squid evm-rpc-stream projection.
+ */
+export function keptByPosition<P, Q>(projected: P[], pre: Q[], kept: Q[]): P[] {
+  const survived = new Set(kept)
 
-/** Keep only the items of `projected` whose structural index appears in the `filtered` block. */
-export function projectKept(projected: Block<any>, filtered: Block<any>): Block<any> {
-  const logs = new Set(filtered.logs.map((l: any) => l.logIndex))
-  const transactions = new Set(filtered.transactions.map((t: any) => t.transactionIndex))
-  const traces = new Set(filtered.traces.map(traceKey))
-  const stateDiffs = new Set(filtered.stateDiffs.map(stateDiffKey))
-
-  projected.logs = projected.logs.filter((l: any) => logs.has(l.logIndex))
-  projected.transactions = projected.transactions.filter((t: any) => transactions.has(t.transactionIndex))
-  projected.traces = projected.traces.filter((t: any) => traces.has(traceKey(t)))
-  projected.stateDiffs = projected.stateDiffs.filter((d: any) => stateDiffs.has(stateDiffKey(d)))
-
-  return projected
+  return projected.filter((_, i) => survived.has(pre[i]))
 }

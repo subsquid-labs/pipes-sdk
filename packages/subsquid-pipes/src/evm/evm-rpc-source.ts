@@ -18,7 +18,7 @@ import { Block, DataRequest, FieldSelection } from '~/portal-client/query/evm.js
 
 import { decodeBlock, withRequiredFields } from './rpc/decode.js'
 import { Relations, filterBlock, setUpRelations } from './rpc/filter.js'
-import { augmentFields, projectKept, selectionGrew } from './rpc/project.js'
+import { augmentFields, keptByPosition, selectionGrew } from './rpc/project.js'
 import { toRequiredData } from './rpc/request.js'
 
 /** RPC method-selection toggles (the per-chain "C1" config) merged into the coarse fetch request. */
@@ -86,7 +86,8 @@ export class EvmRpcSource<F extends FieldSelection> {
     this.#withStateDiffs = coarse.stateDiffs
 
     const req: RpcDataRequest = {
-      // mapRpcBlock always maps the block's transactions, so full tx objects must be fetched.
+      // mapRpcBlock always maps the block's transactions, so full tx objects must be fetched. This
+      // is why `RequiredData` carries no `transactions` toggle — it could never be false.
       transactions: true,
       logs: coarse.logs,
       receipts: coarse.receipts,
@@ -147,20 +148,34 @@ export class EvmRpcSource<F extends FieldSelection> {
 
   #mapBlock(raw: RpcBlock): Block<F> {
     const normalized = mapRpcBlock(raw, { withTraces: this.#withTraces, withStateDiffs: this.#withStateDiffs })
-    const filtered = decodeBlock(normalized, this.#augmentedFields)
+    const filtered: any = decodeBlock(normalized, this.#augmentedFields)
 
-    const relations: Relations = setUpRelations(filtered as any)
-    filterBlock(filtered as any, this.#request, relations)
+    // The augmented decode's item arrays align 1:1 by index with a decode at exactly the output
+    // fields of the *same* normalized block; snapshot them before filtering so the surviving
+    // positions can be recovered by object identity (used by the projection below).
+    const preLogs = filtered.logs
+    const preTransactions = filtered.transactions
+    const preTraces = filtered.traces
+    const preStateDiffs = filtered.stateDiffs
+
+    const relations: Relations = setUpRelations(filtered)
+    filterBlock(filtered, this.#request, relations)
 
     if (!this.#needsProjection) {
       return filtered as Block<F>
     }
 
-    // A where-clause referenced a field not selected for output; project back to exactly the
-    // output shape and keep only the filtered items, matched by their structural index keys.
-    const projected = decodeBlock(normalized, this.#outputFields)
+    // A where-clause referenced a field not selected for output; decode again at exactly the output
+    // shape and keep the items whose pre-filter position survived. Position/identity — not a
+    // synthesized structural key — so items that share one (block-reward traces carry no
+    // transactionIndex) can't collide and project the wrong one.
+    const projected: any = decodeBlock(normalized, this.#outputFields)
+    projected.logs = keptByPosition(projected.logs, preLogs, filtered.logs)
+    projected.transactions = keptByPosition(projected.transactions, preTransactions, filtered.transactions)
+    projected.traces = keptByPosition(projected.traces, preTraces, filtered.traces)
+    projected.stateDiffs = keptByPosition(projected.stateDiffs, preStateDiffs, filtered.stateDiffs)
 
-    return projectKept(projected as any, filtered as any) as Block<F>
+    return projected as Block<F>
   }
 
   #buildContext(

@@ -176,7 +176,12 @@ export class FallbackSource<T> {
             if (next.done) return // source completed (bounded stream)
             const batch = next.value
 
+            // A delivered batch proves both liveness *and* capability: the active source just served
+            // exactly the configured query (an incapable source throws rather than yields). The
+            // standby capability probe never runs for the active source, so without this a cold-start
+            // primary would serve forever yet never leave `unknown` for `healthy`.
             this.#health[active].onBatch()
+            this.#health[active].onCapability(true)
 
             // Clamp the source's finalized head through the shared monotonic watermark before it
             // reaches the target, so a source switch reporting a deeper/transiently-missing finalized
@@ -286,6 +291,25 @@ export class FallbackSource<T> {
   }
 
   /**
+   * A head poll, time-boxed by `headPollTimeoutMs`. The poll is `await`ed on the batch-critical path
+   * (lag check, staleness hold, switch-up), so a sick standby whose `getHead` hangs — TCP up, no
+   * response — must not stall the healthy active source: on timeout this rejects and `#getCachedHead`
+   * records a liveness failure. `null` defers to the underlying client's own request timeout.
+   */
+  #headWithTimeout(p: Promise<BlockCursor | undefined>): Promise<BlockCursor | undefined> {
+    const timeoutMs = this.#policy.headPollTimeoutMs
+    if (timeoutMs == null) return p
+
+    p.catch(() => {}) // an abandoned (timed-out) poll must not surface as an unhandled rejection
+    let timer: ReturnType<typeof setTimeout>
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error(`head poll timed out after ${timeoutMs}ms`)), timeoutMs)
+    })
+
+    return Promise.race([p, timeout]).finally(() => clearTimeout(timer))
+  }
+
+  /**
    * Poll a source's independent head (cached for `headTtlMs`). The poll doubles as a liveness probe
    * — a fresh head promotes a standby toward `healthy` — and is when we (re)fire its capability
    * probe. A source without `getHead` contributes no head, but still has its capability probe driven
@@ -303,7 +327,7 @@ export class FallbackSource<T> {
     if (cached && now - cached.at < this.#policy.headTtlMs) return cached.value
 
     try {
-      const head = await src.getHead()
+      const head = await this.#headWithTimeout(src.getHead())
       const value = head?.number
       this.#headCache[i] = { value, at: now }
       if (value != null) this.#health[i].onLivenessPass()

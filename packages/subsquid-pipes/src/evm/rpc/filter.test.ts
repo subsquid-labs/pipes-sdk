@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { DataRequest } from '~/portal-client/query/evm.js'
 
 import { filterBlock, setUpRelations } from './filter.js'
+import { keptByPosition } from './project.js'
 import { toRequiredData } from './request.js'
 
 /**
@@ -74,21 +75,35 @@ describe('filterBlock', () => {
 
 describe('toRequiredData', () => {
   it('derives coarse toggles incl. relation-implication and receipt upgrade', () => {
+    // No `transactions` toggle: the RPC source always fetches full transactions (mapRpcBlock needs
+    // them), so it isn't derived here.
     expect(toRequiredData({}, {})).toEqual({
-      transactions: false,
       logs: false,
       receipts: false,
       traces: false,
       stateDiffs: false,
     })
 
-    // A log filter that includes the transaction + a requested tx field forces tx fetching.
-    expect(
-      toRequiredData({ logs: [{ address: ['0xa'], transaction: true }] }, { transaction: { from: true } }).transactions,
-    ).toBe(true)
-
     const upgraded = toRequiredData({ transactions: [{ to: ['0xb'] }], logs: [{}] }, { transaction: { gasUsed: true } })
     expect(upgraded.receipts).toBe(true)
     expect(upgraded.logs).toBe(false)
+  })
+})
+
+describe('keptByPosition', () => {
+  it('projects by position/identity, so structurally identical items never collide', () => {
+    // Two pre-filter items that would share a synthesized structural key — e.g. block-reward
+    // traces, which carry no transactionIndex. A keyed projection couldn't tell them apart.
+    const preA = { tag: 'reward' }
+    const preB = { tag: 'reward' }
+    const pre = [preA, preB]
+    // The decode at exactly the output fields: distinct objects, aligned 1:1 with `pre` by position.
+    const projected = [{ n: 0 }, { n: 1 }]
+
+    // Only the *second* survived filtering — the projection must keep the second, not the first.
+    expect(keptByPosition(projected, pre, [preB])).toEqual([{ n: 1 }])
+    expect(keptByPosition(projected, pre, [preA])).toEqual([{ n: 0 }])
+    expect(keptByPosition(projected, pre, [preA, preB])).toEqual([{ n: 0 }, { n: 1 }])
+    expect(keptByPosition(projected, pre, [])).toEqual([])
   })
 })

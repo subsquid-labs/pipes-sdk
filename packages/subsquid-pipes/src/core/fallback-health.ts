@@ -40,6 +40,13 @@ export interface FallbackPolicy {
   freshnessTickMs?: number
   /** Cache an independent head poll this long, to bound the head-query rate. Default 5s. */
   headTtlMs?: number
+  /**
+   * Time-box each independent head poll. A head poll is `await`ed on the batch-critical path, so an
+   * unbounded one lets a sick standby — TCP up but not responding — stall an otherwise-healthy active
+   * source. A poll exceeding this counts as a liveness failure and returns no head. Default 500ms;
+   * `null` disables the guard and relies on the underlying client's own request timeout.
+   */
+  headPollTimeoutMs?: number | null
   /** Injectable clock (ms) for deterministic tests. Defaults to `Date.now`. */
   clock?: () => number
 }
@@ -56,6 +63,7 @@ export interface ResolvedFallbackPolicy {
   maxLagBlocks: number | null
   freshnessTickMs: number
   headTtlMs: number
+  headPollTimeoutMs: number | null
   clock: () => number
 }
 
@@ -71,6 +79,7 @@ const DEFAULTS: ResolvedFallbackPolicy = {
   maxLagBlocks: 10,
   freshnessTickMs: 1000,
   headTtlMs: 5000,
+  headPollTimeoutMs: 500,
   clock: () => Date.now(),
 }
 
@@ -91,6 +100,7 @@ export function resolveFallbackPolicy(p?: FallbackPolicy): ResolvedFallbackPolic
     maxLagBlocks: orDefault(p?.maxLagBlocks, DEFAULTS.maxLagBlocks),
     freshnessTickMs: p?.freshnessTickMs ?? DEFAULTS.freshnessTickMs,
     headTtlMs: p?.headTtlMs ?? DEFAULTS.headTtlMs,
+    headPollTimeoutMs: orDefault(p?.headPollTimeoutMs, DEFAULTS.headPollTimeoutMs),
     clock: p?.clock ?? DEFAULTS.clock,
   }
 }

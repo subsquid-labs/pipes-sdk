@@ -7,7 +7,6 @@ import { DataRequest, FieldSelection } from '~/portal-client/query/evm.js'
  * consumed directly.
  */
 export interface RequiredData {
-  transactions: boolean
   logs: boolean
   receipts: boolean
   traces: boolean
@@ -19,8 +18,11 @@ export function toRequiredData(req: DataRequest, fields: FieldSelection): Requir
   const logs = logsRequested(req)
   const receipts = txs && isRequested(TX_RECEIPT_FIELDS, fields.transaction)
 
+  // No `transactions` toggle: the RPC source always fetches full transactions (mapRpcBlock needs
+  // them to normalize a block — see `EvmRpcSource`), so deriving whether they're required would be
+  // dead — the fetch can't be turned off. `txs` is still needed to decide whether requested
+  // *receipt* fields upgrade the fetch to receipts.
   return {
-    transactions: !!req.transactions?.length || (txs && isRequested(TX_FIELDS, fields.transaction)),
     logs: logs && !receipts,
     receipts,
     traces: tracesRequested(req),
@@ -75,24 +77,6 @@ function stateDiffsRequested(req: DataRequest): boolean {
   }
 
   return false
-}
-
-const TX_FIELDS: Record<string, true> = {
-  from: true,
-  to: true,
-  gas: true,
-  gasPrice: true,
-  maxFeePerGas: true,
-  maxPriorityFeePerGas: true,
-  input: true,
-  nonce: true,
-  value: true,
-  v: true,
-  r: true,
-  s: true,
-  yParity: true,
-  chainId: true,
-  authorizationList: true,
 }
 
 const TX_RECEIPT_FIELDS: Record<string, true> = {
