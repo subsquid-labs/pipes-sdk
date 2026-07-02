@@ -276,8 +276,8 @@ describe('Drizzle target', () => {
       // Every surviving sync row is keyed by the pipe id — nothing is left under "stream".
       const rows = await getAllFromSyncTable('test')
       expect(rows.length).toBeGreaterThan(0)
-      expect(rows.map((r) => r.id)).toEqual(rows.map(() => 'test'))
-      expect(rows.at(-1)?.current_number).toBe('2')
+      expect(rows.map((r) => r['id'])).toEqual(rows.map(() => 'test'))
+      expect(rows.at(-1)?.['current_number']).toBe('2')
     })
   })
 
