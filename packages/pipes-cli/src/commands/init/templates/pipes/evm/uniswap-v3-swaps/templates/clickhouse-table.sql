@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS uniswap_v3_swaps (
     sqrt_price_x96 UInt256,
     liquidity UInt256,
     tick Int64,
-    sign Int8 DEFAULT 1
+    sign Int8 DEFAULT 1,
+    INDEX _sqd_rollback_idx block_number TYPE minmax GRANULARITY 1
 )
 ENGINE = CollapsingMergeTree(sign)
 ORDER BY (block_number, tx_hash, log_index)

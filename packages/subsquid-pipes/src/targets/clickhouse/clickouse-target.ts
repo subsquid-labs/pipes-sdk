@@ -51,6 +51,20 @@ export function clickhouseTarget<T>({
   settings?: Settings
   onStart?: (ctx: { store: ClickhouseStore; logger: Logger }) => unknown | Promise<unknown>
   onData: (ctx: { store: ClickhouseStore; data: T; ctx: Ctx }) => unknown | Promise<unknown>
+  /**
+   * Called when previously written blocks must be removed — on a blockchain fork or an
+   * offset check at startup. The typical implementation calls `store.removeAllRows` with
+   * `where: 'block_number > {latest:UInt32}'` and `params: { latest: safeCursor.number }`.
+   *
+   * On CollapsingMergeTree / VersionedCollapsingMergeTree tables (or their Replicated
+   * variants) with a `sign` column, `store.removeAllRows` removes rows by inserting
+   * cancel rows (sign = -1) — the only removal mechanism that propagates through
+   * materialized views. On any other engine it falls back to a lightweight `DELETE` with
+   * a warning: the table itself is cleaned, but materialized views built on it keep the
+   * removed data. It also auto-creates a minmax skip index on `block_number` so the
+   * rollback stays fast on large tables; call `store.ensureRollbackIndex({ table })` in
+   * `onStart` to set the index up eagerly.
+   */
   onRollback?: (ctx: {
     type: 'offset_check' | 'blockchain_fork'
     store: ClickhouseStore
@@ -70,6 +84,7 @@ export function clickhouseTarget<T>({
       // Key the cursor by the pipe's source id (unless an explicit settings.id was given), so
       // progress is isolated per pipe. Must run before getCursor so read and write agree.
       state.bindCursorKey(id, logger)
+      store.bindLogger(logger)
 
       await onStart?.({ store, logger })
       const cursor = await state.getCursor()

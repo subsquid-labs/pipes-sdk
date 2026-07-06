@@ -507,6 +507,30 @@ evmDecoder({
 
 ---
 
+### 10. Engine-aware ClickHouse rollbacks
+
+`store.removeAllRows` now picks the removal mechanism by table engine:
+
+- **CollapsingMergeTree family** (incl. `Replicated*` and ClickHouse Cloud `Shared*` variants) with a
+  `sign` column: rows are cancelled with `sign = -1` rows — the only removal mechanism that propagates
+  through materialized views. The read-back uses a `GROUP BY all columns / sum(sign)` netting query
+  instead of `SELECT * FINAL`, so it is correct under insert-retry duplicates, idempotent on re-run,
+  and no longer scans the whole table.
+- **Any other engine**: falls back to a lightweight `DELETE` with a logged warning — the table itself
+  is cleaned, but materialized views built on it keep the removed data (ClickHouse fires MVs on
+  `INSERT` only). Requires ClickHouse ≥ 23.3.
+- **`Distributed` tables** are rejected with an explicit error — roll back the underlying local table.
+
+A minmax skip index `_sqd_rollback_idx` on `block_number` is created automatically on first rollback,
+so rollback reads prune old parts regardless of the table's `ORDER BY`. Call the new
+`store.ensureRollbackIndex({ table })` in `onStart` to set it up eagerly and avoid a slow first
+rollback on an existing large table.
+
+Reading table metadata requires access to `system.tables` / `system.columns`; without it the store
+logs a warning and falls back to the previous `FINAL`-based cancel-row behavior.
+
+---
+
 ## Removals
 
 - `CompositeTransformer` / `compositeTransformer` / `composite-transformer.ts` removed — use named `outputs`
@@ -519,7 +543,7 @@ evmDecoder({
 - `TransformerFn` removed from public exports
 - `Subset<T, U>` removed from `query-builder.ts` exports — now a recursive type in `types.ts`
 
-### 10. `DecodedInstruction` now includes `block` with hash
+### 11. `DecodedInstruction` now includes `block` with hash
 
 Solana `DecodedInstruction` now exposes a `block` object with both `number` and `hash`. The top-level `blockNumber` field is deprecated.
 
@@ -533,7 +557,7 @@ event.block.hash   // string
 event.blockNumber  // still works, deprecated
 ```
 
-### 11. Fixed D2/D4 discriminator matching in Solana instruction decoder
+### 12. Fixed D2/D4 discriminator matching in Solana instruction decoder
 
 `getInstructionD2` and `getInstructionD4` used incorrect hex slice offsets for `0x`-prefixed strings, extracting 3/6 bytes instead of 2/4. Programs using 2-byte or 4-byte discriminators (e.g. Solana System Program) silently matched zero instructions.
 

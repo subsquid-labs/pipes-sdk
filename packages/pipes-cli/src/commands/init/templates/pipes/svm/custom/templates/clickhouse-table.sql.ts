@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS {{tableName}} (
   instruction_address String,
   program_id String,
   timestamp DateTime CODEC (DoubleDelta, ZSTD),
-  sign Int8  DEFAULT toInt8(1)
+  sign Int8  DEFAULT toInt8(1),
+  INDEX _sqd_rollback_idx block_number TYPE minmax GRANULARITY 1
 )
 ENGINE = CollapsingMergeTree(sign) PARTITION BY toYYYYMM(timestamp) -- Data will be split by month
 ORDER BY (block_number, transaction_index, instruction_address);
