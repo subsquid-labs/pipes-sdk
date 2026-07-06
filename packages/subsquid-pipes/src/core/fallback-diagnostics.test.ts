@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { classifyError, redactUrl } from './fallback-diagnostics.js'
+import { capabilityFailure, classifyError, redactUrl } from './fallback-diagnostics.js'
 
 describe('redactUrl', () => {
   it('strips userinfo and query string', () => {
@@ -64,5 +64,19 @@ describe('classifyError', () => {
     expect(info.reason).toBe('unknown')
     expect(info.code).toBeUndefined()
     expect(info.detail).toContain('something odd')
+  })
+})
+
+describe('capabilityFailure', () => {
+  it('defaults to check=capability, reason=unknown (a not-capable probe is not `stale`)', () => {
+    const info = capabilityFailure('probe reported not-capable')
+    expect(info.check).toBe('capability')
+    expect(info.reason).toBe('unknown')
+    expect(info.reason).not.toBe('stale')
+    expect(info.detail).toContain('probe reported not-capable')
+  })
+
+  it('carries an explicit accurate reason, e.g. timeout', () => {
+    expect(capabilityFailure('probe timed out after 20ms', 'timeout').reason).toBe('timeout')
   })
 })

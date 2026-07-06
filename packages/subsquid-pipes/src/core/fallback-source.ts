@@ -2,7 +2,7 @@ import { isForkException } from '~/portal-client/index.js'
 
 import { ForkCursorMissingError, ForkNoPreviousBlocksError, TargetForkNotSupportedError } from './errors.js'
 import type { ProbeResult } from './fallback-capability.js'
-import { SourceErrorInfo, classifyError, freshnessFailure } from './fallback-diagnostics.js'
+import { SourceErrorInfo, capabilityFailure, classifyError, freshnessFailure } from './fallback-diagnostics.js'
 import {
   AllSourcesDownError,
   FallbackHealth,
@@ -364,7 +364,7 @@ export class FallbackSource<T> {
             this.#health[i].onLivenessPass()
             this.#health[i].onCapability(true)
           } else {
-            this.#failSource(i, r.cause ?? freshnessFailure('capability', 'stale', 'probe reported not-capable'))
+            this.#failSource(i, r.cause ?? capabilityFailure('probe reported not-capable'))
           }
         },
         (e) => this.#failSource(i, classifyError('capability', e)),

@@ -1,6 +1,6 @@
 import { isForkException } from '~/portal-client/index.js'
 
-import { SourceErrorInfo, classifyError, freshnessFailure } from './fallback-diagnostics.js'
+import { SourceErrorInfo, capabilityFailure, classifyError } from './fallback-diagnostics.js'
 import { FallbackUnderlyingSource } from './fallback-source.js'
 import { BlockCursor } from './types.js'
 
@@ -52,7 +52,7 @@ export function makeCapabilityProbe<T>(
       next.catch(() => {}) // a late rejection after a timeout must not surface as unhandled
       const timeout = new Promise<never>((_resolve, reject) => {
         timer = setTimeout(
-          () => reject(freshnessFailure('capability', 'stale', `probe timed out after ${timeoutMs}ms`)),
+          () => reject(capabilityFailure(`probe timed out after ${timeoutMs}ms`, 'timeout')),
           timeoutMs,
         )
       })
