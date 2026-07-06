@@ -78,6 +78,32 @@ You should see logs as transfers are decoded.
 If you have ClickHouse and want automatic offset management, read the [ClickHouse example](https://github.com/subsquid-labs/pipes-sdk/blob/main/docs/examples/evm/04.clickhouse.example.ts).
 It uses the `createClickhouseTarget` from the core package to batch writes and handle forks gracefully.
 
+#### Rollbacks and materialized views
+
+On a blockchain fork the target removes rolled-back rows by inserting CollapsingMergeTree
+cancel rows (`sign = -1`) — the only delete mechanism in ClickHouse that propagates through
+materialized views. To get this behavior, a table must use a `CollapsingMergeTree`
+(or `VersionedCollapsingMergeTree`) engine with a `sign` column, and materialized views
+built on top of it should be written rollback-aware: aggregate with the sign, e.g.
+`sum(value * sign)` for sums and `sum(sign)` for counts, so cancel rows revert the
+aggregate automatically.
+
+Tables on any other engine still roll back — the target falls back to a lightweight
+`DELETE` and logs a warning — but materialized views built on such tables keep the
+rolled-back data, because ClickHouse fires MVs on `INSERT` only. Picking the mechanism
+requires read access to `system.tables` / `system.columns`; without it the target logs a
+warning and uses the legacy `FINAL`-based cancel-row rollback, which assumes a
+`CollapsingMergeTree` table with a `sign` column.
+
+Irreversible aggregates — `min`, `max`, `uniq`, `argMax` and similar — cannot "subtract" a
+value, so no write mechanism can roll them back. If you need such an MV, the only correct
+recovery after a fork is recomputing its affected tail (drop the tail partition and
+`INSERT ... SELECT` the range from the base table).
+
+Rollback reads are pruned by a small `minmax` skip index on `block_number` that
+`store.removeAllRows` creates automatically on first use; call
+`store.ensureRollbackIndex({ table })` in `onStart` to set it up eagerly.
+
 ### PostgreSQL with Drizzle
 
 If you prefer PostgreSQL, check out the [Drizzle example](https://github.com/subsquid-labs/pipes-sdk/blob/main/docs/examples/evm/08.drizzle.example.ts),

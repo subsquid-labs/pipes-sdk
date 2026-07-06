@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS erc20_transfers (
     to String,
     value UInt256,
     token_address String,
-    sign Int8 DEFAULT 1
+    sign Int8 DEFAULT 1,
+    INDEX _sqd_rollback_idx block_number TYPE minmax GRANULARITY 1
   )
   ENGINE = CollapsingMergeTree(sign)
   ORDER BY (block_number, tx_hash, log_index)

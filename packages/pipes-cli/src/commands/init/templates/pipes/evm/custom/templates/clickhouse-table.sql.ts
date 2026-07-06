@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS {{tableName}} (
   {{#shared}}
   contract_address LowCardinality(FixedString(42)),
   {{/shared}}
-  sign Int8  DEFAULT toInt8(1)
+  sign Int8  DEFAULT toInt8(1),
+  INDEX _sqd_rollback_idx block_number TYPE minmax GRANULARITY 1
 )
 ENGINE = CollapsingMergeTree(sign) PARTITION BY toYYYYMM(timestamp) -- Data will be split by month
 ORDER BY (block_number, tx_hash, log_index);

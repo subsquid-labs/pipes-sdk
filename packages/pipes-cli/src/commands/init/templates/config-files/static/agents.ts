@@ -175,6 +175,8 @@ async function main() {
     .pipe((data) =>
       data.transfers.map((t) => ({
         block_number: t.block.number,
+        tx_hash: t.rawEvent.transactionHash,
+        log_index: t.rawEvent.logIndex,
         token: t.contract,
         from: t.event.from,
         to: t.event.to,
@@ -193,14 +195,20 @@ async function main() {
             query: \`
               CREATE TABLE IF NOT EXISTS erc20_transfers (
                 block_number  UInt64,
+                tx_hash       String,
+                log_index     UInt16,
                 timestamp     DateTime64(3) CODEC (DoubleDelta, ZSTD),
                 token         String,
                 from          String,
                 to            String,
-                amount        UInt256
+                amount        UInt256,
+                sign          Int8 DEFAULT 1,
+                INDEX _sqd_rollback_idx block_number TYPE minmax GRANULARITY 1
               )
-              ENGINE = MergeTree
-              ORDER BY block_number
+              ENGINE = CollapsingMergeTree(sign)
+              -- The sorting key must uniquely identify a transfer: CollapsingMergeTree
+              -- collapses rows sharing the same key, so a non-unique key loses data
+              ORDER BY (block_number, tx_hash, log_index)
             \`,
           })
         },

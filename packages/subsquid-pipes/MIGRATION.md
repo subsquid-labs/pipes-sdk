@@ -345,6 +345,27 @@ one-time warning is logged.
 
 ---
 
+## 14. ClickHouse rollbacks are engine-aware
+
+No code changes are required — `onRollback` implementations calling `store.removeAllRows` keep
+working. What changes is what happens under the hood, depending on each table's engine:
+
+| Table engine | Behaviour after upgrading |
+|---|---|
+| `CollapsingMergeTree` family with a `sign` column | Cancel rows (`sign = -1`), netted with a `GROUP BY / sum(sign)` query instead of `SELECT * FINAL` — correct under insert-retry duplicates and fast on large tables. A minmax skip index `_sqd_rollback_idx` on `block_number` is created on first rollback. |
+| Any other engine (`MergeTree`, `ReplacingMergeTree`, ...) | Lightweight `DELETE` with a logged warning. Previously cancel rows were inserted blindly, which failed or silently corrupted such tables. Requires ClickHouse ≥ 23.3. **Materialized views on these tables keep the rolled-back data** — switch the table to `CollapsingMergeTree(sign)` if you rely on MVs. |
+| `Distributed` | Explicit error — roll back the underlying local table instead. |
+
+Recommended follow-ups:
+
+1. Call `store.ensureRollbackIndex({ table })` in `onStart` for existing large tables — the index is
+   built by an async mutation, so creating it eagerly avoids one slow first rollback.
+2. If the rolling client cannot read `system.tables` / `system.columns`, rollbacks log a warning and
+   fall back to the previous `FINAL`-based cancel-row behavior; grant read access to get the new
+   mechanics.
+
+---
+
 ## Quick checklist
 
 - [ ] `evmPortalSource` → `evmPortalStream`
@@ -366,3 +387,4 @@ one-time warning is logged.
 - [ ] Custom transformers: `data.blocks` → `data`
 - [ ] Custom `.build({ transform })` → `.build().pipe()`
 - [ ] `StartState` → `StartEvent`, `ProgressState` → `ProgressEvent`
+- [ ] ClickHouse rollbacks: nothing to do for CollapsingMergeTree tables (optionally call `store.ensureRollbackIndex` in `onStart` on large tables); non-collapsing tables now roll back via `DELETE` (needs ClickHouse ≥ 23.3) and their MVs keep rolled-back data
