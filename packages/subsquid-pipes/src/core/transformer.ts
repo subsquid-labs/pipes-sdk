@@ -150,7 +150,13 @@ export function createTransformer<In, Out>(options: TransformerOptions<In, Out>)
   return new Transformer<In, Out>(options)
 }
 
-export type SetupQueryFn<Query> = (ctx: { query: Query; logger: Logger }) => void | any | Promise<void | any>
+export type SetupQueryCtx<Query> = {
+  query: Query
+  logger: Logger
+  portal: PortalClient
+}
+
+export type SetupQueryFn<Query> = (ctx: SetupQueryCtx<Query>) => void | any | Promise<void | any>
 
 // FIXME STREAMS write docs
 export class QueryAwareTransformer<

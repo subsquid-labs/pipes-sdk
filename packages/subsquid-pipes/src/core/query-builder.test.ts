@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
+import { mockPortalRestApi } from '~/testing/index.js'
+
+import { BlockRangeConfigurationError } from './errors.js'
 import {
   type RangeRequest,
   applyRangeBound,
   mergeRangeRequests,
   rangeDifference,
   rangeIntersection,
+  resolveNaturalRange,
 } from './query-builder.js'
 
 // ── Helpers ──
@@ -217,5 +221,46 @@ describe('applyRangeBound', () => {
     const result = applyRangeBound([rr(0, 100, ['a'])], { from: 0, to: 0 })
 
     expect(result).toEqual([rr(0, 0, ['a'])])
+  })
+})
+
+// ── resolveNaturalRange ──
+
+describe('resolveNaturalRange', () => {
+  it('passes numeric boundaries through unchanged', async () => {
+    const portal = mockPortalRestApi()
+
+    expect(await resolveNaturalRange(portal, { from: 5, to: 100 })).toEqual({ from: 5, to: 100 })
+    expect(await resolveNaturalRange(portal, { from: 5 })).toEqual({ from: 5, to: undefined })
+  })
+
+  it('returns null for a range starting from latest', async () => {
+    expect(await resolveNaturalRange(mockPortalRestApi(), { from: 'latest' })).toBeNull()
+  })
+
+  it('resolves Date boundaries via the portal', async () => {
+    const portal = mockPortalRestApi({
+      resolveTimestamp: async (seconds) => seconds * 2,
+    })
+
+    const result = await resolveNaturalRange(portal, { from: new Date(1_000_000), to: new Date(2_000_000) })
+
+    expect(result).toEqual({ from: 2000, to: 4000 })
+  })
+
+  it('throws BlockRangeConfigurationError when the range is inverted', async () => {
+    await expect(resolveNaturalRange(mockPortalRestApi(), { from: 100, to: 5 })).rejects.toThrow(
+      BlockRangeConfigurationError,
+    )
+  })
+
+  it('throws BlockRangeConfigurationError for a timestamp above the chain head', async () => {
+    const portal = mockPortalRestApi({
+      resolveTimestamp: async () => {
+        throw new Error('No chunk found for timestamp')
+      },
+    })
+
+    await expect(resolveNaturalRange(portal, { from: new Date() })).rejects.toThrow(BlockRangeConfigurationError)
   })
 })

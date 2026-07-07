@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { PortalClient } from '~/portal-client/client.js'
 import { createTestLogger } from '~/testing/test-logger.js'
 
 import { SolanaQueryBuilder } from './solana-query-builder.js'
@@ -17,7 +18,7 @@ describe('solanaRpcLatencyWatcher factory', () => {
     transformer = solanaRpcLatencyWatcher({ rpcUrl: ['ws://127.0.0.1:1'] })
 
     const builder = new SolanaQueryBuilder<{ block: { number: true; timestamp: true } }>()
-    await transformer.setupQuery({ query: builder, logger: createTestLogger() })
+    await transformer.setupQuery({ query: builder, logger: createTestLogger(), portal: {} as PortalClient })
 
     expect(builder.getFields()).toEqual({
       block: { number: true, timestamp: true },
@@ -28,11 +29,9 @@ describe('solanaRpcLatencyWatcher factory', () => {
     transformer = solanaRpcLatencyWatcher({ rpcUrl: ['ws://127.0.0.1:1'] })
 
     const builder = new SolanaQueryBuilder<{ block: { number: true; timestamp: true } }>()
-    await transformer.setupQuery({ query: builder, logger: createTestLogger() })
+    await transformer.setupQuery({ query: builder, logger: createTestLogger(), portal: {} as PortalClient })
 
     const requests = builder.getRequests()
-    expect(requests).toContainEqual(
-      expect.objectContaining({ range: { from: 'latest' } }),
-    )
+    expect(requests).toContainEqual(expect.objectContaining({ range: { from: 'latest' } }))
   })
 })

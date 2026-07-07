@@ -57,9 +57,14 @@ export async function createFinalizedMockPortal(mockResponses: MockResponse[]) {
   })
 }
 
+export type MockPortalHead = {
+  finalized?: { number: number; hash: string }
+  latest?: { number: number; hash: string }
+}
+
 export async function createMockPortal(
   mockResponses: MockResponse[],
-  { finalized = false }: { finalized?: boolean } = {},
+  { finalized = false, head }: { finalized?: boolean; head?: MockPortalHead } = {},
 ): Promise<MockPortal> {
   const promise = new Promise<Server>((resolve, reject) => {
     let requestCount = 0
@@ -80,6 +85,16 @@ export async function createMockPortal(
             },
           }),
         )
+        res.end()
+        return
+      } else if (req.url === '/finalized-head' && head?.finalized) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.write(JSON.stringify(head.finalized))
+        res.end()
+        return
+      } else if (req.url === '/head' && head?.latest) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.write(JSON.stringify(head.latest))
         res.end()
         return
       } else if (req.url !== streamUrl) {

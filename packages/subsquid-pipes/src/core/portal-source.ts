@@ -360,6 +360,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
           t.setupQuery({
             query: this.#queryBuilder,
             logger: this.#logger,
+            portal: this.#portal,
           }),
         ),
     )
