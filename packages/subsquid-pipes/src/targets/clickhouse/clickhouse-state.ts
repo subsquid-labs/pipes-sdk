@@ -148,8 +148,12 @@ export class ClickhouseState {
         for (const row of rows) {
           const raw = row.json()
           yield {
-            rollbackChain: JSON.parse(raw.rollback_chain) as BlockCursor[],
-            finalized: JSON.parse(raw.finalized) as BlockCursor,
+            // A row persisted before the source reported any finalized head stores '' for both
+            // columns. Guard the parse so an empty cursor decodes to []/undefined and
+            // resolveForkCursor skips it gracefully, instead of crashing the stream on
+            // JSON.parse('') ("Unexpected end of JSON input") and crash-looping on restart.
+            rollbackChain: raw.rollback_chain ? (JSON.parse(raw.rollback_chain) as BlockCursor[]) : [],
+            finalized: raw.finalized ? (JSON.parse(raw.finalized) as BlockCursor) : undefined,
           }
         }
       }
