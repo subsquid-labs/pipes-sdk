@@ -216,6 +216,46 @@ describe('FallbackSource — supervisor', () => {
     expect(fb.metrics().switchCount).toBe(1) // only the initial failover — no churn back to s0
   })
 
+  it('survives a capability probe that throws synchronously (fails as capability, flag not stranded)', async () => {
+    let now = 0
+    const s0 = source('s0', async function* () {
+      throw new Error('s0 down') // always fails the real query
+    })
+    let probes = 0
+    // A misbehaving custom probe that throws *synchronously*, before returning a Promise.
+    s0.probeCapability = (() => {
+      probes++
+      throw new Error('sync boom')
+    }) as any
+
+    const s1 = source('s1', async function* () {
+      for (let n = 1; n <= 4; n++) {
+        yield pbatch(n)
+        now += 100
+      }
+    })
+
+    const fb = new FallbackSource(
+      [s0, s1],
+      {
+        clock: () => now,
+        cooldownMs: 50,
+        capabilityProbeIntervalMs: 0,
+        livenessRecoverThreshold: 1,
+      },
+      silent,
+    )
+
+    const out = await collect(fb.read())
+
+    // Pre-fix, the synchronous throw escaped #maybeProbeCapability and stalled the read loop (and
+    // stranded #capabilityProbing at true). Normalizing it into a rejection keeps the supervisor
+    // streaming s1 to completion, and the probe having run proves the fire-and-forget path executed.
+    expect(probes).toBeGreaterThan(0)
+    expect(out).toEqual([1, 2, 3, 4])
+    expect(fb.metrics().switchCount).toBe(1) // never churned back to the incapable s0
+  })
+
   it('throws AllSourcesDown after a finite timeout', async () => {
     const down: ReadFn = async function* () {
       throw new Error('down')

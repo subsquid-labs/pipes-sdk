@@ -357,7 +357,12 @@ export class FallbackSource<T> {
 
     this.#lastProbeAt[i] = now
     this.#capabilityProbing[i] = true
-    probe(last)
+    // `Promise.resolve().then(() => probe(last))` normalizes a *synchronously*-throwing custom probe
+    // into a rejection, so the throw can't escape this method (stranding `#capabilityProbing[i]` at
+    // `true` and blocking all future probes for the source) — it flows to the rejection handler and
+    // the `.finally` still clears the flag.
+    Promise.resolve()
+      .then(() => probe(last))
       .then(
         (r) => {
           if (r.ok) {
