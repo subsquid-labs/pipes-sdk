@@ -562,7 +562,11 @@ describe('FallbackSource — freshness', () => {
     })
     // A fresher standby exists, so staleness *could* fire — but the staleness clock spans a single
     // source `next()`, not wall-clock across yields, so time spent in a slow consumer must not count.
-    const s1 = headSource('s1', async function* () {}, async () => cursor(100))
+    const s1 = headSource(
+      's1',
+      async function* () {},
+      async () => cursor(100),
+    )
     const fb = new FallbackSource(
       [s0, s1],
       { maxStalenessMs: 30, freshnessTickMs: 5, headTtlMs: 0, maxLagBlocks: null },

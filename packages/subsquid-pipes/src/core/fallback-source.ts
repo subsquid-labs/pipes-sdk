@@ -60,7 +60,6 @@ function delay(ms: number): { promise: Promise<void>; cancel: () => void } {
   return { promise, cancel: () => clearTimeout(timer) }
 }
 
-
 /** A structured snapshot of the fallback's observable state, for a metrics surface (§4). */
 export interface FallbackMetrics {
   activeIndex: number | undefined

@@ -25,10 +25,7 @@ describe('augmentFields', () => {
   })
 
   it('adds transaction where fields (to / from / sighash / type)', () => {
-    const augmented = augmentFields(
-      {},
-      { transactions: [{ to: ['0xa'], from: ['0xb'], sighash: ['0xc'], type: [2] }] },
-    )
+    const augmented = augmentFields({}, { transactions: [{ to: ['0xa'], from: ['0xb'], sighash: ['0xc'], type: [2] }] })
     expect(augmented.transaction).toMatchObject({ to: true, from: true, sighash: true, type: true })
   })
 

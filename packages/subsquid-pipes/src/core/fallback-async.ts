@@ -8,7 +8,11 @@
  * actually fires — and so callers can attach a classified cause (see the capability probe) rather
  * than a bare `Error`.
  */
-export function withTimeout<T>(promise: Promise<T>, ms: number | null | undefined, makeError: () => unknown): Promise<T> {
+export function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number | null | undefined,
+  makeError: () => unknown,
+): Promise<T> {
   if (ms == null) return promise
 
   promise.catch(() => {}) // an abandoned (timed-out) promise must not surface as unhandled
