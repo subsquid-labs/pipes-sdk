@@ -25,9 +25,10 @@ import { Block, DataRequest, FieldSelection, getBlockSchema } from '~/portal-cli
 import type { RpcMethodOptions } from './evm-rpc-source.js'
 import { withRequiredFields } from './rpc/decode.js'
 
-// Re-export the RPC method-selection type so consumers can type an `rpc` source's `method` without
-// importing from the lazily-loaded (optional-peer) evm-rpc-source module. Type-only: erased at build,
-// so it never eagerly pulls the optional peers.
+// Re-export the RPC method-selection type so consumers can type an `rpc` source's `method`. Type-only,
+// so it's erased from the JS and never pulls the optional peers at *runtime* — but, like the `Rpc`-typed
+// config field, it is preserved in the emitted .d.ts, so a TS consumer that references the RPC-config
+// types needs @subsquid/evm-rpc installed for typechecking.
 export type { RpcMethodOptions } from './evm-rpc-source.js'
 
 /** One EVM source in a fallback. Both kinds share the same `fields` + `request`. */
