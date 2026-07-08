@@ -57,6 +57,29 @@ describe('SourceHealth', () => {
     expect(health.state).toBe('unhealthy')
   })
 
+  it('a liveness pass resets the consecutive-fail counter, so non-consecutive blips do not condemn', () => {
+    const { health } = setup() // livenessFailThreshold = 2
+    health.onLivenessFail() // fail #1
+    health.onLivenessPass() // success in between must reset the counter
+    health.onLivenessFail() // this is fail #1 again, NOT #2
+    expect(health.state).toBe('unknown') // not condemned — the fails were not consecutive
+  })
+
+  it('a failed capability probe flips it unhealthy', () => {
+    const { health } = setup({ hasCapabilityProbe: true })
+    health.onCapability(false)
+    expect(health.state).toBe('unhealthy')
+  })
+
+  it('a liveness pass while unhealthy does not reset (or extend) the cooldown', () => {
+    const { health, advance } = setup({ cooldownMs: 1000 })
+    health.onStreamError() // unhealthy at t=0, cooldown ends at t=1000
+    advance(500)
+    health.onLivenessPass() // must be a no-op while unhealthy — not reset the cooldown clock
+    advance(500) // t=1000: cooldown measured from the error, so it elapses now
+    expect(health.state).toBe('unknown') // (if the pass had reset the cooldown, it'd still be unhealthy)
+  })
+
   it('exposes the cause while unhealthy and clears it on recovery', () => {
     const { health, advance } = setup({ cooldownMs: 1000 })
     const cause = { check: 'stream' as const, reason: 'http' as const, code: 400, detail: 'boom' }

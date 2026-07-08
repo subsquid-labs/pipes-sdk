@@ -1,6 +1,7 @@
 import { isForkException } from '~/portal-client/index.js'
 
 import { ForkCursorMissingError, ForkNoPreviousBlocksError, TargetForkNotSupportedError } from './errors.js'
+import { safeReturn, withTimeout } from './fallback-async.js'
 import type { ProbeResult } from './fallback-capability.js'
 import { SourceErrorInfo, capabilityFailure, classifyError, freshnessFailure } from './fallback-diagnostics.js'
 import {
@@ -59,18 +60,6 @@ function delay(ms: number): { promise: Promise<void>; cancel: () => void } {
   return { promise, cancel: () => clearTimeout(timer) }
 }
 
-function safeReturn(it: AsyncIterator<unknown>): void {
-  try {
-    // Don't await: closing a *stalled* source's iterator can itself hang on the same unresolved
-    // fetch, and failover must not wait on it.
-    it.return?.()?.then(
-      () => {},
-      () => {},
-    )
-  } catch {
-    /* ignore */
-  }
-}
 
 /** A structured snapshot of the fallback's observable state, for a metrics surface (§4). */
 export interface FallbackMetrics {
@@ -298,15 +287,7 @@ export class FallbackSource<T> {
    */
   #headWithTimeout(p: Promise<BlockCursor | undefined>): Promise<BlockCursor | undefined> {
     const timeoutMs = this.#policy.headPollTimeoutMs
-    if (timeoutMs == null) return p
-
-    p.catch(() => {}) // an abandoned (timed-out) poll must not surface as an unhandled rejection
-    let timer: ReturnType<typeof setTimeout>
-    const timeout = new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(() => reject(new Error(`head poll timed out after ${timeoutMs}ms`)), timeoutMs)
-    })
-
-    return Promise.race([p, timeout]).finally(() => clearTimeout(timer))
+    return withTimeout(p, timeoutMs, () => new Error(`head poll timed out after ${timeoutMs}ms`))
   }
 
   /**

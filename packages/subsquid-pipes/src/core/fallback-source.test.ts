@@ -140,6 +140,28 @@ describe('FallbackSource — supervisor', () => {
     expect(s1.reads).toHaveLength(0)
   })
 
+  it('propagates a ForkException thrown by a source reached AFTER a switch (fork straddles the switch)', async () => {
+    const s0 = source('s0', async function* () {
+      yield pbatch(1)
+      throw new Error('s0 down') // non-fork error → fail over to s1
+    })
+    // s1 resumes at the last committed cursor and detects a reorg right there. A fork thrown by the
+    // switched-in source must propagate untouched (the target/consumer rewinds), never trigger
+    // another source switch.
+    const s1 = source('s1', async function* () {
+      throw new ForkException([cursor(1)], { fromBlock: 2, parentBlockHash: '0x1' })
+    })
+    const fb = new FallbackSource([s0, s1], undefined, silent)
+
+    const seen: number[] = []
+    await expect(
+      (async () => {
+        for await (const b of fb.read()) seen.push(...b.data)
+      })(),
+    ).rejects.toBeInstanceOf(ForkException)
+    expect(seen).toEqual([1]) // s0's block delivered; then s1's fork propagated
+  })
+
   it('reclaims a recovered higher-preference source once its capability probe confirms it', async () => {
     let now = 0
     let s0reads = 0
@@ -177,6 +199,82 @@ describe('FallbackSource — supervisor', () => {
     expect(probes).toBeGreaterThan(0) // the standby s0 was probed
     expect(out).toContain(50) // and reclaimed once healthy
     expect(fb.metrics().switchCount).toBe(2) // s0 → s1 (failover) → s0 (switch-up)
+  })
+
+  it('eager: reclaims a recovered probe-less higher-preference source via head-poll liveness alone', async () => {
+    let now = 0
+    let s0reads = 0
+    // s0 has NO capability probe — its recovery must come from head-poll liveness only (the head
+    // fetch doubles as the liveness signal that promotes a probe-less source back to healthy).
+    const s0 = headSource(
+      's0',
+      async function* () {
+        s0reads++
+        if (s0reads === 1) throw new Error('s0 down') // initial failure → fail over to s1
+        yield pbatch(50) // reclaimed once head-poll liveness promotes it
+      },
+      async () => cursor(50),
+    )
+    const s1 = source('s1', async function* () {
+      for (let n = 1; n <= 6; n++) {
+        yield pbatch(n)
+        now += 100 // advance clock so s0's cooldown elapses and it gets head-polled between batches
+      }
+    })
+
+    const fb = new FallbackSource(
+      [s0, s1],
+      {
+        clock: () => now,
+        cooldownMs: 50,
+        headTtlMs: 0,
+        livenessRecoverThreshold: 1, // one head-poll liveness pass is enough for a probe-less source
+        preferPrimary: 'eager',
+        maxLagBlocks: null,
+        maxStalenessMs: null,
+      },
+      silent,
+    )
+
+    const out = await collect(fb.read())
+
+    expect(out).toContain(50) // s0 reclaimed without ever running a capability probe
+    expect(fb.metrics().switchCount).toBe(2) // s0 → s1 (failover) → s0 (switch-up)
+  })
+
+  it('onFailureOnly: does not switch up to a recovered higher-preference source', async () => {
+    let now = 0
+    let s0reads = 0
+    const s0 = source('s0', async function* () {
+      s0reads++
+      if (s0reads === 1) throw new Error('s0 down')
+      yield pbatch(50) // would be reclaimed under 'eager' — must NOT be under 'onFailureOnly'
+    })
+    s0.probeCapability = async () => ({ ok: true })
+    const s1 = source('s1', async function* () {
+      for (let n = 1; n <= 4; n++) {
+        yield pbatch(n)
+        now += 100
+      }
+    })
+
+    const fb = new FallbackSource(
+      [s0, s1],
+      {
+        clock: () => now,
+        cooldownMs: 50,
+        capabilityProbeIntervalMs: 0,
+        livenessRecoverThreshold: 1,
+        preferPrimary: 'onFailureOnly', // sticky: only switch on failure, never reclaim
+      },
+      silent,
+    )
+
+    const out = await collect(fb.read())
+
+    expect(out).toEqual([1, 2, 3, 4]) // stayed on s1 the whole time
+    expect(out).not.toContain(50) // s0 never reclaimed
+    expect(fb.metrics().switchCount).toBe(1) // only the initial failover — no switch-up
   })
 
   it('does not switch up to a standby whose capability probe keeps failing', async () => {
@@ -425,6 +523,30 @@ describe('FallbackSource — freshness', () => {
 
     expect(await collect(fb)).toEqual([1, 2])
     expect(fb.activeIndex).toBe(1)
+  }, 5000)
+
+  it('(e) slow-handler immunity: a slow downstream consumer between yields does not mark the source stale', async () => {
+    const s0 = source('s0', async function* () {
+      yield pbatch(1)
+      yield pbatch(2)
+      yield pbatch(3)
+    })
+    // A fresher standby exists, so staleness *could* fire — but the staleness clock spans a single
+    // source `next()`, not wall-clock across yields, so time spent in a slow consumer must not count.
+    const s1 = headSource('s1', async function* () {}, async () => cursor(100))
+    const fb = new FallbackSource(
+      [s0, s1],
+      { maxStalenessMs: 30, freshnessTickMs: 5, headTtlMs: 0, maxLagBlocks: null },
+      silent,
+    )
+
+    const got: number[] = []
+    for await (const b of fb) {
+      got.push(...b.data)
+      await wait(50) // slow handler (> maxStalenessMs), but parked at yield — clock not running on s0
+    }
+    expect(got).toEqual([1, 2, 3]) // all served by s0
+    expect(fb.activeIndex).toBe(0) // never failed over
   }, 5000)
 
   it('(d) global stall: no fresher source → holds + flags chainStalled, no churn', async () => {

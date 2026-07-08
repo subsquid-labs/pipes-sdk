@@ -1,5 +1,6 @@
 import { isForkException } from '~/portal-client/index.js'
 
+import { safeReturn, withTimeout } from './fallback-async.js'
 import { SourceErrorInfo, capabilityFailure, classifyError } from './fallback-diagnostics.js'
 import { FallbackUnderlyingSource } from './fallback-source.js'
 import { BlockCursor } from './types.js'
@@ -46,19 +47,12 @@ export function makeCapabilityProbe<T>(
 
   return async (atCursor?: BlockCursor): Promise<ProbeResult> => {
     const iterator = source.read(atCursor)[Symbol.asyncIterator]()
-    let timer: ReturnType<typeof setTimeout> | undefined
     try {
-      const next = iterator.next()
-      next.catch(() => {}) // a late rejection after a timeout must not surface as unhandled
-      const timeout = new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(
-          () => reject(capabilityFailure(`probe timed out after ${timeoutMs}ms`, 'timeout')),
-          timeoutMs,
-        )
-      })
-
-      // One batch (or a clean stream end) is enough: it proves the source served the slice.
-      await Promise.race([next, timeout])
+      // One batch (or a clean stream end) is enough: it proves the source served the slice. The
+      // timeout rejects with a ready-made cause (a `SourceErrorInfo`, not a bare Error).
+      await withTimeout(iterator.next(), timeoutMs, () =>
+        capabilityFailure(`probe timed out after ${timeoutMs}ms`, 'timeout'),
+      )
 
       return { ok: true }
     } catch (e) {
@@ -67,17 +61,7 @@ export function makeCapabilityProbe<T>(
       const cause = isErrorInfo(e) ? e : classifyError('capability', e)
       return { ok: false, cause }
     } finally {
-      if (timer) clearTimeout(timer)
-      // Don't await: closing the probe stream must not block, and a stalled source's `return()`
-      // can hang on the same unresolved fetch.
-      try {
-        iterator.return?.()?.then(
-          () => {},
-          () => {},
-        )
-      } catch {
-        /* ignore */
-      }
+      safeReturn(iterator)
     }
   }
 }
