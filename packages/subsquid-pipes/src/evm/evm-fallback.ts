@@ -179,7 +179,7 @@ export function createEvmFallback<F extends FieldSelection>(
  * source is actually read (i.e. it becomes active). A multi-Portal fallback therefore never
  * imports the RPC stack, and a misconfigured RPC source fails with a clear, actionable error
  * instead of an opaque module-not-found at startup. (`@subsquid/evm-rpc` + `evm-normalization` are
- * optional and currently unpublished — see EXECUTION_STATUS.md.)
+ * declared as optional peer dependencies — a Portal-only consumer never installs them.)
  */
 function lazyRpcSource<F extends FieldSelection>(
   name: string,
