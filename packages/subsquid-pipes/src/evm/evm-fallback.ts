@@ -174,6 +174,28 @@ export function createEvmFallback<F extends FieldSelection>(
   return fallback
 }
 
+const RPC_PEERS = ['@subsquid/evm-rpc', '@subsquid/evm-normalization']
+
+/**
+ * If `e` is a module-not-found for one of the optional RPC peers, return an actionable error naming
+ * both peers; otherwise return `e` unchanged. Matches the missing module by its exact quoted name,
+ * so a module-not-found for a *different* module (a broken transitive dep) — and any other fault
+ * thrown while loading the RPC stack (a syntax/init error) — surfaces as-is rather than being masked
+ * as "peers missing". Handles both the ESM (`ERR_MODULE_NOT_FOUND`) and CJS (`MODULE_NOT_FOUND`)
+ * loader codes, since the package ships both builds.
+ */
+export function translateMissingRpcPeer(e: unknown, sourceName = 'rpc'): unknown {
+  const err = e as NodeJS.ErrnoException
+  const isModuleNotFound = err?.code === 'ERR_MODULE_NOT_FOUND' || err?.code === 'MODULE_NOT_FOUND'
+  if (isModuleNotFound && RPC_PEERS.some((p) => err.message?.includes(`'${p}'`))) {
+    return new Error(
+      `RPC fallback source "${sourceName}" requires the optional peer dependencies ` +
+        `"${RPC_PEERS[0]}" and "${RPC_PEERS[1]}" — install them to use RPC sources, or use only 'portal' sources.`,
+    )
+  }
+  return err
+}
+
 /**
  * An RPC fallback source whose `@subsquid/evm-rpc` dependency is loaded **lazily** — only when the
  * source is actually read (i.e. it becomes active). A multi-Portal fallback therefore never
@@ -198,11 +220,8 @@ function lazyRpcSource<F extends FieldSelection>(
     let mod: typeof import('./evm-rpc-source.js')
     try {
       mod = await import('./evm-rpc-source.js')
-    } catch {
-      throw new Error(
-        `RPC fallback source "${name}" requires the optional "@subsquid/evm-rpc" and ` +
-          `"@subsquid/evm-normalization" packages — install them to use RPC sources.`,
-      )
+    } catch (e) {
+      throw translateMissingRpcPeer(e, name)
     }
     inner = new mod.EvmRpcSource({
       id: name,
