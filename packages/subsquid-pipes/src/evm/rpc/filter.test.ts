@@ -221,8 +221,8 @@ describe('merged multi-request required-data (#510 regression)', () => {
 
 describe('keptByPosition', () => {
   it('projects by position/identity, so structurally identical items never collide', () => {
-    // Two pre-filter items that would share a synthesized structural key — e.g. block-reward
-    // traces, which carry no transactionIndex. A keyed projection couldn't tell them apart.
+    // Two structurally identical pre-filter items that a synthesized structural key couldn't tell
+    // apart. A keyed projection would confuse them; position + identity won't.
     const preA = { tag: 'reward' }
     const preB = { tag: 'reward' }
     const pre = [preA, preB]

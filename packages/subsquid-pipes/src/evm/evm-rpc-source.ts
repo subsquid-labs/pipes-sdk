@@ -170,8 +170,8 @@ export class EvmRpcSource<F extends FieldSelection> {
 
     // A where-clause referenced a field not selected for output; decode again at exactly the output
     // shape and keep the items whose pre-filter position survived. Position/identity — not a
-    // synthesized structural key — so items that share one (block-reward traces carry no
-    // transactionIndex) can't collide and project the wrong one.
+    // synthesized structural key — so structurally identical items can't collide and project the
+    // wrong one.
     const projected: any = decodeBlock(normalized, this.#outputFields)
     projected.logs = keptByPosition(projected.logs, preLogs, filtered.logs)
     projected.transactions = keptByPosition(projected.transactions, preTransactions, filtered.transactions)

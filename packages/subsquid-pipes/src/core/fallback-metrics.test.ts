@@ -59,7 +59,7 @@ describe('registerFallbackMetrics', () => {
     })
     expect(health.calls.every((c) => !JSON.stringify(c).includes('capability check failed'))).toBe(true)
 
-    expect(captured.get('sqd_fallback_switches_total')!.gauge.calls).toEqual([{ value: 2 }])
+    expect(captured.get('sqd_fallback_switches')!.gauge.calls).toEqual([{ value: 2 }])
     expect(captured.get('sqd_fallback_lag_blocks')!.gauge.calls).toEqual([{ value: 7 }])
     expect(captured.get('sqd_fallback_staleness_ms')!.gauge.calls).toEqual([{ value: 1500 }])
     expect(captured.get('sqd_fallback_chain_stalled')!.gauge.calls).toEqual([{ value: 1 }])

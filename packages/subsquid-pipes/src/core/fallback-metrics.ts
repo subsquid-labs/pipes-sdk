@@ -60,7 +60,9 @@ export function registerFallbackMetrics(
   })
 
   metrics.gauge({
-    name: `${prefix}_switches_total`,
+    // No `_total` suffix — that suffix is reserved for Counters by Prometheus convention, and this is
+    // a pull-based gauge set to the current cumulative value (matches the Squid metric name).
+    name: `${prefix}_switches`,
     help: 'Cumulative number of fallback source switches',
     collect() {
       this.set(source.metrics().switchCount)

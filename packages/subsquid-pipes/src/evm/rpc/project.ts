@@ -51,9 +51,9 @@ export function selectionGrew(augmented: FieldSelection, original: FieldSelectio
 /**
  * Keep the items of `projected` whose positionally-aligned item in `pre` (the pre-filter decode of
  * the same block) survived filtering into `kept`. `projected[i]` and `pre[i]` are the same on-chain
- * item decoded at two field selections, so a surviving `pre[i]` means keep `projected[i]`. Position
- * + identity — not a synthesized structural key — so items that would share such a key (block-reward
- * traces carry no `transactionIndex`) can't collide. Mirrors the Squid evm-rpc-stream projection.
+ * item decoded at two field selections, so a surviving `pre[i]` means keep `projected[i]`. Alignment
+ * is by position + object identity — never a synthesized structural key — so structurally identical
+ * items can't be confused by a shared/ambiguous key. Mirrors the Squid evm-rpc-stream projection.
  */
 export function keptByPosition<P, Q>(projected: P[], pre: Q[], kept: Q[]): P[] {
   const survived = new Set(kept)
