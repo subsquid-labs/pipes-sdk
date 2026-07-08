@@ -13,7 +13,12 @@ export function shimWireBlock(block: any): any {
     for (const trace of traces) {
       if (trace.type === 'selfdestruct') {
         trace.type = 'suicide'
-      } else if (trace.type === 'reward' && trace.action && 'rewardType' in trace.action) {
+      } else if (
+        trace.type === 'reward' &&
+        typeof trace.action === 'object' &&
+        trace.action !== null &&
+        'rewardType' in trace.action
+      ) {
         trace.action.type = trace.action.rewardType
         delete trace.action.rewardType
       }

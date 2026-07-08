@@ -37,4 +37,12 @@ describe('shimWireBlock', () => {
     expect(() => shimWireBlock({ header: {} })).not.toThrow()
     expect(() => shimWireBlock({})).not.toThrow()
   })
+
+  it('does not throw on malformed wire JSON (non-object action) — leaves it for schema validation', () => {
+    // A reward trace whose `action` is a truthy non-object must not make the `in` check throw before
+    // the downstream `cast()` can report a proper validation error.
+    const block = { traces: [{ type: 'reward', action: 'not-an-object' }] }
+    expect(() => shimWireBlock(block)).not.toThrow()
+    expect(block.traces[0].action).toBe('not-an-object') // left untouched for the schema to reject
+  })
 })
