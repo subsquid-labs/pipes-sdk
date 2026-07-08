@@ -28,6 +28,14 @@ function pbatch(n: number, hash?: string): PortalBatch<number[]> {
   } as unknown as PortalBatch<number[]>
 }
 
+/** A batch that also reports a finalized head — for exercising the monotonic watermark clamp. */
+function pbatchF(n: number, finalizedNumber: number, hash?: string): PortalBatch<number[]> {
+  return {
+    data: [n],
+    ctx: { stream: { state: { current: cursor(n, hash) }, head: { finalized: cursor(finalizedNumber) } } },
+  } as unknown as PortalBatch<number[]>
+}
+
 type ReadFn = (cursor?: BlockCursor) => AsyncGenerator<PortalBatch<number[]>>
 
 function source(
@@ -138,6 +146,27 @@ describe('FallbackSource — supervisor', () => {
     ).rejects.toBeInstanceOf(ForkException)
     expect(seen).toEqual([1])
     expect(s1.reads).toHaveLength(0)
+  })
+
+  it('clamps a switched-in source’s finalized head monotonically (a shallower head cannot un-finalize)', async () => {
+    // Unlike the Squid supervisor (which passes finalized through — the processor owns finality), the
+    // Pipes FallbackSource owns the single monotonic watermark and clamps every batch. This guards
+    // that the clamp survives a switch: a source promoted after a failover may transiently report a
+    // shallower finalized head, and that must never un-finalize what an earlier source already did.
+    const s0 = source('s0', async function* () {
+      yield pbatchF(1, 2) // finalized head advances to 2
+      yield pbatchF(2, 2)
+      throw new Error('s0 down') // → fail over to s1
+    })
+    const s1 = source('s1', async function* () {
+      yield pbatchF(3, 1) // s1 reports a SHALLOWER finalized head (1) right after the switch
+    })
+    const fb = new FallbackSource([s0, s1], undefined, silent)
+
+    const finalizedSeen: (number | undefined)[] = []
+    for await (const b of fb.read()) finalizedSeen.push(b.ctx.stream.head.finalized?.number)
+
+    expect(finalizedSeen).toEqual([2, 2, 2]) // block 3's shallower head is clamped back up to 2
   })
 
   it('propagates a ForkException thrown by a source reached AFTER a switch (fork straddles the switch)', async () => {
