@@ -38,8 +38,9 @@ export function registerFallbackMetrics(
     labelNames: ['source', 'state', 'check', 'reason', 'code'],
     collect() {
       // Reset so a previous scrape's cause labels (e.g. an old `code`) don't linger as stale series
-      // once the source recovers or fails for a different reason.
-      this.reset()
+      // once the source recovers or fails for a different reason. Optional-chained: a custom
+      // MetricsServer may not implement reset() (then stale series just aren't pruned).
+      this.reset?.()
       for (const s of source.metrics().sources) {
         for (const state of HEALTH_STATES) {
           // Only the current, unhealthy state row gets cause labels.
