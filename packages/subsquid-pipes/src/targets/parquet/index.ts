@@ -6,5 +6,6 @@ export {
   type ParquetColumn,
   type ParquetColumnType,
   type ParquetColumns,
+  type ParquetLeafType,
   type ParquetTable,
 } from './schema.js'
