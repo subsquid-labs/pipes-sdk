@@ -1,4 +1,4 @@
-import { Block as NormalizedBlock } from '@subsquid/evm-normalization'
+import type { Block as NormalizedBlock } from '@subsquid/evm-normalization'
 import { toJSON } from '@subsquid/util-internal-json'
 import { cast } from '@subsquid/util-internal-validation'
 
@@ -16,7 +16,10 @@ export function withRequiredFields(fields: FieldSelection): FieldSelection {
     transaction: { ...fields.transaction, transactionIndex: true },
     log: { ...fields.log, logIndex: true, transactionIndex: true },
     trace: { ...fields.trace, transactionIndex: true, traceAddress: true },
-    stateDiff: { ...fields.stateDiff, transactionIndex: true, address: true, key: true },
+    // `kind` is the stateDiff tagged-union discriminator and an always-present required field, so it
+    // must survive projection — otherwise a `stateDiffs: [{ kind: [...] }]` where-clause (which reads
+    // `kind`) never matches when the user didn't also select it for output.
+    stateDiff: { ...fields.stateDiff, transactionIndex: true, address: true, key: true, kind: true },
   }
 }
 

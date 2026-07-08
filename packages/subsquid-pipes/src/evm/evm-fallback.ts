@@ -25,6 +25,11 @@ import { Block, DataRequest, FieldSelection, getBlockSchema } from '~/portal-cli
 import type { RpcMethodOptions } from './evm-rpc-source.js'
 import { withRequiredFields } from './rpc/decode.js'
 
+// Re-export the RPC method-selection type so consumers can type an `rpc` source's `method` without
+// importing from the lazily-loaded (optional-peer) evm-rpc-source module. Type-only: erased at build,
+// so it never eagerly pulls the optional peers.
+export type { RpcMethodOptions } from './evm-rpc-source.js'
+
 /** One EVM source in a fallback. Both kinds share the same `fields` + `request`. */
 export type EvmFallbackSourceConfig<F extends FieldSelection> =
   | { type: 'portal'; name?: string; portal: string | PortalClientOptions | PortalClient }
