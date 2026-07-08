@@ -5,7 +5,16 @@ import { ParquetSchema } from '@dsnp/parquetjs'
 import { type BlockCursor, type Finalization, type FinalizationBuffer, createFinalizationBuffer } from '~/core/index.js'
 
 import { PQ_ERR, ParquetTargetError } from './errors.js'
-import { type Codec, type ParquetColumns, type ParquetTable, blockColumnOf, toParquetSchemaShape } from './schema.js'
+import {
+  type Codec,
+  type ParquetColumn,
+  type ParquetColumns,
+  type ParquetLeafType,
+  type ParquetTable,
+  blockColumnOf,
+  buildRowWrapper,
+  toParquetSchemaShape,
+} from './schema.js'
 import { ParquetSegmentWriter, type PublishedSegment } from './writer.js'
 
 type Row = Record<string, unknown>
@@ -19,6 +28,8 @@ type TableConfig = {
   columns: ParquetColumns
   schema: ParquetSchema
   dir: string
+  /** Rewrites plain-array LIST values into the library's row shape; unset for list-free tables. */
+  wrapRow?: (row: Row) => Row
 }
 
 /** Rotation thresholds checked at each batch boundary. */
@@ -65,6 +76,7 @@ export class ParquetStore {
         columns: table.schema,
         schema: new ParquetSchema(toParquetSchemaShape(table, options.defaultCodec)),
         dir: path.join(options.dir, table.table),
+        wrapRow: buildRowWrapper(table.schema),
       })
       this.#buffers.set(table.table, createFinalizationBuffer<Row>({ getBlockNumber }))
     }
@@ -114,7 +126,7 @@ export class ParquetStore {
       if (released.length > 0) {
         const writer = this.#getOrCreateWriter(table, config)
         for (const row of released) {
-          await writer.appendRow(row, config.getBlockNumber(row))
+          await writer.appendRow(config.wrapRow ? config.wrapRow(row) : row, config.getBlockNumber(row))
         }
         stats.push({ table, rows: released.length })
       }
@@ -231,35 +243,82 @@ function readBlockNumber(table: string, blockColumn: string, row: Row): number {
  * Dev-mode (non-production) check that each cell matches its declared column type, catching silent
  * corruption the Parquet encoder would otherwise wave through — most notably a hex *string* handed
  * to a `BYTE_ARRAY` column (stored as the ASCII bytes of `"0x…"`, not the decoded bytes) and a
- * `number` above 2^53 for an `INT64` column (precision already lost before the write).
+ * `number` above 2^53 for an `INT64` column (precision already lost before the write). Recurses
+ * into STRUCT/LIST declarations so errors carry the offending path — the writer library's own
+ * errors for nested data name a bare field with no table/row context.
  */
 function validateRowValues(table: string, columns: ParquetColumns, row: Row): void {
   for (const [name, column] of Object.entries(columns)) {
-    const value = row[name]
-
-    if (value == null) {
-      if (!column.optional) {
-        throw new ParquetTargetError(
-          PQ_ERR.VALUE_INVALID,
-          `Table '${table}' column '${name}' is required but the row value is ${describe(value)}.`,
-        )
-      }
-
-      continue
-    }
-
-    const problem = checkValueType(column.type, value)
-    if (problem) {
-      throw new ParquetTargetError(
-        PQ_ERR.VALUE_INVALID,
-        `Table '${table}' column '${name}' (declared ${column.type}) ${problem}, got ${describe(value)}.`,
-      )
-    }
+    validateValue(table, name, column, row[name])
   }
 }
 
-/** Returns a human description of why `value` is wrong for `type`, or `undefined` if it is fine. */
-function checkValueType(type: string, value: unknown): string | undefined {
+function validateValue(table: string, path: string, column: ParquetColumn, value: unknown): void {
+  if (value == null) {
+    if (!column.optional) {
+      throw new ParquetTargetError(
+        PQ_ERR.VALUE_INVALID,
+        `Table '${table}' column '${path}' is required but the row value is ${describe(value)}.`,
+      )
+    }
+
+    return
+  }
+
+  if (column.type === 'STRUCT') {
+    // Map/Set are rejected because their entries are invisible to the property access the
+    // writer shreds with (`value[field]`) — required fields would fail as "undefined" and
+    // optional ones silently write null. Class instances stay accepted: their fields ARE
+    // readable as properties, so they write correctly.
+    if (
+      typeof value !== 'object' ||
+      Array.isArray(value) ||
+      value instanceof Date ||
+      value instanceof Uint8Array ||
+      value instanceof Map ||
+      value instanceof Set
+    ) {
+      throw new ParquetTargetError(
+        PQ_ERR.VALUE_INVALID,
+        `Table '${table}' column '${path}' (declared STRUCT) expects a plain object, got ${describe(value)}.`,
+      )
+    }
+    for (const [name, child] of Object.entries(column.fields)) {
+      validateValue(table, `${path}.${name}`, child, (value as Row)[name])
+    }
+
+    return
+  }
+
+  if (column.type === 'LIST') {
+    if (!Array.isArray(value)) {
+      throw new ParquetTargetError(
+        PQ_ERR.VALUE_INVALID,
+        `Table '${table}' column '${path}' (declared LIST) expects an array, got ${describe(value)}.`,
+      )
+    }
+    for (let i = 0; i < value.length; i++) {
+      validateValue(table, `${path}[${i}]`, column.element, value[i])
+    }
+
+    return
+  }
+
+  const problem = checkValueType(column.type, value)
+  if (problem) {
+    throw new ParquetTargetError(
+      PQ_ERR.VALUE_INVALID,
+      `Table '${table}' column '${path}' (declared ${column.type}) ${problem}, got ${describe(value)}.`,
+    )
+  }
+}
+
+/**
+ * Returns a human description of why `value` is wrong for `type`, or `undefined` if it is fine.
+ * Exhaustive over {@link ParquetLeafType} with no `default` on purpose: adding a leaf type
+ * without deciding its dev-mode check here fails to compile (`noImplicitReturns`).
+ */
+function checkValueType(type: ParquetLeafType, value: unknown): string | undefined {
   switch (type) {
     case 'BYTE_ARRAY':
       if (!(value instanceof Uint8Array)) {
@@ -291,11 +350,37 @@ function checkValueType(type: string, value: unknown): string | undefined {
     case 'UTF8':
       return typeof value === 'string' ? undefined : 'expects a string'
 
+    case 'TIMESTAMP':
     case 'TIMESTAMP_MILLIS':
       return value instanceof Date || typeof value === 'number' ? undefined : 'expects a Date or epoch-millis number'
 
-    default:
-      return undefined
+    case 'DATE': {
+      // The writer library divides a Date's epoch-ms by 86,400,000 and the int32 encoder
+      // truncates toward zero — the correct calendar day for 1970+, the *wrong* day before
+      // 1970 — and it rejects negative day numbers outright, so pre-1970 input is refused here.
+      if (value instanceof Date) {
+        return value.getTime() >= 0 ? undefined : 'does not support pre-1970 Dates'
+      }
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+        return 'expects a Date or a non-negative integer of whole days since the Unix epoch'
+      }
+
+      return value > INT32_MAX
+        ? 'is out of INT32 range for days since the Unix epoch — this looks like epoch millis; pass a Date instead'
+        : undefined
+    }
+
+    case 'JSON': {
+      // The writer does Buffer.from(JSON.stringify(value)) at flush time; a bigint or circular
+      // reference crashes there without table/column context, and a function/symbol/undefined
+      // stringifies to undefined and crashes Buffer.from. Serialize once here (dev-only) to
+      // fail early with context.
+      try {
+        return JSON.stringify(value) === undefined ? 'expects a JSON-serializable value' : undefined
+      } catch {
+        return 'expects a JSON-serializable value (bigints and circular references are not)'
+      }
+    }
   }
 }
 

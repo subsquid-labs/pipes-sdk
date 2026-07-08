@@ -68,7 +68,11 @@ async function main() {
             blockNumber: { type: 'INT64' },
             logIndex: { type: 'INT32' },
             txIndex: { type: 'INT32' },
-            timestamp: { type: 'TIMESTAMP_MILLIS', optional: true },
+            timestamp: { type: 'TIMESTAMP', optional: true },
+            // The same instant stored as its UTC calendar day (int32) — cheap day-partitioned scans.
+            day: { type: 'DATE', optional: true },
+            // Raw log topics as a Parquet LIST — declare the element type, insert a plain array.
+            topics: { type: 'LIST', element: { type: 'UTF8' } },
             token: { type: 'UTF8' },
             from: { type: 'UTF8' },
             to: { type: 'UTF8' },
@@ -82,7 +86,7 @@ async function main() {
             blockNumber: { type: 'INT64' },
             logIndex: { type: 'INT32' },
             txIndex: { type: 'INT32' },
-            timestamp: { type: 'TIMESTAMP_MILLIS', optional: true },
+            timestamp: { type: 'TIMESTAMP', optional: true },
             token: { type: 'UTF8' },
             owner: { type: 'UTF8' },
             spender: { type: 'UTF8' },
@@ -101,8 +105,9 @@ async function main() {
         ctx.logger.debug(`batch: ${data.transfers.length} transfers, ${data.approvals.length} approvals`)
 
         // Rows are staged per table; the finalized ones flush to the open Parquet writer after
-        // `onData` returns. The JS → Parquet input contract: INT64 ← number/bigint,
-        // TIMESTAMP_MILLIS ← Date (or null for an optional column), UTF8 ← string.
+        // `onData` returns. The JS → Parquet input contract: INT64 ← number/bigint, TIMESTAMP ←
+        // Date (or null for an optional column), DATE ← Date truncated to its UTC day, LIST ←
+        // plain array, UTF8 ← string.
         store.insert(
           'transfers',
           data.transfers.map((t) => ({
@@ -110,6 +115,8 @@ async function main() {
             logIndex: t.rawEvent.logIndex,
             txIndex: t.rawEvent.transactionIndex,
             timestamp: t.timestamp ?? null,
+            day: t.timestamp ?? null,
+            topics: t.rawEvent.topics,
             token: t.rawEvent.address,
             from: t.event.from,
             to: t.event.to,

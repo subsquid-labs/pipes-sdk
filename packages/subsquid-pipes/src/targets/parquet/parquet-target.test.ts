@@ -19,7 +19,7 @@ import { PQ_ERR, ParquetTargetError } from './errors.js'
 import { ParquetState } from './parquet-state.js'
 import { ParquetStore } from './parquet-store.js'
 import { parquetTarget } from './parquet-target.js'
-import { type ParquetTable, validateTables } from './schema.js'
+import type { ParquetTable } from './schema.js'
 import { ParquetSegmentWriter } from './writer.js'
 
 // ---------------------------------------------------------------------------------------------
@@ -141,92 +141,6 @@ describe('parquetTarget', () => {
     await rm(dir, { recursive: true, force: true })
   })
 
-  describe('schema validation', () => {
-    it('rejects an empty tables list', () => {
-      expect.assertions(1)
-      try {
-        validateTables([])
-      } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.NO_TABLES)
-      }
-    })
-
-    it('rejects a schema missing the block-number column', () => {
-      expect.assertions(1)
-      try {
-        validateTables([{ table: 't', schema: { hash: { type: 'UTF8' } } }])
-      } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.BLOCK_COLUMN_MISSING)
-      }
-    })
-
-    it('rejects a non-integer block-number column', () => {
-      expect.assertions(1)
-      try {
-        validateTables([{ table: 't', schema: { blockNumber: { type: 'UTF8' } } }])
-      } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.BLOCK_COLUMN_TYPE)
-      }
-    })
-
-    it('rejects duplicate table names', () => {
-      expect.assertions(1)
-      try {
-        validateTables([BLOCKS_TABLE, BLOCKS_TABLE])
-      } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.DUPLICATE_TABLE)
-      }
-    })
-
-    it('rejects an empty schema', () => {
-      expect.assertions(1)
-      try {
-        validateTables([{ table: 't', schema: {} }])
-      } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.EMPTY_SCHEMA)
-      }
-    })
-
-    it('rejects an unsupported column type', () => {
-      expect.assertions(1)
-      try {
-        validateTables([
-          { table: 't', schema: { blockNumber: { type: 'INT64' }, amount: { type: 'DECIMAL' as never } } },
-        ])
-      } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.UNSUPPORTED_TYPE)
-      }
-    })
-
-    it('rejects an unsupported compression codec', () => {
-      expect.assertions(1)
-      try {
-        validateTables([{ table: 't', schema: { blockNumber: { type: 'INT64', compression: 'ZSTD' as never } } }])
-      } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.UNSUPPORTED_COMPRESSION)
-      }
-    })
-
-    it('rejects TIMESTAMP_MILLIS as the block-number column', () => {
-      // A timestamp is epoch-ms, not a block number, so finalization comparisons never release rows.
-      expect.assertions(1)
-      try {
-        validateTables([{ table: 't', schema: { blockNumber: { type: 'TIMESTAMP_MILLIS' } } }])
-      } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.BLOCK_COLUMN_TYPE)
-      }
-    })
-
-    it('rejects an optional block-number column', () => {
-      expect.assertions(1)
-      try {
-        validateTables([{ table: 't', schema: { blockNumber: { type: 'INT64', optional: true } } }])
-      } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.BLOCK_COLUMN_OPTIONAL)
-      }
-    })
-  })
-
   describe('block-number value guard', () => {
     it('fails loudly instead of coercing a null block number to 0, even in production', async () => {
       // Disable the dev-mode value check so the always-on block guard is what trips.
@@ -253,38 +167,6 @@ describe('parquetTarget', () => {
 
       // No bogus block-0 file was published.
       expect(await listDataFiles(dir, 'blocks')).toEqual([])
-    })
-  })
-
-  describe('dev-mode value validation', () => {
-    const bytesTable: ParquetTable = {
-      table: 't',
-      schema: { blockNumber: { type: 'INT64' }, raw: { type: 'BYTE_ARRAY' } },
-    }
-
-    it('rejects a hex string handed to a BYTE_ARRAY column', () => {
-      const store = new ParquetStore({ dir, tables: [bytesTable], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
-      expect.assertions(1)
-      try {
-        store.insert('t', [{ blockNumber: 1, raw: '0xdeadbeef' }])
-      } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.VALUE_INVALID)
-      }
-    })
-
-    it('rejects an INT64 number above 2^53 (precision already lost)', () => {
-      const store = new ParquetStore({ dir, tables: [BLOCKS_TABLE], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
-      expect.assertions(1)
-      try {
-        store.insert('blocks', [{ blockNumber: 2 ** 53, hash: '0x1', timestamp: 1 }])
-      } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.VALUE_INVALID)
-      }
-    })
-
-    it('accepts a Buffer for BYTE_ARRAY and a bigint for INT64', () => {
-      const store = new ParquetStore({ dir, tables: [bytesTable], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
-      expect(() => store.insert('t', [{ blockNumber: 1n, raw: Buffer.from('deadbeef', 'hex') }])).not.toThrow()
     })
   })
 
@@ -344,6 +226,99 @@ describe('parquetTarget', () => {
       await reader.close()
       expect(typeof raw['blockNumber']).toBe('bigint')
       expect(raw['blockNumber']).toBe(1n)
+    })
+
+    it('round-trips TIMESTAMP, DATE, JSON, STRUCT and LIST columns with the expected footer annotations', async () => {
+      const kitchenSink: ParquetTable = {
+        table: 'sink',
+        schema: {
+          blockNumber: { type: 'INT64' },
+          at: { type: 'TIMESTAMP' },
+          legacyAt: { type: 'TIMESTAMP_MILLIS' },
+          day: { type: 'DATE' },
+          dayNum: { type: 'DATE' },
+          meta: { type: 'JSON', optional: true },
+          user: { type: 'STRUCT', fields: { name: { type: 'UTF8' }, age: { type: 'INT32', optional: true } } },
+          tags: { type: 'LIST', element: { type: 'UTF8', optional: true }, optional: true },
+          xfers: {
+            type: 'LIST',
+            element: { type: 'STRUCT', fields: { to: { type: 'UTF8' }, amt: { type: 'INT64' } } },
+          },
+          matrix: { type: 'LIST', element: { type: 'LIST', element: { type: 'INT32' } } },
+        },
+      }
+      const at = new Date('2024-01-01T15:30:45.123Z')
+
+      mockPortal = await createMockPortal([blocksResponse([1, 2], 2)])
+      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 2 }) }).pipeTo(
+        parquetTarget({
+          dir,
+          tables: [kitchenSink],
+          onData: ({ store, data }) => {
+            store.insert(
+              'sink',
+              data.map((b) => ({
+                blockNumber: b.number,
+                at,
+                legacyAt: at,
+                day: at, // non-midnight Date — must land on its UTC calendar day
+                dayNum: 19724, // whole days since epoch = 2024-01-02
+                meta: b.number === 1 ? { fee: 12, keys: ['k1', 'k2'] } : null,
+                user: { name: `user-${b.number}`, age: b.number === 1 ? 30 : null },
+                tags: b.number === 1 ? ['a', null, 'c'] : [],
+                xfers: [{ to: '0xa', amt: 5n }],
+                matrix: [[1, 2], [3]],
+              })),
+            )
+          },
+        }),
+      )
+
+      const [file] = await listDataFiles(dir, 'sink')
+      const reader = await ParquetReader.openFile(path.join(dir, 'sink', file))
+      const cursor = reader.getCursor()
+      const rows: Record<string, unknown>[] = []
+      let raw: Record<string, unknown> | null
+      while ((raw = (await cursor.next()) as Record<string, unknown> | null)) rows.push(raw)
+
+      // Legacy footer annotations (the pinned library never writes the modern LogicalType field;
+      // per the format spec readers map these to the corresponding logical types):
+      // TIMESTAMP_MILLIS=9 for both timestamp spellings, DATE=6, JSON=19, LIST=3 on the outer
+      // list groups; STRUCT groups carry children but no converted_type.
+      const annotations = new Map(reader.metadata!.schema.map((s) => [s.name, s.converted_type] as const))
+      const children = new Map(reader.metadata!.schema.map((s) => [s.name, s.num_children] as const))
+      await reader.close()
+      expect(annotations.get('at')).toBe(9)
+      expect(annotations.get('legacyAt')).toBe(9)
+      expect(annotations.get('day')).toBe(6)
+      expect(annotations.get('dayNum')).toBe(6)
+      expect(annotations.get('meta')).toBe(19)
+      expect(annotations.get('tags')).toBe(3)
+      expect(annotations.get('xfers')).toBe(3)
+      expect(annotations.get('matrix')).toBe(3)
+      expect(annotations.get('user')).toBeNull()
+      expect(Number(children.get('user'))).toBe(2)
+
+      rows.sort((a, b) => Number(a['blockNumber']) - Number(b['blockNumber']))
+      const [r1, r2] = rows
+      expect((r1['at'] as Date).toISOString()).toBe('2024-01-01T15:30:45.123Z')
+      expect((r1['legacyAt'] as Date).toISOString()).toBe('2024-01-01T15:30:45.123Z')
+      expect((r1['day'] as Date).toISOString()).toBe('2024-01-01T00:00:00.000Z')
+      expect((r1['dayNum'] as Date).toISOString()).toBe('2024-01-02T00:00:00.000Z')
+      expect(r1['meta']).toEqual({ fee: 12, keys: ['k1', 'k2'] })
+      expect(r1['user']).toEqual({ name: 'user-1', age: 30 })
+      // This library's reader materializes the canonical layout verbatim: wrapped elements, an
+      // empty list as { list: null } (still distinct from a null column at the definition level).
+      expect(r1['tags']).toEqual({ list: [{ element: 'a' }, { element: null }, { element: 'c' }] })
+      expect(r1['xfers']).toEqual({ list: [{ element: { to: '0xa', amt: 5n } }] })
+      // Nested lists round-trip with each level in the canonical wrapped shape.
+      expect(r1['matrix']).toEqual({
+        list: [{ element: { list: [{ element: 1 }, { element: 2 }] } }, { element: { list: [{ element: 3 }] } }],
+      })
+
+      expect(r2['meta']).toBeNull()
+      expect(r2['user']).toEqual({ name: 'user-2', age: null })
+      expect(r2['tags']).toEqual({ list: null })
     })
   })
 

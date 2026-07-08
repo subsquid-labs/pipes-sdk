@@ -366,6 +366,32 @@ Recommended follow-ups:
 
 ---
 
+## 15. Parquet: rename `TIMESTAMP_MILLIS` to `TIMESTAMP`
+
+The Parquet format spec deprecates the `TIMESTAMP_MILLIS` converted type in favor of the `TIMESTAMP` logical type. The column type is renamed accordingly; the old name still works as a deprecated alias and both write byte-identical files (int64 epoch-ms, readable by every Parquet reader as `TIMESTAMP(isAdjustedToUTC=true, unit=MILLIS)`), so existing data needs no migration.
+
+```ts
+// before
+schema: { timestamp: { type: 'TIMESTAMP_MILLIS', optional: true } }
+
+// after
+schema: { timestamp: { type: 'TIMESTAMP', optional: true } }
+```
+
+New column types are also available: `DATE` (int32 days since the Unix epoch), `JSON` (stringified into an annotated BYTE_ARRAY), `STRUCT` (nested groups — insert plain nested objects) and `LIST` (canonical 3-level lists — insert plain arrays):
+
+```ts
+schema: {
+  blockNumber: { type: 'INT64' },
+  day: { type: 'DATE' },
+  meta: { type: 'JSON', optional: true },
+  user: { type: 'STRUCT', fields: { name: { type: 'UTF8' } } },
+  topics: { type: 'LIST', element: { type: 'UTF8' } },
+}
+```
+
+---
+
 ## Quick checklist
 
 - [ ] `evmPortalSource` → `evmPortalStream`
@@ -388,3 +414,4 @@ Recommended follow-ups:
 - [ ] Custom `.build({ transform })` → `.build().pipe()`
 - [ ] `StartState` → `StartEvent`, `ProgressState` → `ProgressEvent`
 - [ ] ClickHouse rollbacks: nothing to do for CollapsingMergeTree tables (optionally call `store.ensureRollbackIndex` in `onStart` on large tables); non-collapsing tables now roll back via `DELETE` (needs ClickHouse ≥ 23.3) and their MVs keep rolled-back data
+- [ ] Parquet schemas: `TIMESTAMP_MILLIS` → `TIMESTAMP` (deprecated alias still accepted; files unchanged)

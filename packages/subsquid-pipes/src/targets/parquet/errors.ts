@@ -25,7 +25,7 @@ export const PQ_ERR = {
   EMPTY_SCHEMA: 'E1203',
   /** Table schema is missing the declared block-number column. */
   BLOCK_COLUMN_MISSING: 'E1204',
-  /** Block-number column is not an integer type (must be INT64/INT32/TIMESTAMP_MILLIS). */
+  /** Block-number column is not an integer type (must be INT64/INT32). */
   BLOCK_COLUMN_TYPE: 'E1205',
   /** A column declared an unsupported compression codec. */
   UNSUPPORTED_COMPRESSION: 'E1206',
@@ -45,4 +45,6 @@ export const PQ_ERR = {
   VALUE_INVALID: 'E1213',
   /** Crash recovery could not delete an over-cursor data file (leaving it would duplicate data). */
   RECOVERY_DELETE_FAILED: 'E1214',
+  /** A nested column declaration is malformed (empty STRUCT fields, LIST without element, over-deep nesting). */
+  NESTED_SCHEMA_INVALID: 'E1215',
 } as const
