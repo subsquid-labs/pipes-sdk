@@ -90,6 +90,8 @@
     "@opentelemetry/api": "^1.9.0",
     "@subsquid/evm-normalization": "^0.0.2",
     "@subsquid/evm-rpc": "^0.0.2",
+    "@subsquid/http-client": "^1.8.1",
+    "@subsquid/rpc-client": "^4.15.1",
     "better-sqlite3": "12.4.5",
     "drizzle-orm": "0.44.7",
     "pg": "8.16.3",
@@ -103,6 +105,12 @@
       "optional": true
     },
     "@subsquid/evm-rpc": {
+      "optional": true
+    },
+    "@subsquid/http-client": {
+      "optional": true
+    },
+    "@subsquid/rpc-client": {
       "optional": true
     },
     "@opentelemetry/api": {

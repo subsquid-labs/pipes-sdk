@@ -179,23 +179,27 @@ export function createEvmFallback<F extends FieldSelection>(
   return fallback
 }
 
-const RPC_PEERS = ['@subsquid/evm-rpc', '@subsquid/evm-normalization']
+// The full optional "RPC stack": `@subsquid/evm-rpc` + `@subsquid/evm-normalization` and evm-rpc's
+// own peers (`@subsquid/http-client`, `@subsquid/rpc-client`). A consumer installing only the first
+// two can still hit a module-not-found for the transitive peers, so all four are detected and named.
+const RPC_PEERS = ['@subsquid/evm-rpc', '@subsquid/evm-normalization', '@subsquid/http-client', '@subsquid/rpc-client']
 
 /**
- * If `e` is a module-not-found for one of the optional RPC peers, return an actionable error naming
- * both peers; otherwise return `e` unchanged. Matches the missing module by its exact quoted name,
- * so a module-not-found for a *different* module (a broken transitive dep) — and any other fault
- * thrown while loading the RPC stack (a syntax/init error) — surfaces as-is rather than being masked
- * as "peers missing". Handles both the ESM (`ERR_MODULE_NOT_FOUND`) and CJS (`MODULE_NOT_FOUND`)
- * loader codes, since the package ships both builds.
+ * If `e` is a module-not-found for one of the optional RPC-stack peers, return an actionable error
+ * naming the whole stack; otherwise return `e` unchanged. Matches the missing module by its exact
+ * quoted name, so a module-not-found for a *different* module (a broken transitive dep) — and any
+ * other fault thrown while loading the RPC stack (a syntax/init error) — surfaces as-is rather than
+ * being masked as "peers missing". Handles both the ESM (`ERR_MODULE_NOT_FOUND`) and CJS
+ * (`MODULE_NOT_FOUND`) loader codes, since the package ships both builds.
  */
 export function translateMissingRpcPeer(e: unknown, sourceName = 'rpc'): unknown {
   const err = e as NodeJS.ErrnoException
   const isModuleNotFound = err?.code === 'ERR_MODULE_NOT_FOUND' || err?.code === 'MODULE_NOT_FOUND'
   if (isModuleNotFound && RPC_PEERS.some((p) => err.message?.includes(`'${p}'`))) {
+    const list = RPC_PEERS.map((p) => `"${p}"`).join(', ')
     return new Error(
-      `RPC fallback source "${sourceName}" requires the optional peer dependencies ` +
-        `"${RPC_PEERS[0]}" and "${RPC_PEERS[1]}" — install them to use RPC sources, or use only 'portal' sources.`,
+      `RPC fallback source "${sourceName}" requires the optional peer dependencies ${list} — ` +
+        `install them to use RPC sources, or use only 'portal' sources.`,
     )
   }
   return err

@@ -44,6 +44,19 @@ describe('translateMissingRpcPeer', () => {
     expect((out as Error).message).toContain('optional peer dependencies')
   })
 
+  it("maps evm-rpc's transitive peers (http-client / rpc-client) and names the whole stack", () => {
+    // A consumer who installed only evm-rpc + evm-normalization can still miss these; the message
+    // must name them so the guidance is complete.
+    const out = translateMissingRpcPeer(
+      moduleNotFound("Cannot find package '@subsquid/http-client' imported from /app/rpc.js"),
+    )
+    const msg = (out as Error).message
+    expect(msg).toContain('@subsquid/http-client')
+    expect(msg).toContain('@subsquid/rpc-client')
+    expect(msg).toContain('@subsquid/evm-rpc')
+    expect(msg).toContain('@subsquid/evm-normalization')
+  })
+
   it('passes through a module-not-found for an UNRELATED module unchanged', () => {
     const original = moduleNotFound("Cannot find package 'some-other-dep' imported from /app/x.js")
     expect(translateMissingRpcPeer(original)).toBe(original) // not masked as a missing peer
