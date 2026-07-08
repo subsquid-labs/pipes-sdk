@@ -147,15 +147,18 @@ function buildTraceFilter(req: TraceRequest[] = []) {
   } of req) {
     const filter = new FilterBuilder<AnyTrace>()
     filter.propIn('type' as any, type)
-    filter.getIn((t) => (t.type === 'create' ? assertNotNull((t as any).action?.from) : undefined), createFrom)
-    filter.getIn((t) => (t.type === 'call' ? assertNotNull((t as any).action?.to) : undefined), callTo)
-    filter.getIn((t) => (t.type === 'call' ? assertNotNull((t as any).action?.from) : undefined), callFrom)
-    filter.getIn((t) => (t.type === 'call' ? assertNotNull((t as any).action?.sighash) : undefined), callSighash)
+    // Read action fields nullable-safely: `getIn` treats `undefined` as a non-match, and several of
+    // these are legitimately absent on valid traces (a `call` with empty input has no `sighash`; a
+    // `suicide`'s `refundAddress` is nullable) — asserting non-null would crash the whole stream.
+    filter.getIn((t) => (t.type === 'create' ? (t as any).action?.from : undefined), createFrom)
+    filter.getIn((t) => (t.type === 'call' ? (t as any).action?.to : undefined), callTo)
+    filter.getIn((t) => (t.type === 'call' ? (t as any).action?.from : undefined), callFrom)
+    filter.getIn((t) => (t.type === 'call' ? (t as any).action?.sighash : undefined), callSighash)
     filter.getIn(
-      (t) => (t.type === 'suicide' ? assertNotNull((t as any).action?.refundAddress) : undefined),
+      (t) => (t.type === 'suicide' ? ((t as any).action?.refundAddress ?? undefined) : undefined),
       suicideRefundAddress,
     )
-    filter.getIn((t) => (t.type === 'reward' ? assertNotNull((t as any).action?.author) : undefined), rewardAuthor)
+    filter.getIn((t) => (t.type === 'reward' ? (t as any).action?.author : undefined), rewardAuthor)
     items.add(filter, relations)
   }
 

@@ -139,6 +139,33 @@ describe('filterBlock', () => {
     expect(block.traces.map((t: any) => t.transactionIndex)).toEqual([0])
   })
 
+  it('filters callSighash without crashing when a call trace has no sighash (optional field)', () => {
+    const block = makeBlock({
+      traces: [
+        { transactionIndex: 0, traceAddress: [0], type: 'call', action: { to: '0x0', from: '0x0' } }, // no sighash
+        {
+          transactionIndex: 1,
+          traceAddress: [0],
+          type: 'call',
+          action: { to: '0x0', from: '0x0', sighash: '0xdeadbeef' },
+        },
+      ],
+    })
+    run(block, { traces: [{ callSighash: ['0xdeadbeef'] }] })
+    expect(block.traces.map((t: any) => t.transactionIndex)).toEqual([1]) // the sighash-less trace is a non-match, not a crash
+  })
+
+  it('filters suicideRefundAddress without crashing when refundAddress is null (nullable field)', () => {
+    const block = makeBlock({
+      traces: [
+        { transactionIndex: 0, traceAddress: [0], type: 'suicide', action: { refundAddress: null } },
+        { transactionIndex: 1, traceAddress: [0], type: 'suicide', action: { refundAddress: '0xbene' } },
+      ],
+    })
+    run(block, { traces: [{ suicideRefundAddress: ['0xbene'] }] })
+    expect(block.traces.map((t: any) => t.transactionIndex)).toEqual([1])
+  })
+
   it('expands trace → parents up the traceAddress chain', () => {
     const block = makeBlock({
       traces: [callTrace(0, [0]), callTrace(0, [0, 0]), callTrace(0, [0, 0, 0], { to: '0xdeep' })],
