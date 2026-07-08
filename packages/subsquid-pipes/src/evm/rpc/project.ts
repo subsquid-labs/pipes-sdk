@@ -60,3 +60,27 @@ export function keptByPosition<P, Q>(projected: P[], pre: Q[], kept: Q[]): P[] {
 
   return projected.filter((_, i) => survived.has(pre[i]))
 }
+
+interface FilterableBlock {
+  header: { number: number }
+  logs: unknown[]
+  transactions: unknown[]
+  traces: unknown[]
+  stateDiffs: unknown[]
+}
+
+/**
+ * Match the Portal's empty-block handling for the RPC source (which fetches full blocks, so every
+ * block in a range arrives even when filtering leaves it empty): drop a block left empty by
+ * filtering, EXCEPT the batch's boundary blocks (first + last) and — when `includeAllBlocks` is set
+ * — every block. Keeping the last block matters beyond parity: it is the batch's progress cursor, so
+ * dropping it would stall resume. Mirrors the Squid evm-rpc-stream `dropEmptyBlocks`.
+ */
+export function dropEmptyBlocks<B extends FilterableBlock>(blocks: B[], includeAllBlocks = false): B[] {
+  if (includeAllBlocks) return blocks
+
+  return blocks.filter((b, i) => {
+    if (i === 0 || i === blocks.length - 1) return true // boundary blocks: always present
+    return b.logs.length > 0 || b.transactions.length > 0 || b.traces.length > 0 || b.stateDiffs.length > 0
+  })
+}

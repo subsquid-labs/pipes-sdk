@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { FieldSelection } from '~/portal-client/query/evm.js'
 
-import { augmentFields, selectionGrew } from './project.js'
+import { augmentFields, dropEmptyBlocks, selectionGrew } from './project.js'
 
 /**
  * `augmentFields` adds the fields a request's where-clauses must read to be *evaluated* client-side
@@ -55,5 +55,44 @@ describe('selectionGrew', () => {
     const fields: FieldSelection = { log: { topics: true } }
     const augmented = augmentFields(fields, { logs: [{ address: ['0xaaa'] }] })
     expect(selectionGrew(augmented, fields)).toBe(true)
+  })
+})
+
+describe('dropEmptyBlocks', () => {
+  const blk = (
+    number: number,
+    parts: { logs?: unknown[]; transactions?: unknown[]; traces?: unknown[]; stateDiffs?: unknown[] } = {},
+  ) => ({
+    header: { number },
+    logs: parts.logs ?? [],
+    transactions: parts.transactions ?? [],
+    traces: parts.traces ?? [],
+    stateDiffs: parts.stateDiffs ?? [],
+  })
+
+  it('drops empty interior blocks but keeps the boundaries', () => {
+    const blocks = [blk(1), blk(2, { logs: [{}] }), blk(3), blk(4)]
+    // 1 kept (first), 2 kept (has a log), 3 dropped (empty interior), 4 kept (last)
+    expect(dropEmptyBlocks(blocks).map((b) => b.header.number)).toEqual([1, 2, 4])
+  })
+
+  it('keeps every block when includeAllBlocks is set', () => {
+    const blocks = [blk(1), blk(2), blk(3)]
+    expect(dropEmptyBlocks(blocks, true).map((b) => b.header.number)).toEqual([1, 2, 3])
+  })
+
+  it('keeps an interior block that has any data (tx / trace / stateDiff)', () => {
+    const blocks = [
+      blk(1),
+      blk(2, { transactions: [{}] }),
+      blk(3, { traces: [{}] }),
+      blk(4, { stateDiffs: [{}] }),
+      blk(5),
+    ]
+    expect(dropEmptyBlocks(blocks).map((b) => b.header.number)).toEqual([1, 2, 3, 4, 5])
+  })
+
+  it('keeps a lone empty block (it is both first and last — the progress cursor)', () => {
+    expect(dropEmptyBlocks([blk(7)]).map((b) => b.header.number)).toEqual([7])
   })
 })

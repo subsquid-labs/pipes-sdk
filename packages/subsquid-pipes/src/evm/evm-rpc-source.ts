@@ -18,7 +18,7 @@ import { Block, DataRequest, FieldSelection } from '~/portal-client/query/evm.js
 
 import { decodeBlock, withRequiredFields } from './rpc/decode.js'
 import { Relations, filterBlock, setUpRelations } from './rpc/filter.js'
-import { augmentFields, keptByPosition, selectionGrew } from './rpc/project.js'
+import { augmentFields, dropEmptyBlocks, keptByPosition, selectionGrew } from './rpc/project.js'
 import { toRequiredData } from './rpc/request.js'
 
 /** RPC method-selection toggles (the per-chain "C1" config) merged into the coarse fetch request. */
@@ -126,7 +126,10 @@ export class EvmRpcSource<F extends FieldSelection> {
 
     try {
       for await (const { blocks, finalizedHead } of stream) {
-        const data = blocks.map((raw) => this.#mapBlock(raw))
+        const mapped = blocks.map((raw) => this.#mapBlock(raw))
+        // Match the Portal: a block left empty by filtering is dropped (boundary blocks kept). The
+        // last kept block is also the batch's progress cursor.
+        const data = dropEmptyBlocks(mapped as any, this.#request.includeAllBlocks) as typeof mapped
         if (data.length === 0) continue
 
         const current = cursorFromHeader(data[data.length - 1] as any)
