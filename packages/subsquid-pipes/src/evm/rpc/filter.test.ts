@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { DataRequest } from '~/portal-client/query/evm.js'
 
+import { EvmQueryBuilder } from '../evm-query-builder.js'
 import { filterBlock, setUpRelations } from './filter.js'
 import { keptByPosition } from './project.js'
 import { toRequiredData } from './request.js'
@@ -19,6 +20,12 @@ function tx(transactionIndex: number, props: any = {}): any {
 }
 function callTrace(transactionIndex: number, traceAddress: number[], action: any = {}): any {
   return { transactionIndex, traceAddress, type: 'call', action: { to: '0x0', from: '0x0', ...action } }
+}
+function rewardTrace(transactionIndex: number, traceAddress: number[] = [0], author = '0xauthor'): any {
+  return { transactionIndex, traceAddress, type: 'reward', action: { author, value: '0x1' } }
+}
+function stateDiff(transactionIndex: number, address: string, kind: string): any {
+  return { transactionIndex, address, key: 'balance', kind }
 }
 function makeBlock(parts: { transactions?: any[]; logs?: any[]; traces?: any[]; stateDiffs?: any[] } = {}): any {
   return {
@@ -71,6 +78,75 @@ describe('filterBlock', () => {
     expect(block.logs).toHaveLength(0)
     expect(block.transactions).toHaveLength(0)
   })
+
+  it('matches logs by topic0 alone (regardless of address)', () => {
+    const block = makeBlock({ logs: [log(0, '0xaaa', ['0xt0']), log(1, '0xbbb', ['0xz'])] })
+    run(block, { logs: [{ topic0: ['0xt0'] }] })
+    expect(block.logs.map((l: any) => l.transactionIndex)).toEqual([0])
+  })
+
+  it('keeps an item matched by two requests only once (Set union, no duplicates)', () => {
+    const block = makeBlock({ logs: [log(0, '0xaaa', ['0xt0'])] })
+    // the single log matches BOTH requests — it must appear once, not twice
+    run(block, { logs: [{ address: ['0xaaa'] }, { topic0: ['0xt0'] }] })
+    expect(block.logs).toHaveLength(1)
+  })
+
+  it('an empty where matches every item of that type', () => {
+    const block = makeBlock({ logs: [log(0, '0xaaa'), log(1, '0xbbb')] })
+    run(block, { logs: [{}] })
+    expect(block.logs).toHaveLength(2)
+  })
+
+  it('matches traces by type', () => {
+    const block = makeBlock({ traces: [callTrace(0, [0]), rewardTrace(1)] })
+    run(block, { traces: [{ type: ['reward'] }] })
+    expect(block.traces.map((t: any) => t.type)).toEqual(['reward'])
+  })
+
+  it('matches stateDiffs by address and, separately, by kind', () => {
+    const diffs = () => [stateDiff(0, '0xaaa', '='), stateDiff(1, '0xbbb', '+')]
+
+    const byAddress = makeBlock({ stateDiffs: diffs() })
+    run(byAddress, { stateDiffs: [{ address: ['0xaaa'] }] })
+    expect(byAddress.stateDiffs.map((d: any) => d.transactionIndex)).toEqual([0])
+
+    const byKind = makeBlock({ stateDiffs: diffs() })
+    run(byKind, { stateDiffs: [{ kind: ['+'] }] })
+    expect(byKind.stateDiffs.map((d: any) => d.transactionIndex)).toEqual([1])
+  })
+
+  it('expands transaction → logs / traces / stateDiffs siblings', () => {
+    const block = makeBlock({
+      transactions: [tx(0, { to: '0xt' })],
+      logs: [log(0, '0xaaa'), log(1, '0xbbb')],
+      traces: [callTrace(0, [0]), callTrace(1, [0])],
+      stateDiffs: [stateDiff(0, '0xaaa', '='), stateDiff(1, '0xbbb', '=')],
+    })
+    run(block, { transactions: [{ to: ['0xt'], logs: true, traces: true, stateDiffs: true }] })
+    expect(block.transactions.map((t: any) => t.transactionIndex)).toEqual([0])
+    expect(block.logs.map((l: any) => l.transactionIndex)).toEqual([0])
+    expect(block.traces.map((t: any) => t.transactionIndex)).toEqual([0])
+    expect(block.stateDiffs.map((d: any) => d.transactionIndex)).toEqual([0])
+  })
+
+  it('expands log → transactionTraces siblings', () => {
+    const block = makeBlock({
+      logs: [log(0, '0xaaa')],
+      traces: [callTrace(0, [0]), callTrace(1, [0])],
+    })
+    run(block, { logs: [{ address: ['0xaaa'], transactionTraces: true }] })
+    expect(block.traces.map((t: any) => t.transactionIndex)).toEqual([0])
+  })
+
+  it('expands trace → parents up the traceAddress chain', () => {
+    const block = makeBlock({
+      traces: [callTrace(0, [0]), callTrace(0, [0, 0]), callTrace(0, [0, 0, 0], { to: '0xdeep' })],
+    })
+    run(block, { traces: [{ callTo: ['0xdeep'], parents: true }] })
+    // the matched deep trace plus its ancestors [0,0] and [0] (original order preserved)
+    expect(block.traces.map((t: any) => t.traceAddress)).toEqual([[0], [0, 0], [0, 0, 0]])
+  })
 })
 
 describe('toRequiredData', () => {
@@ -87,6 +163,32 @@ describe('toRequiredData', () => {
     const upgraded = toRequiredData({ transactions: [{ to: ['0xb'] }], logs: [{}] }, { transaction: { gasUsed: true } })
     expect(upgraded.receipts).toBe(true)
     expect(upgraded.logs).toBe(false)
+  })
+
+  it('derives traces / stateDiffs / logs from relation includes on other item types', () => {
+    expect(toRequiredData({ logs: [{ transactionTraces: true }] }, {}).traces).toBe(true)
+    expect(toRequiredData({ logs: [{ transactionStateDiffs: true }] }, {}).stateDiffs).toBe(true)
+    expect(toRequiredData({ transactions: [{ traces: true }] }, {}).traces).toBe(true)
+    expect(toRequiredData({ transactions: [{ stateDiffs: true }] }, {}).stateDiffs).toBe(true)
+    expect(toRequiredData({ traces: [{ transactionLogs: true }] }, {}).logs).toBe(true)
+  })
+})
+
+describe('merged multi-request required-data (#510 regression)', () => {
+  it('applies the logs↔receipts dedup on the merged aggregate, not per request', () => {
+    // Two independent request items, exactly as a multi-`add*` config produces before the stream
+    // runs. `mergeDataRequests` concatenates them into one request; a single `toRequiredData` then
+    // decides the fetch toggles on the aggregate.
+    const merged = new EvmQueryBuilder().mergeDataRequests(
+      { logs: [{ address: ['0xaaa'] }] }, // wants raw logs
+      { transactions: [{ to: ['0xbbb'] }] }, // wants a tx; its receipt field upgrades to receipts
+    )
+    const required = toRequiredData(merged, { transaction: { gasUsed: true } })
+
+    // Receipts already carry the logs, so a redundant `eth_getLogs` must NOT be requested — even
+    // though one of the merged items asked for logs. Deduping per-request (the pre-#510 bug) would
+    // leave `logs: true` here.
+    expect(required).toEqual({ logs: false, receipts: true, traces: false, stateDiffs: false })
   })
 })
 
