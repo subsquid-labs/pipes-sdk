@@ -16,7 +16,7 @@ Supports **prereleases** (`1.0.0-alpha.14`, `1.0.0-beta.1`, `1.0.0-rc.1`) as wel
 ## Preconditions
 
 Confirm before starting:
-- `git status` is clean on `design/sdk1` — the branch the 1.0 alpha line is cut from (or the version bump is staged deliberately). Releases are **not** cut from `main`: `main` trails `design/sdk1`, and the tag-triggered workflow builds and publishes the code from the tagged commit, so the tag must sit on `design/sdk1`.
+- `git status` is clean on `main` — the branch releases are cut from (or the version bump is staged deliberately). The 1.0 line originally lived on `design/sdk1`, but that branch was merged into `main` (PR #37) and deleted; since then `main` is where development happens and where release tags sit. The tag-triggered workflow builds and publishes the code from the tagged commit, so make sure `main` is up to date with `origin/main` before tagging.
 - The user named a target version, e.g. `1.0.0-alpha.14` (prerelease) or `1.0.0` (stable). If not, ask. See [Choosing the next version](#choosing-the-next-version).
 - A **trusted publisher** for `@subsquid/pipes` is configured on npmjs.com pointing at `subsquid-labs/pipes-sdk` → `.github/workflows/release-subsquid-pipes.yml`. This is a one-time setup on npm (Package → Settings → Trusted Publishing). Without it, the `publish` job 404s. See [First-time setup](#first-time-setup-trusted-publishing).
 
@@ -34,7 +34,7 @@ The workflow's `Verify version` step compares the exact string — including any
 git add packages/subsquid-pipes/package.json
 git commit -m "chore(release): @subsquid/pipes <version>"
 git tag pipes-v<version>
-git push origin design/sdk1
+git push origin main
 git push origin pipes-v<version>
 ```
 
