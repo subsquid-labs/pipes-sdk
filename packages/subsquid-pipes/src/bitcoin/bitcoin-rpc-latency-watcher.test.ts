@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { PortalClient } from '~/portal-client/client.js'
 import { type MockBitcoinRpc, createMockBitcoinRpc } from '~/testing/bitcoin/index.js'
 import { createTestLogger } from '~/testing/test-logger.js'
 
@@ -153,7 +154,7 @@ describe('bitcoinRpcLatencyWatcher factory', () => {
     })
 
     const builder = new BitcoinQueryBuilder<{ block: { number: true; timestamp: true } }>()
-    await transformer.setupQuery({ query: builder, logger: createTestLogger() })
+    await transformer.setupQuery({ query: builder, logger: createTestLogger(), portal: {} as PortalClient })
 
     expect(builder.getFields()).toEqual({
       block: { number: true, timestamp: true },

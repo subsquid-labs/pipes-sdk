@@ -1,9 +1,12 @@
 import { Query } from '~/portal-client/index.js'
 
+import { sha256Hex, stringToArrayBuffer } from '../internal/hash.js'
 import { Heap } from '../internal/heap.js'
 import { BlockRangeConfigurationError } from './errors.js'
 import { PortalRange, parsePortalRange } from './portal-range.js'
 import { QueryAwareTransformer, SetupQueryFn, TransformerArgs } from './transformer.js'
+
+export { stringToArrayBuffer }
 
 /**
  * A range of blocks with inclusive boundaries
@@ -167,6 +170,44 @@ export abstract class QueryBuilder<F extends {}, R = any> {
 export interface Portal {
   getHead(): Promise<{ number: number; hash: string } | undefined>
   resolveTimestamp(seconds: number): Promise<number>
+}
+
+/**
+ * Resolves a {@link NaturalRange} to concrete block numbers.
+ *
+ * - `Date` boundaries are resolved to block numbers via `portal.resolveTimestamp`
+ *   (same semantics as {@link QueryBuilder.calculateRanges}).
+ * - Returns `null` for `from: 'latest'` — such a range has no historical span to resolve.
+ */
+export async function resolveNaturalRange(portal: Portal, range: NaturalRange): Promise<Range | null> {
+  if (range.from === 'latest') return null
+
+  const resolveValue = async (value: number | Date): Promise<number> => {
+    if (typeof value === 'number') return value
+
+    try {
+      return await portal.resolveTimestamp(dateToSeconds(value))
+    } catch (error) {
+      if (error instanceof Error && error.message.toLowerCase().includes('no chunk found for timestamp')) {
+        throw new BlockRangeConfigurationError(
+          `Failed to resolve timestamp ${value.toISOString()} to a block number. The block for this timestamp may not have been produced yet.`,
+        )
+      }
+      throw error
+    }
+  }
+
+  const from = await resolveValue(range.from)
+  const to = range.to !== undefined ? await resolveValue(range.to) : undefined
+
+  // non-strict comparison on purpose. `to` can be zero
+  if (to != null && to < from) {
+    throw new BlockRangeConfigurationError(
+      `Invalid block range: 'from' (${from}) must be less than or equal to 'to' (${to})`,
+    )
+  }
+
+  return { from, to }
 }
 
 function dateToSeconds(date: Date): number {
@@ -434,29 +475,4 @@ export async function hashQuery(query: Query): Promise<string> {
   const { fromBlock, toBlock, parentBlockHash, ...unique } = query
 
   return await sha256Hex(JSON.stringify(unique))
-}
-
-/**
- * UTF-8 encode a JS string to ArrayBuffer.
- * @internal
- */
-export function stringToArrayBuffer(str: string): Uint8Array {
-  if (typeof TextEncoder !== 'undefined') {
-    return new TextEncoder().encode(str)
-  }
-
-  throw new Error(
-    'TextEncoder is not supported in this environment. Please ensure you are running in a modern JavaScript environment that supports TextEncoder (Node.js 11+, modern browsers, or include a polyfill).',
-  )
-}
-
-async function sha256Hex(data: string): Promise<string> {
-  // globalThis.crypto is available in browsers, Node 18+, and Cloudflare Workers
-  if (typeof crypto === 'undefined' || !crypto.subtle) {
-    throw new Error(
-      'crypto.subtle is not supported in this environment. Please ensure you are running in a modern JavaScript environment that supports crypto.subtle (Node.js 18+, modern browsers, or include a polyfill).',
-    )
-  }
-  const d = await crypto.subtle.digest('SHA-256', stringToArrayBuffer(data))
-  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }

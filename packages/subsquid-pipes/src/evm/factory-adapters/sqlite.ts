@@ -1,5 +1,6 @@
 import { AbiEvent } from '@subsquid/evm-abi'
 
+import { Range } from '~/core/query-builder.js'
 import { SqliteOptions, SqliteSync, loadSqlite } from '~/drivers/sqlite/sqlite.js'
 import { jsonParse, jsonStringify } from '~/internal/json.js'
 
@@ -147,6 +148,28 @@ class SqliteFactoryAdapter<T extends EventArgs> implements FactoryPersistentAdap
     this.clearCache()
   }
 
+  async getPreindexedRange(key: string): Promise<Range | null> {
+    const row = this.#db.get<{ value: string }>('SELECT value FROM "metadata" WHERE id = ?', [`preindex:${key}`])
+    if (!row) return null
+
+    const range = jsonParse(row.value)
+    if (typeof range?.from !== 'number' || typeof range?.to !== 'number') return null
+
+    return range
+  }
+
+  async setPreindexedRange(key: string, range: Range): Promise<void> {
+    this.#db.exec(
+      `INSERT INTO "metadata" (id, value) VALUES (?, ?) ON CONFLICT (id) DO UPDATE SET "value" = excluded.value`,
+      [`preindex:${key}`, jsonStringify(range)],
+    )
+  }
+
+  /**
+   * Fork rollback. Intentionally leaves the preindex watermark untouched: the watermark
+   * is only ever advanced up to the finalized head, and forks can only happen above it
+   * (blockNumber >= finalized >= watermark), so pre-indexed children are never removed here.
+   */
   async remove(blockNumber: number): Promise<void> {
     this.#db.exec(`DELETE FROM factory WHERE block_number > ?`, [blockNumber])
     this.clearCache()

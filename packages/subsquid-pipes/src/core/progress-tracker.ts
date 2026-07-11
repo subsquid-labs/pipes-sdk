@@ -218,6 +218,40 @@ export type ProgressTrackerOptions = {
   interval?: number
 }
 
+/**
+ * Builds the standard progress log payload (percent, ETA, blocks/s, bytes/s).
+ * Reused by phases that wrap a nested stream (e.g. factory pre-indexing) to keep
+ * their progress lines consistent with the main loop while adding their own prefix.
+ */
+export function formatProgressMessage({ state, interval }: ProgressEvent['progress']): Record<string, string> {
+  const bps =
+    interval.processedBlocks.perSecond > 1
+      ? formatNumber(interval.processedBlocks.perSecond, 0)
+      : interval.processedBlocks.perSecond.toFixed(2)
+
+  const msg: Record<string, string> = {
+    message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%), ${displayEstimatedTime(state.etaSeconds)}`,
+    blocks: `${bps} blocks/second`,
+    bytes: `${humanBytes(interval.bytesDownloaded.perSecond)}/second`,
+  }
+
+  if (interval.requests.total.count > 0) {
+    msg['requests'] = [
+      interval.requests.successful.percent > 0
+        ? `${formatNumber(interval.requests.successful.percent)}% successful`
+        : false,
+      interval.requests.rateLimited.percent
+        ? `${formatNumber(interval.requests.rateLimited.percent)}% rate limited`
+        : false,
+      interval.requests.failed.percent > 0 ? `${formatNumber(interval.requests.failed.percent)}% failed` : false,
+    ]
+      .filter(Boolean)
+      .join(', ')
+  }
+
+  return msg
+}
+
 const DEFAULT_BLOCKS_BUCKETS = [1, 5, 10, 50, 100, 500, 1000, 2000, 3000, 5000]
 const DEFAULT_BYTES_BUCKETS = [
   1024, // 1kb
@@ -260,38 +294,13 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
   }
 
   if (!onProgress) {
-    onProgress = ({ progress: { state, interval }, logger }) => {
-      if (state.current === 0 && state.last === 0) {
+    onProgress = ({ progress, logger }) => {
+      if (progress.state.current === 0 && progress.state.last === 0) {
         logger.info({ message: 'Initializing...' })
         return
       }
 
-      const bps =
-        interval.processedBlocks.perSecond > 1
-          ? formatNumber(interval.processedBlocks.perSecond, 0)
-          : interval.processedBlocks.perSecond.toFixed(2)
-
-      const msg: Record<string, string> = {
-        message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%), ${displayEstimatedTime(state.etaSeconds)}`,
-        blocks: `${bps} blocks/second`,
-        bytes: `${humanBytes(interval.bytesDownloaded.perSecond)}/second`,
-      }
-
-      if (interval.requests.total.count > 0) {
-        msg['requests'] = [
-          interval.requests.successful.percent > 0
-            ? `${formatNumber(interval.requests.successful.percent)}% successful`
-            : false,
-          interval.requests.rateLimited.percent
-            ? `${formatNumber(interval.requests.rateLimited.percent)}% rate limited`
-            : false,
-          interval.requests.failed.percent > 0 ? `${formatNumber(interval.requests.failed.percent)}% failed` : false,
-        ]
-          .filter(Boolean)
-          .join(', ')
-      }
-
-      logger.info(msg)
+      logger.info(formatProgressMessage(progress))
     }
   }
 

@@ -1,12 +1,22 @@
 import type { AbiEvent, EventParams } from '@subsquid/evm-abi'
 import { Codec, Sink } from '@subsquid/evm-codec'
 
-import { BatchContext, PortalRange, ProfilerOptions, Transformer, formatWarning, parsePortalRange } from '~/core/index.js'
+import {
+  BatchContext,
+  Logger,
+  PortalRange,
+  ProfilerOptions,
+  Transformer,
+  formatWarning,
+  parsePortalRange,
+} from '~/core/index.js'
+import { resolveNaturalRange } from '~/core/query-builder.js'
 import { arrayify, findDuplicates } from '~/internal/array.js'
+import { PortalClient } from '~/portal-client/client.js'
 import { Log, LogRequest } from '~/portal-client/query/evm.js'
 
 import { evmQuery } from './evm-query-builder.js'
-import { Factory } from './factory.js'
+import { Factory, TOO_MANY_CHILDREN } from './factory.js'
 
 export type FactoryEvent<T> = {
   contract: string
@@ -61,12 +71,8 @@ export type IndexedKeys<T> = {
   [K in keyof T]: T[K] extends { indexed: true } ? K : never
 }[keyof T]
 
-type CodecValueType<T extends AbiEvent<any>, K extends keyof T['params']> = T['params'][K] extends Codec<
-  any,
-  infer TOut
->
-  ? TOut
-  : never
+type CodecValueType<T extends AbiEvent<any>, K extends keyof T['params']> =
+  T['params'][K] extends Codec<any, infer TOut> ? TOut : never
 
 export type IndexedParamsInput<T extends AbiEvent<any>> = Partial<{
   [K in IndexedKeys<T['params']>]: CodecValueType<T, K> | CodecValueType<T, K>[]
@@ -251,16 +257,13 @@ function splitEvents<T extends AbiEvent<any>>(normalizedEvents: EventWithArgs<T>
   }
 }
 
-function buildEventRequests<T extends AbiEvent<any>, C extends Contracts>(
-  eventWithArgs: EventWithArgs<T>[],
-  contracts?: C,
-) {
+function buildEventRequests<T extends AbiEvent<any>>(eventWithArgs: EventWithArgs<T>[], address?: string[]) {
   return eventWithArgs
     .map<LogRequest | undefined>((event) => {
       const topics = buildEventTopics(event.event, event.params)
       return {
         ...topics,
-        address: Factory.isFactory(contracts) ? undefined : contracts,
+        address,
         transaction: true,
       }
     })
@@ -331,34 +334,90 @@ export function evmDecoder<T extends Events, C extends Contracts>({
     contracts && !Factory.isFactory(contracts) ? contracts.map((contract) => contract.toLowerCase()) : undefined
 
   const query = evmQuery().addFields(decodedEventFields)
+  let registration: Promise<void> | undefined
 
-  if (Factory.isFactory(contracts)) {
-    query.addLog({ range: decodedRange, request: contracts.buildFactoryEventRequest() })
+  const addChildEventRequests = (range: PortalRange, address?: string[]) => {
+    if (eventsWithoutParams.length > 0) {
+      query.addLog({
+        range,
+        request: {
+          address,
+          topic0: eventTopic0,
+          transaction: true,
+        },
+      })
+    }
+
+    for (const request of buildEventRequests(eventsWithParams, address)) {
+      query.addLog({ range, request })
+    }
   }
 
-  if (eventsWithoutParams.length > 0) {
-    query.addLog({
-      range: decodedRange,
-      request: {
-        address: !Factory.isFactory(contracts) ? contracts : undefined,
-        topic0: eventTopic0,
-        transaction: true,
-      },
-    })
+  /**
+   * Runs the pre-indexing phase and registers the split child-event requests:
+   * a server-side address filter for the pre-indexed range and a wildcard tail above it.
+   * Returns `null` when the caller should fall back to a single wildcard request.
+   */
+  const setupPreindexedRequests = async (
+    factory: Factory<any>,
+    ctx: { portal: PortalClient; logger: Logger },
+  ): Promise<number | null> => {
+    const resolved = await resolveNaturalRange(ctx.portal, decodedRange)
+    if (!resolved) return null
+
+    const watermark = await factory.ensurePreindexed({ portal: ctx.portal, logger: ctx.logger, range: resolved })
+    if (watermark === null) return null
+
+    const addresses = await factory.getChildAddresses()
+    if (addresses.length > factory.maxAddressFilterSize()) {
+      ctx.logger.warn(TOO_MANY_CHILDREN(addresses.length, factory.maxAddressFilterSize()))
+
+      return null
+    }
+
+    // Children discovered up to the watermark are final — historical child events can be
+    // filtered server-side. No children below the watermark means no child events there either.
+    if (addresses.length > 0) {
+      addChildEventRequests({ from: resolved.from, to: watermark }, addresses)
+    }
+
+    if (resolved.to === undefined || resolved.to > watermark) {
+      addChildEventRequests({ from: watermark + 1, to: resolved.to })
+    }
+
+    return watermark
   }
 
-  for (const request of buildEventRequests(eventsWithParams, contracts)) {
-    query.addLog({ range: decodedRange, request })
+  const registerRequests = async (ctx: { portal: PortalClient; logger: Logger }): Promise<void> => {
+    if (Factory.isFactory(contracts)) {
+      // The factory-creation request spans the full range: inline discovery keeps
+      // running above the pre-indexed boundary
+      query.addLog({ range: decodedRange, request: contracts.buildFactoryEventRequest() })
+
+      const watermark = contracts.preindexEnabled() ? await setupPreindexedRequests(contracts, ctx) : null
+
+      if (watermark === null) {
+        addChildEventRequests(decodedRange)
+      }
+    } else {
+      addChildEventRequests(decodedRange, contracts)
+    }
   }
 
   return query
     .build({
-      setupQuery: (config) => {
+      setupQuery: async (config) => {
         const allEventTopics = normalizedEvents.map(({ event }) => event.topic)
         const duplicates = findDuplicates(allEventTopics)
         if (duplicates.length) {
           config.logger.error(DUPLICATED_EVENTS(getDuplicateEvents(events, duplicates)))
         }
+
+        // Memoized as a promise: concurrent setup calls wait for the same registration,
+        // and a failed one stays rejected — a retried stream start fails loudly instead
+        // of silently merging a query with no child-event requests
+        registration ??= registerRequests(config)
+        await registration
 
         config.query.merge(query)
       },

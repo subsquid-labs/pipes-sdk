@@ -3,6 +3,7 @@ import * as p from '@subsquid/evm-codec'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import { PortalRange, QueryAwareTransformer } from '~/core/index.js'
+import { PortalClient } from '~/portal-client/client.js'
 import { encodeEvent, evmPortalMockStream, mockBlock, resetMockBlockCounter } from '~/testing/evm/index.js'
 import { MockPortal, MockResponse, createMockPortal, createTestLogger, readAll } from '~/testing/index.js'
 
@@ -26,12 +27,13 @@ import { contractFactoryStore } from './factory-adapters/sqlite.js'
 async function captureQueryBuilder(
   decoder: QueryAwareTransformer<any, any, EvmQueryBuilder<any>>,
   logger = createTestLogger(),
+  portal: PortalClient = {} as PortalClient,
 ) {
   const query = new EvmQueryBuilder()
   await decoder.setupQuery({
     query,
     logger,
-    // portal: {} as any,
+    portal,
   })
   return query
 }
