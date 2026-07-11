@@ -283,11 +283,21 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
           const data = await this.applyTransformers(ctx, batch.blocks as T)
 
           yield { data, ctx }
+          // batchSpan was ended by the consumer via batchEnd(ctx) -> ctx.profiler.end()
+        } else {
+          // Nothing to yield, so batchEnd() is never called. Close the span here
+          // to keep onStart/onEnd balanced and avoid leaking spans into sibling parents.
+          batchSpan.end()
         }
 
         batchSpan = Span.root('batch', this.#options.profiler).addLabels('core')
         readSpan = batchSpan.start('fetch data').addLabels('core')
       }
+
+      // The last batchSpan/readSpan created by the bottom-of-loop reassignment
+      // are dangling after the for-await exits normally. End them so onEnd fires.
+      readSpan.end()
+      batchSpan.end()
     }
 
     // Cleanup is owned by the callers (pipeTo/[Symbol.asyncIterator]), which run stop() in a

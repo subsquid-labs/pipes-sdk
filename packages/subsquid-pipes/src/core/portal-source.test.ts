@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
+import { SpanHooks } from '~/core/profiling.js'
 import { createTarget } from '~/core/target.js'
 import { Target } from '~/core/target.js'
 import { TransformerArgs, createTransformer } from '~/core/transformer.js'
@@ -549,6 +550,79 @@ describe('stop lifecycle', () => {
     await expect(readAll(stream)).rejects.toThrow('start failed')
 
     expect(stopSpy).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('profiler span lifecycle', () => {
+  let mockPortal: MockPortal
+
+  afterEach(async () => {
+    await mockPortal?.close()
+  })
+
+  it('ends every batch span — including empty batches and final iteration', async () => {
+    mockPortal = await createMockPortal([
+      // Empty batch (204) — previously caused batchSpan to leak because the
+      // loop reassigns batchSpan without ending the old one when blocks.length === 0.
+      { statusCode: 204 },
+      // Non-empty batch — batchSpan ends via batchEnd(ctx).
+      {
+        statusCode: 200,
+        data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
+      },
+      // Another empty batch before we finish the range.
+      { statusCode: 204 },
+      // Final non-empty batch hits toBlock; the last batchSpan created by
+      // the bottom-of-loop reassignment must also be ended on normal exit.
+      {
+        statusCode: 200,
+        data: [{ header: { number: 2, hash: '0x456', timestamp: 2000 } }],
+      },
+    ])
+
+    const starts: string[] = []
+    const ends: string[] = []
+
+    const makeHooks = (name: string): SpanHooks => ({
+      onStart(childName) {
+        starts.push(childName)
+        return makeHooks(childName)
+      },
+      onEnd() {
+        ends.push(name)
+      },
+    })
+
+    const rootHooks: SpanHooks = {
+      onStart(name) {
+        starts.push(name)
+        return makeHooks(name)
+      },
+      onEnd() {
+        // root span on the source options isn't ended itself; only children are.
+      },
+    }
+
+    const stream = evmPortalStream({
+      id: 'test',
+      portal: mockPortal.url,
+      outputs: blockDecoder({ from: 0, to: 2 }),
+      profiler: rootHooks,
+    })
+
+    await readAll(stream)
+
+    const batchStarts = starts.filter((n) => n === 'batch').length
+    const batchEnds = ends.filter((n) => n === 'batch').length
+
+    expect(batchStarts).toBeGreaterThan(0)
+    expect(batchEnds).toBe(batchStarts)
+
+    // 'fetch data' spans are started once per loop iteration and must all end too.
+    const fetchStarts = starts.filter((n) => n === 'fetch data').length
+    const fetchEnds = ends.filter((n) => n === 'fetch data').length
+    expect(fetchStarts).toBeGreaterThan(0)
+    expect(fetchEnds).toBe(fetchStarts)
   })
 })
 
