@@ -2,7 +2,7 @@ import { PgDialect } from 'drizzle-orm/pg-core'
 import { describe, expect, it, vi } from 'vitest'
 
 import { BatchContext } from '~/core/index.js'
-import { createTestLogger } from '~/testing/index.js'
+import { testLogger } from '~/testing/index.js'
 
 import { PostgresState } from './postgres-state.js'
 
@@ -32,7 +32,7 @@ function ctxFor(
   rollbackChain: { number: number; hash: string }[],
 ): BatchContext {
   return {
-    logger: createTestLogger(),
+    logger: testLogger(),
     profiler: fakeSpan(),
     stream: {
       head: { finalized },
@@ -67,7 +67,7 @@ async function seededState(persistedFinalized: unknown) {
     }),
   }
   const state = new PostgresState(client as any, { unfinalizedBlocksRetention: 1000 })
-  await state.getCursor({ logger: createTestLogger() })
+  await state.getCursor({ logger: testLogger() })
 
   return state
 }
@@ -76,7 +76,7 @@ describe('PostgresState — resume state & cursor persistence', () => {
   it('returns the persisted cursor and finalized head as TargetState', async () => {
     const state = await seededState(block(100))
 
-    const resume = await state.getCursor({ logger: createTestLogger() })
+    const resume = await state.getCursor({ logger: testLogger() })
 
     expect(resume).toEqual({ latest: { number: 50, hash: '0x50' }, finalized: block(100) })
   })
@@ -84,7 +84,7 @@ describe('PostgresState — resume state & cursor persistence', () => {
   it('returns finalized: null when no finalized head was persisted', async () => {
     const state = await seededState({})
 
-    const resume = await state.getCursor({ logger: createTestLogger() })
+    const resume = await state.getCursor({ logger: testLogger() })
 
     expect(resume).toEqual({ latest: { number: 50, hash: '0x50' }, finalized: null })
   })
@@ -156,7 +156,7 @@ describe('PostgresState — cursor key binding', () => {
 
     expect(state.cursorKey).toBe('pipe-x')
 
-    await state.getCursor({ logger: createTestLogger() })
+    await state.getCursor({ logger: testLogger() })
     expect(queries[0].params).toEqual(['pipe-x'])
 
     const executed: any[] = []
@@ -243,7 +243,7 @@ describe('PostgresState — legacy cursor migration', () => {
     const state = new PostgresState(client as any, {})
     state.bindCursorKey('pipe-x')
 
-    const resume = await state.getCursor({ logger: createTestLogger() })
+    const resume = await state.getCursor({ logger: testLogger() })
 
     expect(resume).toEqual({ latest: { number: 200, hash: '0x200' }, finalized: null })
     expect(updates).toHaveLength(0)
@@ -256,7 +256,7 @@ describe('PostgresState — legacy cursor migration', () => {
     const state = new PostgresState(client as any, { id: 'pinned' })
     state.bindCursorKey('pipe-x')
 
-    await expect(state.getCursor({ logger: createTestLogger() })).resolves.toBeUndefined()
+    await expect(state.getCursor({ logger: testLogger() })).resolves.toBeUndefined()
     expect(updates).toHaveLength(0)
   })
 
@@ -265,7 +265,7 @@ describe('PostgresState — legacy cursor migration', () => {
     const state = new PostgresState(client as any, {})
     state.bindCursorKey('stream')
 
-    const resume = await state.getCursor({ logger: createTestLogger() })
+    const resume = await state.getCursor({ logger: testLogger() })
 
     expect(resume).toEqual({ latest: { number: 50, hash: '0x50' }, finalized: null })
     expect(updates).toHaveLength(0)

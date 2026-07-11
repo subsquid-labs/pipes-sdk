@@ -10,7 +10,7 @@ import { JSONEncoder } from '@google-cloud/bigquery-storage/build/src/managedwri
 
 import { doWithRetry } from '~/internal/function.js'
 
-import { BQ_ERR, BigQueryTargetError } from './errors.js'
+import { BIGQUERY_ERROR_CODES, BigQueryTargetError } from './errors.js'
 import { type TrackedTable, normalizePartitionColumn } from './tables.js'
 import { isTransientError } from './utils.js'
 
@@ -129,7 +129,7 @@ type StreamState = {
  * The store buffers rows in memory during `onData` (via `insert(table, rows)`) and flushes
  * them all in parallel when the target calls `commitBatch()`.
  */
-export class BigQueryStore {
+export class BigQueryWriter {
   readonly #bigquery: BigQuery
   readonly #writer: managedwriter.WriterClient
   readonly #allowlist: Set<string>
@@ -179,7 +179,7 @@ export class BigQueryStore {
   insert(table: string, rows: Row[]): void {
     if (!this.#allowlist.has(table)) {
       throw new BigQueryTargetError(
-        BQ_ERR.UNREGISTERED_TABLE,
+        BIGQUERY_ERROR_CODES.UNREGISTERED_TABLE,
         `Table '${table}' is not registered for fork tracking. ` +
           `Registered tables: ${[...this.#allowlist].sort().join(', ') || '(none)'}. ` +
           `Add it to the bigqueryTarget({ tables: [...] }) config so its rows can be cleaned up on reorg.`,
@@ -230,7 +230,7 @@ export class BigQueryStore {
     const schema = this.#schemas.get(table)
     if (!schema) {
       throw new BigQueryTargetError(
-        BQ_ERR.INTERNAL_SCHEMA_MAP,
+        BIGQUERY_ERROR_CODES.INTERNAL_SCHEMA_MAP,
         `Internal: no schema registered for tracked table '${table}'`,
       )
     }
@@ -269,7 +269,7 @@ export class BigQueryStore {
           // Unreachable — allowlist and schema map are populated together — but throw with
           // context if it ever happens, rather than failing inside the proto encoder.
           throw new BigQueryTargetError(
-            BQ_ERR.INTERNAL_SCHEMA_MAP,
+            BIGQUERY_ERROR_CODES.INTERNAL_SCHEMA_MAP,
             `Internal: no schema registered for tracked table '${table}'`,
           )
         }
@@ -485,7 +485,7 @@ function assertNoRowErrors(response: unknown, tableFqnPath: string, offset: numb
     .join('; ')
   const more = errs.length > 3 ? ` (and ${errs.length - 3} more)` : ''
   throw new BigQueryTargetError(
-    BQ_ERR.APPEND_ROW_REJECTED,
+    BIGQUERY_ERROR_CODES.APPEND_ROW_REJECTED,
     `BigQuery rejected ${errs.length} row(s) in AppendRows for ${tableFqnPath} at offset ` +
       `${offset}: ${summary}${more}.\n\n` +
       `These rows are NOT written. Common causes: proto-schema mismatch with table schema, ` +

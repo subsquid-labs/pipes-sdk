@@ -21,7 +21,7 @@ export type MockBitcoinRpc = {
  * `Authorization` header value) so tests can assert on transport-level behavior
  * such as Basic auth.
  */
-export async function createMockBitcoinRpc(handler: MockBitcoinRpcHandler): Promise<MockBitcoinRpc> {
+export async function mockBitcoinRpc(handler: MockBitcoinRpcHandler): Promise<MockBitcoinRpc> {
   const calls: MockRpcCall[] = []
 
   const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {

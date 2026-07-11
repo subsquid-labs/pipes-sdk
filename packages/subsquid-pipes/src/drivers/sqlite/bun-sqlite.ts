@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite'
+
 import { SqliteOptions, SqliteSync } from './sqlite.js'
 
 export class BunSQLite implements SqliteSync {

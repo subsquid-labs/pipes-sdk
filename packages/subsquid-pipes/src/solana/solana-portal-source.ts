@@ -10,11 +10,11 @@ import {
   Logger,
   Outputs,
   PortalCache,
-  PortalSource,
+  PortalStream,
   SpanHooks,
   Transformer,
-  createDefaultLogger,
   createTransformer,
+  defaultLogger,
   mergeOutputs,
 } from '../core/index.js'
 import { SolanaQueryBuilder } from './solana-query-builder.js'
@@ -69,7 +69,7 @@ export function solanaPortalStream<Out extends SolanaOutputs>({
     block: { hash: true, number: true },
   })
 
-  return new PortalSource<SolanaQueryBuilder<F>, SolanaPortalStream<Out>>({
+  return new PortalStream<SolanaQueryBuilder<F>, SolanaPortalStream<Out>>({
     id,
     portal,
     query,

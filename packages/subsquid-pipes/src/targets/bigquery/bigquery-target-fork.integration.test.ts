@@ -4,15 +4,9 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import type { BlockCursor } from '~/core/index.js'
 import { evmPortalStream } from '~/evm/evm-portal-source.js'
-import {
-  type MockPortal,
-  type MockResponse,
-  blockDecoder,
-  createMockPortal,
-  createTestLogger,
-} from '~/testing/index.js'
+import { type MockPortal, type MockResponse, blockDecoder, mockPortal, testLogger } from '~/testing/index.js'
 
-import { type BigQueryStore } from './bigquery-store.js'
+import { type BigQueryWriter } from './bigquery-store.js'
 import { bigqueryTarget } from './bigquery-target.js'
 import {
   DATASET,
@@ -35,7 +29,7 @@ import { ensureTrackedTable } from './tables.js'
  *   pnpm vitest run src/targets/bigquery/bigquery-target-fork.integration.test.ts
  *
  * Lives in its own file because:
- *   - These tests run real `target.write()` + `target.fork()` against a live BQ table; each
+ *   - These tests run real `target.write()` + `target.resolveFork()` against a live BQ table; each
  *     case runs for tens of seconds. Splitting them off lets `bigquery-target.integration.test`
  *     finish DDL/visibility/type-mapping checks fast without waiting on the fork suite.
  *   - The fork suite has its own helpers (`uniqueTables`, `buildTarget`, `readEvents`,
@@ -78,7 +72,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
         }
       }
 
-      await target.write({ read: read as never, logger: createTestLogger() })
+      await target.write({ read: read as never, logger: testLogger() })
 
       const [rows] = await bigquery.query({
         query: `SELECT block_number FROM \`${projectId}.${DATASET}.${localEvents}\` WHERE block_number = 1`,
@@ -110,14 +104,14 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
         }
       }
 
-      await target.write({ read: write1To10 as never, logger: createTestLogger() })
+      await target.write({ read: write1To10 as never, logger: testLogger() })
 
       const [pre] = await bigquery.query({
         query: `SELECT COUNT(*) AS n FROM \`${projectId}.${DATASET}.${localEvents}\` WHERE block_number BETWEEN 1 AND 10`,
       })
       expect(Number(pre[0].n)).toBe(10)
 
-      const previousBlocks: BlockCursor[] = [
+      const canonicalBlocks: BlockCursor[] = [
         { number: 5, hash: '0x5' },
         { number: 6, hash: 'BAD6' },
         { number: 7, hash: 'BAD7' },
@@ -125,7 +119,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
         { number: 9, hash: 'BAD9' },
         { number: 10, hash: 'BADA' },
       ]
-      const safe = await target.fork!(previousBlocks)
+      const safe = await target.resolveFork!(canonicalBlocks)
       expect(safe?.number).toBe(5)
 
       const [post] = await bigquery.query({
@@ -181,9 +175,9 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
   // ---------------------------------------------------------------------------------------
   // Fork scenarios driven through the full pipeTo() path with a mock portal.
   //
-  // These mirror the ClickHouse / Postgres reorg suites: rather than calling target.fork()
+  // These mirror the ClickHouse / Postgres reorg suites: rather than calling target.resolveFork()
   // directly, we let evmPortalStream replay 409 reorg responses and observe BQ table /
-  // sync-table state after the framework drives target.fork() and re-stream automatically.
+  // sync-table state after the framework drives target.resolveFork() and re-stream automatically.
   //
   // Each test creates a fresh tracked + sync table pair so writes / DELETEs from one test
   // never bleed into another. Tables are reaped on the next run by the PREFIX sweep in
@@ -191,11 +185,11 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
   // ---------------------------------------------------------------------------------------
 
   describe('forks (mock portal end-to-end)', () => {
-    let mockPortal: MockPortal | undefined
+    let portal: MockPortal | undefined
 
     afterEach(async () => {
-      await mockPortal?.close()
-      mockPortal = undefined
+      await portal?.close()
+      portal = undefined
     })
 
     /** Build a tracked-events + sync table pair with unique names for one test. */
@@ -218,7 +212,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
       events: string,
       sync: string,
       overrides: {
-        onData?: (ctx: { store: BigQueryStore; data: Header[] }) => Promise<unknown> | unknown
+        onData?: (ctx: { store: BigQueryWriter; data: Header[] }) => Promise<unknown> | unknown
         onBeforeRollback?: (ctx: { cursor: BlockCursor }) => Promise<unknown> | unknown
         onAfterRollback?: (ctx: { cursor: BlockCursor }) => Promise<unknown> | unknown
       } = {},
@@ -271,7 +265,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
     it('handles a simple fork: re-streams forked tail and DELETE removes superseded rows', async () => {
       const { events, sync } = uniqueTables('simple')
 
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         // First batch: blocks 1..5 on the original chain.
         {
           statusCode: 200,
@@ -296,7 +290,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
             ],
           },
         },
-        // Re-stream after the framework drives target.fork() — blocks 4..7 on the new chain.
+        // Re-stream after the framework drives target.resolveFork() — blocks 4..7 on the new chain.
         {
           statusCode: 200,
           data: [
@@ -312,7 +306,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
       let afterRollbacks = 0
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(
         buildTarget(events, sync, {
@@ -348,7 +342,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
     it('handles a fork whose finalized block is missing from the in-flight batch (multi-step rollback)', async () => {
       const { events, sync } = uniqueTables('missing_finalized')
 
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [
@@ -397,7 +391,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
       const rollbackCursors: BlockCursor[] = []
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(
         buildTarget(events, sync, {
@@ -440,7 +434,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
         head: { finalized: { number: 4, hash: '0x4a' } },
       }
 
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [
@@ -482,7 +476,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
         try {
           await evmPortalStream({
             id: 'test',
-            portal: mockPortal.url,
+            portal: portal.url,
             outputs: blockDecoder({ from: 0, to: 7 }),
           }).pipeTo(
             buildTarget(events, sync, {
@@ -528,7 +522,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
     it('handles a deep fork via two cascading rollbacks (no crash)', async () => {
       const { events, sync } = uniqueTables('deep')
 
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [
@@ -577,7 +571,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
       const rollbackCursors: BlockCursor[] = []
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(
         buildTarget(events, sync, {
@@ -603,7 +597,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
     it('resumes from the last persisted cursor after a clean stop (parentBlockHash threaded through)', async () => {
       const { events, sync } = uniqueTables('resume')
 
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
@@ -627,7 +621,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
       // First run: ingest block 1 and stop cleanly.
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
       }).pipeTo(buildTarget(events, sync))
 
@@ -636,7 +630,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
       // expected parentBlockHash. validateRequest in the mock asserts that.
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 1, to: 2 }),
       }).pipeTo(buildTarget(events, sync))
 
@@ -649,7 +643,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
     it('records cursor + finalized for every committed batch in the sync table', async () => {
       const { events, sync } = uniqueTables('sync_state')
 
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [
@@ -663,7 +657,7 @@ describe.skipIf(!RUN)('bigquery target — fork lifecycle (integration)', () => 
 
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 3 }),
       }).pipeTo(buildTarget(events, sync))
 

@@ -3,7 +3,7 @@ import type { InitStage } from '../types.js'
 
 export const writeSinkFilesStage: InitStage = {
   id: 'write-sink-files',
-  label: 'Creating sink files',
+  label: 'Creating target files',
   run: async (ctx) => {
     const artifacts = buildSink(ctx.config)
     for (const file of artifacts.files) {

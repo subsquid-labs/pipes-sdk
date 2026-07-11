@@ -1,22 +1,15 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
-import { createTarget } from '~/core/target.js'
-import { Target } from '~/core/target.js'
+import { Target, createTarget } from '~/core/target.js'
 import { TransformerArgs, createTransformer } from '~/core/transformer.js'
 import { evmPortalStream } from '~/evm/index.js'
-import {
-  MockPortal,
-  blockDecoder,
-  createFinalizedMockPortal,
-  createMockPortal,
-  readAll,
-} from '~/testing/index.js'
+import { MockPortal, blockDecoder, finalizedMockPortal, mockPortal, readAll } from '~/testing/index.js'
 
 describe('Portal abstract stream', () => {
-  let mockPortal: MockPortal
+  let portal: MockPortal
 
   afterEach(async () => {
-    await mockPortal?.close()
+    await portal?.close()
   })
 
   describe('common', () => {
@@ -33,7 +26,7 @@ describe('Portal abstract stream', () => {
     })
 
     it('should expose finalization headers', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 2, hash: '0x456', timestamp: 2000 } }],
@@ -46,7 +39,7 @@ describe('Portal abstract stream', () => {
 
       const stream = evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 2 }),
       })
 
@@ -72,16 +65,16 @@ describe('Portal abstract stream', () => {
           "progress_state": {
             "current": 2,
             "etaSeconds": 0,
-            "initial": 0,
-            "last": 2,
+            "from": 0,
             "percent": 100,
+            "to": 2,
           },
         }
       `)
     })
 
     it('should adjust latest block number from data over header', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 14, hash: '0x456', timestamp: 14000 } }], // latest block is 14 in data
@@ -94,7 +87,7 @@ describe('Portal abstract stream', () => {
 
       const stream = evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 2 }),
       })
 
@@ -120,16 +113,16 @@ describe('Portal abstract stream', () => {
           "progress_state": {
             "current": 14,
             "etaSeconds": 0,
-            "initial": 0,
-            "last": 14,
+            "from": 0,
             "percent": 100,
+            "to": 14,
           },
         }
       `)
     })
 
     it('should keep requesting data on head', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 204,
         },
@@ -147,7 +140,7 @@ describe('Portal abstract stream', () => {
 
       const stream = evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
       })
 
@@ -165,16 +158,19 @@ describe('Portal abstract stream', () => {
 
   describe('unfinalized', () => {
     it('should receive all stream data and stop', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
-          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }, { header: { number: 2, hash: '0x456', timestamp: 2000 } }],
+          data: [
+            { header: { number: 1, hash: '0x123', timestamp: 1000 } },
+            { header: { number: 2, hash: '0x456', timestamp: 2000 } },
+          ],
         },
       ])
 
       const stream = evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 2 }),
       })
 
@@ -197,7 +193,7 @@ describe('Portal abstract stream', () => {
     })
 
     it('should retries 10 by default', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
@@ -212,7 +208,7 @@ describe('Portal abstract stream', () => {
       const stream = evmPortalStream({
         id: 'test',
         portal: {
-          url: mockPortal.url,
+          url: portal.url,
           http: { retrySchedule: [0] },
         },
         outputs: blockDecoder({ from: 0, to: 2 }),
@@ -237,7 +233,7 @@ describe('Portal abstract stream', () => {
     })
 
     it('should throw an error after max retries', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
@@ -248,7 +244,7 @@ describe('Portal abstract stream', () => {
       const stream = evmPortalStream({
         id: 'test',
         portal: {
-          url: mockPortal.url,
+          url: portal.url,
           http: {
             retryAttempts: 1,
             retrySchedule: [0],
@@ -257,12 +253,12 @@ describe('Portal abstract stream', () => {
         outputs: blockDecoder({ from: 0, to: 2 }),
       })
 
-      await expect(readAll(stream)).rejects.toThrow(`Got 503 from ${mockPortal.url}`)
+      await expect(readAll(stream)).rejects.toThrow(`Got 503 from ${portal.url}`)
       await stream.stop()
     })
 
     it('should throw fork exception', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [
@@ -302,7 +298,7 @@ describe('Portal abstract stream', () => {
       const stream = evmPortalStream({
         id: 'test',
         portal: {
-          url: mockPortal.url,
+          url: portal.url,
           http: { retryAttempts: 0, retrySchedule: [0] },
         },
         outputs: blockDecoder({ from: 0, to: 100_000_001 }),
@@ -324,7 +320,7 @@ describe('Portal abstract stream', () => {
 
   describe('pipe/pipeTo', () => {
     it('should not throw when a transform function is passed to .pipe()', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
@@ -333,7 +329,7 @@ describe('Portal abstract stream', () => {
 
       const stream = evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
       })
 
@@ -341,7 +337,7 @@ describe('Portal abstract stream', () => {
     })
 
     it('should not throw when a target is passed to .pipeTo()', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
@@ -350,7 +346,7 @@ describe('Portal abstract stream', () => {
 
       const stream = evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
       })
 
@@ -364,17 +360,20 @@ describe('Portal abstract stream', () => {
 
   describe('finalized', () => {
     it('should receive all finalized data and stop', async () => {
-      mockPortal = await createFinalizedMockPortal([
+      portal = await finalizedMockPortal([
         {
           statusCode: 200,
-          data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }, { header: { number: 2, hash: '0x456', timestamp: 2000 } }],
+          data: [
+            { header: { number: 1, hash: '0x123', timestamp: 1000 } },
+            { header: { number: 2, hash: '0x456', timestamp: 2000 } },
+          ],
         },
       ])
 
       const stream = evmPortalStream({
         id: 'test',
         portal: {
-          url: mockPortal.url,
+          url: portal.url,
           finalized: true,
         },
         outputs: blockDecoder({ from: 0, to: 2 }),
@@ -401,7 +400,7 @@ describe('Portal abstract stream', () => {
 
   describe('finalized watermark (centralized clamp)', () => {
     it('clamps a transient missing finalized head up to the persisted floor', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 6, hash: '0x6', timestamp: 6000 } }],
@@ -409,12 +408,15 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 6 }) })
+      const stream = evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 6 }) })
 
       const seen: unknown[] = []
       const target = createTarget({
         write: async ({ read }) => {
-          for await (const { ctx } of read({ latest: { number: 5, hash: '0x5' }, finalized: { number: 5, hash: '0x5f' } })) {
+          for await (const { ctx } of read({
+            latest: { number: 5, hash: '0x5' },
+            finalized: { number: 5, hash: '0x5f' },
+          })) {
             seen.push(ctx.stream.head.finalized)
           }
         },
@@ -427,7 +429,7 @@ describe('Portal abstract stream', () => {
     })
 
     it('seeds the floor from the target resume state and clamps a regression below it (restart-mid-fork)', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 6, hash: '0x6', timestamp: 6000 } }],
@@ -436,12 +438,15 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 6 }) })
+      const stream = evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 6 }) })
 
       const seen: unknown[] = []
       const target = createTarget({
         write: async ({ read }) => {
-          for await (const { ctx } of read({ latest: { number: 5, hash: '0x5' }, finalized: { number: 5, hash: '0x5f' } })) {
+          for await (const { ctx } of read({
+            latest: { number: 5, hash: '0x5' },
+            finalized: { number: 5, hash: '0x5f' },
+          })) {
             seen.push(ctx.stream.head.finalized)
           }
         },
@@ -453,7 +458,7 @@ describe('Portal abstract stream', () => {
     })
 
     it('leaves finalized undefined for a no-finality dataset (passthrough)', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [
@@ -464,7 +469,7 @@ describe('Portal abstract stream', () => {
         },
       ])
 
-      const stream = evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 2 }) })
+      const stream = evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 2 }) })
 
       const finalizedPerBatch = []
       for await (const { ctx } of stream) {
@@ -478,14 +483,14 @@ describe('Portal abstract stream', () => {
 })
 
 describe('stop lifecycle', () => {
-  let mockPortal: MockPortal
+  let portal: MockPortal
 
   afterEach(async () => {
-    await mockPortal?.close()
+    await portal?.close()
   })
 
   it('invokes transformer stop hook exactly once on normal completion', async () => {
-    mockPortal = await createMockPortal([
+    portal = await mockPortal([
       {
         statusCode: 200,
         data: [
@@ -499,7 +504,7 @@ describe('stop lifecycle', () => {
 
     const stream = evmPortalStream({
       id: 'test',
-      portal: mockPortal.url,
+      portal: portal.url,
       outputs: blockDecoder({ from: 0, to: 2 }),
     }).pipe(
       createTransformer({
@@ -515,7 +520,7 @@ describe('stop lifecycle', () => {
   })
 
   it('runs stop hook cleanup when a transformer start hook fails', async () => {
-    mockPortal = await createMockPortal([
+    portal = await mockPortal([
       {
         statusCode: 200,
         data: [{ header: { number: 1, hash: '0x123', timestamp: 1000 } }],
@@ -526,7 +531,7 @@ describe('stop lifecycle', () => {
 
     const stream = evmPortalStream({
       id: 'test',
-      portal: mockPortal.url,
+      portal: portal.url,
       outputs: blockDecoder({ from: 0, to: 1 }),
     })
       .pipe(

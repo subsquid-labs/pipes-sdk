@@ -1,4 +1,4 @@
-import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
+import { commonAbis, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 
 /**
  * This example demonstrates how to filter EVM events by indexed parameters to reduce data transfer and processing.
@@ -11,7 +11,7 @@ async function cli() {
   const stream = evmPortalStream({
     id: 'event-params-filter',
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-    outputs: evmDecoder({
+    outputs: evmEventDecoder({
       range: { from: '24171448', to: '24171449' },
       events: {
         // Use the AbiEvent instance directly for convenience if you need all the emitted events

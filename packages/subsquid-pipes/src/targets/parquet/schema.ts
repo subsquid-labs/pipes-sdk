@@ -1,4 +1,4 @@
-import { PQ_ERR, ParquetTargetError } from './errors.js'
+import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 
 /**
  * Compression codecs supported by `@dsnp/parquetjs` (verified by the Step 0 spike against
@@ -161,14 +161,17 @@ export function blockColumnOf(table: ParquetTable): string {
  */
 export function validateTables(tables: ParquetTable[]): void {
   if (tables.length === 0) {
-    throw new ParquetTargetError(PQ_ERR.NO_TABLES, 'parquetTarget: `tables` must declare at least one table.')
+    throw new ParquetTargetError(
+      PARQUET_ERROR_CODES.NO_TABLES,
+      'parquetTarget: `tables` must declare at least one table.',
+    )
   }
 
   const seen = new Set<string>()
   for (const table of tables) {
     if (seen.has(table.table)) {
       throw new ParquetTargetError(
-        PQ_ERR.DUPLICATE_TABLE,
+        PARQUET_ERROR_CODES.DUPLICATE_TABLE,
         `parquetTarget: duplicate table '${table.table}'. Each table name must be unique.`,
       )
     }
@@ -190,7 +193,7 @@ export function validateTable(table: ParquetTable): void {
   const columns = Object.entries(table.schema)
   if (columns.length === 0) {
     throw new ParquetTargetError(
-      PQ_ERR.EMPTY_SCHEMA,
+      PARQUET_ERROR_CODES.EMPTY_SCHEMA,
       `parquetTarget: table '${table.table}' has an empty schema. Declare at least one column.`,
     )
   }
@@ -203,7 +206,7 @@ export function validateTable(table: ParquetTable): void {
   const declared = table.schema[blockColumn]
   if (!declared) {
     throw new ParquetTargetError(
-      PQ_ERR.BLOCK_COLUMN_MISSING,
+      PARQUET_ERROR_CODES.BLOCK_COLUMN_MISSING,
       `parquetTarget: table '${table.table}' schema does not include the block-number column ` +
         `'${blockColumn}'. Add it to the schema as an integer column (INT64), or set ` +
         `blockNumberColumn to the column that carries the block number.`,
@@ -211,14 +214,14 @@ export function validateTable(table: ParquetTable): void {
   }
   if (!INTEGER_BLOCK_TYPES.has(declared.type)) {
     throw new ParquetTargetError(
-      PQ_ERR.BLOCK_COLUMN_TYPE,
+      PARQUET_ERROR_CODES.BLOCK_COLUMN_TYPE,
       `parquetTarget: table '${table.table}' block-number column '${blockColumn}' has type ` +
         `'${declared.type}', but must be an integer type (${[...INTEGER_BLOCK_TYPES].join(', ')}).`,
     )
   }
   if (declared.optional) {
     throw new ParquetTargetError(
-      PQ_ERR.BLOCK_COLUMN_OPTIONAL,
+      PARQUET_ERROR_CODES.BLOCK_COLUMN_OPTIONAL,
       `parquetTarget: table '${table.table}' block-number column '${blockColumn}' is declared optional, ` +
         `but it must carry a block number on every row — finalization, file-range naming and crash recovery ` +
         `all key off it. A null block coerces to 0 (written as an immutable block-0 row) and a missing one to ` +
@@ -235,7 +238,7 @@ const MAX_NESTING_DEPTH = 32
 function validateColumn(table: string, path: string, column: ParquetColumn, depth: number): void {
   if (depth > MAX_NESTING_DEPTH) {
     throw new ParquetTargetError(
-      PQ_ERR.NESTED_SCHEMA_INVALID,
+      PARQUET_ERROR_CODES.NESTED_SCHEMA_INVALID,
       `parquetTarget: table '${table}' column '${path}' exceeds ${MAX_NESTING_DEPTH} nesting levels — ` +
         `is the schema object cyclic?`,
     )
@@ -245,7 +248,7 @@ function validateColumn(table: string, path: string, column: ParquetColumn, dept
   // on `column.type` below with a context-free TypeError.
   if (column == null || typeof column !== 'object') {
     throw new ParquetTargetError(
-      PQ_ERR.NESTED_SCHEMA_INVALID,
+      PARQUET_ERROR_CODES.NESTED_SCHEMA_INVALID,
       `parquetTarget: table '${table}' column '${path}' declaration must be an object like ` +
         `{ type: 'INT64' }, got ${typeof column === 'string' ? `'${column}'` : String(column)}.`,
     )
@@ -255,7 +258,7 @@ function validateColumn(table: string, path: string, column: ParquetColumn, dept
     const fields = Object.entries(column.fields ?? {})
     if (fields.length === 0) {
       throw new ParquetTargetError(
-        PQ_ERR.NESTED_SCHEMA_INVALID,
+        PARQUET_ERROR_CODES.NESTED_SCHEMA_INVALID,
         `parquetTarget: table '${table}' STRUCT column '${path}' must declare at least one field.`,
       )
     }
@@ -269,7 +272,7 @@ function validateColumn(table: string, path: string, column: ParquetColumn, dept
   if (column.type === 'LIST') {
     if (!column.element) {
       throw new ParquetTargetError(
-        PQ_ERR.NESTED_SCHEMA_INVALID,
+        PARQUET_ERROR_CODES.NESTED_SCHEMA_INVALID,
         `parquetTarget: table '${table}' LIST column '${path}' must declare an 'element'.`,
       )
     }
@@ -280,14 +283,14 @@ function validateColumn(table: string, path: string, column: ParquetColumn, dept
 
   if (!SUPPORTED_TYPES.has(column.type)) {
     throw new ParquetTargetError(
-      PQ_ERR.UNSUPPORTED_TYPE,
+      PARQUET_ERROR_CODES.UNSUPPORTED_TYPE,
       `parquetTarget: table '${table}' column '${path}' has unsupported type '${column.type}'. ` +
         `Supported leaf types: ${[...SUPPORTED_TYPES].join(', ')}, plus 'LIST' and 'STRUCT'.`,
     )
   }
   if (column.compression && !SUPPORTED_CODECS.has(column.compression)) {
     throw new ParquetTargetError(
-      PQ_ERR.UNSUPPORTED_COMPRESSION,
+      PARQUET_ERROR_CODES.UNSUPPORTED_COMPRESSION,
       `parquetTarget: table '${table}' column '${path}' declares unsupported compression ` +
         `'${column.compression}'. Supported codecs: ${[...SUPPORTED_CODECS].join(', ')}.`,
     )

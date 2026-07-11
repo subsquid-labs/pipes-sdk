@@ -27,7 +27,7 @@ async function cli() {
           closedPnl: true,
         },
       })
-      .addFill({
+      .addFillRequest({
         request: {},
         range: {
           // Earlier blocks aren't supported yet

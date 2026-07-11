@@ -25,7 +25,7 @@ const tokenBalances = solanaQuery()
       preMint: true,
     },
   })
-  .addTokenBalance({
+  .addTokenBalanceRequest({
     range: { from: '372,195,730' },
     request: {
       // You can filter in that way. it is much faster, but the query has a limit of 5000 addresses

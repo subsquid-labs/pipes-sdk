@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { MockPortal, createMockPortal } from '../testing/index.js'
+import { MockPortal, mockPortal } from '../testing/index.js'
 import { bitcoinPortalStream } from './bitcoin-portal-source.js'
 import { BitcoinQueryBuilder } from './bitcoin-query-builder.js'
 
@@ -11,15 +11,15 @@ const fixture = (name: string) =>
   JSON.parse(readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url)), 'utf8'))
 
 describe('Bitcoin portal stream', () => {
-  let mockPortal: MockPortal
+  let portal: MockPortal
 
   afterEach(async () => {
-    await mockPortal?.close()
+    await portal?.close()
   })
 
   it('streams blocks with selected fields and array defaults', async () => {
     // Hashes/txids are bare hex (no `0x`) — matching the real Bitcoin portal wire format.
-    mockPortal = await createMockPortal([
+    portal = await mockPortal([
       {
         statusCode: 200,
         data: [
@@ -36,7 +36,7 @@ describe('Bitcoin portal stream', () => {
 
     const stream = bitcoinPortalStream({
       id: 'test',
-      portal: mockPortal.url,
+      portal: portal.url,
       outputs: new BitcoinQueryBuilder()
         .addFields({
           block: { number: true, hash: true, timestamp: true },
@@ -68,7 +68,7 @@ describe('Bitcoin portal stream', () => {
   it('validates a real portal response (block #100000) end-to-end', async () => {
     const block = fixture('block-100000.json')
 
-    mockPortal = await createMockPortal([
+    portal = await mockPortal([
       {
         statusCode: 200,
         data: [block],
@@ -77,7 +77,7 @@ describe('Bitcoin portal stream', () => {
 
     const stream = bitcoinPortalStream({
       id: 'real-data',
-      portal: mockPortal.url,
+      portal: portal.url,
       outputs: new BitcoinQueryBuilder()
         .addFields({
           block: {
@@ -133,9 +133,7 @@ describe('Bitcoin portal stream', () => {
 
       // Bare-hex hash survives validation untouched.
       expect(b.header.hash).toBe('000000000003ba27aa200b1cecaad478d2b00432346c3f1f3986da1afd33e506')
-      expect(b.header.parentHash).toBe(
-        '000000000002d01c1fccc21636b607dfd930d31d01c3a62104612a1719011250',
-      )
+      expect(b.header.parentHash).toBe('000000000002d01c1fccc21636b607dfd930d31d01c3a62104612a1719011250')
       expect(b.header.difficulty).toBeCloseTo(14484.16, 2)
 
       // Block #100000 has 4 transactions; the coinbase produces a 50 BTC output.

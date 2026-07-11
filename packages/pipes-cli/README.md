@@ -20,11 +20,11 @@ src/
 │   └── init/
 │       ├── builders/           # Code generation builders
 │       │   ├── schema-builder/ # Database schema generation
-│       │   ├── sink-builder/   # Database sink configuration
+│       │   ├── sink-builder/   # Database target configuration
 │       │   └── transformer-builder/ # Data transformer generation
 │       ├── config/
 │       │   ├── networks.ts     # Network configurations (EVM/SVM)
-│       │   ├── sinks.ts        # Available sinks (ClickHouse, PostgreSQL, Memory)
+│       │   ├── targets.ts      # Available targets (ClickHouse, PostgreSQL, Memory)
 │       │   └── templates.ts    # Template registry
 │       ├── templates/
 │       │   ├── config-files/   # Project scaffolding files
@@ -46,10 +46,10 @@ src/
 - **EVM**: Ethereum Virtual Machine compatible chains
 - **SVM**: Solana Virtual Machine compatible chains
 
-### Sinks
+### Targets
 - **ClickHouse**: Fast columnar database
 - **PostgreSQL**: Traditional relational database  
-- **Memory**: In-memory sink (testing)
+- **Memory**: In-memory target (coming soon)
 
 ### Package Managers
 - pnpm
@@ -347,7 +347,7 @@ override renderTransformers() {
   "projectFolder": "./my-project",
   "networkType": "evm",
   "network": "ethereum-mainnet",
-  "sink": "postgresql",
+  "target": "postgresql",
   "packageManager": "pnpm",
   "templates": [
     {
@@ -360,3 +360,4 @@ override renderTransformers() {
 }
 ```
 
+The `sink` key is still accepted as a deprecated alias for `target`.

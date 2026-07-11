@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3'
+
 import { SqliteOptions, SqliteSync } from './sqlite.js'
 
 export class NodeSQLite implements SqliteSync {

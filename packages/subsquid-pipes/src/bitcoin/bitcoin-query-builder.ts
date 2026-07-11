@@ -39,15 +39,15 @@ export class BitcoinQueryBuilder<F extends api.FieldSelection = {}> extends Quer
     return this
   }
 
-  addTransaction(options: RequestOptions<api.TransactionRequest>): this {
+  addTransactionRequest(options: RequestOptions<api.TransactionRequest>): this {
     return this.addRequest('transactions', options)
   }
 
-  addInput(options: RequestOptions<api.InputRequest>): this {
+  addInputRequest(options: RequestOptions<api.InputRequest>): this {
     return this.addRequest('inputs', options)
   }
 
-  addOutput(options: RequestOptions<api.OutputRequest>): this {
+  addOutputRequest(options: RequestOptions<api.OutputRequest>): this {
     return this.addRequest('outputs', options)
   }
 

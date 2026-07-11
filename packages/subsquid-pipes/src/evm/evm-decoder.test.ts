@@ -3,8 +3,8 @@ import * as p from '@subsquid/evm-codec'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import { PortalRange, QueryAwareTransformer } from '~/core/index.js'
-import { encodeEvent, evmPortalMockStream, mockBlock, resetMockBlockCounter } from '~/testing/evm/index.js'
-import { MockPortal, MockResponse, createMockPortal, createTestLogger, readAll } from '~/testing/index.js'
+import { encodeEvent, mockBlock, mockEvmPortalStream, resetMockBlockCounter } from '~/testing/evm/index.js'
+import { MockPortal, MockResponse, mockPortal, readAll, testLogger } from '~/testing/index.js'
 
 import { commonAbis } from './abi/common.js'
 import {
@@ -16,7 +16,7 @@ import {
   IndexedKeys,
   IndexedParams,
   IndexedParamsInput,
-  evmDecoder,
+  evmEventDecoder,
 } from './evm-decoder.js'
 import { evmPortalStream } from './evm-portal-source.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
@@ -25,7 +25,7 @@ import { contractFactoryStore } from './factory-adapters/sqlite.js'
 
 async function captureQueryBuilder(
   decoder: QueryAwareTransformer<any, any, EvmQueryBuilder<any>>,
-  logger = createTestLogger(),
+  logger = testLogger(),
 ) {
   const query = new EvmQueryBuilder()
   await decoder.setupQuery({
@@ -68,7 +68,7 @@ const swapAbi = {
 
 const FACTORY_ADDRESS = '0x1f98431c8ad98523631ae4a59f267346ea31f984'
 
-describe('evmDecoder types', () => {
+describe('evmEventDecoder types', () => {
   it('type IndexedKeys picks indexed params from ERC20 Transfer', async () => {
     type Result = IndexedKeys<(typeof commonAbis.erc20.events.Transfer)['params']>
     expectTypeOf<Result>().toEqualTypeOf<'from' | 'to'>()
@@ -260,12 +260,12 @@ describe('EventFilter type', () => {
   })
 })
 
-describe('evmDecoder queries', () => {
+describe('evmEventDecoder queries', () => {
   it('should build query for events without params', async () => {
     const range = { from: 0, to: 100 }
     const contracts = ['0x123']
 
-    const decoder = evmDecoder({
+    const decoder = evmEventDecoder({
       range,
       contracts: contracts,
       events: {
@@ -313,7 +313,7 @@ describe('evmDecoder queries', () => {
     const range = { from: 0, to: 100 }
     const contracts = ['0x123']
 
-    const decoder = evmDecoder({
+    const decoder = evmEventDecoder({
       range,
       contracts: contracts,
       events: {
@@ -366,7 +366,7 @@ describe('evmDecoder queries', () => {
     const contracts = ['0x123']
 
     // `from` is topic1 on ERC20 Transfer event
-    const fromParamDecoder = evmDecoder({
+    const fromParamDecoder = evmEventDecoder({
       range,
       contracts: contracts,
       events: {
@@ -388,7 +388,7 @@ describe('evmDecoder queries', () => {
     expect(fromRequests[0].request?.logs?.[0]?.topic3).toEqual(undefined)
 
     // `from` is topic2 on ERC20 Transfer event
-    const toParamDecoder = evmDecoder({
+    const toParamDecoder = evmEventDecoder({
       range,
       contracts: contracts,
       events: {
@@ -414,7 +414,7 @@ describe('evmDecoder queries', () => {
     const range = { from: 0, to: 100 }
     const contracts = ['0x123']
 
-    const decoder = evmDecoder({
+    const decoder = evmEventDecoder({
       range,
       contracts: contracts,
       events: {
@@ -472,7 +472,7 @@ describe('evmDecoder queries', () => {
     const range = { from: 0, to: 100 }
     const contracts = ['0x123']
 
-    const decoder = evmDecoder({
+    const decoder = evmEventDecoder({
       range,
       contracts: contracts,
       events: {
@@ -505,7 +505,7 @@ describe('evmDecoder queries', () => {
     const range = { from: 0, to: 100 }
     const contracts = ['0x123']
 
-    const decoder = evmDecoder({
+    const decoder = evmEventDecoder({
       range,
       contracts: contracts,
       events: {
@@ -574,7 +574,7 @@ describe('evmDecoder queries', () => {
     const range = { from: 0, to: 100 }
     const contracts = ['0x123']
 
-    const decoder = evmDecoder({
+    const decoder = evmEventDecoder({
       range,
       contracts: contracts,
       events: {
@@ -658,7 +658,7 @@ describe('evmDecoder queries', () => {
       ),
     }
 
-    const decoder = evmDecoder({
+    const decoder = evmEventDecoder({
       range: { from: 0, to: 100 },
       contracts: ['0x123'],
       events: {
@@ -689,12 +689,12 @@ describe('evmDecoder queries', () => {
     })
   })
 
-  describe('evmDecoder duplicate events', () => {
+  describe('evmEventDecoder duplicate events', () => {
     it('should log error when duplicate event topics are detected', async () => {
-      const logger = createTestLogger()
+      const logger = testLogger()
       const errorSpy = vi.spyOn(logger, 'error')
       const duplicateEvent = commonAbis.erc20.events.Transfer
-      const decoder = evmDecoder({
+      const decoder = evmEventDecoder({
         range: { from: 0, to: 100 },
         contracts: ['0x123'],
         events: {
@@ -716,10 +716,10 @@ describe('evmDecoder queries', () => {
     })
 
     it('should log error when duplicate event topics are detected across AbiEvent and EventWithArgs', async () => {
-      const logger = createTestLogger()
+      const logger = testLogger()
       const errorSpy = vi.spyOn(logger, 'error')
       const duplicateEvent = commonAbis.erc20.events.Transfer
-      const decoder = evmDecoder({
+      const decoder = evmEventDecoder({
         range: { from: 0, to: 100 },
         contracts: ['0x123'],
         events: {
@@ -748,10 +748,10 @@ describe('evmDecoder queries', () => {
     })
 
     it('should not log error when all events have unique topics', async () => {
-      const logger = createTestLogger()
+      const logger = testLogger()
       const errorSpy = vi.spyOn(logger, 'error')
 
-      const decoder = evmDecoder({
+      const decoder = evmEventDecoder({
         range: { from: 0, to: 100 },
         contracts: ['0x123'],
         events: {
@@ -772,7 +772,7 @@ describe('evmDecoder queries', () => {
     const db = await contractFactoryStore({ path: ':memory:' })
     const range = { from: 0, to: 100 }
 
-    const decoder = evmDecoder({
+    const decoder = evmEventDecoder({
       range,
       contracts: contractFactory({
         address: FACTORY_ADDRESS,
@@ -811,7 +811,7 @@ describe('evmDecoder queries', () => {
     const db = await contractFactoryStore({ path: ':memory:' })
     const range = { from: 0, to: 100 }
 
-    const decoder = evmDecoder({
+    const decoder = evmEventDecoder({
       range,
       contracts: contractFactory({
         address: FACTORY_ADDRESS,
@@ -837,15 +837,15 @@ describe('evmDecoder queries', () => {
   })
 })
 
-describe('evmDecoder transform', () => {
-  let mockPortal: MockPortal
+describe('evmEventDecoder transform', () => {
+  let portal: MockPortal
 
   beforeEach(async () => {
-    mockPortal = await createMockPortal(PORTAL_MOCK_RESPONSE)
+    portal = await mockPortal(PORTAL_MOCK_RESPONSE)
   })
 
   afterEach(async () => {
-    await mockPortal?.close()
+    await portal?.close()
   })
 
   const PORTAL_MOCK_RESPONSE: MockResponse[] = [
@@ -900,8 +900,8 @@ describe('evmDecoder transform', () => {
   it('should decode the events when passed AbiEvent', async () => {
     const stream = evmPortalStream({
       id: 'test',
-      portal: mockPortal.url,
-      outputs: evmDecoder({
+      portal: portal.url,
+      outputs: evmEventDecoder({
         range: { from: 0, to: 1 },
         events: {
           transfers: commonAbis.erc20.events.Transfer,
@@ -978,8 +978,8 @@ describe('evmDecoder transform', () => {
   ])(`should filter events by specified contracts $contracts -> $expected`, async ({ contracts, expected }) => {
     const stream = evmPortalStream({
       id: 'test',
-      portal: mockPortal.url,
-      outputs: evmDecoder({
+      portal: portal.url,
+      outputs: evmEventDecoder({
         range: { from: 0, to: 1 },
         contracts: contracts, // No contracts should filter out all events
         events: {
@@ -996,8 +996,8 @@ describe('evmDecoder transform', () => {
   it('should decode the events when passed an EventWithArgs', async () => {
     const stream = evmPortalStream({
       id: 'test',
-      portal: mockPortal.url,
-      outputs: evmDecoder({
+      portal: portal.url,
+      outputs: evmEventDecoder({
         range: { from: 0, to: 1 },
         events: {
           transfers: {
@@ -1072,8 +1072,8 @@ describe('evmDecoder transform', () => {
   it('should decode the events when mixed EventWithArgs and AbiEvent', async () => {
     const stream = evmPortalStream({
       id: 'test',
-      portal: mockPortal.url,
-      outputs: evmDecoder({
+      portal: portal.url,
+      outputs: evmEventDecoder({
         range: { from: 0, to: 1 },
         events: {
           approvals: commonAbis.erc20.events.Approval,
@@ -1174,7 +1174,7 @@ describe('evmDecoder transform', () => {
   })
 })
 
-describe('evmDecoder multi-output isolation', () => {
+describe('evmEventDecoder multi-output isolation', () => {
   const CONTRACT_A = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as const
   const CONTRACT_B = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as const
 
@@ -1183,7 +1183,7 @@ describe('evmDecoder multi-output isolation', () => {
   beforeEach(async () => {
     resetMockBlockCounter()
 
-    portal = await createMockPortal([
+    portal = await mockPortal([
       {
         statusCode: 200,
         data: [
@@ -1228,19 +1228,19 @@ describe('evmDecoder multi-output isolation', () => {
     await portal?.close()
   })
 
-  it('should isolate events between two evmDecoders with different contracts', async () => {
+  it('should isolate events between two evmEventDecoders with different contracts', async () => {
     const results: { decoderA: { transfers: any[] }; decoderB: { transfers: any[] } }[] = []
 
     for await (const batch of evmPortalStream({
       id: 'test',
       portal: portal.url,
       outputs: {
-        decoderA: evmDecoder({
+        decoderA: evmEventDecoder({
           range: { from: 0, to: 1 },
           contracts: [CONTRACT_A],
           events: { transfers: commonAbis.erc20.events.Transfer },
         }),
-        decoderB: evmDecoder({
+        decoderB: evmEventDecoder({
           range: { from: 0, to: 1 },
           contracts: [CONTRACT_B],
           events: { transfers: commonAbis.erc20.events.Transfer },

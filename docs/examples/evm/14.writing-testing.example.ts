@@ -1,9 +1,9 @@
-import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
+import { commonAbis, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 import {
   type MockPortal,
   encodeEvent,
-  evmPortalMockStream,
   mockBlock,
+  mockEvmPortalStream,
   resetMockBlockCounter,
 } from '@subsquid/pipes/testing/evm'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -24,7 +24,7 @@ export async function readAll<T>(stream: AsyncIterable<{ data: T[] }>): Promise<
  * The testing library provides utilities to:
  * - Encode events with full type inference from viem ABIs (`encodeEvent`)
  * - Build mock blocks with auto-generated metadata (`mockBlock`)
- * - Spin up a mock portal HTTP server (`evmPortalMockStream`)
+ * - Spin up a mock portal HTTP server (`mockEvmPortalStream`)
  * - Collect all output from a stream (`readAll`)
  *
  * This lets you test your pipe logic end-to-end without hitting a real portal.
@@ -85,7 +85,7 @@ describe('EVM pipe testing example', () => {
     })
 
     // 2. Build mock blocks — metadata (number, hash, timestamp) is auto-generated
-    portal = await evmPortalMockStream({
+    portal = await mockEvmPortalStream({
       blocks: [
         mockBlock({ transactions: [{ logs: [transfer1] }] }),
         mockBlock({ transactions: [{ logs: [transfer2] }] }),
@@ -96,7 +96,7 @@ describe('EVM pipe testing example', () => {
     const stream = evmPortalStream({
       id: 'test',
       portal: portal.url,
-      outputs: evmDecoder({
+      outputs: evmEventDecoder({
         range: { from: 0, to: 2 },
         events: {
           transfers: commonAbis.erc20.events.Transfer,
@@ -133,7 +133,7 @@ describe('EVM pipe testing example', () => {
       args: { owner: ALICE, spender: BOB, value: 5_000_000n },
     })
 
-    portal = await evmPortalMockStream({
+    portal = await mockEvmPortalStream({
       blocks: [
         mockBlock({
           transactions: [{ logs: [transfer, approval] }],
@@ -144,7 +144,7 @@ describe('EVM pipe testing example', () => {
     const stream = evmPortalStream({
       id: 'test',
       portal: portal.url,
-      outputs: evmDecoder({
+      outputs: evmEventDecoder({
         range: { from: 0, to: 1 },
         events: {
           transfers: commonAbis.erc20.events.Transfer,
@@ -171,7 +171,7 @@ describe('EVM pipe testing example', () => {
       args: { from: ALICE, to: BOB, value: 2_000_000n },
     })
 
-    portal = await evmPortalMockStream({
+    portal = await mockEvmPortalStream({
       blocks: [mockBlock({ transactions: [{ logs: [transfer] }] })],
     })
 
@@ -179,7 +179,7 @@ describe('EVM pipe testing example', () => {
     const stream = evmPortalStream({
       id: 'test',
       portal: portal.url,
-      outputs: evmDecoder({
+      outputs: evmEventDecoder({
         range: { from: 0, to: 1 },
         events: {
           transfers: commonAbis.erc20.events.Transfer,

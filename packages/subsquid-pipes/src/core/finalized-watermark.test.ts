@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { FinalizedWatermark, coerceFinalized, maxFinalized } from './finalized-watermark.js'
+import { FinalizedWatermark, maxFinalized, normalizeFinalized } from './finalized-watermark.js'
 
 function block(number: number, hash?: string) {
   return { number, hash: hash ?? `0x${number}` }
@@ -25,16 +25,16 @@ describe('maxFinalized', () => {
   })
 })
 
-describe('coerceFinalized', () => {
+describe('normalizeFinalized', () => {
   it('passes through a valid cursor', () => {
-    expect(coerceFinalized(block(3))).toEqual(block(3))
+    expect(normalizeFinalized(block(3))).toEqual(block(3))
   })
 
   it('rejects empty / partial persisted values', () => {
-    expect(coerceFinalized({})).toBeUndefined()
-    expect(coerceFinalized(undefined)).toBeUndefined()
-    expect(coerceFinalized(null)).toBeUndefined()
-    expect(coerceFinalized({ hash: '0x1' })).toBeUndefined()
+    expect(normalizeFinalized({})).toBeUndefined()
+    expect(normalizeFinalized(undefined)).toBeUndefined()
+    expect(normalizeFinalized(null)).toBeUndefined()
+    expect(normalizeFinalized({ hash: '0x1' })).toBeUndefined()
   })
 })
 

@@ -31,7 +31,13 @@ export type Target<In> = {
     read: (state?: TargetState) => AsyncIterableIterator<PortalBatch<In>>
     logger: Logger
   }) => Promise<void>
-  fork?: (previousBlocks: BlockCursor[]) => Promise<BlockCursor | null>
+  /**
+   * Called when a chain fork is detected. Receives the portal's view of the canonical
+   * chain (a.k.a. `previousBlocks` from Portal API `/stream` 409 responses); must find
+   * the common ancestor, roll back everything written above it, and return the cursor
+   * to resume from (or `null` on a dead-end fork).
+   */
+  resolveFork?: (canonicalBlocks: BlockCursor[]) => Promise<BlockCursor | null>
 }
 
 export function createTarget<In>(options: Target<In>): Target<In> {

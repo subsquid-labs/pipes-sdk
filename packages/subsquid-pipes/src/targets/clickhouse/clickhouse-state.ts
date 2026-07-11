@@ -7,7 +7,7 @@ import {
   Profiler,
   RollbackRecord,
   TargetState,
-  coerceFinalized,
+  normalizeFinalized,
   resolveForkCursor,
 } from '~/core/index.js'
 
@@ -288,14 +288,14 @@ export class ClickhouseState {
     // max-across-rows seed is deferred (PR #88 review). Explicit `null` when none was ever stored.
     return {
       latest: this.decodeCursor(row.current),
-      finalized: coerceFinalized(row.finalized ? this.decodeCursor(row.finalized) : undefined) ?? null,
+      finalized: normalizeFinalized(row.finalized ? this.decodeCursor(row.finalized) : undefined) ?? null,
     }
   }
 
-  async fork(previousBlocks: BlockCursor[]): Promise<BlockCursor | null> {
+  async fork(canonicalBlocks: BlockCursor[]): Promise<BlockCursor | null> {
     // Only the pipe's own rows participate: getCursor migrated any legacy-keyed rows to the
     // current key before the first read, so by fork time no other key can hold our chain.
-    return resolveForkCursor(this.#records(this.#key.value), previousBlocks)
+    return resolveForkCursor(this.#records(this.#key.value), canonicalBlocks)
   }
 
   async *#records(id: string): AsyncIterable<RollbackRecord> {

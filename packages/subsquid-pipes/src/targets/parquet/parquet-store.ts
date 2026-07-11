@@ -2,9 +2,9 @@ import path from 'node:path'
 
 import { ParquetSchema } from '@dsnp/parquetjs'
 
-import { type BlockCursor, type Finalization, type FinalizationBuffer, createFinalizationBuffer } from '~/core/index.js'
+import { type BlockCursor, type Finalization, type FinalizationBuffer, finalizationBuffer } from '~/core/index.js'
 
-import { PQ_ERR, ParquetTargetError } from './errors.js'
+import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import {
   type Codec,
   type ParquetColumn,
@@ -78,7 +78,7 @@ export class ParquetStore {
         dir: path.join(options.dir, table.table),
         wrapRow: buildRowWrapper(table.schema),
       })
-      this.#buffers.set(table.table, createFinalizationBuffer<Row>({ getBlockNumber }))
+      this.#buffers.set(table.table, finalizationBuffer<Row>({ getBlockNumber }))
     }
   }
 
@@ -91,7 +91,7 @@ export class ParquetStore {
     const config = this.#configs.get(table)
     if (!config) {
       throw new ParquetTargetError(
-        PQ_ERR.UNREGISTERED_TABLE,
+        PARQUET_ERROR_CODES.UNREGISTERED_TABLE,
         `Table '${table}' is not declared. Declared tables: ${[...this.#configs.keys()].sort().join(', ')}. ` +
           `Add it to parquetTarget({ tables: [...] }).`,
       )
@@ -177,13 +177,13 @@ export class ParquetStore {
    * with the same finalization), so resolve the safe cursor ONCE and reuse it to drop rows in
    * each buffer — resolving per buffer would repeat the identical walk N times.
    */
-  async fork(previousBlocks: BlockCursor[]): Promise<BlockCursor | null> {
+  async resolveFork(canonicalBlocks: BlockCursor[]): Promise<BlockCursor | null> {
     const buffers = [...this.#buffers.values()]
     if (buffers.length === 0) {
       return null
     }
 
-    const safe = await buffers[0].resolveFork(previousBlocks)
+    const safe = await buffers[0].resolveForkCursor(canonicalBlocks)
     for (const buffer of buffers) {
       buffer.dropAbove(safe)
     }
@@ -230,7 +230,7 @@ function readBlockNumber(table: string, blockColumn: string, row: Row): number {
   const value = Number(raw)
   if (raw == null || !Number.isFinite(value)) {
     throw new ParquetTargetError(
-      PQ_ERR.BLOCK_VALUE_INVALID,
+      PARQUET_ERROR_CODES.BLOCK_VALUE_INVALID,
       `Table '${table}' has a row whose block-number column '${blockColumn}' is ${describe(raw)}. ` +
         `It must be a finite integer on every row.`,
     )
@@ -257,7 +257,7 @@ function validateValue(table: string, path: string, column: ParquetColumn, value
   if (value == null) {
     if (!column.optional) {
       throw new ParquetTargetError(
-        PQ_ERR.VALUE_INVALID,
+        PARQUET_ERROR_CODES.VALUE_INVALID,
         `Table '${table}' column '${path}' is required but the row value is ${describe(value)}.`,
       )
     }
@@ -279,7 +279,7 @@ function validateValue(table: string, path: string, column: ParquetColumn, value
       value instanceof Set
     ) {
       throw new ParquetTargetError(
-        PQ_ERR.VALUE_INVALID,
+        PARQUET_ERROR_CODES.VALUE_INVALID,
         `Table '${table}' column '${path}' (declared STRUCT) expects a plain object, got ${describe(value)}.`,
       )
     }
@@ -293,7 +293,7 @@ function validateValue(table: string, path: string, column: ParquetColumn, value
   if (column.type === 'LIST') {
     if (!Array.isArray(value)) {
       throw new ParquetTargetError(
-        PQ_ERR.VALUE_INVALID,
+        PARQUET_ERROR_CODES.VALUE_INVALID,
         `Table '${table}' column '${path}' (declared LIST) expects an array, got ${describe(value)}.`,
       )
     }
@@ -307,7 +307,7 @@ function validateValue(table: string, path: string, column: ParquetColumn, value
   const problem = checkValueType(column.type, value)
   if (problem) {
     throw new ParquetTargetError(
-      PQ_ERR.VALUE_INVALID,
+      PARQUET_ERROR_CODES.VALUE_INVALID,
       `Table '${table}' column '${path}' (declared ${column.type}) ${problem}, got ${describe(value)}.`,
     )
   }

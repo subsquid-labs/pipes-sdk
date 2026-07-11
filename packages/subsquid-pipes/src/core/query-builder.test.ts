@@ -91,10 +91,7 @@ describe('rangeDifference', () => {
   })
 
   it('handles infinite a with finite b in the middle', () => {
-    expect(rangeDifference({ from: 0 }, { from: 50, to: 100 })).toEqual([
-      { from: 0, to: 49 },
-      { from: 101 },
-    ])
+    expect(rangeDifference({ from: 0 }, { from: 50, to: 100 })).toEqual([{ from: 0, to: 49 }, { from: 101 }])
   })
 
   it('handles infinite a with b at the start', () => {
@@ -149,10 +146,7 @@ describe('mergeRangeRequests', () => {
   })
 
   it('merges three overlapping ranges', () => {
-    const result = mergeRangeRequests(
-      [rr(0, 100, ['a']), rr(50, 150, ['b']), rr(120, 200, ['c'])],
-      mergeReqs,
-    )
+    const result = mergeRangeRequests([rr(0, 100, ['a']), rr(50, 150, ['b']), rr(120, 200, ['c'])], mergeReqs)
 
     expect(result).toEqual([
       rr(0, 49, ['a']),

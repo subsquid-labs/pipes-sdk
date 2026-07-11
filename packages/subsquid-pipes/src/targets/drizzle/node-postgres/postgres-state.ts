@@ -9,7 +9,7 @@ import {
   Profiler,
   RollbackRecord,
   TargetState,
-  coerceFinalized,
+  normalizeFinalized,
   resolveForkCursor,
 } from '~/core/index.js'
 import { doWithRetry } from '~/internal/function.js'
@@ -246,7 +246,7 @@ export class PostgresState {
         hash: row.current_hash,
         timestamp: row.current_timestamp ? row.current_timestamp.getTime() / 1000 : undefined,
       },
-      finalized: coerceFinalized(row.finalized) ?? null,
+      finalized: normalizeFinalized(row.finalized) ?? null,
     }
   }
 
@@ -296,7 +296,7 @@ export class PostgresState {
     `)
   }
 
-  async fork(previousBlocks: BlockCursor[]): Promise<BlockCursor | null> {
+  async fork(canonicalBlocks: BlockCursor[]): Promise<BlockCursor | null> {
     const PAGE_SIZE = 1000
     const client = this.client
     const fqnName = this.#sync.fqnName
@@ -323,6 +323,6 @@ export class PostgresState {
       }
     }
 
-    return resolveForkCursor(records(), previousBlocks)
+    return resolveForkCursor(records(), canonicalBlocks)
   }
 }

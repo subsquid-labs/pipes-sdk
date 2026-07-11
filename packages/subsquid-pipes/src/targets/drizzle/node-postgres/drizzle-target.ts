@@ -4,7 +4,7 @@ import { NodePgQueryResultHKT } from 'drizzle-orm/node-postgres/session'
 import { PgTransaction } from 'drizzle-orm/pg-core'
 import type { PgTransactionConfig } from 'drizzle-orm/pg-core/session'
 
-import { BlockCursor, Ctx, createTarget } from '~/core/index.js'
+import { BlockCursor, HookContext, createTarget } from '~/core/index.js'
 import { nonNullable } from '~/internal/array.js'
 import { doWithRetry } from '~/internal/function.js'
 
@@ -55,7 +55,7 @@ export function drizzleTarget<T>({
   }
   tables: Table[] | Record<string, Table>
   onStart?: (ctx: { db: NodePgDatabase }) => Promise<unknown>
-  onData: (ctx: { tx: Transaction; data: T; ctx: Ctx }) => Promise<unknown>
+  onData: (ctx: { tx: Transaction; data: T; ctx: HookContext }) => Promise<unknown>
   onBeforeRollback?: (ctx: { tx: Transaction; cursor: BlockCursor }) => Promise<unknown> | unknown
   onAfterRollback?: (ctx: { tx: Transaction; cursor: BlockCursor }) => Promise<unknown> | unknown
 }) {
@@ -162,8 +162,8 @@ export function drizzleTarget<T>({
         }
       }
     },
-    fork: async (previousBlocks) => {
-      const cursor = await state.fork(previousBlocks)
+    resolveFork: async (canonicalBlocks) => {
+      const cursor = await state.fork(canonicalBlocks)
       if (!cursor) return cursor
 
       await db.transaction(async (tx) => {

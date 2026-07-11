@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { BatchContext } from '~/core/index.js'
-import { createTestLogger } from '~/testing/index.js'
+import { testLogger } from '~/testing/index.js'
 
 import { ClickhouseState } from './clickhouse-state.js'
 
@@ -31,7 +31,7 @@ function ctxFor(
   rollbackChain: { number: number; hash: string }[],
 ): BatchContext {
   return {
-    logger: createTestLogger(),
+    logger: testLogger(),
     profiler: fakeSpan(),
     stream: {
       head: { finalized },

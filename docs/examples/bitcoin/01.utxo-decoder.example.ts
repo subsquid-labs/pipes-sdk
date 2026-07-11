@@ -6,9 +6,9 @@ import { BitcoinQueryBuilder, bitcoinPortalStream } from '@subsquid/pipes/bitcoi
  *
  * The DataRequest model mirrors the Rust portal query (see
  * https://github.com/subsquid/data/blob/master/crates/query/src/query/bitcoin.rs):
- *   - `addTransaction` — request transactions in a range, optionally including
+ *   - `addTransactionRequest` — request transactions in a range, optionally including
  *     their inputs / outputs.
- *   - `addInput` / `addOutput` — request inputs / outputs by script type or
+ *   - `addInputRequest` / `addOutputRequest` — request inputs / outputs by script type or
  *     address, optionally pulling in the parent transaction.
  *   - `includeAllBlocks` — also include blocks that have no matching data
  *     (otherwise the portal skips them for efficiency).
@@ -97,7 +97,7 @@ async function main() {
           scriptPubKeyAsm: true,
         },
       })
-      .addTransaction({
+      .addTransactionRequest({
         request: { inputs: true, outputs: true },
         // 900_000 ≈ early-2025 mainnet height. Adjust to the range you want.
         range: { from: 900_000, to: 900_002 },
@@ -108,7 +108,9 @@ async function main() {
     for (const block of data) {
       console.log(`-------------------------------------`)
       console.log(`Block ${block.header.number} (${block.header.hash}) — ts=${block.header.timestamp}`)
-      console.log(`  ${block.transactions.length} txs / ${block.inputs.length} inputs / ${block.outputs.length} outputs`)
+      console.log(
+        `  ${block.transactions.length} txs / ${block.inputs.length} inputs / ${block.outputs.length} outputs`,
+      )
 
       // Pick a non-coinbase tx to demonstrate script parsing.
       const tx =

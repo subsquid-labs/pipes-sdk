@@ -5,26 +5,28 @@ import { Logger } from './logger.js'
 import { BatchContext } from './portal-source.js'
 import { ProfilerOptions } from './profiling.js'
 import { QueryBuilder } from './query-builder.js'
-import { BlockCursor, Ctx } from './types.js'
+import { BlockCursor, HookContext } from './types.js'
 
-export type StartCtx = {
+export type StartContext = {
   id: string
   state: { current?: BlockCursor; initial: number }
   logger: Logger
   metrics: Metrics
   portal: PortalClient
 }
-
-export type StopCtx = { logger: Logger }
-
+export type StopContext = { logger: Logger }
 type TransformerFn<In, Out> = (data: In, ctx: BatchContext) => Promise<Out> | Out
 
 export type TransformerOptions<In, Out> = {
   profiler?: ProfilerOptions
-  start?: (ctx: StartCtx) => Promise<void> | void
+  start?: (ctx: StartContext) => Promise<void> | void
   transform: TransformerFn<In, Out>
-  fork?: (cursor: BlockCursor, ctx: Ctx) => Promise<void> | void
-  stop?: (ctx: StopCtx) => Promise<void> | void
+  /**
+   * Called after a chain fork has been resolved. Receives the already-resolved safe
+   * cursor; undo any internal state above it.
+   */
+  rollback?: (cursor: BlockCursor, ctx: HookContext) => Promise<void> | void
+  stop?: (ctx: StopContext) => Promise<void> | void
 }
 
 export type TransformerArgs<In, Out> = Transformer<In, Out> | TransformerOptions<In, Out> | TransformerFn<In, Out>
@@ -62,7 +64,7 @@ export class Transformer<In, Out> {
   /**
    * @internal
    */
-  async start(ctx: StartCtx) {
+  async start(ctx: StartContext) {
     await this.options.start?.(ctx)
 
     if (this.children.length === 0) return
@@ -82,11 +84,11 @@ export class Transformer<In, Out> {
   /**
    * @internal
    */
-  async fork(cursor: BlockCursor, ctx: Ctx) {
-    await this.options.fork?.(cursor, ctx)
+  async rollback(cursor: BlockCursor, ctx: HookContext) {
+    await this.options.rollback?.(cursor, ctx)
 
     if (this.children.length === 0) return
-    await Promise.all(this.children.map((t) => t.fork(cursor, ctx)))
+    await Promise.all(this.children.map((t) => t.rollback(cursor, ctx)))
   }
 
   /**

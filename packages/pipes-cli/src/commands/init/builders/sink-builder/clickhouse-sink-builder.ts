@@ -4,8 +4,8 @@ import type { Config, NetworkType } from '~/types/init.js'
 
 import { clickhouseDefaults } from '../../templates/config-files/dynamic/docker-compose.js'
 import { groupContractsForDecoders } from '../../templates/pipes/evm/custom/decoder-grouping.js'
+import { tableName as chTableName, extractCreateTableNames } from './shared.js'
 import type { SinkArtifacts, SinkFile } from './sink-artifacts.js'
-import { extractCreateTableNames, tableName as chTableName } from './shared.js'
 
 const sinkTemplate = `
 import path from 'node:path'

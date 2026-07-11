@@ -9,7 +9,7 @@ import {
   Logger,
   Outputs,
   PortalCache,
-  PortalSource,
+  PortalStream,
   SpanHooks,
   Transformer,
   createTransformer,
@@ -68,7 +68,7 @@ export function bitcoinPortalStream<Out extends BitcoinOutputs>({
     block: { hash: true, number: true },
   })
 
-  return new PortalSource<BitcoinQueryBuilder<F>, BitcoinPortalStream<Out>>({
+  return new PortalStream<BitcoinQueryBuilder<F>, BitcoinPortalStream<Out>>({
     id,
     portal,
     query,

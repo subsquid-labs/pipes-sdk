@@ -1,5 +1,5 @@
 import { PortalRange } from '@subsquid/pipes'
-import { commonAbis, evmDecoder } from '@subsquid/pipes/evm'
+import { commonAbis, evmEventDecoder } from '@subsquid/pipes/evm'
 
 export type Erc20Event = {
   from: string
@@ -10,7 +10,7 @@ export type Erc20Event = {
 }
 
 export function erc20Transfers({ range, contracts }: { range?: PortalRange; contracts?: string[] } = {}) {
-  return evmDecoder({
+  return evmEventDecoder({
     profiler: { name: 'ERC20 transfers' },
     range: range || { from: 'latest' },
     contracts,

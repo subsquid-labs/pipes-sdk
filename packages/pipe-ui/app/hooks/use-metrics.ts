@@ -72,9 +72,8 @@ export type ApiStats = {
     name: 'bun' | 'node' | 'deno' | 'unknown'
     version: string
   }
-  code?: {
-    filename: string
-  }
+  /** Path of the process entrypoint. */
+  entrypoint?: string
   usage: {
     memory: number
   }
@@ -242,7 +241,7 @@ export type ApiProfilerResult = {
   children: ApiProfilerResult[]
 }
 
-export function useProfilers({
+export function useProfiles({
   enabled = true,
   serverIndex,
   pipeId,
@@ -260,10 +259,13 @@ export function useProfilers({
 
       const data: HttpResponse<{
         enabled: boolean
-        profilers: ApiProfilerResult[]
+        profiles?: ApiProfilerResult[]
       }> = await res.json()
 
-      return data.payload
+      return {
+        enabled: data.payload.enabled,
+        profiles: data.payload.profiles ?? [],
+      }
     },
     enabled,
     retry: false,
@@ -271,7 +273,7 @@ export function useProfilers({
   })
 }
 
-export type ApiExemplarResult = {
+export type ApiPreviewResult = {
   name: string
   data: any
   elapsed?: number
@@ -279,10 +281,10 @@ export type ApiExemplarResult = {
   startOffset?: number
   dataSize?: number
   labels?: string[]
-  children: ApiExemplarResult[]
+  children: ApiPreviewResult[]
 }
 
-export function useTransformationExemplar({
+export function useTransformationPreview({
   enabled = true,
   serverIndex,
   pipeId,
@@ -292,14 +294,14 @@ export function useTransformationExemplar({
   pipeId: string
 }) {
   return useQuery({
-    queryKey: ['pipe/exemplars/transformation', serverIndex, pipeId],
+    queryKey: ['pipe/preview/transformation', serverIndex, pipeId],
     queryFn: async () => {
-      const res = await fetch(`/api/metrics/exemplars/transformation?id=${pipeId}&_server=${serverIndex}`)
+      const res = await fetch(`/api/metrics/preview/transformation?id=${pipeId}&_server=${serverIndex}`)
 
-      if (!res.ok) throw new Error('Failed to fetch transformation exemplar')
+      if (!res.ok) throw new Error('Failed to fetch transformation preview')
 
       const data: HttpResponse<{
-        transformation: ApiExemplarResult
+        transformation: ApiPreviewResult
         batch?: { from: number; to: number; blocksCount: number; bytesSize?: number }
       }> = await res.json()
 

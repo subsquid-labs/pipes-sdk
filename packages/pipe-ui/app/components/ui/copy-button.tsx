@@ -1,9 +1,11 @@
 'use client'
 
-import { cva, type VariantProps } from 'class-variance-authority'
+import * as React from 'react'
+
+import { type VariantProps, cva } from 'class-variance-authority'
 import { CheckIcon, CopyIcon } from 'lucide-react'
 import { AnimatePresence, type HTMLMotionProps, motion } from 'motion/react'
-import * as React from 'react'
+
 import { cn } from '~/lib/utils'
 
 const buttonVariants = cva(
@@ -114,4 +116,4 @@ function CopyButton({
   )
 }
 
-export { CopyButton, buttonVariants, type CopyButtonProps }
+export { CopyButton, type CopyButtonProps, buttonVariants }

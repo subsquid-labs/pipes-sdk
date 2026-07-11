@@ -2,9 +2,9 @@ import Mustache from 'mustache'
 
 import { Erc20TransfersPipeTemplateParams } from '../template.config.js'
 
-const template = `import { commonAbis, evmDecoder } from '@subsquid/pipes/evm'
+const template = `import { commonAbis, evmEventDecoder } from '@subsquid/pipes/evm'
 
-const erc20Transfers = evmDecoder({
+const erc20Transfers = evmEventDecoder({
   profiler: { name: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
   range: { from: '{{{range.from}}}'{{#range.to}}, to: '{{{range.to}}}'{{/range.to}} },
   contracts: [

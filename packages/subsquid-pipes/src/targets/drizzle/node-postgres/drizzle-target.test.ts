@@ -5,7 +5,7 @@ import { Pool, QueryResultRow } from 'pg'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { evmPortalStream } from '~/evm/index.js'
-import { MockPortal, MockResponse, blockDecoder, createMockPortal } from '~/testing/index.js'
+import { MockPortal, MockResponse, blockDecoder, mockPortal } from '~/testing/index.js'
 
 import { drizzleTarget } from './index.js'
 
@@ -29,11 +29,11 @@ async function getAllFromSyncTable(schema = 'public') {
 }
 
 describe('Drizzle target', () => {
-  let mockPortal: MockPortal
+  let portal: MockPortal
   const db = drizzle(pool)
 
   afterEach(async () => {
-    await mockPortal?.close()
+    await portal?.close()
   })
   afterAll(async () => {
     await pool.end()
@@ -52,7 +52,7 @@ describe('Drizzle target', () => {
     })
 
     it('should throw an error if table is not tracked', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [
@@ -69,7 +69,7 @@ describe('Drizzle target', () => {
       await expect(async () => {
         await evmPortalStream({
           id: 'test',
-          portal: mockPortal.url,
+          portal: portal.url,
           outputs: blockDecoder({ from: 0, to: 5 }),
         }).pipeTo(
           drizzleTarget({
@@ -93,7 +93,7 @@ describe('Drizzle target', () => {
     })
 
     it('should save state to custom schema', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [
@@ -109,7 +109,7 @@ describe('Drizzle target', () => {
 
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(
         drizzleTarget({
@@ -179,7 +179,7 @@ describe('Drizzle target', () => {
     })
 
     it('should continue from the last block after stop', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
@@ -200,7 +200,7 @@ describe('Drizzle target', () => {
 
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
       }).pipeTo(
         drizzleTarget({
@@ -215,7 +215,7 @@ describe('Drizzle target', () => {
 
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 1, to: 2 }),
       }).pipeTo(
         drizzleTarget({
@@ -228,7 +228,7 @@ describe('Drizzle target', () => {
     })
 
     it('migrates a legacy "stream" cursor to the pipe id and resumes from it', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
@@ -247,7 +247,7 @@ describe('Drizzle target', () => {
       // pinning the legacy key explicitly for the first run.
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
       }).pipeTo(
         drizzleTarget({
@@ -262,7 +262,7 @@ describe('Drizzle target', () => {
       // re-keyed to it in a single atomic UPDATE, and indexing continues from the migrated cursor.
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 2 }),
       }).pipeTo(
         drizzleTarget({
@@ -303,7 +303,7 @@ describe('Drizzle target', () => {
     })
 
     it('should handle simple fork', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           // 1. The First response is okay, it gets 5 blocks
           statusCode: 200,
@@ -388,7 +388,7 @@ describe('Drizzle target', () => {
 
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(
         drizzleTarget({
@@ -458,7 +458,7 @@ describe('Drizzle target', () => {
     })
 
     it('should rollback updates', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         ...new Array(4).fill(null).map((_, i): MockResponse => {
           const block = i + 1
           return {
@@ -500,7 +500,7 @@ describe('Drizzle target', () => {
 
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(
         drizzleTarget({
@@ -551,7 +551,7 @@ describe('Drizzle target', () => {
     })
 
     it('should rollback deletes', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         ...new Array(4).fill(null).map((_, i): MockResponse => {
           const block = i + 1
           return {
@@ -592,7 +592,7 @@ describe('Drizzle target', () => {
       let callCount = 0
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(
         drizzleTarget({
@@ -678,7 +678,7 @@ describe('Drizzle target', () => {
     })
 
     it('should remove child entity first', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         ...new Array(4).fill(null).map((_, i): MockResponse => {
           const block = i + 1
           return {
@@ -720,7 +720,7 @@ describe('Drizzle target', () => {
 
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(
         drizzleTarget({

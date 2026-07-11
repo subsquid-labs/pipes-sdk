@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { type MockBitcoinRpc, createMockBitcoinRpc } from '~/testing/bitcoin/index.js'
-import { createTestLogger } from '~/testing/test-logger.js'
+import { type MockBitcoinRpc, mockBitcoinRpc } from '~/testing/bitcoin/index.js'
+import { testLogger } from '~/testing/test-logger.js'
 
 import { BitcoinQueryBuilder } from './bitcoin-query-builder.js'
 import { BitcoinRpcLatencyWatcher, bitcoinRpcLatencyWatcher } from './bitcoin-rpc-latency-watcher.js'
@@ -21,7 +21,7 @@ describe('BitcoinRpcLatencyWatcher', () => {
     let height = 800_000
     const time = 1_700_000_000
 
-    mock = await createMockBitcoinRpc((method) => {
+    mock = await mockBitcoinRpc((method) => {
       if (method === 'getbestblockhash') return `hash-${height}`
       if (method === 'getblockheader') return { hash: `hash-${height}`, height, time }
       throw new Error(`unexpected method ${method}`)
@@ -59,7 +59,7 @@ describe('BitcoinRpcLatencyWatcher', () => {
   it('keeps polling after a transient RPC failure', async () => {
     let failNext = true
 
-    mock = await createMockBitcoinRpc((method) => {
+    mock = await mockBitcoinRpc((method) => {
       if (failNext) {
         failNext = false
         throw new Error('boom')
@@ -80,7 +80,7 @@ describe('BitcoinRpcLatencyWatcher', () => {
   })
 
   it('extracts user:pass@ from the URL into a Basic Authorization header without leaking credentials downstream', async () => {
-    mock = await createMockBitcoinRpc((method) => {
+    mock = await mockBitcoinRpc((method) => {
       if (method === 'getbestblockhash') return 'hash-1'
       if (method === 'getblockheader') return { hash: 'hash-1', height: 1, time: 1 }
       throw new Error(`unexpected ${method}`)
@@ -122,7 +122,7 @@ describe('BitcoinRpcLatencyWatcher', () => {
   })
 
   it('aborts requests that exceed the per-call timeout and keeps polling', async () => {
-    mock = await createMockBitcoinRpc(
+    mock = await mockBitcoinRpc(
       () =>
         new Promise(() => {
           // never resolves — simulates a hung RPC
@@ -153,13 +153,13 @@ describe('bitcoinRpcLatencyWatcher factory', () => {
     })
 
     const builder = new BitcoinQueryBuilder<{ block: { number: true; timestamp: true } }>()
-    await transformer.setupQuery({ query: builder, logger: createTestLogger() })
+    await transformer.setupQuery({ query: builder, logger: testLogger() })
 
     expect(builder.getFields()).toEqual({
       block: { number: true, timestamp: true },
     })
 
     // Tear down the underlying polling loop (sits on a child transformer).
-    await transformer.stop({ logger: createTestLogger() })
+    await transformer.stop({ logger: testLogger() })
   })
 })

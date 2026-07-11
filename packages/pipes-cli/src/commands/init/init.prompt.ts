@@ -6,7 +6,7 @@ import { type NetworkType, networkTypes, packageManagerTypes } from '~/types/ini
 
 import { networks } from './config/networks.js'
 import { prepareConfig } from './config/prepare-config.js'
-import { sinks } from './config/sinks.js'
+import { targets } from './config/targets.js'
 import { templatePromptLoop } from './config/template-prompt-loop.js'
 import { validateProjectFolder } from './config/validate-project-folder.js'
 import { InitHandler } from './init.handler.js'
@@ -64,7 +64,12 @@ export class InitPrompt {
 
     const sink = await select({
       message: 'Where would you like to store your data?',
-      choices: sinks.map((s) => ({ name: s.name, value: s.id })),
+      choices: targets.map((t) => ({ name: t.name, value: t.id, disabled: 'disabled' in t && t.disabled })),
+      theme: {
+        style: {
+          disabled: (text: string) => chalk.dim(`  ${text.replace('disabled', 'Coming soon')}`),
+        },
+      },
     })
 
     return {

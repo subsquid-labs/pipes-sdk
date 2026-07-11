@@ -38,4 +38,3 @@ export function renderSchemasTemplate(renderedSchemas: string[]): string {
     })),
   })
 }
-

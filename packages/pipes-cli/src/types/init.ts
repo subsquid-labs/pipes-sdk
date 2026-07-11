@@ -17,12 +17,12 @@ export const networkTypes = [
 ] as const
 export type NetworkType = (typeof networkTypes)[number]['value']
 
-export const sinkTypes = [
+export const targetTypes = [
   { name: 'ClickHouse', value: 'clickhouse' },
   { name: 'PostgreSQL', value: 'postgresql' },
   { name: 'Memory', value: 'memory' },
 ] as const
-export type Sink = (typeof sinkTypes)[number]['value']
+export type Sink = (typeof targetTypes)[number]['value']
 
 export interface Config<N extends NetworkType> {
   projectFolder: string

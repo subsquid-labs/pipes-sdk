@@ -36,7 +36,7 @@
  * ```
  */
 
-import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
+import { commonAbis, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 import { parquetTarget } from '@subsquid/pipes/targets/parquet'
 
 const OUT = process.env['PARQUET_OUT'] ?? './parquet-out'
@@ -45,7 +45,7 @@ async function main() {
   await evmPortalStream({
     id: 'erc20-parquet',
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-    outputs: evmDecoder({
+    outputs: evmEventDecoder({
       // A small, already-finalized historical range so files appear immediately and the run
       // terminates. Swap to `{ from: 'latest' }` to watch the finalized-only buffer hold the
       // unfinalized tail back until it finalizes.
@@ -56,7 +56,7 @@ async function main() {
       },
     }),
   }).pipeTo(
-    // The decoded data type is inferred from the evmDecoder events config above.
+    // The decoded data type is inferred from the evmEventDecoder events config above.
     parquetTarget({
       dir: OUT,
       // The block-number column defaults to `blockNumber` and must be present + integer-typed.

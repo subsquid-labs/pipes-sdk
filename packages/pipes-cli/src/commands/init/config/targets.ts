@@ -1,4 +1,4 @@
-export const sinks = [
+export const targets = [
   {
     name: 'ClickHouse',
     id: 'clickhouse',
@@ -10,5 +10,6 @@ export const sinks = [
   {
     name: 'Memory',
     id: 'memory',
+    disabled: true,
   },
 ] as const

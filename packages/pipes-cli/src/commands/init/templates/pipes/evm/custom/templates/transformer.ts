@@ -4,7 +4,7 @@ import Mustache from 'mustache'
 import { uniqueEventKey } from '../../../../../builders/sink-builder/shared.js'
 import { type DecoderGrouping } from '../decoder-grouping.js'
 
-export const customContractTemplate = `import { evmDecoder } from '@subsquid/pipes/evm'
+export const customContractTemplate = `import { evmEventDecoder } from '@subsquid/pipes/evm'
 {{#decoderGroups}}
 {{#imports}}
 import { events as {{{alias}}} } from "./contracts/{{{address}}}.js"
@@ -13,7 +13,7 @@ import { events as {{{alias}}} } from "./contracts/{{{address}}}.js"
 import { enrichEvents } from './utils/index.js'
 
 {{#decoderGroups}}
-const {{{decoderId}}} = evmDecoder({
+const {{{decoderId}}} = evmEventDecoder({
   range: { from: '{{{rangeFrom}}}'{{#rangeTo}}, to: '{{{rangeTo}}}'{{/rangeTo}} },
   contracts: [
     {{#contracts}}

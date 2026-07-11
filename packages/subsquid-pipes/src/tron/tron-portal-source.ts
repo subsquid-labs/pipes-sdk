@@ -9,7 +9,7 @@ import {
   Logger,
   Outputs,
   PortalCache,
-  PortalSource,
+  PortalStream,
   SpanHooks,
   Transformer,
   createTransformer,
@@ -68,7 +68,7 @@ export function tronPortalStream<Out extends TronOutputs>({
     block: { hash: true, number: true },
   })
 
-  return new PortalSource<TronQueryBuilder<F>, TronPortalStream<Out>>({
+  return new PortalStream<TronQueryBuilder<F>, TronPortalStream<Out>>({
     id,
     portal,
     query,

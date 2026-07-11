@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { MockPortal, createMockPortal } from '../testing/index.js'
+import { MockPortal, mockPortal } from '../testing/index.js'
 import { evmPortalStream } from './evm-portal-source.js'
 import { evmQuery } from './evm-query-builder.js'
 
 describe('evmPortalStream', () => {
-  let mockPortal: MockPortal
+  let portal: MockPortal
 
   afterEach(async () => {
-    await mockPortal?.close()
+    await portal?.close()
   })
 
   it('should add default fields', async () => {
-    mockPortal = await createMockPortal([
+    portal = await mockPortal([
       {
         statusCode: 200,
         data: [
@@ -32,7 +32,7 @@ describe('evmPortalStream', () => {
 
     const stream = evmPortalStream({
       id: 'test',
-      portal: mockPortal.url,
+      portal: portal.url,
       outputs: evmQuery().addFields(fields).addRange({ from: 0, to: 2 }),
     })
 

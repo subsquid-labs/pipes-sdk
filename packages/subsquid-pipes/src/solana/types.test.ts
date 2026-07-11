@@ -17,10 +17,7 @@ const SYSTEM_TRANSFER_INSTRUCTION = {
   transactionIndex: 804,
   instructionAddress: [3, 0, 2],
   programId: '11111111111111111111111111111111',
-  accounts: [
-    'JFKrXdoKnzZuGY2A5cnm3ubXcN7UGRUcs1iKZXHUJss',
-    '6iK3n7QbmbLaTT1zwHar4WSCUgG1gsDmdQi9g6Ysb3RK',
-  ],
+  accounts: ['JFKrXdoKnzZuGY2A5cnm3ubXcN7UGRUcs1iKZXHUJss', '6iK3n7QbmbLaTT1zwHar4WSCUgG1gsDmdQi9g6Ysb3RK'],
   data: '3Bxs4Ty4XnVSszuM',
 }
 

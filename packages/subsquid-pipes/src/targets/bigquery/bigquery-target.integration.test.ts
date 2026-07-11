@@ -2,10 +2,10 @@ import type { BigQuery, TableField } from '@google-cloud/bigquery'
 import type { managedwriter } from '@google-cloud/bigquery-storage'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { createTestLogger } from '~/testing/index.js'
+import { testLogger } from '~/testing/index.js'
 
-import { BigQueryState } from './bigquery-state.js'
-import { BigQueryStore } from './bigquery-store.js'
+import { BigQuerySyncState } from './bigquery-state.js'
+import { BigQueryWriter } from './bigquery-store.js'
 import { bigqueryTarget } from './bigquery-target.js'
 import {
   DATASET,
@@ -83,22 +83,22 @@ describe.skipIf(!RUN)('bigquery target — integration', () => {
       expect(exists).toBe(true)
     }, 30_000)
 
-    it('BigQueryState.getCursor lazy-creates the sync table on Not Found and returns undefined', async () => {
+    it('BigQuerySyncState.getCursor lazy-creates the sync table on Not Found and returns undefined', async () => {
       const localSync = `${PREFIX}sync_lazy_${Date.now()}`
-      const store = new BigQueryStore(bigquery, writer, {
+      const store = new BigQueryWriter(bigquery, writer, {
         projectId,
         dataset: DATASET,
         trackedTables: [],
         syncTable: { dataset: DATASET, table: localSync },
       })
-      const state = new BigQueryState({
+      const state = new BigQuerySyncState({
         store,
         bigquery,
         trackedTables: [],
         options: { projectId, dataset: DATASET, table: localSync },
       })
 
-      const cursor = await state.getCursor({ logger: createTestLogger() })
+      const cursor = await state.getCursor({ logger: testLogger() })
       expect(cursor).toBeUndefined()
 
       const [exists] = await bigquery.dataset(DATASET).table(localSync).exists()
@@ -112,25 +112,25 @@ describe.skipIf(!RUN)('bigquery target — integration', () => {
       // from the fork-resolution chain. If this passes but the fork test fails, the bug is
       // in resolveForkCursor / our paging — not in BigQuery's read-after-write semantics.
       const localSync = `${PREFIX}sync_visibility_${Date.now()}`
-      const store = new BigQueryStore(bigquery, writer, {
+      const store = new BigQueryWriter(bigquery, writer, {
         projectId,
         dataset: DATASET,
         trackedTables: [],
         syncTable: { dataset: DATASET, table: localSync },
       })
-      const state = new BigQueryState({
+      const state = new BigQuerySyncState({
         store,
         bigquery,
         trackedTables: [],
         options: { projectId, dataset: DATASET, table: localSync },
       })
 
-      await state.getCursor({ logger: createTestLogger() }) // lazy-creates the table
+      await state.getCursor({ logger: testLogger() }) // lazy-creates the table
 
       // Write one COMMITTED sync row through the same Storage Write API path the production
       // WAL uses (saveCommitPost → commitSyncRow → Committed-stream AppendRows).
       await state.saveCommitPost({
-        logger: createTestLogger(),
+        logger: testLogger(),
         cursor: { number: 42, hash: '0x42' },
         finalized: undefined,
         rollbackChain: [{ number: 42, hash: '0x42' }],
@@ -147,7 +147,7 @@ describe.skipIf(!RUN)('bigquery target — integration', () => {
   // ---------------------------------------------------------------------------------------
   // Type-mapping coverage — Storage Write API round-trip.
   //
-  // Verifies what JS shapes the BigQueryStore accepts per BQ column type, and that the value
+  // Verifies what JS shapes the BigQueryWriter accepts per BQ column type, and that the value
   // SQL reads back equals what we wrote. Each column owns one bullet of the matrix (no hidden
   // coupling) so a regression on, say, NUMERIC fails its own assertion line and not the rest.
   //
@@ -295,7 +295,7 @@ describe.skipIf(!RUN)('bigquery target — integration', () => {
       async function* read() {
         yield { data: scalarRow, ctx: makeBatchContext({ number: 1, hash: '0x1' }) }
       }
-      await target.write({ read: read as never, logger: createTestLogger() })
+      await target.write({ read: read as never, logger: testLogger() })
 
       const [rows] = await bigquery.query({
         query: `SELECT ${SCALAR_SELECT} FROM \`${projectId}.${DATASET}.${localEvents}\` WHERE block_number = 1`,
@@ -373,7 +373,7 @@ describe.skipIf(!RUN)('bigquery target — integration', () => {
       async function* read() {
         yield { data: row, ctx: makeBatchContext({ number: 1, hash: '0x1' }) }
       }
-      await target.write({ read: read as never, logger: createTestLogger() })
+      await target.write({ read: read as never, logger: testLogger() })
 
       const [rows] = await bigquery.query({
         query: `
@@ -448,7 +448,7 @@ describe.skipIf(!RUN)('bigquery target — integration', () => {
           ctx: makeBatchContext({ number: 2, hash: '0x2' }),
         }
       }
-      await target.write({ read: read as never, logger: createTestLogger() })
+      await target.write({ read: read as never, logger: testLogger() })
 
       const [rows] = await bigquery.query({
         query: `SELECT block_number, col_string_nullable, col_int64_nullable, CAST(col_numeric_nullable AS STRING) AS num

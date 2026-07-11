@@ -9,7 +9,7 @@ import {
   Logger,
   Outputs,
   PortalCache,
-  PortalSource,
+  PortalStream,
   SpanHooks,
   Transformer,
   createTransformer,
@@ -68,7 +68,7 @@ export function hyperliquidFillsPortalStream<Out extends HyperliquidFillsOutputs
     block: { hash: true, number: true },
   })
 
-  return new PortalSource<HyperliquidFillsQueryBuilder<F>, HyperliquidFillsPortalStream<Out>>({
+  return new PortalStream<HyperliquidFillsQueryBuilder<F>, HyperliquidFillsPortalStream<Out>>({
     id,
     portal,
     query,

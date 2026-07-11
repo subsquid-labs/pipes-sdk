@@ -3,18 +3,18 @@ import { afterEach, describe, expect, it } from 'vitest'
 import * as solana from '~/portal-client/query/solana.js'
 import { solanaQuery } from '~/solana/solana-query-builder.js'
 
-import { MockPortal, createMockPortal } from '../testing/index.js'
+import { MockPortal, mockPortal } from '../testing/index.js'
 import { solanaPortalStream } from './solana-portal-source.js'
 
 describe('Portal abstract stream', () => {
-  let mockPortal: MockPortal
+  let portal: MockPortal
 
   afterEach(async () => {
-    await mockPortal?.close()
+    await portal?.close()
   })
 
   it('should add default fields', async () => {
-    mockPortal = await createMockPortal([
+    portal = await mockPortal([
       {
         statusCode: 200,
         data: [
@@ -36,7 +36,7 @@ describe('Portal abstract stream', () => {
 
     const stream = solanaPortalStream({
       id: 'test',
-      portal: mockPortal.url,
+      portal: portal.url,
       outputs: solanaQuery().addFields(fields).addRange({ from: 0, to: 2 }),
     })
 

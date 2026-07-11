@@ -1,13 +1,4 @@
-import {
-  BOOLEAN,
-  NAT,
-  STRING,
-  Validator,
-  array,
-  object,
-  option,
-  withDefault,
-} from '@subsquid/util-internal-validation'
+import { BOOLEAN, NAT, STRING, Validator, array, object, option, withDefault } from '@subsquid/util-internal-validation'
 
 import {
   FLOAT,

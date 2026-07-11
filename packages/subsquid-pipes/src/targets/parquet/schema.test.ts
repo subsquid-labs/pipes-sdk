@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { PQ_ERR, ParquetTargetError } from './errors.js'
+import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { type ParquetTable, buildRowWrapper, toParquetSchemaShape, validateTables } from './schema.js'
 
 const BLOCKS_TABLE: ParquetTable = {
@@ -18,7 +18,7 @@ describe('schema validation', () => {
     try {
       validateTables([])
     } catch (e) {
-      expect((e as ParquetTargetError).code).toBe(PQ_ERR.NO_TABLES)
+      expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.NO_TABLES)
     }
   })
 
@@ -27,7 +27,7 @@ describe('schema validation', () => {
     try {
       validateTables([{ table: 't', schema: { hash: { type: 'UTF8' } } }])
     } catch (e) {
-      expect((e as ParquetTargetError).code).toBe(PQ_ERR.BLOCK_COLUMN_MISSING)
+      expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.BLOCK_COLUMN_MISSING)
     }
   })
 
@@ -36,7 +36,7 @@ describe('schema validation', () => {
     try {
       validateTables([{ table: 't', schema: { blockNumber: { type: 'UTF8' } } }])
     } catch (e) {
-      expect((e as ParquetTargetError).code).toBe(PQ_ERR.BLOCK_COLUMN_TYPE)
+      expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.BLOCK_COLUMN_TYPE)
     }
   })
 
@@ -45,7 +45,7 @@ describe('schema validation', () => {
     try {
       validateTables([BLOCKS_TABLE, BLOCKS_TABLE])
     } catch (e) {
-      expect((e as ParquetTargetError).code).toBe(PQ_ERR.DUPLICATE_TABLE)
+      expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.DUPLICATE_TABLE)
     }
   })
 
@@ -54,7 +54,7 @@ describe('schema validation', () => {
     try {
       validateTables([{ table: 't', schema: {} }])
     } catch (e) {
-      expect((e as ParquetTargetError).code).toBe(PQ_ERR.EMPTY_SCHEMA)
+      expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.EMPTY_SCHEMA)
     }
   })
 
@@ -63,7 +63,7 @@ describe('schema validation', () => {
     try {
       validateTables([{ table: 't', schema: { blockNumber: { type: 'INT64' }, amount: { type: 'DECIMAL' as never } } }])
     } catch (e) {
-      expect((e as ParquetTargetError).code).toBe(PQ_ERR.UNSUPPORTED_TYPE)
+      expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.UNSUPPORTED_TYPE)
     }
   })
 
@@ -72,7 +72,7 @@ describe('schema validation', () => {
     try {
       validateTables([{ table: 't', schema: { blockNumber: { type: 'INT64', compression: 'ZSTD' as never } } }])
     } catch (e) {
-      expect((e as ParquetTargetError).code).toBe(PQ_ERR.UNSUPPORTED_COMPRESSION)
+      expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.UNSUPPORTED_COMPRESSION)
     }
   })
 
@@ -82,7 +82,7 @@ describe('schema validation', () => {
     try {
       validateTables([{ table: 't', schema: { blockNumber: { type: 'TIMESTAMP_MILLIS' } } }])
     } catch (e) {
-      expect((e as ParquetTargetError).code).toBe(PQ_ERR.BLOCK_COLUMN_TYPE)
+      expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.BLOCK_COLUMN_TYPE)
     }
   })
 
@@ -109,7 +109,7 @@ describe('schema validation', () => {
     try {
       validateTables([{ table: 't', schema: { blockNumber: { type: 'TIMESTAMP' } } }])
     } catch (e) {
-      expect((e as ParquetTargetError).code).toBe(PQ_ERR.BLOCK_COLUMN_TYPE)
+      expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.BLOCK_COLUMN_TYPE)
     }
   })
 
@@ -119,7 +119,7 @@ describe('schema validation', () => {
     try {
       validateTables([{ table: 't', schema: { blockNumber: { type: 'DATE' } } }])
     } catch (e) {
-      expect((e as ParquetTargetError).code).toBe(PQ_ERR.BLOCK_COLUMN_TYPE)
+      expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.BLOCK_COLUMN_TYPE)
     }
   })
 
@@ -128,7 +128,7 @@ describe('schema validation', () => {
     try {
       validateTables([{ table: 't', schema: { blockNumber: { type: 'JSON' } } }])
     } catch (e) {
-      expect((e as ParquetTargetError).code).toBe(PQ_ERR.BLOCK_COLUMN_TYPE)
+      expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.BLOCK_COLUMN_TYPE)
     }
   })
 
@@ -137,7 +137,7 @@ describe('schema validation', () => {
     try {
       validateTables([{ table: 't', schema: { blockNumber: { type: 'INT64', optional: true } } }])
     } catch (e) {
-      expect((e as ParquetTargetError).code).toBe(PQ_ERR.BLOCK_COLUMN_OPTIONAL)
+      expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.BLOCK_COLUMN_OPTIONAL)
     }
   })
 
@@ -170,7 +170,7 @@ describe('schema validation', () => {
       try {
         validateTables([{ table: 't', schema: { blockNumber: decl as never } }])
       } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.BLOCK_COLUMN_TYPE)
+        expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.BLOCK_COLUMN_TYPE)
       }
     }
   })
@@ -181,12 +181,15 @@ describe('schema validation', () => {
     const cases: { schema: Record<string, unknown>; code: string }[] = [
       {
         schema: { blockNumber: { type: 'INT64' }, u: { type: 'STRUCT', fields: {} } },
-        code: PQ_ERR.NESTED_SCHEMA_INVALID,
+        code: PARQUET_ERROR_CODES.NESTED_SCHEMA_INVALID,
       },
-      { schema: { blockNumber: { type: 'INT64' }, l: { type: 'LIST' } }, code: PQ_ERR.NESTED_SCHEMA_INVALID },
+      {
+        schema: { blockNumber: { type: 'INT64' }, l: { type: 'LIST' } },
+        code: PARQUET_ERROR_CODES.NESTED_SCHEMA_INVALID,
+      },
       {
         schema: { blockNumber: { type: 'INT64' }, u: { type: 'STRUCT', fields: { d: { type: 'DECIMAL' } } } },
-        code: PQ_ERR.UNSUPPORTED_TYPE,
+        code: PARQUET_ERROR_CODES.UNSUPPORTED_TYPE,
       },
     ]
     for (const { schema, code } of cases) {
@@ -212,7 +215,7 @@ describe('schema validation', () => {
       try {
         validateTables([{ table: 't', schema: schema as never }])
       } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.NESTED_SCHEMA_INVALID)
+        expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.NESTED_SCHEMA_INVALID)
         expect((e as ParquetTargetError).message).toContain(`'${at}'`)
       }
     }
@@ -227,7 +230,7 @@ describe('schema validation', () => {
     try {
       validateTables([{ table: 't', schema: { blockNumber: { type: 'INT64' }, u: cyclic as never } }])
     } catch (e) {
-      expect((e as ParquetTargetError).code).toBe(PQ_ERR.NESTED_SCHEMA_INVALID)
+      expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.NESTED_SCHEMA_INVALID)
     }
   })
 })

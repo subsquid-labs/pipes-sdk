@@ -1,4 +1,4 @@
-import { PipeError, SdkError } from '~/core/errors.js'
+import { PipeError, SdkErrorName } from '~/core/errors.js'
 
 /**
  * Common error wrapper for everything thrown by the Parquet target.
@@ -11,12 +11,12 @@ import { PipeError, SdkError } from '~/core/errors.js'
  */
 export class ParquetTargetError extends PipeError {
   constructor(code: string, message: string | string[]) {
-    super(code, SdkError.TargetConfiguration, message)
+    super(code, SdkErrorName.TargetConfiguration, message)
   }
 }
 
 // E12xx — Parquet target codes
-export const PQ_ERR = {
+export const PARQUET_ERROR_CODES = {
   /** `tables[]` is empty — the target has nothing to write. */
   NO_TABLES: 'E1201',
   /** Two declared tables share the same name. */

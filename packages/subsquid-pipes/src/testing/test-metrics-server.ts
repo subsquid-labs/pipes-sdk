@@ -69,7 +69,7 @@ class MockSummary<T extends string = string> implements Summary<T> {
   }
 }
 
-export function createMockMetricServer() {
+export function mockMetricsServer() {
   const registered = new Map<string, any>()
 
   const metrics = {

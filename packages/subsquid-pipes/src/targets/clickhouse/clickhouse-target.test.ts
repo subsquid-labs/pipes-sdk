@@ -2,7 +2,7 @@ import { createClient } from '@clickhouse/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { evmPortalStream } from '~/evm/index.js'
-import { MockPortal, MockResponse, blockDecoder, createMockPortal } from '~/testing/index.js'
+import { MockPortal, MockResponse, blockDecoder, mockPortal } from '~/testing/index.js'
 
 import { ClickhouseStore } from './clickhouse-store.js'
 import { clickhouseTarget } from './clickouse-target.js'
@@ -25,10 +25,10 @@ async function getAllFromSyncTable() {
 }
 
 describe('Clickhouse state', () => {
-  let mockPortal: MockPortal
+  let portal: MockPortal
 
   afterEach(async () => {
-    await mockPortal?.close()
+    await portal?.close()
     await client.close()
   })
 
@@ -40,7 +40,7 @@ describe('Clickhouse state', () => {
 
   describe('progress table', () => {
     it('should store unfinalized blocks to the lastest offset', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [
@@ -56,7 +56,7 @@ describe('Clickhouse state', () => {
 
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
       }).pipeTo(
         clickhouseTarget({
@@ -99,7 +99,7 @@ describe('Clickhouse state', () => {
     })
 
     it('should keep 10,000 rows in status table by default', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
@@ -120,7 +120,7 @@ describe('Clickhouse state', () => {
       await evmPortalStream({
         id: 'test',
         portal: {
-          url: mockPortal.url,
+          url: portal.url,
           // we need to save each response separately
           // to create multiple rows in the status table,
           // so, we set maxBytes to 1 to avoid batching
@@ -166,7 +166,7 @@ describe('Clickhouse state', () => {
     })
 
     it('should keep only 1 row in status table', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         { statusCode: 200, data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }] },
         { statusCode: 200, data: [{ header: { number: 2, hash: '0x2', timestamp: 2000 } }] },
         { statusCode: 200, data: [{ header: { number: 3, hash: '0x3', timestamp: 3000 } }] },
@@ -174,7 +174,7 @@ describe('Clickhouse state', () => {
 
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 3 }),
       }).pipeTo(
         clickhouseTarget({
@@ -218,13 +218,13 @@ describe('Clickhouse state', () => {
           data: [{ header: { number: i + 1, hash: `0x${i + 1}`, timestamp: (i + 1) * 1000 } }],
         }),
       )
-      mockPortal = await createMockPortal(responses)
+      portal = await mockPortal(responses)
 
       try {
         await evmPortalStream({
           id: 'test',
           portal: {
-            url: mockPortal.url,
+            url: portal.url,
             // force one batch per response so each triggers a saveCursor call
             maxBytes: 1,
           },
@@ -249,7 +249,7 @@ describe('Clickhouse state', () => {
     })
 
     it('should not store chain continuity if finalized head doesnt exist', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
@@ -258,7 +258,7 @@ describe('Clickhouse state', () => {
 
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
       }).pipeTo(
         clickhouseTarget({
@@ -283,7 +283,7 @@ describe('Clickhouse state', () => {
     })
 
     it('should continue from the last block after stop', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
@@ -304,7 +304,7 @@ describe('Clickhouse state', () => {
 
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
       }).pipeTo(
         clickhouseTarget({
@@ -315,7 +315,7 @@ describe('Clickhouse state', () => {
 
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 1, to: 2 }),
       }).pipeTo(
         clickhouseTarget({
@@ -326,7 +326,7 @@ describe('Clickhouse state', () => {
     })
 
     it('migrates a legacy "stream" cursor to the pipe id and resumes from it', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
@@ -345,7 +345,7 @@ describe('Clickhouse state', () => {
       // pinning the legacy key explicitly for the first run.
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 1 }),
       }).pipeTo(
         clickhouseTarget({
@@ -359,7 +359,7 @@ describe('Clickhouse state', () => {
       // migrated to it automatically, and indexing continues from the migrated cursor.
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 2 }),
       }).pipeTo(
         clickhouseTarget({
@@ -386,7 +386,7 @@ describe('Clickhouse state', () => {
       await client.query({ query: `CREATE DATABASE ${customDb}` })
 
       try {
-        mockPortal = await createMockPortal([
+        portal = await mockPortal([
           {
             statusCode: 200,
             data: [
@@ -398,7 +398,7 @@ describe('Clickhouse state', () => {
 
         await evmPortalStream({
           id: 'test',
-          portal: mockPortal.url,
+          portal: portal.url,
           outputs: blockDecoder({ from: 0, to: 2 }),
         }).pipeTo(
           clickhouseTarget({
@@ -450,7 +450,7 @@ describe('Clickhouse state', () => {
     })
 
     it('should handle simple fork', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           // 1. The First response is okay, it gets 5 blocks
           statusCode: 200,
@@ -536,7 +536,7 @@ describe('Clickhouse state', () => {
       let rollbackCalls = 0
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(
         clickhouseTarget({
@@ -614,7 +614,7 @@ describe('Clickhouse state', () => {
     })
 
     it('should handle fork with missing finalized block in stream', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           // 1. The First response is okay, it gets 5 blocks
           statusCode: 200,
@@ -728,7 +728,7 @@ describe('Clickhouse state', () => {
 
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(
         clickhouseTarget({
@@ -744,7 +744,7 @@ describe('Clickhouse state', () => {
               format: 'JSONEachRow',
             })
           },
-          onRollback: async ({ type, store, safeCursor }) => {
+          onRollback: async ({ reason, store, safeCursor }) => {
             if (rollbackCalls === 0) {
               expect(safeCursor).toMatchObject({ number: 3, hash: '0x3' })
             } else {
@@ -804,7 +804,7 @@ describe('Clickhouse state', () => {
     })
 
     it('should handle fork up to last finalized block', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           // 1. The First response is okay, it gets 5 blocks
           statusCode: 200,
@@ -866,7 +866,7 @@ describe('Clickhouse state', () => {
         try {
           await evmPortalStream({
             id: 'test',
-            portal: mockPortal.url,
+            portal: portal.url,
             outputs: blockDecoder({ from: 0, to: 7 }),
           }).pipeTo(
             clickhouseTarget({
@@ -959,7 +959,7 @@ describe('Clickhouse state', () => {
     })
 
     it('should handle deep fork', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           // 1. The First response is okay, it gets 5 blocks
           statusCode: 200,
@@ -1073,7 +1073,7 @@ describe('Clickhouse state', () => {
 
       await evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(
         clickhouseTarget({
@@ -1089,7 +1089,7 @@ describe('Clickhouse state', () => {
               format: 'JSONEachRow',
             })
           },
-          onRollback: async ({ type, store, safeCursor }) => {
+          onRollback: async ({ reason, store, safeCursor }) => {
             if (rollbackCalls === 0) {
               expect(safeCursor).toMatchObject({ number: 3, hash: '0x3' })
             } else {

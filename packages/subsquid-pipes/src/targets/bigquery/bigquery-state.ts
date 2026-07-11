@@ -7,14 +7,14 @@ import {
   type Logger,
   type RollbackRecord,
   type TargetState,
-  coerceFinalized,
   formatBlock,
+  normalizeFinalized,
   resolveForkCursor,
 } from '~/core/index.js'
 
-import type { BigQueryStore } from './bigquery-store.js'
+import type { BigQueryWriter } from './bigquery-store.js'
 import type { TrackedTableLocation } from './bigquery-tracker.js'
-import { BQ_ERR, BigQueryTargetError } from './errors.js'
+import { BIGQUERY_ERROR_CODES, BigQueryTargetError } from './errors.js'
 import { syncTableDdl } from './tables.js'
 import { isNotFoundError } from './utils.js'
 
@@ -98,14 +98,14 @@ export type BigQueryStateOptions = {
  *     across tables, since BQ DML is exact (unlike ClickHouse CollapsingMergeTree).
  *
  *   - `fork` — pages sync rows newest-first from BigQuery to find the common ancestor with
- *     `previousBlocks`. Asserts the portal invariant `upper >= cursor.number` to refuse
- *     silently dropping orphan rows above a truncated `previousBlocks`.
+ *     `canonicalBlocks`. Asserts the portal invariant `upper >= cursor.number` to refuse
+ *     silently dropping orphan rows above a truncated `canonicalBlocks`.
  *
  *   - `cleanupOldRows` — periodic maintenance to keep the sync table small, gated on save
  *     count to avoid running every batch.
  */
-export class BigQueryState {
-  readonly #store: BigQueryStore
+export class BigQuerySyncState {
+  readonly #store: BigQueryWriter
   readonly #bigquery: BigQuery
   readonly #trackedTables: TrackedTableLocation[]
   readonly #fqn: string
@@ -123,7 +123,7 @@ export class BigQueryState {
     trackedTables,
     options,
   }: {
-    store: BigQueryStore
+    store: BigQueryWriter
     bigquery: BigQuery
     trackedTables: TrackedTableLocation[]
     options: BigQueryStateOptions
@@ -228,7 +228,7 @@ export class BigQueryState {
     // floor; a higher finalized left by a pre-fix regression in an older row is not recovered
     // — defensive max-across-rows seed is deferred (PR #88 review). Explicit `null` when no
     // finalized head was ever stored.
-    const finalized = coerceFinalized(decodeCursor(row.finalized)) ?? null
+    const finalized = normalizeFinalized(decodeCursor(row.finalized)) ?? null
 
     if (row.committed) {
       this.#lastCommittedCursor = cursor
@@ -240,7 +240,7 @@ export class BigQueryState {
     const high = parseIntStrict(row.range_high)
     if (low === null || high === null) {
       throw new BigQueryTargetError(
-        BQ_ERR.CORRUPT_INFLIGHT_ROW,
+        BIGQUERY_ERROR_CODES.CORRUPT_INFLIGHT_ROW,
         `Internal: sync row in ${row.op} IN_FLIGHT state has NULL range_low/range_high; ` +
           `cannot recover. Manual intervention needed: inspect ${this.#fqn} for id=${this.#key.value}.`,
       )
@@ -382,27 +382,27 @@ export class BigQueryState {
    * Resolve the safe cursor for a fork.
    *
    * Pages committed sync rows newest-first from BigQuery (`ORDER BY timestamp DESC`) and
-   * walks them through `resolveForkCursor` to find the common ancestor with `previousBlocks`.
+   * walks them through `resolveForkCursor` to find the common ancestor with `canonicalBlocks`.
    *
    * Asserts the portal invariant `upper >= currentCursor.number`. If violated — the portal
-   * sent a previousBlocks set whose highest block is below our persisted cursor — we throw
+   * sent a canonicalBlocks set whose highest block is below our persisted cursor — we throw
    * rather than silently DELETE only part of the divergence range and leave orphan rows above
    * `upper` to corrupt the new chain.
    */
-  async fork(previousBlocks: BlockCursor[]): Promise<{ safeCursor: BlockCursor | null; upper: number }> {
-    const upper = previousBlocks.reduce((m, b) => (b.number > m ? b.number : m), Number.NEGATIVE_INFINITY)
+  async fork(canonicalBlocks: BlockCursor[]): Promise<{ safeCursor: BlockCursor | null; upper: number }> {
+    const upper = canonicalBlocks.reduce((m, b) => (b.number > m ? b.number : m), Number.NEGATIVE_INFINITY)
     if (this.#lastCommittedCursor && upper < this.#lastCommittedCursor.number) {
       throw new BigQueryTargetError(
-        BQ_ERR.PORTAL_INVARIANT,
-        `Portal invariant violated: max(previousBlocks).number=${upper} is below the persisted cursor ` +
+        BIGQUERY_ERROR_CODES.PORTAL_INVARIANT,
+        `Portal invariant violated: max(canonicalBlocks).number=${upper} is below the persisted cursor ` +
           `(${this.#lastCommittedCursor.number}). The portal must include every block above the safe ` +
-          `cursor in previousBlocks, otherwise rows in (${upper}, ${this.#lastCommittedCursor.number}] ` +
+          `cursor in canonicalBlocks, otherwise rows in (${upper}, ${this.#lastCommittedCursor.number}] ` +
           `would survive the fork DELETE and corrupt the new chain. Refusing to proceed — file a bug ` +
           `against the portal contract.`,
       )
     }
 
-    const safeCursor = await resolveForkCursor(this.#streamRollbackRecords(), previousBlocks)
+    const safeCursor = await resolveForkCursor(this.#streamRollbackRecords(), canonicalBlocks)
     return { safeCursor, upper }
   }
 
@@ -462,7 +462,7 @@ export class BigQueryState {
         })
       if (probe.length > 0) {
         throw new BigQueryTargetError(
-          BQ_ERR.ORPHAN_TRACKED_DATA,
+          BIGQUERY_ERROR_CODES.ORPHAN_TRACKED_DATA,
           `Sync table \`${this.#fqn}\` has no rows for id='${this.#key.value}', but tracked ` +
             `table \`${t.fqn}\` still holds data from a prior run. Refusing to restart from the ` +
             `initial cursor — that would re-process every block and duplicate every row.\n\n` +

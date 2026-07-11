@@ -1,8 +1,8 @@
 import type { BigQuery } from '@google-cloud/bigquery'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { BigQueryStore, chunkBuffersByByteSize } from './bigquery-store.js'
-import { BQ_ERR, BigQueryTargetError } from './errors.js'
+import { BigQueryWriter, chunkBuffersByByteSize } from './bigquery-store.js'
+import { BIGQUERY_ERROR_CODES, BigQueryTargetError } from './errors.js'
 import {
   type TrackedTable,
   assertSchemaMatches,
@@ -10,7 +10,13 @@ import {
   syncTableDdl,
   trackedTableDdl,
 } from './tables.js'
-import { assertInt64NotNull, assertRangePartitionedOn, classifyBqError, isNotFoundError, isTransientError } from './utils.js'
+import {
+  assertInt64NotNull,
+  assertRangePartitionedOn,
+  classifyBqError,
+  isNotFoundError,
+  isTransientError,
+} from './utils.js'
 
 /**
  * This file holds ONLY pure-function unit tests:
@@ -19,7 +25,7 @@ import { assertInt64NotNull, assertRangePartitionedOn, classifyBqError, isNotFou
  *     assertSchemaMatches)
  *   - DDL string generators (syncTableDdl, trackedTableDdl, partitioningWithDefaults)
  *   - chunkBuffersByByteSize byte-budget generator over pre-encoded proto rows
- *   - BigQueryStore allowlist guard (synchronous JS check, no SDK)
+ *   - BigQueryWriter allowlist guard (synchronous JS check, no SDK)
  *   - BigQueryTargetError wrapper class
  *
  * Anything that requires a BigQuery client (cursor I/O, recovery, fork resolution,
@@ -28,8 +34,8 @@ import { assertInt64NotNull, assertRangePartitionedOn, classifyBqError, isNotFou
  * a real BigQuery project (gated by `BIGQUERY_TEST_PROJECT`).
  */
 
-describe('BigQueryStore — tracked-table allowlist', () => {
-  let store: BigQueryStore
+describe('BigQueryWriter — tracked-table allowlist', () => {
+  let store: BigQueryWriter
   const tables: TrackedTable[] = [
     { table: 'events', blockNumberColumn: 'block_number', schema: [] },
     { table: 'transfers', blockNumberColumn: 'block_number', schema: [] },
@@ -38,7 +44,7 @@ describe('BigQueryStore — tracked-table allowlist', () => {
   beforeEach(() => {
     const fakeBq = {} as BigQuery
     const fakeWriter = { close: vi.fn() } as any
-    store = new BigQueryStore(fakeBq, fakeWriter, {
+    store = new BigQueryWriter(fakeBq, fakeWriter, {
       projectId: 'p',
       dataset: 'd',
       trackedTables: tables,
@@ -162,7 +168,7 @@ describe('BigQueryTargetError', () => {
       throw new Error('expected throw')
     } catch (e) {
       expect(e).toBeInstanceOf(BigQueryTargetError)
-      expect((e as BigQueryTargetError).code).toBe(BQ_ERR.PARTITION_COLUMN_TYPE)
+      expect((e as BigQueryTargetError).code).toBe(BIGQUERY_ERROR_CODES.PARTITION_COLUMN_TYPE)
     }
 
     try {
@@ -170,7 +176,7 @@ describe('BigQueryTargetError', () => {
       throw new Error('expected throw')
     } catch (e) {
       expect(e).toBeInstanceOf(BigQueryTargetError)
-      expect((e as BigQueryTargetError).code).toBe(BQ_ERR.TABLE_NOT_PARTITIONED)
+      expect((e as BigQueryTargetError).code).toBe(BIGQUERY_ERROR_CODES.TABLE_NOT_PARTITIONED)
     }
 
     try {
@@ -186,7 +192,7 @@ describe('BigQueryTargetError', () => {
       throw new Error('expected throw')
     } catch (e) {
       expect(e).toBeInstanceOf(BigQueryTargetError)
-      expect((e as BigQueryTargetError).code).toBe(BQ_ERR.PARTITION_COLUMN_MISSING)
+      expect((e as BigQueryTargetError).code).toBe(BIGQUERY_ERROR_CODES.PARTITION_COLUMN_MISSING)
     }
   })
 })

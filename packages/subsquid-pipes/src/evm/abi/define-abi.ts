@@ -364,7 +364,7 @@ function buildFunction(item: JsonAbiItem): AbiFunction<any, any> {
  *
  * Accepts either a plain ABI array or a Hardhat/Foundry artifact object with an `abi` field.
  * The returned object contains `.events` and `.functions` maps that can be used directly
- * with `evmDecoder()` and other subsquid APIs.
+ * with `evmEventDecoder()` and other subsquid APIs.
  *
  * Uses `@subsquid/evm-codec` for 10x faster decoding compared to viem, while accepting
  * the same standard JSON ABI format — no code generation required.
@@ -375,7 +375,7 @@ function buildFunction(item: JsonAbiItem): AbiFunction<any, any> {
  * import erc20Json from './erc20.json'
  * const erc20 = defineAbi(erc20Json)
  *
- * evmDecoder({
+ * evmEventDecoder({
  *   range: { from: 'latest' },
  *   events: {
  *     transfers: erc20.events.Transfer,

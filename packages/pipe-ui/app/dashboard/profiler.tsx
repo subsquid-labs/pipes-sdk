@@ -8,7 +8,7 @@ import { Switch } from '~/components/ui/switch'
 import { PanelLoading } from '~/dashboard/panel-loading'
 import { FlameChart } from '~/dashboard/profiler-flame-chart'
 import { useLocalStorage } from '~/hooks/use-local-storage'
-import { type ApiProfilerResult, useProfilers } from '~/hooks/use-metrics'
+import { type ApiProfilerResult, useProfiles } from '~/hooks/use-metrics'
 import { useServerIndex } from '~/hooks/use-server-context'
 import { cn } from '~/lib/utils'
 
@@ -288,28 +288,28 @@ function SettingsPopover({
 
 export function Profiler({ pipeId }: { pipeId: string }) {
   const { serverIndex } = useServerIndex()
-  const { data, isLoading } = useProfilers({ serverIndex, pipeId })
+  const { data, isLoading } = useProfiles({ serverIndex, pipeId })
   const [excludeChildren, setExcludeChildren] = useLocalStorage('profiler.excludeChildren', false)
   const [view, setView] = useLocalStorage<ProfilerView>('profiler.view', 'tree')
   const [timeMode, setTimeMode] = useLocalStorage<TimeMode>('profiler.timeMode', 'total')
 
-  if (isLoading || !data?.profilers.length) {
+  if (isLoading || !data?.profiles.length) {
     return <PanelLoading message="Waiting for data samples..." />
   }
 
-  const profilers = data.profilers || []
-  const totalSpentTime = profilers.reduce((a, b) => a + b.totalTime, 0)
+  const profiles = data.profiles || []
+  const totalSpentTime = profiles.reduce((a, b) => a + b.totalTime, 0)
 
   const res = calcStats({
     acc: [],
-    profilers: data.profilers || [],
+    profilers: data.profiles || [],
     percentage: {
       totalSpentTime,
       excludeChildren,
     },
   })
 
-  const totalSamples = profilers.length
+  const totalSamples = profiles.length
 
   return (
     <div className="space-y-3">

@@ -12,7 +12,7 @@ export type BlockCursor = {
   timestamp?: number
 }
 
-export type Ctx = { logger: Logger; profiler: Profiler }
+export type HookContext = { logger: Logger; profiler: Profiler }
 
 type ClassOutput<T> = T extends QueryAwareTransformer<any, infer O> ? O : never
 type StreamsOutput<T> = { [K in keyof T]: ClassOutput<T[K]> }

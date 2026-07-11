@@ -34,7 +34,7 @@ describe('EVM Template Builder', () => {
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
-      import { commonAbis, evmDecoder, evmPortalSource } from "@subsquid/pipes/evm";
+      import { commonAbis, evmEventDecoder, evmPortalStream } from "@subsquid/pipes/evm";
       import { z } from "zod";
       import path from "node:path";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
@@ -48,7 +48,7 @@ describe('EVM Template Builder', () => {
         CLICKHOUSE_DATABASE: z.string(),
       }).parse(process.env)
 
-      const erc20Transfers = evmDecoder({
+      const erc20Transfers = evmEventDecoder({
         profiler: { name: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
         range: { from: '12,369,621' },
         contracts: [
@@ -71,7 +71,7 @@ describe('EVM Template Builder', () => {
       )
 
       export async function main() {
-        await evmPortalSource({
+        await evmPortalStream({
           id: 'a1b2c3d4',
           portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
           outputs: {
@@ -138,7 +138,7 @@ describe('EVM Template Builder', () => {
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
-      import { commonAbis, evmDecoder, evmPortalSource, factory, factorySqliteDatabase } from "@subsquid/pipes/evm";
+      import { commonAbis, contractFactory, contractFactoryStore, evmEventDecoder, evmPortalStream } from "@subsquid/pipes/evm";
       import { z } from "zod";
       import path from "node:path";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
@@ -154,7 +154,7 @@ describe('EVM Template Builder', () => {
         CLICKHOUSE_DATABASE: z.string(),
       }).parse(process.env)
 
-      const erc20Transfers = evmDecoder({
+      const erc20Transfers = evmEventDecoder({
         profiler: { name: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
         range: { from: '12,369,621' },
         contracts: [
@@ -176,15 +176,15 @@ describe('EVM Template Builder', () => {
         })),
       )
 
-      const uniswapV3Swaps = evmDecoder({
+      const uniswapV3Swaps = evmEventDecoder({
         range: { from: '12,369,621' },
-        contracts: factory({
+        contracts: contractFactory({
           address: [
             '0x1f98431c8ad98523631ae4a59f267346ea31f984',
           ],
           event: factoryEvents.PoolCreated,
           childAddressField: 'pool',
-          database: await factorySqliteDatabase({
+          database: await contractFactoryStore({
             path: './uniswap3-eth-pools.sqlite',
           }),
         }),
@@ -205,7 +205,7 @@ describe('EVM Template Builder', () => {
       )
 
       export async function main() {
-        await evmPortalSource({
+        await evmPortalStream({
           id: 'a1b2c3d4',
           portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
           outputs: {
@@ -299,9 +299,9 @@ describe('EVM Template Builder', () => {
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
-      import { evmDecoder, evmPortalSource } from "@subsquid/pipes/evm";
+      import { evmEventDecoder, evmPortalStream } from "@subsquid/pipes/evm";
       import { z } from "zod";
-      import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres";
+      import { chunkForInsert, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres";
       import { drizzle } from "drizzle-orm/node-postgres";
       import { weth9ApprovalTable, weth9TransferTable } from "./schemas.js";
       import { events as weth9Events } from "./contracts/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2.js";
@@ -311,7 +311,7 @@ describe('EVM Template Builder', () => {
         DB_CONNECTION_STR: z.string(),
       }).parse(process.env)
 
-      const custom = evmDecoder({
+      const custom = evmEventDecoder({
         range: { from: 'latest' },
         contracts: [
           '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
@@ -329,7 +329,7 @@ describe('EVM Template Builder', () => {
       }).pipe(enrichEvents)
 
       export async function main() {
-        await evmPortalSource({
+        await evmPortalStream({
           id: 'a1b2c3d4',
           portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
           outputs: {
@@ -343,10 +343,10 @@ describe('EVM Template Builder', () => {
             weth9TransferTable,
           ],
           onData: async ({ tx, data }) => {
-            for (const values of chunk(data.custom.Approval)) {
+            for (const values of chunkForInsert(data.custom.Approval)) {
               await tx.insert(weth9ApprovalTable).values(values)
             }
-            for (const values of chunk(data.custom.Transfer)) {
+            for (const values of chunkForInsert(data.custom.Transfer)) {
               await tx.insert(weth9TransferTable).values(values)
             }
           },

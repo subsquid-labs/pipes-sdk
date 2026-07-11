@@ -7,7 +7,7 @@ const templateReader = new TemplateReader(getTemplateDirname('svm'), 'token-bala
 
 export const tokenBalancesTemplate = defineTemplate({
   id: 'tokenBalances',
-  name: 'Token balances',
+  name: 'Token Balances',
   networkType: 'svm',
   render: () => ({
     transformer: templateReader.readTransformer(),

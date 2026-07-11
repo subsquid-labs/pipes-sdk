@@ -31,4 +31,4 @@ export function loadConfig(): Config {
   }
 }
 
-export type { MetricsServerEntry, Config }
+export type { Config, MetricsServerEntry }

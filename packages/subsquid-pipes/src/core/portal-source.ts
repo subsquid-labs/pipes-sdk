@@ -1,24 +1,24 @@
 import {
   ApiDataset,
   GetBlock,
+  PortalBlockStream,
   PortalClient,
   PortalClientOptions,
-  PortalStream,
   Query,
   isForkException,
 } from '~/portal-client/index.js'
 
 import { last } from '../internal/array.js'
-import { ForkCursorMissingError, ForkNoPreviousBlocksError, TargetForkNotSupportedError } from './errors.js'
+import { ForkCursorMissingError, MissingForkAncestorError, TargetForkNotSupportedError } from './errors.js'
 import { FinalizedWatermark } from './finalized-watermark.js'
-import { LogLevel, Logger, createDefaultLogger, formatWarning } from './logger.js'
+import { LogLevel, Logger, defaultLogger, formatWarning } from './logger.js'
 import { Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
 import { Profiler, Span, SpanHooks } from './profiling.js'
 import { ProgressEvent, StartEvent } from './progress-tracker.js'
 import { QueryBuilder, hashQuery } from './query-builder.js'
 import { Target, TargetState } from './target.js'
 import { QueryAwareTransformer, Transformer, TransformerArgs, TransformerOptions } from './transformer.js'
-import { BlockCursor, Ctx } from './types.js'
+import { BlockCursor, HookContext } from './types.js'
 
 const NOT_REAL_TIME_WARNING = (name: string) => {
   return formatWarning({
@@ -31,10 +31,14 @@ const NOT_REAL_TIME_WARNING = (name: string) => {
 }
 
 export interface PortalCache {
-  getStream<Q extends Query>(options: { portal: PortalClient; query: Q; logger: Logger }): PortalStream<GetBlock<Q>>
+  getStream<Q extends Query>(options: {
+    portal: PortalClient
+    query: Q
+    logger: Logger
+  }): PortalBlockStream<GetBlock<Q>>
 }
 
-export type BatchStreamContext = {
+export type StreamInfo = {
   dataset: ApiDataset
   head: {
     finalized?: BlockCursor
@@ -67,7 +71,7 @@ export type BatchContext = {
   profiler: Profiler
   metrics: Metrics
   logger: Logger
-  stream: BatchStreamContext
+  stream: StreamInfo
   batch: BatchMetadata
 }
 
@@ -91,7 +95,7 @@ export function extractRollbackChain({ blocks, head }: { blocks: PartialBlock[];
     .map(cursorFromHeader)
 }
 
-export type PortalSourceOptions<Query> = {
+export type PortalStreamOptions<Query> = {
   /**
    * Globally unique, stable identifier for this pipe.
    * Targets use it as a cursor key to persist progress — two pipes with the
@@ -112,7 +116,7 @@ export type PortalSourceOptions<Query> = {
   }
 }
 
-export class PortalSource<Q extends QueryBuilder<any>, T = any> {
+export class PortalStream<Q extends QueryBuilder<any>, T = any> {
   readonly #id: string
   readonly #options: {
     profiler: boolean | SpanHooks
@@ -131,16 +135,16 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
   readonly #watermark = new FinalizedWatermark()
   #started = false
 
-  constructor({ portal, id, query, logger, progress, ...options }: PortalSourceOptions<Q>) {
+  constructor({ portal, id, query, logger, progress, ...options }: PortalStreamOptions<Q>) {
     // Targets key their persisted cursor by this id, and every state class treats an empty id as
     // "not bound" and falls back to the shared legacy "stream" key — which would silently put
     // this pipe back into the cross-pipe cursor collision the id exists to prevent.
     if (!id?.trim()) {
-      throw new Error('PortalSource requires a non-empty "id": targets use it as the cursor key to persist progress')
+      throw new Error('PortalStream requires a non-empty "id": targets use it as the cursor key to persist progress')
     }
 
     this.#id = id
-    this.#logger = logger && typeof logger !== 'string' ? logger : createDefaultLogger({ id: this.#id, level: logger })
+    this.#logger = logger && typeof logger !== 'string' ? logger : defaultLogger({ id: this.#id, level: logger })
 
     this.#portal =
       portal instanceof PortalClient
@@ -295,8 +299,8 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
     // completion; the idempotency guard in stop() remains as a safety net.
   }
 
-  pipe<Out>(options: TransformerArgs<T, Out>): PortalSource<Q, Out> {
-    if (this.#started) throw new Error('Source is closed')
+  pipe<Out>(options: TransformerArgs<T, Out>): PortalStream<Q, Out> {
+    if (this.#started) throw new Error('Stream is closed')
 
     const transformer = options instanceof Transformer ? options : new Transformer(options)
 
@@ -310,7 +314,7 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       transformer.setId(`${id} ${exists.length + 1}`)
     }
 
-    return new PortalSource<Q, Out>({
+    return new PortalStream<Q, Out>({
       id: this.#id,
       portal: this.#portal,
       query: this.#queryBuilder,
@@ -342,13 +346,13 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
       logger: this.#logger,
       profiler: span,
       ...rest,
-    } as Ctx & T
+    } as HookContext & T
   }
 
-  private async forkTransformers(profiler: Profiler, cursor: BlockCursor) {
+  private async rollbackTransformers(profiler: Profiler, cursor: BlockCursor) {
     const span = profiler.start({ name: 'transformers_rollback', labels: 'core' })
     const ctx = this.context(span)
-    await Promise.all(this.#transformers.map((t) => t.fork(cursor, ctx)))
+    await Promise.all(this.#transformers.map((t) => t.rollback(cursor, ctx)))
     span.end()
   }
 
@@ -436,25 +440,25 @@ export class PortalSource<Q extends QueryBuilder<any>, T = any> {
           } catch (e) {
             if (!isForkException(e)) throw e
 
-            if (!e.previousBlocks.length) {
-              throw new ForkNoPreviousBlocksError()
+            if (!e.canonicalBlocks.length) {
+              throw new MissingForkAncestorError()
             }
 
-            if (!target.fork) {
+            if (!target.resolveFork) {
               throw new TargetForkNotSupportedError()
             }
 
             const forkProfiler = Span.root('fork', self.#options.profiler).addLabels('core')
 
             const span = forkProfiler.start({ name: 'target_rollback', labels: 'core' })
-            const forkedCursor = await target.fork(e.previousBlocks)
+            const forkedCursor = await target.resolveFork(e.canonicalBlocks)
             span.end()
 
             if (!forkedCursor) {
               throw new ForkCursorMissingError()
             }
 
-            await self.forkTransformers(forkProfiler, forkedCursor)
+            await self.rollbackTransformers(forkProfiler, forkedCursor)
 
             // Resume from the forked cursor; the finalized floor persists in the
             // instance #watermark across read() re-invocation, so re-seeding with the

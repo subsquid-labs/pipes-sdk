@@ -1,11 +1,11 @@
-import { createFinalizationBuffer, createTarget } from '~/core/index.js'
+import { createTarget, finalizationBuffer } from '~/core/index.js'
 
 export function createMemoryTarget<T extends { blockNumber: number }[]>({
   onData,
 }: {
   onData: (data: T) => Promise<void> | void
 }) {
-  const buffer = createFinalizationBuffer<T[number]>({
+  const buffer = finalizationBuffer<T[number]>({
     getBlockNumber: (row) => row.blockNumber,
   })
 
@@ -26,6 +26,6 @@ export function createMemoryTarget<T extends { blockNumber: number }[]>({
       }
     },
 
-    fork: (previousBlocks) => buffer.fork(previousBlocks),
+    resolveFork: (canonicalBlocks) => buffer.resolveFork(canonicalBlocks),
   })
 }

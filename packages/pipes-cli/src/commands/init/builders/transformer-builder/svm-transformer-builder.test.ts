@@ -34,7 +34,7 @@ describe('SVM Template Builder', () => {
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
-      import { solanaInstructionDecoder, solanaPortalSource } from "@subsquid/pipes/solana";
+      import { solanaInstructionDecoder, solanaPortalStream } from "@subsquid/pipes/solana";
       import { z } from "zod";
       import path from "node:path";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
@@ -66,7 +66,7 @@ describe('SVM Template Builder', () => {
       }).pipe(enrichEvents)
 
       export async function main() {
-        await solanaPortalSource({
+        await solanaPortalStream({
           id: 'a1b2c3d4',
           portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
           outputs: {
@@ -133,9 +133,9 @@ describe('SVM Template Builder', () => {
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
-      import { solanaPortalSource, solanaQuery } from "@subsquid/pipes/solana";
+      import { solanaPortalStream, solanaQuery } from "@subsquid/pipes/solana";
       import { z } from "zod";
-      import { chunk, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres";
+      import { chunkForInsert, drizzleTarget } from "@subsquid/pipes/targets/drizzle/node-postgres";
       import { drizzle } from "drizzle-orm/node-postgres";
       import { tokenBalancesTable } from "./schemas.js";
 
@@ -168,7 +168,7 @@ describe('SVM Template Builder', () => {
             preMint: true,
           },
         })
-        .addTokenBalance({
+        .addTokenBalanceRequest({
           range: { from: '372,195,730' },
           request: {
             // You can filter in that way. it is much faster, but the query has a limit of 5000 addresses
@@ -209,7 +209,7 @@ describe('SVM Template Builder', () => {
         )
 
       export async function main() {
-        await solanaPortalSource({
+        await solanaPortalStream({
           id: 'a1b2c3d4',
           portal: 'https://portal.sqd.dev/datasets/solana-mainnet',
           outputs: {
@@ -222,7 +222,7 @@ describe('SVM Template Builder', () => {
             tokenBalancesTable,
           ],
           onData: async ({ tx, data }) => {
-            for (const values of chunk(data.tokenBalances)) {
+            for (const values of chunkForInsert(data.tokenBalances)) {
               await tx.insert(tokenBalancesTable).values(values)
             }
           },

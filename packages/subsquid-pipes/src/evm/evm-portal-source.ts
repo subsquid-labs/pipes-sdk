@@ -5,7 +5,7 @@ import {
   Logger,
   Outputs,
   PortalCache,
-  PortalSource,
+  PortalStream,
   SpanHooks,
   Transformer,
   createTransformer,
@@ -68,7 +68,7 @@ export function evmPortalStream<Out extends EvmOutputs>({
     block: { hash: true, number: true },
   })
 
-  return new PortalSource<EvmQueryBuilder<F>, EvmPortalStream<Out>>({
+  return new PortalStream<EvmQueryBuilder<F>, EvmPortalStream<Out>>({
     id,
     portal,
     query,

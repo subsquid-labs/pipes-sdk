@@ -14,7 +14,7 @@ describe('tokenBalancesTemplate (defineTemplate)', () => {
 
   it('has the expected identity metadata', () => {
     expect(tokenBalancesTemplate.id).toBe('tokenBalances')
-    expect(tokenBalancesTemplate.name).toBe('Token balances')
+    expect(tokenBalancesTemplate.name).toBe('Token Balances')
     expect(tokenBalancesTemplate.networkType).toBe('svm')
   })
 

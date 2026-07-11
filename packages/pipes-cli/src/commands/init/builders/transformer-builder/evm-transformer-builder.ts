@@ -11,7 +11,7 @@ export const template = `{{#deduplicatedImports}}
 
 {{/transformerTemplates}}
 export async function main() {
-  await evmPortalSource({
+  await evmPortalStream({
     id: '{{pipeId}}',
     portal: 'https://portal.sqd.dev/datasets/{{network}}',
     outputs: {
@@ -38,7 +38,7 @@ export class EvmTransformerBuilder extends BaseTransformerBuilder<'evm'> {
   }
 
   getNetworkImports() {
-    return ['import { evmPortalSource } from "@subsquid/pipes/evm"']
+    return ['import { evmPortalStream } from "@subsquid/pipes/evm"']
   }
 
   getTransformerTemplates() {

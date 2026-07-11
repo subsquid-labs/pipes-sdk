@@ -1,6 +1,6 @@
 import type { ClickHouseClient } from '@clickhouse/client'
 
-import { BlockCursor, Ctx, Logger, createTarget } from '~/core/index.js'
+import { BlockCursor, HookContext, Logger, createTarget } from '~/core/index.js'
 
 import { ClickhouseState } from './clickhouse-state.js'
 import { ClickhouseStore } from './clickhouse-store.js'
@@ -8,7 +8,7 @@ import { ClickhouseStore } from './clickhouse-store.js'
 /**
  * Configuration options for ClickhouseState.
  */
-export type Settings = {
+export type ClickhouseSettings = {
   /**
    * Name of the ClickHouse database to use.
    * Defaults to "default" if not provided.
@@ -48,12 +48,14 @@ export function clickhouseTarget<T>({
   settings = {},
 }: {
   client: ClickHouseClient
-  settings?: Settings
+  settings?: ClickhouseSettings
   onStart?: (ctx: { store: ClickhouseStore; logger: Logger }) => unknown | Promise<unknown>
-  onData: (ctx: { store: ClickhouseStore; data: T; ctx: Ctx }) => unknown | Promise<unknown>
+  onData: (ctx: { store: ClickhouseStore; data: T; ctx: HookContext }) => unknown | Promise<unknown>
   /**
-   * Called when previously written blocks must be removed — on a blockchain fork or an
-   * offset check at startup. The typical implementation calls `store.removeAllRows` with
+   * Called when previously written blocks must be removed. `reason: 'recovery'` fires on
+   * every restart with a persisted cursor — it cleans up rows a possibly-interrupted
+   * previous run wrote past the saved cursor. `reason: 'fork'` fires on chain forks.
+   * The typical implementation calls `store.removeAllRows` with
    * `where: 'block_number > {latest:UInt32}'` and `params: { latest: safeCursor.number }`.
    *
    * On CollapsingMergeTree / VersionedCollapsingMergeTree tables (or their Replicated
@@ -66,7 +68,7 @@ export function clickhouseTarget<T>({
    * `onStart` to set the index up eagerly.
    */
   onRollback?: (ctx: {
-    type: 'offset_check' | 'blockchain_fork'
+    reason: 'recovery' | 'fork'
     store: ClickhouseStore
     safeCursor: BlockCursor
 
@@ -91,7 +93,7 @@ export function clickhouseTarget<T>({
 
       if (cursor) {
         await onRollback?.({
-          type: 'offset_check',
+          reason: 'recovery',
           store,
           cursor: cursor.latest,
           safeCursor: cursor.latest,
@@ -121,12 +123,12 @@ export function clickhouseTarget<T>({
 
       await store.close()
     },
-    fork: async (previousBlocks) => {
-      const cursor = await state.fork(previousBlocks)
+    resolveFork: async (canonicalBlocks) => {
+      const cursor = await state.fork(canonicalBlocks)
       if (!cursor) return cursor
 
       await onRollback?.({
-        type: 'blockchain_fork',
+        reason: 'fork',
         store,
         cursor,
         safeCursor: cursor,

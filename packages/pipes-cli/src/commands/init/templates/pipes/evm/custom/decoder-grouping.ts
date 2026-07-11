@@ -59,7 +59,7 @@ export function groupContractsForDecoders(contracts: ContractWithRange[]): Decod
   }
 
   // Multiple contracts, all share identical event signatures AND ranges.
-  // Range compatibility matters because evmDecoder uses a single range for the
+  // Range compatibility matters because evmEventDecoder uses a single range for the
   // whole decoder — collapsing divergent ranges would silently widen the scan.
   if (areContractsCompatible(nonEmpty) && areRangesCompatible(nonEmpty)) {
     return {

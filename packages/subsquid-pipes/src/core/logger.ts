@@ -9,7 +9,7 @@ function isEnvFalse(name: string): boolean {
   return val === 'false' || val === '0'
 }
 
-export function createDefaultLogger({ id, level }: { level?: LogLevel; id?: string } = {}): Logger {
+export function defaultLogger({ id, level }: { level?: LogLevel; id?: string } = {}): Logger {
   const baseLevel = level !== false && level !== null ? level : 'silent'
 
   const pretty = process.stdout?.isTTY && !isEnvFalse('LOG_PRETTY')

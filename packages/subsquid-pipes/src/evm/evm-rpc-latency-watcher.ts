@@ -19,10 +19,7 @@ class EvmRpcLatencyWatcher extends RpcLatencyWatcher {
 
     listener.subscribe(
       payload,
-      (message: {
-        method: string
-        params?: { result?: { number: string; hash: string; timestamp: string } }
-      }) => {
+      (message: { method: string; params?: { result?: { number: string; hash: string; timestamp: string } } }) => {
         if (message.method !== 'eth_subscription') return
         const head = message.params?.result
         if (!head) return
@@ -52,7 +49,7 @@ export function evmRpcLatencyWatcher({ rpcUrl }: { rpcUrl: string[] }) {
         timestamp: true,
       },
     })
-    .addRange({from: 'latest'})
+    .addRange({ from: 'latest' })
     .build()
     .pipe(transformer.options)
 }

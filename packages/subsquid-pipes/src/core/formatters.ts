@@ -49,11 +49,11 @@ export function humanBytes(bytes: number) {
  * @param seconds - Duration in seconds. If undefined, displays a calculating message.
  * @returns A formatted ETA string.
  * @example
- * displayEstimatedTime(90) // "ETA: 1m 30s"
- * displayEstimatedTime(3700) // "ETA: 1h 1m"
- * displayEstimatedTime(90000) // "ETA: 1d 1h"
+ * formatEta(90) // "ETA: 1m 30s"
+ * formatEta(3700) // "ETA: 1h 1m"
+ * formatEta(90000) // "ETA: 1d 1h"
  */
-export function displayEstimatedTime(seconds?: number) {
+export function formatEta(seconds?: number) {
   if (typeof seconds === 'undefined' || Number.isNaN(seconds) || !Number.isFinite(seconds)) {
     return 'ETA: calculating...' // unknown
   }
@@ -105,6 +105,6 @@ export function parseBlockNumber(block: number | string) {
   return block
 }
 
-export function lines(str: string[]): string {
+export function joinLines(str: string[]): string {
   return str.join('\n')
 }

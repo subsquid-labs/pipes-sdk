@@ -38,27 +38,27 @@ export class SolanaQueryBuilder<F extends solana.FieldSelection = {}> extends Qu
     return this
   }
 
-  addLog(options: RequestOptions<solana.LogRequest>): this {
+  addLogRequest(options: RequestOptions<solana.LogRequest>): this {
     return this.addRequest('logs', options)
   }
 
-  addTransaction(options: RequestOptions<solana.TransactionRequest>): this {
+  addTransactionRequest(options: RequestOptions<solana.TransactionRequest>): this {
     return this.addRequest('transactions', options)
   }
 
-  addReward(options: RequestOptions<solana.RewardRequest>): this {
+  addRewardRequest(options: RequestOptions<solana.RewardRequest>): this {
     return this.addRequest('rewards', options)
   }
 
-  addBalance(options: RequestOptions<solana.BalanceRequest>): this {
+  addBalanceRequest(options: RequestOptions<solana.BalanceRequest>): this {
     return this.addRequest('balances', options)
   }
 
-  addTokenBalance(options: RequestOptions<solana.TokenBalanceRequest>): this {
+  addTokenBalanceRequest(options: RequestOptions<solana.TokenBalanceRequest>): this {
     return this.addRequest('tokenBalances', options)
   }
 
-  addInstruction(options: RequestOptions<solana.InstructionRequest>): this {
+  addInstructionRequest(options: RequestOptions<solana.InstructionRequest>): this {
     return this.addRequest('instructions', options)
   }
 

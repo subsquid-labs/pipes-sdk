@@ -1,4 +1,4 @@
-import { PipeError, SdkError } from '~/core/errors.js'
+import { PipeError, SdkErrorName } from '~/core/errors.js'
 
 /**
  * Common error wrapper for everything thrown by the BigQuery target.
@@ -10,12 +10,12 @@ import { PipeError, SdkError } from '~/core/errors.js'
  */
 export class BigQueryTargetError extends PipeError {
   constructor(code: string, message: string | string[]) {
-    super(code, SdkError.TargetConfiguration, message)
+    super(code, SdkErrorName.TargetConfiguration, message)
   }
 }
 
 // E11xx — BigQuery target codes
-export const BQ_ERR = {
+export const BIGQUERY_ERROR_CODES = {
   /** Cannot determine GCP project id at target construction. */
   PROJECT_ID: 'E1101',
   /** Tracked table schema is missing the declared partition column. */
@@ -38,7 +38,7 @@ export const BQ_ERR = {
   INTERNAL_SCHEMA_MAP: 'E1110',
   /** Sync row in IN_FLIGHT state lacks the range_low/range_high it needs for recovery. */
   CORRUPT_INFLIGHT_ROW: 'E1111',
-  /** Portal sent previousBlocks whose max block is below our persisted cursor. */
+  /** Portal sent canonicalBlocks whose max block is below our persisted cursor. */
   PORTAL_INVARIANT: 'E1112',
   /**
    * Sync table has no rows for this stream id, but tracked tables still hold data — refusing

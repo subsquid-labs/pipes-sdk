@@ -4,8 +4,8 @@ import { managedwriter } from '@google-cloud/bigquery-storage'
 import {
   type BlockCursor,
   type Counter,
-  type Ctx,
   type Histogram,
+  type HookContext,
   type Logger,
   type Metrics,
   createTarget,
@@ -14,10 +14,10 @@ import {
   humanBytes,
 } from '~/core/index.js'
 
-import { BigQueryState, type BigQueryStateOptions } from './bigquery-state.js'
-import { BigQueryStore } from './bigquery-store.js'
-import { BigQueryTracker, type TrackedTableLocation } from './bigquery-tracker.js'
-import { BQ_ERR, BigQueryTargetError } from './errors.js'
+import { type BigQueryStateOptions, BigQuerySyncState } from './bigquery-state.js'
+import { BigQueryWriter } from './bigquery-store.js'
+import { BigQueryTableRegistry, type TrackedTableLocation } from './bigquery-tracker.js'
+import { BIGQUERY_ERROR_CODES, BigQueryTargetError } from './errors.js'
 import { type PartitioningSetting, type TrackedTable, ensureTrackedTable, partitioningWithDefaults } from './tables.js'
 import { classifyBqError } from './utils.js'
 
@@ -30,7 +30,7 @@ export type BigQuerySettings = {
    */
   partitioning?: PartitioningSetting
   /**
-   * Optional proto Writer factory passed through to BigQueryStore. Tests inject a fake here
+   * Optional proto Writer factory passed through to BigQueryWriter. Tests inject a fake here
    * to avoid the fragile vi.mock-on-Storage-Write-API path under v8 coverage.
    */
   protoWriterFactory?: import('./bigquery-store.js').ProtoWriterFactory
@@ -82,8 +82,8 @@ export function bigqueryTarget<T>(options: {
   dataset: string
   tables: TrackedTable[]
   settings?: BigQuerySettings
-  onStart?: (ctx: { store: BigQueryStore; logger: Logger }) => Promise<unknown> | unknown
-  onData: (ctx: { store: BigQueryStore; data: T; ctx: Ctx }) => Promise<unknown> | unknown
+  onStart?: (ctx: { store: BigQueryWriter; logger: Logger }) => Promise<unknown> | unknown
+  onData: (ctx: { store: BigQueryWriter; data: T; ctx: HookContext }) => Promise<unknown> | unknown
   onBeforeRollback?: (ctx: { cursor: BlockCursor }) => Promise<unknown> | unknown
   onAfterRollback?: (ctx: { cursor: BlockCursor }) => Promise<unknown> | unknown
 }) {
@@ -92,7 +92,7 @@ export function bigqueryTarget<T>(options: {
   const projectId = options.projectId ?? (client.bigquery.projectId as string | undefined)
   if (!projectId) {
     throw new BigQueryTargetError(
-      BQ_ERR.PROJECT_ID,
+      BIGQUERY_ERROR_CODES.PROJECT_ID,
       `bigqueryTarget: cannot determine GCP project id. Pass options.projectId explicitly or ` +
         `construct BigQuery({ projectId }) so client.bigquery.projectId is set.`,
     )
@@ -110,7 +110,7 @@ export function bigqueryTarget<T>(options: {
   // gRPC handle out from under any other code holding a reference.
   const ownsWriter = !client.writer
 
-  const store = new BigQueryStore(client.bigquery, writer, {
+  const store = new BigQueryWriter(client.bigquery, writer, {
     projectId,
     dataset,
     trackedTables: tables,
@@ -124,9 +124,9 @@ export function bigqueryTarget<T>(options: {
     blockNumberColumn: t.blockNumberColumn,
   }))
 
-  const tracker = new BigQueryTracker({ store, tables, dataset, projectId })
+  const tracker = new BigQueryTableRegistry({ store, tables, dataset, projectId })
 
-  const state = new BigQueryState({
+  const state = new BigQuerySyncState({
     store,
     bigquery: client.bigquery,
     trackedTables: trackedLocations,
@@ -258,8 +258,8 @@ export function bigqueryTarget<T>(options: {
         if (ownsWriter) writer.close()
       }
     },
-    fork: async (previousBlocks) => {
-      const { safeCursor, upper } = await state.fork(previousBlocks)
+    resolveFork: async (canonicalBlocks) => {
+      const { safeCursor, upper } = await state.fork(canonicalBlocks)
       if (!safeCursor) return null
 
       await state.saveRollbackPre({

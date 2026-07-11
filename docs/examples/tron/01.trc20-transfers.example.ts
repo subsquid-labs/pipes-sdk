@@ -6,14 +6,14 @@ import { TronQueryBuilder, tronPortalStream } from '@subsquid/pipes/tron'
  *
  * The DataRequest model mirrors the Rust portal query (see
  * https://github.com/subsquid/data/blob/master/crates/query/src/query/tron.rs):
- *   - `addTransaction` — request transactions by `type`, optionally including
+ *   - `addTransactionRequest` — request transactions by `type`, optionally including
  *     their `logs` / `internalTransactions`.
- *   - `addTransferTransaction` / `addTransferAssetTransaction` — native TRX and
+ *   - `addTransferTransactionRequest` / `addTransferAssetTransactionRequest` — native TRX and
  *     TRC-10 transfers, filterable by `owner` / `to` (/ `asset`).
- *   - `addTriggerSmartContractTransaction` — smart-contract calls, filterable by
+ *   - `addTriggerSmartContractTransactionRequest` — smart-contract calls, filterable by
  *     `owner` / `contract` / `sighash` (the 4-byte method selector).
- *   - `addLog` — event logs, filterable by `address` / `topic0..3`.
- *   - `addInternalTransaction` — internal transfers, by `caller` / `transferTo`.
+ *   - `addLogRequest` — event logs, filterable by `address` / `topic0..3`.
+ *   - `addInternalTransactionRequest` — internal transfers, by `caller` / `transferTo`.
  *   - `includeAllBlocks` — also include blocks that have no matching data.
  *
  * A few TRON-specific notes:
@@ -67,7 +67,7 @@ async function main() {
         },
       })
       // Pull USDT `transfer(...)` calls and the logs they emit.
-      .addTriggerSmartContractTransaction({
+      .addTriggerSmartContractTransactionRequest({
         request: {
           contract: [USDT_CONTRACT],
           sighash: [TRANSFER_SIGHASH],
