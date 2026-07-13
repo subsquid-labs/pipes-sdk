@@ -94,6 +94,3 @@ export function evmPortalStream<Out extends EvmOutputs>({
     ],
   })
 }
-
-/** @deprecated Use {@link evmPortalStream} instead. */
-export const evmPortalSource = evmPortalStream

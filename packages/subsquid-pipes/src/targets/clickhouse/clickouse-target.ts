@@ -71,9 +71,6 @@ export function clickhouseTarget<T>({
     reason: 'recovery' | 'fork'
     store: ClickhouseStore
     safeCursor: BlockCursor
-
-    /** @deprecated Use `safeCursor` from state instead */
-    cursor: BlockCursor
   }) => unknown | Promise<unknown>
 }) {
   // TODO Can we generate row ID based on query?
@@ -95,7 +92,6 @@ export function clickhouseTarget<T>({
         await onRollback?.({
           reason: 'recovery',
           store,
-          cursor: cursor.latest,
           safeCursor: cursor.latest,
         })
       }
@@ -130,15 +126,9 @@ export function clickhouseTarget<T>({
       await onRollback?.({
         reason: 'fork',
         store,
-        cursor,
         safeCursor: cursor,
       })
       return cursor
     },
   })
 }
-
-/**
- *  @deprecated use `clickhouseTarget` instead
- */
-export const createClickhouseTarget = clickhouseTarget

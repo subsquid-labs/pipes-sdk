@@ -877,11 +877,11 @@ describe('Clickhouse state', () => {
                 }
                 finished = true
               },
-              onRollback: async ({ store, cursor }) => {
+              onRollback: async ({ store, safeCursor }) => {
                 await store.removeAllRows({
                   tables: 'test',
                   where: `block_number > {latest:UInt32}`,
-                  params: { latest: cursor.number },
+                  params: { latest: safeCursor.number },
                 })
               },
             }),

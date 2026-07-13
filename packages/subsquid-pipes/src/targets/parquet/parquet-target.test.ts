@@ -228,7 +228,6 @@ describe('parquetTarget', () => {
         schema: {
           blockNumber: { type: 'INT64' },
           at: { type: 'TIMESTAMP' },
-          legacyAt: { type: 'TIMESTAMP_MILLIS' },
           day: { type: 'DATE' },
           dayNum: { type: 'DATE' },
           meta: { type: 'JSON', optional: true },
@@ -254,7 +253,6 @@ describe('parquetTarget', () => {
               data.map((b) => ({
                 blockNumber: b.number,
                 at,
-                legacyAt: at,
                 day: at, // non-midnight Date — must land on its UTC calendar day
                 dayNum: 19724, // whole days since epoch = 2024-01-02
                 meta: b.number === 1 ? { fee: 12, keys: ['k1', 'k2'] } : null,
@@ -277,13 +275,12 @@ describe('parquetTarget', () => {
 
       // Legacy footer annotations (the pinned library never writes the modern LogicalType field;
       // per the format spec readers map these to the corresponding logical types):
-      // TIMESTAMP_MILLIS=9 for both timestamp spellings, DATE=6, JSON=19, LIST=3 on the outer
+      // TIMESTAMP_MILLIS=9 (the library's legacy spelling of TIMESTAMP), DATE=6, JSON=19, LIST=3 on the outer
       // list groups; STRUCT groups carry children but no converted_type.
       const annotations = new Map(reader.metadata!.schema.map((s) => [s.name, s.converted_type] as const))
       const children = new Map(reader.metadata!.schema.map((s) => [s.name, s.num_children] as const))
       await reader.close()
       expect(annotations.get('at')).toBe(9)
-      expect(annotations.get('legacyAt')).toBe(9)
       expect(annotations.get('day')).toBe(6)
       expect(annotations.get('dayNum')).toBe(6)
       expect(annotations.get('meta')).toBe(19)
@@ -296,7 +293,6 @@ describe('parquetTarget', () => {
       rows.sort((a, b) => Number(a['blockNumber']) - Number(b['blockNumber']))
       const [r1, r2] = rows
       expect((r1['at'] as Date).toISOString()).toBe('2024-01-01T15:30:45.123Z')
-      expect((r1['legacyAt'] as Date).toISOString()).toBe('2024-01-01T15:30:45.123Z')
       expect((r1['day'] as Date).toISOString()).toBe('2024-01-01T00:00:00.000Z')
       expect((r1['dayNum'] as Date).toISOString()).toBe('2024-01-02T00:00:00.000Z')
       expect(r1['meta']).toEqual({ fee: 12, keys: ['k1', 'k2'] })

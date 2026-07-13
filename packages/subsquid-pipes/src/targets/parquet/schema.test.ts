@@ -76,17 +76,7 @@ describe('schema validation', () => {
     }
   })
 
-  it('rejects TIMESTAMP_MILLIS as the block-number column', () => {
-    // A timestamp is epoch-ms, not a block number, so finalization comparisons never release rows.
-    expect.assertions(1)
-    try {
-      validateTables([{ table: 't', schema: { blockNumber: { type: 'TIMESTAMP_MILLIS' } } }])
-    } catch (e) {
-      expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.BLOCK_COLUMN_TYPE)
-    }
-  })
-
-  it('accepts TIMESTAMP, DATE, JSON and the deprecated TIMESTAMP_MILLIS alias as column types', () => {
+  it('accepts TIMESTAMP, DATE and JSON as column types', () => {
     expect(() =>
       validateTables([
         {
@@ -96,7 +86,6 @@ describe('schema validation', () => {
             at: { type: 'TIMESTAMP' },
             day: { type: 'DATE' },
             meta: { type: 'JSON', optional: true },
-            legacyAt: { type: 'TIMESTAMP_MILLIS' },
           },
         },
       ]),
@@ -104,7 +93,7 @@ describe('schema validation', () => {
   })
 
   it('rejects TIMESTAMP as the block-number column', () => {
-    // Epoch-ms, not a block number — same trap as the legacy TIMESTAMP_MILLIS alias.
+    // Epoch-ms, not a block number — finalization comparisons would never release rows.
     expect.assertions(1)
     try {
       validateTables([{ table: 't', schema: { blockNumber: { type: 'TIMESTAMP' } } }])
