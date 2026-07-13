@@ -138,7 +138,7 @@ describe('EVM Template Builder', () => {
 
     expect(indexerContent).toMatchInlineSnapshot(`
       "import "dotenv/config";
-      import { commonAbis, contractFactory, contractFactoryStore, evmEventDecoder, evmPortalStream } from "@subsquid/pipes/evm";
+      import { commonAbis, contractFactory, contractFactorySqliteStore, evmEventDecoder, evmPortalStream } from "@subsquid/pipes/evm";
       import { z } from "zod";
       import path from "node:path";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
@@ -184,7 +184,7 @@ describe('EVM Template Builder', () => {
           ],
           event: factoryEvents.PoolCreated,
           childAddressField: 'pool',
-          database: await contractFactoryStore({
+          database: await contractFactorySqliteStore({
             path: './uniswap3-eth-pools.sqlite',
           }),
         }),

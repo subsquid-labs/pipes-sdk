@@ -2,7 +2,7 @@ import Mustache from 'mustache'
 
 import { UniswapV3SwapsPipeTemplateParams } from '../template.config.js'
 
-const template = `import { contractFactory, contractFactoryStore, evmEventDecoder } from '@subsquid/pipes/evm'
+const template = `import { contractFactory, contractFactorySqliteStore, evmEventDecoder } from '@subsquid/pipes/evm'
 import { events as factoryEvents } from './contracts/factory.js'
 import { events as poolEvents } from './contracts/pool.js'
 
@@ -14,7 +14,7 @@ const uniswapV3Swaps = evmEventDecoder({
     ],
     event: factoryEvents.PoolCreated,
     childAddressField: 'pool',
-    database: await contractFactoryStore({
+    database: await contractFactorySqliteStore({
       path: './uniswap3-eth-pools.sqlite',
     }),
   }),

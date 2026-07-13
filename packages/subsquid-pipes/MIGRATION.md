@@ -6,7 +6,7 @@ Step-by-step instructions for updating from the previous release.
 
 ## ⚠️ Naming overhaul: hard renames, and one name that changed meaning
 
-The public API naming overhaul renames symbols **without** compatibility aliases — this lands in a major release, so old names simply stop existing and the compiler will point you at each one (`resolveFork`, `canonicalBlocks`, `rollback` hooks, `PortalStream`, `add*Request` builder methods, `evmEventDecoder`, `chunkForInsert`, CLI `target` config key, `/preview/transformation`, `sqd_processed_block`/`sqd_end_block`, and friends). Deprecated aliases that existed *before* this overhaul (`evmPortalSource`, `contractFactory`'s `factory`, `factorySqliteDatabase`, `chunk`, `createClickhouseTarget`) are still present and will be removed separately.
+The public API naming overhaul renames symbols **without** compatibility aliases — this lands in a major release, so old names simply stop existing and the compiler will point you at each one (`resolveFork`, `canonicalBlocks`, `rollback` hooks, `PortalStream`, `add*Request` builder methods, `evmEventDecoder`, `chunkForInsert`, `contractFactorySqliteStore`, CLI `target` config key, `/preview/transformation`, `sqd_processed_block`/`sqd_end_block`, and friends). Deprecated aliases that existed *before* this overhaul (`evmPortalSource`, `contractFactory`'s `factory`, `factorySqliteDatabase`, `chunk`, `createClickhouseTarget`) are still present and will be removed separately.
 
 **One rename will NOT surface as a compile error — the name changed meaning:**
 

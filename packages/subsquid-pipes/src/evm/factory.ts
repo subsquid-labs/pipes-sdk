@@ -280,7 +280,7 @@ export class Factory<T extends EventArgs> {
  *   address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
  *   event: factoryAbi.PoolCreated,
  *   childAddressField: 'pool',
- *   database: contractFactoryStore({
+ *   database: contractFactorySqliteStore({
  *     path: './uniswap3-eth-pools.sqlite',
  *   }),
  * })

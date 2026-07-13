@@ -9,7 +9,7 @@ import { MockPortal, mockPortal, readAll } from '~/testing/index.js'
 import { FactoryEvent, evmEventDecoder } from './evm-decoder.js'
 import { evmPortalStream } from './evm-portal-source.js'
 import { Factory, InternalFactoryEvent, contractFactory } from './factory.js'
-import { contractFactoryStore } from './factory-adapters/sqlite.js'
+import { contractFactorySqliteStore } from './factory-adapters/sqlite.js'
 
 const POOL_CREATED_ABI = [
   {
@@ -151,7 +151,7 @@ describe('Factory', () => {
   })
 
   it('should support bigint in parent event ', async () => {
-    const db = await contractFactoryStore({ path: ':memory:' })
+    const db = await contractFactorySqliteStore({ path: ':memory:' })
     await db.migrate()
 
     const entity = {
@@ -178,7 +178,7 @@ describe('Factory', () => {
   it('should decode child event', async () => {
     portal = await createSimpleChildPortal()
 
-    const db = await contractFactoryStore({ path: ':memory:' })
+    const db = await contractFactorySqliteStore({ path: ':memory:' })
 
     const poolFactory = contractFactory({
       address: UNISWAP_FACTORY,
@@ -269,7 +269,7 @@ describe('Factory', () => {
   it('should skip null parameter', async () => {
     portal = await createSimpleChildPortal()
 
-    const db = await contractFactoryStore({ path: ':memory:' })
+    const db = await contractFactorySqliteStore({ path: ':memory:' })
     const stream = evmPortalStream({
       id: 'test',
       portal: portal.url,
@@ -297,7 +297,7 @@ describe('Factory', () => {
   it('should set event with same topic to correct factory', async () => {
     portal = await createSimpleChildPortal()
 
-    const db = await contractFactoryStore({ path: ':memory:' })
+    const db = await contractFactorySqliteStore({ path: ':memory:' })
     const stream = evmPortalStream({
       id: 'test',
       portal: portal.url,
@@ -375,7 +375,7 @@ describe('Factory', () => {
 
     const res: any[] = []
 
-    const db = await contractFactoryStore({ path: ':memory:' })
+    const db = await contractFactorySqliteStore({ path: ':memory:' })
 
     await evmPortalStream({
       id: 'test-factory',
@@ -432,7 +432,7 @@ describe('Factory', () => {
             },
           },
           childAddressField: 'pool',
-          database: contractFactoryStore({ path: ':memory:' }),
+          database: contractFactorySqliteStore({ path: ':memory:' }),
         }),
         events: {
           swaps: poolAbi.Swap,
@@ -457,7 +457,7 @@ describe('Factory', () => {
    * not whether the correct set of parameters had been used.
    */
   it('should only return events matching new factory parameters after second run with different params', async () => {
-    const db = await contractFactoryStore({ path: ':memory:' })
+    const db = await contractFactorySqliteStore({ path: ':memory:' })
 
     const getPipeline = async (token0: string) => {
       portal = await createFilteredFactoryPortal()
@@ -512,7 +512,7 @@ describe('Factory', () => {
         },
       },
       childAddressField: 'pool',
-      database: await contractFactoryStore({ path: ':memory:' }),
+      database: await contractFactorySqliteStore({ path: ':memory:' }),
     })
 
     const stream = evmPortalStream({
@@ -616,7 +616,7 @@ describe('Factory types', () => {
         },
       },
       childAddressField: 'pool',
-      database: contractFactoryStore({ path: ':memory:' }),
+      database: contractFactorySqliteStore({ path: ':memory:' }),
     })
 
     type Result = Awaited<ReturnType<(typeof poolFactory)['getContract']>>

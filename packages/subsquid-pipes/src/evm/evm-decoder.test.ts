@@ -21,7 +21,7 @@ import {
 import { evmPortalStream } from './evm-portal-source.js'
 import { EvmQueryBuilder } from './evm-query-builder.js'
 import { contractFactory } from './factory.js'
-import { contractFactoryStore } from './factory-adapters/sqlite.js'
+import { contractFactorySqliteStore } from './factory-adapters/sqlite.js'
 
 async function captureQueryBuilder(
   decoder: QueryAwareTransformer<any, any, EvmQueryBuilder<any>>,
@@ -769,7 +769,7 @@ describe('evmEventDecoder queries', () => {
   })
 
   it('should build query for Factory with params', async () => {
-    const db = await contractFactoryStore({ path: ':memory:' })
+    const db = await contractFactorySqliteStore({ path: ':memory:' })
     const range = { from: 0, to: 100 }
 
     const decoder = evmEventDecoder({
@@ -808,7 +808,7 @@ describe('evmEventDecoder queries', () => {
   })
 
   it('should build query for Factory without params', async () => {
-    const db = await contractFactoryStore({ path: ':memory:' })
+    const db = await contractFactorySqliteStore({ path: ':memory:' })
     const range = { from: 0, to: 100 }
 
     const decoder = evmEventDecoder({

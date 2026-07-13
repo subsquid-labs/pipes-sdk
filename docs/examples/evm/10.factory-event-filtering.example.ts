@@ -1,6 +1,6 @@
 import assert from 'assert'
 
-import { contractFactory, contractFactoryStore, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
+import { contractFactory, contractFactorySqliteStore, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 
 import { events as factoryAbi } from './abi/uniswap.v3/factory'
 import { events as swapsAbi } from './abi/uniswap.v3/swaps'
@@ -33,7 +33,7 @@ async function cli() {
           },
         },
         childAddressField: 'pool',
-        database: contractFactoryStore({
+        database: contractFactorySqliteStore({
           path: './uniswap3-eth-pools.sqlite',
         }),
       }),

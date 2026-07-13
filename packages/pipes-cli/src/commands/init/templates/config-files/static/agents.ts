@@ -59,7 +59,7 @@ For long-running jobs, guard against forks:
 - Use \`evmPortalStream\` + \`evmEventDecoder\`
 - \`commonAbis.erc20\` is available for ERC20 transfers
 - For custom contracts, generate ABIs into \`src/contracts/\`
-- Use \`contractFactory\` + \`contractFactoryStore\` for dynamic contract sets
+- Use \`contractFactory\` + \`contractFactorySqliteStore\` for dynamic contract sets
 
 ## Solana-specific notes
 - Use \`solanaPortalStream\`
@@ -123,7 +123,7 @@ Tracks pools created by a factory contract, then decodes swap events only for th
 This is the standard approach for protocols with dynamic contract creation (e.g., Uniswap V3).
 
 \`\`\`ts
-import { contractFactory, contractFactoryStore, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
+import { contractFactory, contractFactorySqliteStore, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 import { events as factoryAbi } from './abi/uniswap.v3/factory'
 import { events as swapsAbi } from './abi/uniswap.v3/swaps'
 
@@ -137,7 +137,7 @@ async function main() {
         address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
         event: factoryAbi.PoolCreated,
         childAddressField: 'pool',
-        database: contractFactoryStore({ path: './uniswap3-eth-pools.sqlite' }),
+        database: contractFactorySqliteStore({ path: './uniswap3-eth-pools.sqlite' }),
       }),
       events: {
         swaps: swapsAbi.Swap,
