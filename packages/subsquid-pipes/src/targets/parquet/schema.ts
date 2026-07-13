@@ -45,8 +45,6 @@ export type ParquetLeafType =
   | 'TIMESTAMP'
   | 'DATE'
   | 'JSON'
-  /** @deprecated Legacy converted-type name — use `'TIMESTAMP'` instead (identical wire format). */
-  | 'TIMESTAMP_MILLIS'
 
 /** Every string accepted in a column's `type` field, including the nested kinds. */
 export type ParquetColumnType = ParquetLeafType | 'LIST' | 'STRUCT'
@@ -55,7 +53,7 @@ export type ParquetColumnType = ParquetLeafType | 'LIST' | 'STRUCT'
  * Leaf type strings as `@dsnp/parquetjs` expects them: the public union minus `'TIMESTAMP'`,
  * which the pinned library only knows by its legacy `TIMESTAMP_MILLIS` name.
  */
-export type LibraryLeafType = Exclude<ParquetLeafType, 'TIMESTAMP'>
+export type LibraryLeafType = Exclude<ParquetLeafType, 'TIMESTAMP'> | 'TIMESTAMP_MILLIS'
 
 /**
  * Declaration for a single Parquet column: a leaf, a `LIST` (spec-canonical 3-level layout;
@@ -136,7 +134,6 @@ const LIBRARY_TYPE: Record<ParquetLeafType, LibraryLeafType> = {
   TIMESTAMP: 'TIMESTAMP_MILLIS',
   DATE: 'DATE',
   JSON: 'JSON',
-  TIMESTAMP_MILLIS: 'TIMESTAMP_MILLIS',
 }
 
 const SUPPORTED_TYPES = new Set<string>(Object.keys(LIBRARY_TYPE))

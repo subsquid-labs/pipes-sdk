@@ -290,6 +290,3 @@ export class Factory<T extends EventArgs> {
 export function contractFactory<T extends EventArgs>(options: ContractFactoryOptions<T>) {
   return new Factory(options)
 }
-
-/** @deprecated Use {@link contractFactory} instead. */
-export const factory = contractFactory

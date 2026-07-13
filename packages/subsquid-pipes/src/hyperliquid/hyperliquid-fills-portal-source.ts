@@ -94,6 +94,3 @@ export function hyperliquidFillsPortalStream<Out extends HyperliquidFillsOutputs
     ],
   })
 }
-
-/** @deprecated Use {@link hyperliquidFillsPortalStream} instead. */
-export const hyperliquidFillsPortalSource = hyperliquidFillsPortalStream

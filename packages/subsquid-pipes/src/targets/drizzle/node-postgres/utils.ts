@@ -32,6 +32,3 @@ export function* chunkForInsert<T>(data: readonly T[], size?: number) {
     yield data.slice(i, i + size)
   }
 }
-
-/** @deprecated Use {@link chunkForInsert} instead. */
-export const chunk = chunkForInsert

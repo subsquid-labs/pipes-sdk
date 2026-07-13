@@ -351,7 +351,6 @@ function checkValueType(type: ParquetLeafType, value: unknown): string | undefin
       return typeof value === 'string' ? undefined : 'expects a string'
 
     case 'TIMESTAMP':
-    case 'TIMESTAMP_MILLIS':
       return value instanceof Date || typeof value === 'number' ? undefined : 'expects a Date or epoch-millis number'
 
     case 'DATE': {

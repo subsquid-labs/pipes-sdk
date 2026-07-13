@@ -95,6 +95,3 @@ export function solanaPortalStream<Out extends SolanaOutputs>({
     ],
   })
 }
-
-/** @deprecated Use {@link solanaPortalStream} instead. */
-export const solanaPortalSource = solanaPortalStream
