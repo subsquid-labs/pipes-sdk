@@ -48,7 +48,7 @@ Keep the pipeline linear and declarative. Combine multiple decoders by passing a
 When persisting:
 - Use \`onStart\` to ensure tables exist
 - Use \`onData\` to batch inserts
-- Use \`onRollback\` with the provided cursor to delete rows above the safe point
+- Use \`onRollback\` with the provided \`safeCursor\` to delete rows above the safe point
 
 ## Stateful indexing
 For long-running jobs, guard against forks:

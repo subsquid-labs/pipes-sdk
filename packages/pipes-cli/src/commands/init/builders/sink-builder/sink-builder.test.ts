@@ -20,7 +20,7 @@ describe('clickhouse sink template builder', () => {
       import path from 'node:path'
       import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
       import { createClient } from '@clickhouse/client'
-      import { serializeJsonWithBigInt, toSnakeKeysArray } from './utils/index.js'
+      import { serializeJsonWithBigInt, toSnakeCaseKeysArray } from './utils/index.js'
 
       clickhouseTarget({
           client: createClient({
@@ -47,7 +47,7 @@ describe('clickhouse sink template builder', () => {
           onData: async ({ data, store }) => {
             await store.insert({
               table: 'erc20_transfers',
-              values: toSnakeKeysArray(data.erc20Transfers),
+              values: toSnakeCaseKeysArray(data.erc20Transfers),
               format: 'JSONEachRow',
             });
           },
@@ -79,7 +79,7 @@ describe('clickhouse sink template builder', () => {
       import path from 'node:path'
       import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
       import { createClient } from '@clickhouse/client'
-      import { serializeJsonWithBigInt, toSnakeKeysArray } from './utils/index.js'
+      import { serializeJsonWithBigInt, toSnakeCaseKeysArray } from './utils/index.js'
 
       clickhouseTarget({
           client: createClient({
@@ -106,12 +106,12 @@ describe('clickhouse sink template builder', () => {
           onData: async ({ data, store }) => {
             await store.insert({
               table: 'weth_9_approval',
-              values: toSnakeKeysArray(data.custom.Approval),
+              values: toSnakeCaseKeysArray(data.custom.Approval),
               format: 'JSONEachRow',
             });
             await store.insert({
               table: 'weth_9_transfer',
-              values: toSnakeKeysArray(data.custom.Transfer),
+              values: toSnakeCaseKeysArray(data.custom.Transfer),
               format: 'JSONEachRow',
             });
           },

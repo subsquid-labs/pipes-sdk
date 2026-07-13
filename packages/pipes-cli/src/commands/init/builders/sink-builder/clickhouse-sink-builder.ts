@@ -11,7 +11,7 @@ const sinkTemplate = `
 import path from 'node:path'
 import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
 import { createClient } from '@clickhouse/client'
-import { serializeJsonWithBigInt, toSnakeKeysArray } from './utils/index.js'
+import { serializeJsonWithBigInt, toSnakeCaseKeysArray } from './utils/index.js'
 
 clickhouseTarget({
     client: createClient({
@@ -40,7 +40,7 @@ clickhouseTarget({
     {{#tableNames}}
       await store.insert({
         table: '{{{.}}}',
-        values: toSnakeKeysArray(data.{{{templateId}}}),
+        values: toSnakeCaseKeysArray(data.{{{templateId}}}),
         format: 'JSONEachRow',
       });
     {{/tableNames}}
@@ -49,7 +49,7 @@ clickhouseTarget({
     {{#schemaNames}}
       await store.insert({
         table: '{{{tableName}}}',
-        values: toSnakeKeysArray(data.{{decoderId}}.{{{event}}}),
+        values: toSnakeCaseKeysArray(data.{{decoderId}}.{{{event}}}),
         format: 'JSONEachRow',
       });
     {{/schemaNames}}

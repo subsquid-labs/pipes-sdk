@@ -2,7 +2,7 @@ import type { Sink } from '~/types/init.js'
 
 // TODO: use only network specific dependencies
 const baseDependencies: Record<string, string> = {
-  '@subsquid/pipes': 'alpha',
+  '@subsquid/pipes': '^1.0.0',
   '@subsquid/evm-codec': '0.3.0',
   '@subsquid/evm-abi': '0.3.1',
   '@subsquid/borsh': '^0.3.0',
