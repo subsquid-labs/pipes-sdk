@@ -1,6 +1,6 @@
 import { pino, stdSerializers } from 'pino'
 
-export function createTestLogger() {
+export function testLogger() {
   return pino({
     level: process.env['LOG_LEVEL'] || 'info',
     messageKey: 'message',

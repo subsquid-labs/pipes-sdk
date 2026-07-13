@@ -16,7 +16,7 @@ export function maxFinalized(a: BlockCursor | undefined, b: BlockCursor | undefi
  * Normalises a persisted finalized value (which may be `{}` / partial JSON for
  * "no finalized head yet") into a usable cursor or `undefined`.
  */
-export function coerceFinalized(value: unknown): BlockCursor | undefined {
+export function normalizeFinalized(value: unknown): BlockCursor | undefined {
   if (value && typeof value === 'object' && typeof (value as BlockCursor).number === 'number') {
     return value as BlockCursor
   }

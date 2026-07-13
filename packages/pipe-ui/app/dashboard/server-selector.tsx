@@ -34,9 +34,7 @@ export function ServerSelector({
 function formatServerLabel(url: string, index: number): string {
   try {
     const parsed = new URL(url)
-    const host = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1'
-      ? 'localhost'
-      : parsed.hostname
+    const host = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' ? 'localhost' : parsed.hostname
     return `${host}:${parsed.port || '80'}`
   } catch {
     return `Server ${index + 1}`

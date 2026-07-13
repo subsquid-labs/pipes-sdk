@@ -36,9 +36,7 @@ export type MultiOutput<F extends {}, QB extends QueryBuilder<F>> = Record<
   QueryAwareTransformer<any, any, QB> | QB
 >
 
-export type Outputs<F extends {}, QB extends QueryBuilder<F>> =
-  | SingleOutput<F, QB>
-  | MultiOutput<F, QB>
+export type Outputs<F extends {}, QB extends QueryBuilder<F>> = SingleOutput<F, QB> | MultiOutput<F, QB>
 
 /**
  * @internal
@@ -63,7 +61,7 @@ export type Outputs<F extends {}, QB extends QueryBuilder<F>> =
  * // combined.transform('apple') yields: { len: 5, isA: true }
  * ```
  *
- * All lifecycle methods (`start`, `stop`, `fork`) are forwarded to each sub-transformer.
+ * All lifecycle methods (`start`, `stop`, `rollback`) are forwarded to each sub-transformer.
  */
 export function mergeOutputs<F extends {}, Q extends QueryBuilder<F>>(input: Outputs<F, Q>) {
   if (input instanceof QueryAwareTransformer) {
@@ -101,8 +99,8 @@ export function mergeOutputs<F extends {}, Q extends QueryBuilder<F>>(input: Out
       stop: async (ctx) => {
         await Promise.all(Object.values(output).map((e) => e.stop?.(ctx)))
       },
-      fork: async (cursor, ctx) => {
-        await Promise.all(Object.values(output).map((e) => e.fork?.(cursor, ctx)))
+      rollback: async (cursor, ctx) => {
+        await Promise.all(Object.values(output).map((e) => e.rollback?.(cursor, ctx)))
       },
       transform: async (data, ctx) => {
         const res = {} as any

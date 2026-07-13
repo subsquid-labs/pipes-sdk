@@ -64,19 +64,19 @@ export interface PortalClientOptions {
    * Maximum time between stream data in milliseconds for return.
    * @default 300
    */
-  maxIdleTime?: number
+  maxIdleTimeMs?: number
 
   /**
    * Maximum wait time in milliseconds for return.
    * @default 5_000
    */
-  maxWaitTime?: number
+  maxWaitTimeMs?: number
 
   /**
    * Interval for polling the head in milliseconds.
    * @default 0
    */
-  headPollInterval?: number
+  headPollIntervalMs?: number
 }
 
 export type PortalRequestOptions = Pick<
@@ -84,16 +84,20 @@ export type PortalRequestOptions = Pick<
   'headers' | 'retryAttempts' | 'retrySchedule' | 'httpTimeout' | 'bodyTimeout'
 >
 
-export interface PortalStreamOptions {
+export interface PortalBlockStreamOptions {
   request?: PortalRequestOptions
   maxBytes?: number
-  maxIdleTime?: number
-  maxWaitTime?: number
-  headPollInterval?: number
+  maxIdleTimeMs?: number
+  maxWaitTimeMs?: number
+  headPollIntervalMs?: number
   finalized?: boolean
 }
 
-export interface PortalStream<B> extends AsyncIterable<StreamData<B>> {}
+/**
+ * The raw block-batch stream for a single portal query, as returned by
+ * {@link PortalClient.getStream}.
+ */
+export interface PortalBlockStream<B> extends AsyncIterable<StreamData<B>> {}
 
 function isForkHttpError(err: unknown): err is HttpError {
   if (!(err instanceof HttpError)) return false
@@ -105,7 +109,13 @@ function isForkHttpError(err: unknown): err is HttpError {
 export class PortalClient {
   readonly #client: HttpClient
   readonly #url: URL
-  readonly #options: Required<Omit<PortalClientOptions, 'url' | 'http'>>
+  readonly #options: {
+    finalized: boolean
+    headPollInterval: number
+    maxBytes: number
+    maxIdleTime: number
+    maxWaitTime: number
+  }
 
   constructor(options: PortalClientOptions) {
     this.#client = options.http instanceof HttpClient ? options.http : new HttpClient(options.http)
@@ -113,10 +123,10 @@ export class PortalClient {
     this.#url = new URL(options.url)
     this.#options = {
       finalized: options.finalized ?? false,
-      headPollInterval: options.headPollInterval ?? 0,
+      headPollInterval: options.headPollIntervalMs ?? 0,
       maxBytes: options.maxBytes ?? 10 * 1024 * 1024,
-      maxIdleTime: options.maxIdleTime ?? 300,
-      maxWaitTime: options.maxWaitTime ?? 5_000,
+      maxIdleTime: options.maxIdleTimeMs ?? 300,
+      maxWaitTime: options.maxWaitTimeMs ?? 5_000,
     }
   }
 
@@ -160,11 +170,14 @@ export class PortalClient {
     return res.body ?? undefined
   }
 
-  getStream<Q extends Query>(query: Q, options?: PortalStreamOptions): PortalStream<GetBlock<Q>> {
+  getStream<Q extends Query>(query: Q, options?: PortalBlockStreamOptions): PortalBlockStream<GetBlock<Q>> {
     const settings = {
-      request: {},
-      ...this.#options,
-      ...options,
+      request: options?.request ?? {},
+      finalized: options?.finalized ?? this.#options.finalized,
+      maxBytes: options?.maxBytes ?? this.#options.maxBytes,
+      maxIdleTime: options?.maxIdleTimeMs ?? this.#options.maxIdleTime,
+      maxWaitTime: options?.maxWaitTimeMs ?? this.#options.maxWaitTime,
+      headPollInterval: options?.headPollIntervalMs ?? this.#options.headPollInterval,
     }
 
     return createPortalStream(query, settings, async (q, o) =>
@@ -217,7 +230,14 @@ export class PortalClient {
 
 function createPortalStream<Q extends Query>(
   query: Q,
-  options: Required<PortalStreamOptions>,
+  options: {
+    request: PortalRequestOptions
+    finalized: boolean
+    maxBytes: number
+    maxIdleTime: number
+    maxWaitTime: number
+    headPollInterval: number
+  },
   requestStream: (
     query: Q,
     options?: RequestOptions,
@@ -226,7 +246,7 @@ function createPortalStream<Q extends Query>(
     status: number
     stream?: AsyncIterable<string[]> | null | undefined
   }>,
-): PortalStream<GetBlock<Q>> {
+): PortalBlockStream<GetBlock<Q>> {
   const { headPollInterval, request, ...bufferOptions } = options
   const buffer = new StreamBuffer<GetBlock<Q>>(bufferOptions)
 

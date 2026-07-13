@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { BatchContext } from '~/core/portal-source.js'
 
-import { RpcLatencyWatcher, type RpcLatencyListener, rpcLatencyWatcher } from './rpc-latency-watcher.js'
+import { type RpcLatencyListener, RpcLatencyWatcher, rpcLatencyWatcher } from './rpc-latency-watcher.js'
 
 class StubWatcher extends RpcLatencyWatcher {
   watch(): RpcLatencyListener {
@@ -102,10 +102,7 @@ describe('rpcLatencyWatcher transformer', () => {
     // No addBlock calls — lookup returns [].
 
     const transformer = rpcLatencyWatcher({ watcher })
-    const result = await transformer.run(
-      [{ header: { number: 999, timestamp: 0 } }],
-      makeBatchContext(new Date()),
-    )
+    const result = await transformer.run([{ header: { number: 999, timestamp: 0 } }], makeBatchContext(new Date()))
 
     expect(result).toBeNull()
   })

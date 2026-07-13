@@ -1,4 +1,4 @@
-import { contractFactoryStore, evmPortalStream } from '@subsquid/pipes/evm'
+import { contractFactorySqliteStore, evmPortalStream } from '@subsquid/pipes/evm'
 
 import { erc20Transfers, uniswapV3, uniswapV3Decoder } from './decoders'
 
@@ -25,7 +25,7 @@ async function cli() {
         range,
         factory: {
           address: uniswapV3.base.mainnet.factory,
-          database: contractFactoryStore({ path: './uniswap-v3-pools.sqlite' }),
+          database: contractFactorySqliteStore({ path: './uniswap-v3-pools.sqlite' }),
         },
       }),
     },

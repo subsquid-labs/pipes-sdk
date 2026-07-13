@@ -1,5 +1,5 @@
-import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
-import { PipeContext, createDevRunner } from '@subsquid/pipes/runtime/node'
+import { commonAbis, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
+import { PipeContext, devRunner } from '@subsquid/pipes/runtime/node'
 
 export type Params = { dataset: string }
 
@@ -9,7 +9,7 @@ async function transfers({ id, params, metrics, logger }: PipeContext<Params>) {
     portal: `https://portal.sqd.dev/datasets/${params.dataset}`,
     metrics,
     logger,
-    outputs: evmDecoder({
+    outputs: evmEventDecoder({
       range: { from: '0' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,
@@ -23,7 +23,7 @@ async function transfers({ id, params, metrics, logger }: PipeContext<Params>) {
 }
 
 async function main() {
-  const run = createDevRunner<Params>(
+  const run = devRunner<Params>(
     [
       { id: 'arb', params: { dataset: 'arbitrum-one' }, handler: transfers },
       { id: 'ethereum', params: { dataset: 'ethereum-mainnet' }, handler: transfers },

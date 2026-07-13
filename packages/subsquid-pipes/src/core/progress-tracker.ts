@@ -1,6 +1,6 @@
 import { Counter, Gauge, Histogram } from '~/core/index.js'
 
-import { displayEstimatedTime, formatBlock, formatNumber, humanBytes } from './formatters.js'
+import { formatBlock, formatEta, formatNumber, humanBytes } from './formatters.js'
 import { Logger } from './logger.js'
 import { createTransformer } from './transformer.js'
 import { BlockCursor } from './types.js'
@@ -24,13 +24,16 @@ export type StartEvent = {
 export type ProgressEvent = {
   progress: {
     state: {
-      initial: number
-      last: number
+      /** First block of the indexed range. */
+      from: number
+      /** End of the indexed range: the configured `to` bound, or the chain head when unbounded. */
+      to: number
       current: number
       percent: number
       etaSeconds: number
     }
-    interval: {
+    /** Activity during the last reporting interval. */
+    intervalStats: {
       requests: {
         total: {
           count: number
@@ -173,41 +176,43 @@ class ProgressHistory {
     const secsDiff = this.#states[0] ? (Date.now() - this.#states[0].ts) / 1000 : 0
     const blockPerSecond = secsDiff > 0 ? stat.blocks / secsDiff : 0
 
+    const intervalStats = {
+      requests: {
+        total: {
+          count: stat.requests.total,
+        },
+        successful: {
+          count: stat.requests.successful,
+          percent: stat.requests.total > 0 ? (stat.requests.successful / stat.requests.total) * 100 : 0,
+        },
+        rateLimited: {
+          count: stat.requests.rateLimited,
+          percent: stat.requests.total > 0 ? (stat.requests.rateLimited / stat.requests.total) * 100 : 0,
+        },
+        failed: {
+          count: stat.requests.failed,
+          percent: stat.requests.total > 0 ? (stat.requests.failed / stat.requests.total) * 100 : 0,
+        },
+      },
+      processedBlocks: {
+        count: stat.blocks,
+        perSecond: blockPerSecond,
+      },
+      bytesDownloaded: {
+        count: stat.bytes,
+        perSecond: secsDiff > 0 ? stat.bytes / secsDiff : 0,
+      },
+    }
+
     return {
       state: {
-        initial,
-        last,
+        from: initial,
+        to: last,
         current,
         percent: blocksTotal > 0 ? (blocksProcessed / blocksTotal) * 100 : 0,
         etaSeconds: blockPerSecond > 0 ? blocksRemaining / blockPerSecond : 0,
       },
-      interval: {
-        requests: {
-          total: {
-            count: stat.requests.total,
-          },
-          successful: {
-            count: stat.requests.successful,
-            percent: stat.requests.total > 0 ? (stat.requests.successful / stat.requests.total) * 100 : 0,
-          },
-          rateLimited: {
-            count: stat.requests.rateLimited,
-            percent: stat.requests.total > 0 ? (stat.requests.rateLimited / stat.requests.total) * 100 : 0,
-          },
-          failed: {
-            count: stat.requests.failed,
-            percent: stat.requests.total > 0 ? (stat.requests.failed / stat.requests.total) * 100 : 0,
-          },
-        },
-        processedBlocks: {
-          count: stat.blocks,
-          perSecond: blockPerSecond,
-        },
-        bytesDownloaded: {
-          count: stat.bytes,
-          perSecond: secsDiff > 0 ? stat.bytes / secsDiff : 0,
-        },
-      },
+      intervalStats,
     }
   }
 }
@@ -235,8 +240,8 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
   let lastProgress: ProgressEvent['progress'] | null = null
 
   let pipeId = ''
-  let currentBlock: Gauge<'id'> | null = null
-  let lastBlock: Gauge<'id'> | null = null
+  let processedBlock: Gauge<'id'> | null = null
+  let endBlock: Gauge<'id'> | null = null
   let progressRatio: Gauge<'id'> | null = null
   let etaSeconds: Gauge<'id'> | null = null
   let blocksProcessedTotal: Counter<'id'> | null = null
@@ -260,32 +265,34 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
   }
 
   if (!onProgress) {
-    onProgress = ({ progress: { state, interval }, logger }) => {
-      if (state.current === 0 && state.last === 0) {
+    onProgress = ({ progress: { state, intervalStats }, logger }) => {
+      if (state.current === 0 && state.to === 0) {
         logger.info({ message: 'Initializing...' })
         return
       }
 
       const bps =
-        interval.processedBlocks.perSecond > 1
-          ? formatNumber(interval.processedBlocks.perSecond, 0)
-          : interval.processedBlocks.perSecond.toFixed(2)
+        intervalStats.processedBlocks.perSecond > 1
+          ? formatNumber(intervalStats.processedBlocks.perSecond, 0)
+          : intervalStats.processedBlocks.perSecond.toFixed(2)
 
       const msg: Record<string, string> = {
-        message: `${formatNumber(state.current)} / ${formatNumber(state.last)} (${formatNumber(state.percent)}%), ${displayEstimatedTime(state.etaSeconds)}`,
+        message: `${formatNumber(state.current)} / ${formatNumber(state.to)} (${formatNumber(state.percent)}%), ${formatEta(state.etaSeconds)}`,
         blocks: `${bps} blocks/second`,
-        bytes: `${humanBytes(interval.bytesDownloaded.perSecond)}/second`,
+        bytes: `${humanBytes(intervalStats.bytesDownloaded.perSecond)}/second`,
       }
 
-      if (interval.requests.total.count > 0) {
+      if (intervalStats.requests.total.count > 0) {
         msg['requests'] = [
-          interval.requests.successful.percent > 0
-            ? `${formatNumber(interval.requests.successful.percent)}% successful`
+          intervalStats.requests.successful.percent > 0
+            ? `${formatNumber(intervalStats.requests.successful.percent)}% successful`
             : false,
-          interval.requests.rateLimited.percent
-            ? `${formatNumber(interval.requests.rateLimited.percent)}% rate limited`
+          intervalStats.requests.rateLimited.percent
+            ? `${formatNumber(intervalStats.requests.rateLimited.percent)}% rate limited`
             : false,
-          interval.requests.failed.percent > 0 ? `${formatNumber(interval.requests.failed.percent)}% failed` : false,
+          intervalStats.requests.failed.percent > 0
+            ? `${formatNumber(intervalStats.requests.failed.percent)}% failed`
+            : false,
         ]
           .filter(Boolean)
           .join(', ')
@@ -310,15 +317,15 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
 
       onStart({ state, logger })
 
-      currentBlock = metrics.gauge({
-        name: 'sqd_current_block',
-        help: 'Current block number being processed',
+      processedBlock = metrics.gauge({
+        name: 'sqd_processed_block',
+        help: 'Highest block number processed so far',
         labelNames: ['id'] as const,
       })
 
-      lastBlock = metrics.gauge({
-        name: 'sqd_last_block',
-        help: 'Last known block number in the chain',
+      endBlock = metrics.gauge({
+        name: 'sqd_end_block',
+        help: 'End of the indexed range: the configured `to` bound, or the chain head when unbounded',
         labelNames: ['id'] as const,
       })
 
@@ -376,7 +383,7 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
         buckets: DEFAULT_BYTES_BUCKETS,
       })
 
-      currentBlock.set({ id }, -1)
+      processedBlock.set({ id }, -1)
     },
     transform: async (data, ctx) => {
       history.addState({
@@ -400,12 +407,12 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
       }
 
       if (ctx.stream.state.current?.number) {
-        currentBlock?.set({ id: ctx.id }, ctx.stream.state.current.number)
+        processedBlock?.set({ id: ctx.id }, ctx.stream.state.current.number)
       }
 
       lastProgress = history.calculate()
 
-      lastBlock?.set({ id: ctx.id }, lastProgress.state.last)
+      endBlock?.set({ id: ctx.id }, lastProgress.state.to)
       progressRatio?.set({ id: ctx.id }, lastProgress.state.percent / 100)
       etaSeconds?.set({ id: ctx.id }, lastProgress.state.etaSeconds)
       blocksProcessedTotal?.inc({ id: ctx.id }, ctx.batch.blocksCount)
@@ -415,7 +422,7 @@ export function progressTracker<T>({ onProgress, onStart, interval = 5000 }: Pro
 
       return data
     },
-    fork: () => {
+    rollback: () => {
       reorgsTotal?.inc({ id: pipeId }, 1)
     },
     stop: () => {

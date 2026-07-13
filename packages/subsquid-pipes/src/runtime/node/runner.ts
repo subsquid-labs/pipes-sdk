@@ -1,4 +1,4 @@
-import { Logger, createDefaultLogger } from '~/core/logger.js'
+import { Logger, defaultLogger } from '~/core/logger.js'
 import { MetricsServer, noopMetricsServer } from '~/core/metrics-server.js'
 import { MetricsServerOptions, metricsServer } from '~/metrics/node/index.js'
 
@@ -46,7 +46,7 @@ class Runner<T extends SerializableObject = any> {
     private pipes: StreamConfig<T>[],
     private config: Config = {},
   ) {
-    this.#logger = createDefaultLogger()
+    this.#logger = defaultLogger()
   }
 
   async start() {
@@ -111,14 +111,14 @@ class Runner<T extends SerializableObject = any> {
  *
  * @example
  * ```ts
- * import { createDevRunner } from '@subsquid/pipes/runtime/node'
+ * import { devRunner } from '@subsquid/pipes/runtime/node'
  *
- * const runner = createDevRunner([
+ * const runner = devRunner([
  *   {
  *     id: 'transfers',
  *     params: { portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet' },
  *     handler: async ({ id, params, logger, metrics }) => {
- *       const stream = evmPortalStream({ id, portal: params.portal, outputs: evmDecoder({ ... }) })
+ *       const stream = evmPortalStream({ id, portal: params.portal, outputs: evmEventDecoder({ ... }) })
  *       for await (const { data } of stream) { ... }
  *     },
  *   },
@@ -127,6 +127,6 @@ class Runner<T extends SerializableObject = any> {
  * await runner.start()
  * ```
  */
-export function createDevRunner<T extends SerializableObject>(streams: StreamConfig<T>[], defaultConfig?: Config) {
+export function devRunner<T extends SerializableObject>(streams: StreamConfig<T>[], defaultConfig?: Config) {
   return new Runner(streams, defaultConfig)
 }

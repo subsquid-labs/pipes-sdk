@@ -39,7 +39,7 @@ export class HyperliquidFillsQueryBuilder<F extends api.FieldSelection = {}> ext
     return this
   }
 
-  addFill(options: RequestOptions<api.FillRequest>): this {
+  addFillRequest(options: RequestOptions<api.FillRequest>): this {
     return this.addRequest('fills', options)
   }
 

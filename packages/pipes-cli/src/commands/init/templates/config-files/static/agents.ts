@@ -20,7 +20,7 @@ Ship a pipeline that:
 ## Project map
 - \`src/index.ts\`: main pipeline entry
 - \`src/contracts/\`: generated ABIs and typed decoders
-- \`src/utils/\`: ClickHouse helpers (only when ClickHouse sink is chosen)
+- \`src/utils/\`: ClickHouse helpers (only when ClickHouse target is chosen)
 - \`migrations/\`: SQL for ClickHouse or PostgreSQL
 - \`.env\`, \`docker-compose.yml\`: local databases and credentials
 
@@ -56,13 +56,13 @@ For long-running jobs, guard against forks:
 - Treat the cursor as the source of truth for safety
 
 ## EVM-specific notes
-- Use \`evmPortalSource\` + \`evmDecoder\`
+- Use \`evmPortalStream\` + \`evmEventDecoder\`
 - \`commonAbis.erc20\` is available for ERC20 transfers
 - For custom contracts, generate ABIs into \`src/contracts/\`
-- Use \`factory\` + \`factorySqliteDatabase\` for dynamic contract sets
+- Use \`contractFactory\` + \`contractFactorySqliteStore\` for dynamic contract sets
 
 ## Solana-specific notes
-- Use \`solanaPortalSource\`
+- Use \`solanaPortalStream\`
 - Use instruction decoding for program-specific data
 - Query builder is the safe way to select accounts, programs, and fields
 - Use the latency watcher only when debugging performance
@@ -96,13 +96,13 @@ npx @subsquid/evm-typegen@latest src/contracts \\
 Creates a Portal source, decodes ERC20 transfers with the built-in ABI, and logs the batch size.
 
 \`\`\`ts
-import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
+import { commonAbis, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 
 async function main() {
-  const stream = evmPortalSource({
+  const stream = evmPortalStream({
     id: 'erc20-transfers',
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-    outputs: evmDecoder({
+    outputs: evmEventDecoder({
       range: { from: 'latest' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,
@@ -123,21 +123,21 @@ Tracks pools created by a factory contract, then decodes swap events only for th
 This is the standard approach for protocols with dynamic contract creation (e.g., Uniswap V3).
 
 \`\`\`ts
-import { evmDecoder, evmPortalSource, factory, factorySqliteDatabase } from '@subsquid/pipes/evm'
+import { contractFactory, contractFactorySqliteStore, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 import { events as factoryAbi } from './abi/uniswap.v3/factory'
 import { events as swapsAbi } from './abi/uniswap.v3/swaps'
 
 async function main() {
-  const stream = evmPortalSource({
+  const stream = evmPortalStream({
     id: 'uniswap-v3-swaps',
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-    outputs: evmDecoder({
+    outputs: evmEventDecoder({
       range: { from: '12,369,621' },
-      contracts: factory({
+      contracts: contractFactory({
         address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
         event: factoryAbi.PoolCreated,
         childAddressField: 'pool',
-        database: factorySqliteDatabase({ path: './uniswap3-eth-pools.sqlite' }),
+        database: contractFactorySqliteStore({ path: './uniswap3-eth-pools.sqlite' }),
       }),
       events: {
         swaps: swapsAbi.Swap,
@@ -158,14 +158,14 @@ Decodes ERC20 transfers, maps them to rows, and writes them to ClickHouse with r
 
 \`\`\`ts
 import { createClient } from '@clickhouse/client'
-import { commonAbis, evmDecoder, evmPortalSource } from '@subsquid/pipes/evm'
+import { commonAbis, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
 
 async function main() {
-  await evmPortalSource({
+  await evmPortalStream({
     id: 'erc20-transfers-clickhouse',
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-    outputs: evmDecoder({
+    outputs: evmEventDecoder({
       range: { from: 'latest' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,

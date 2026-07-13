@@ -12,7 +12,7 @@ import {
   FactoryEvent,
   IndexedParams,
   buildEventTopics,
-  evmDecoder,
+  evmEventDecoder,
   getNormalizedEventParams,
   isEventWithArgs,
 } from './evm-decoder.js'
@@ -187,15 +187,7 @@ export class Factory<T extends EventArgs> {
   }
 
   /** @internal */
-  async runPreindex({
-    portal,
-    range,
-    logger,
-  }: {
-    portal: PortalClient
-    range: PortalRange
-    logger: Logger
-  }) {
+  async runPreindex({ portal, range, logger }: { portal: PortalClient; range: PortalRange; logger: Logger }) {
     const name = `factory preindexing ${this.factoryAddress().join(', ')}`
 
     logger.info(`Starting ${name}`)
@@ -204,7 +196,7 @@ export class Factory<T extends EventArgs> {
       id: name,
       portal,
       logger,
-      outputs: evmDecoder({
+      outputs: evmEventDecoder({
         profiler: { name },
         contracts: this.factoryAddress(),
         range,
@@ -255,7 +247,7 @@ export class Factory<T extends EventArgs> {
     this.#batch = []
   }
 
-  async fork(cursor: BlockCursor) {
+  async rollback(cursor: BlockCursor) {
     await this.assertDb().remove(cursor.number)
   }
 
@@ -280,7 +272,7 @@ export class Factory<T extends EventArgs> {
  *   - If a string, it should be a key from the event's decoded data
  *   - If a function, it receives the decoded event data and should return the contract address or null
  * @param options.database - Database adapter for storing and querying factory events. Can be a {@link FactoryPersistentAdapter} instance or a Promise that resolves to one
- * @returns A {@link Factory} instance that can be used as the `contracts` parameter in {@link evmDecoder}
+ * @returns A {@link Factory} instance that can be used as the `contracts` parameter in {@link evmEventDecoder}
  *
  * @example
  * ```ts
@@ -288,7 +280,7 @@ export class Factory<T extends EventArgs> {
  *   address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
  *   event: factoryAbi.PoolCreated,
  *   childAddressField: 'pool',
- *   database: contractFactoryStore({
+ *   database: contractFactorySqliteStore({
  *     path: './uniswap3-eth-pools.sqlite',
  *   }),
  * })

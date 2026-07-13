@@ -1,9 +1,9 @@
 import {
   type BlockCursor,
   type Counter,
-  type Ctx,
   type Finalization,
   type Histogram,
+  type HookContext,
   type Logger,
   type Metrics,
   createTarget,
@@ -59,7 +59,7 @@ type ParquetTargetMetrics = {
  *
  * **Finalized-only.** Parquet files are immutable once written, so a block that could still
  * reorg is never written. Each table buffers unfinalized rows in memory (via the shared
- * {@link createFinalizationBuffer}) and only appends a row once its block is at or below the
+ * {@link finalizationBuffer}) and only appends a row once its block is at or below the
  * portal's finalized head. A reorg drops the in-memory buffer; published files are never touched.
  *
  * **Constant memory.** Finalized rows stream straight to a temp file and the file rotates by byte
@@ -101,7 +101,7 @@ export function parquetTarget<T>(options: {
   tables: ParquetTable[]
   settings?: ParquetSettings
   onStart?: (ctx: { store: ParquetStore; logger: Logger }) => Promise<unknown> | unknown
-  onData: (ctx: { store: ParquetStore; data: T; ctx: Ctx }) => Promise<unknown> | unknown
+  onData: (ctx: { store: ParquetStore; data: T; ctx: HookContext }) => Promise<unknown> | unknown
 }) {
   const { dir, tables, settings = {}, onStart, onData } = options
 
@@ -222,7 +222,7 @@ export function parquetTarget<T>(options: {
 
     // Reorg: drop buffered (unfinalized) rows above the safe cursor across every table buffer.
     // Published files and open writers hold only finalized rows, so they are never rolled back.
-    fork: (previousBlocks) => store.fork(previousBlocks),
+    resolveFork: (canonicalBlocks) => store.resolveFork(canonicalBlocks),
   })
 }
 

@@ -1,7 +1,7 @@
 import { BlockRangeConfigurationError } from './errors.js'
 import { NaturalRange } from './query-builder.js'
 
-export function parseBlockFormatting(block: string | number) {
+export function parseFormattedBlock(block: string | number) {
   if (typeof block === 'number') return block
   /**
    * Remove commas and underscores
@@ -22,10 +22,10 @@ function parseBlock(block: string | number, offset?: number) {
   if (typeof block === 'number') return block
 
   if (block.startsWith('+') && offset) {
-    return offset + parseBlockFormatting(block.substring(1))
+    return offset + parseFormattedBlock(block.substring(1))
   }
 
-  return parseBlockFormatting(block)
+  return parseFormattedBlock(block)
 }
 
 /**

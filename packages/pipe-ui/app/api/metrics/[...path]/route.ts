@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server'
+
 import { loadConfig } from '~/lib/config'
 
 function getServerUrl(serverIndex: number): string | null {

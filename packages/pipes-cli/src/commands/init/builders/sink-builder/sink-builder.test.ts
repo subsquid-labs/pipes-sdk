@@ -142,7 +142,7 @@ describe('postgres sink template builder', () => {
     }
     expect(buildSink(config).sinkCode).toMatchInlineSnapshot(`
       "
-      import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
+      import { chunkForInsert, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
       import { drizzle } from 'drizzle-orm/node-postgres'
       import {
         erc20TransfersTable,
@@ -154,7 +154,7 @@ describe('postgres sink template builder', () => {
             erc20TransfersTable,
           ],
           onData: async ({ tx, data }) => {
-            for (const values of chunk(data.erc20Transfers)) {
+            for (const values of chunkForInsert(data.erc20Transfers)) {
               await tx.insert(erc20TransfersTable).values(values)
             }
           },
@@ -173,7 +173,7 @@ describe('postgres sink template builder', () => {
     }
     expect(buildSink(config).sinkCode).toMatchInlineSnapshot(`
       "
-      import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
+      import { chunkForInsert, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
       import { drizzle } from 'drizzle-orm/node-postgres'
       import {
         erc20TransfersTable,
@@ -187,10 +187,10 @@ describe('postgres sink template builder', () => {
             uniswapV3SwapsTable,
           ],
           onData: async ({ tx, data }) => {
-            for (const values of chunk(data.erc20Transfers)) {
+            for (const values of chunkForInsert(data.erc20Transfers)) {
               await tx.insert(erc20TransfersTable).values(values)
             }
-            for (const values of chunk(data.uniswapV3Swaps)) {
+            for (const values of chunkForInsert(data.uniswapV3Swaps)) {
               await tx.insert(uniswapV3SwapsTable).values(values)
             }
           },
@@ -210,7 +210,7 @@ describe('postgres sink template builder', () => {
 
     expect(buildSink(config).sinkCode).toMatchInlineSnapshot(`
       "
-      import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
+      import { chunkForInsert, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
       import { drizzle } from 'drizzle-orm/node-postgres'
       import {
         weth9ApprovalTable,
@@ -224,10 +224,10 @@ describe('postgres sink template builder', () => {
             weth9TransferTable,
           ],
           onData: async ({ tx, data }) => {
-            for (const values of chunk(data.custom.Approval)) {
+            for (const values of chunkForInsert(data.custom.Approval)) {
               await tx.insert(weth9ApprovalTable).values(values)
             }
-            for (const values of chunk(data.custom.Transfer)) {
+            for (const values of chunkForInsert(data.custom.Transfer)) {
               await tx.insert(weth9TransferTable).values(values)
             }
           },
@@ -247,7 +247,7 @@ describe('postgres sink template builder', () => {
 
     expect(buildSink(config).sinkCode).toMatchInlineSnapshot(`
       "
-      import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
+      import { chunkForInsert, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
       import { drizzle } from 'drizzle-orm/node-postgres'
       import {
         erc20TransfersTable,
@@ -263,13 +263,13 @@ describe('postgres sink template builder', () => {
             weth9TransferTable,
           ],
           onData: async ({ tx, data }) => {
-            for (const values of chunk(data.erc20Transfers)) {
+            for (const values of chunkForInsert(data.erc20Transfers)) {
               await tx.insert(erc20TransfersTable).values(values)
             }
-            for (const values of chunk(data.custom.Approval)) {
+            for (const values of chunkForInsert(data.custom.Approval)) {
               await tx.insert(weth9ApprovalTable).values(values)
             }
-            for (const values of chunk(data.custom.Transfer)) {
+            for (const values of chunkForInsert(data.custom.Transfer)) {
               await tx.insert(weth9TransferTable).values(values)
             }
           },
@@ -309,9 +309,7 @@ describe('buildPostgresSink artifacts', () => {
   })
 
   it('returns a single db:generate post step using the configured package manager', () => {
-    expect(buildPostgresSink(config).postSteps).toEqual([
-      { kind: 'exec', command: 'pnpm run db:generate' },
-    ])
+    expect(buildPostgresSink(config).postSteps).toEqual([{ kind: 'exec', command: 'pnpm run db:generate' }])
   })
 })
 
@@ -365,7 +363,7 @@ describe('buildSink dispatch', () => {
       sink: 'memory',
       packageManager: 'pnpm',
     }
-    expect(() => buildSink(config)).toThrow(/Memory sink is not supported/)
+    expect(() => buildSink(config)).toThrow(/Memory target is not supported/)
   })
 })
 
@@ -444,7 +442,8 @@ describe('overloaded events', () => {
       packageManager: 'pnpm',
     }
     const migration = buildClickhouseSink(config).files.find((f) => f.path.includes('migrations/'))!.content
-    const approvalCreates = migration.match(/CREATE TABLE IF NOT EXISTS overloaded_token_approval(_[0-9a-f]{4})?/g) ?? []
+    const approvalCreates =
+      migration.match(/CREATE TABLE IF NOT EXISTS overloaded_token_approval(_[0-9a-f]{4})?/g) ?? []
     expect(approvalCreates).toHaveLength(2)
     expect(new Set(approvalCreates).size).toBe(2)
   })

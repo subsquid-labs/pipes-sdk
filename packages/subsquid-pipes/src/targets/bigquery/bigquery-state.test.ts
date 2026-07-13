@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { createTestLogger } from '~/testing/index.js'
+import { testLogger } from '~/testing/index.js'
 
-import { BigQueryState } from './bigquery-state.js'
+import { BigQuerySyncState } from './bigquery-state.js'
 
 /**
- * Unit tests for the finalized-head wiring in BigQueryState, using a mocked store (no live
+ * Unit tests for the finalized-head wiring in BigQuerySyncState, using a mocked store (no live
  * BigQuery). `getCursor` hands the persisted finalized head back as resume state so the source can
  * seed its monotonic watermark — the clamp itself now lives in the source (see portal-source and
  * finalized-watermark tests), not in the target.
@@ -34,7 +34,7 @@ function stateWith(row: ReturnType<typeof committedRow>) {
     query: async () => [row],
   }
 
-  return new BigQueryState({
+  return new BigQuerySyncState({
     store: store as any,
     bigquery: {} as any,
     trackedTables: [],
@@ -42,11 +42,11 @@ function stateWith(row: ReturnType<typeof committedRow>) {
   })
 }
 
-describe('BigQueryState — resume state', () => {
+describe('BigQuerySyncState — resume state', () => {
   it('returns the persisted cursor and finalized head as TargetState', async () => {
     const state = stateWith(committedRow(block(100)))
 
-    const resume = await state.getCursor({ logger: createTestLogger() })
+    const resume = await state.getCursor({ logger: testLogger() })
 
     expect(resume).toEqual({ latest: block(50), finalized: block(100) })
   })
@@ -54,13 +54,13 @@ describe('BigQueryState — resume state', () => {
   it('returns finalized: null when no finalized head was persisted', async () => {
     const state = stateWith(committedRow(null))
 
-    const resume = await state.getCursor({ logger: createTestLogger() })
+    const resume = await state.getCursor({ logger: testLogger() })
 
     expect(resume).toEqual({ latest: block(50), finalized: null })
   })
 })
 
-describe('BigQueryState — cursor key binding', () => {
+describe('BigQuerySyncState — cursor key binding', () => {
   function keyedState(options: { id?: string } = {}) {
     const queryParams: any[] = []
     const walRows: any[] = []
@@ -76,7 +76,7 @@ describe('BigQueryState — cursor key binding', () => {
       executeDml: async () => ({ rowCount: 0 }),
     }
 
-    const state = new BigQueryState({
+    const state = new BigQuerySyncState({
       store: store as any,
       bigquery: {} as any,
       trackedTables: [],
@@ -92,11 +92,11 @@ describe('BigQueryState — cursor key binding', () => {
 
     expect(state.cursorKey).toBe('pipe-x')
 
-    await state.getCursor({ logger: createTestLogger() })
+    await state.getCursor({ logger: testLogger() })
     expect(queryParams[0]).toEqual({ id: 'pipe-x' })
 
     await state.saveCommitPost({
-      logger: createTestLogger(),
+      logger: testLogger(),
       cursor: block(1),
       finalized: undefined,
       rollbackChain: [],

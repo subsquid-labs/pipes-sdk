@@ -6,11 +6,11 @@ import { postgresDefaults } from '../../templates/config-files/dynamic/docker-co
 import { drizzleConfigTemplate } from '../../templates/config-files/static/drizzle-config.js'
 import { groupContractsForDecoders } from '../../templates/pipes/evm/custom/decoder-grouping.js'
 import { renderSchemasTemplate, tableToSchemaName } from '../schema-builder/index.js'
-import type { SinkArtifacts } from './sink-artifacts.js'
 import { extractExportConstNames, tableName as pgTableName } from './shared.js'
+import type { SinkArtifacts } from './sink-artifacts.js'
 
 const sinkTemplate = `
-import { chunk, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
+import { chunkForInsert, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import {
   {{#templates}}
@@ -41,7 +41,7 @@ drizzleTarget({
     ],
     onData: async ({ tx, data }) => {
     {{#templates}}
-      for (const values of chunk(data.{{{templateId}}})) {
+      for (const values of chunkForInsert(data.{{{templateId}}})) {
         {{#schemas}}
         await tx.insert({{.}}).values(values)
         {{/schemas}}
@@ -49,7 +49,7 @@ drizzleTarget({
     {{/templates}}
     {{#customTemplates}}
       {{#schemas}}
-      for (const values of chunk(data.{{decoderId}}.{{event}})) {
+      for (const values of chunkForInsert(data.{{decoderId}}.{{event}})) {
         await tx.insert({{schemaName}}).values(values)
       }
       {{/schemas}}

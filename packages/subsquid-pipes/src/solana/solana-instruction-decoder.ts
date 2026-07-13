@@ -133,7 +133,7 @@ export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEv
   }
 
   if (d1.length) {
-    query.addInstruction({
+    query.addInstructionRequest({
       range,
       request: {
         programId,
@@ -145,7 +145,7 @@ export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEv
       },
     })
   } else if (d2.length) {
-    query.addInstruction({
+    query.addInstructionRequest({
       range,
       request: {
         programId,
@@ -157,7 +157,7 @@ export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEv
       },
     })
   } else if (d4.length) {
-    query.addInstruction({
+    query.addInstructionRequest({
       range,
       request: {
         programId,
@@ -169,7 +169,7 @@ export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEv
       },
     })
   } else if (d8.length) {
-    query.addInstruction({
+    query.addInstructionRequest({
       range,
       request: {
         programId,

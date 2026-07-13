@@ -1,6 +1,6 @@
 import type { TableField, TableMetadata } from '@google-cloud/bigquery'
 
-import { BQ_ERR, BigQueryTargetError } from './errors.js'
+import { BIGQUERY_ERROR_CODES, BigQueryTargetError } from './errors.js'
 
 /**
  * Detects "Not Found" errors from the @google-cloud/bigquery client AND the Storage Write
@@ -125,7 +125,7 @@ export function assertInt64NotNull(metadata: TableMetadata, columnName: string, 
 
   if (!field) {
     throw new BigQueryTargetError(
-      BQ_ERR.PARTITION_COLUMN_MISSING,
+      BIGQUERY_ERROR_CODES.PARTITION_COLUMN_MISSING,
       `Table ${tableFqn} is missing the partition column '${columnName}'. Add it as INT64 NOT NULL, then re-run.`,
     )
   }
@@ -133,7 +133,7 @@ export function assertInt64NotNull(metadata: TableMetadata, columnName: string, 
   const type = (field.type || '').toUpperCase()
   if (type !== 'INT64' && type !== 'INTEGER') {
     throw new BigQueryTargetError(
-      BQ_ERR.PARTITION_COLUMN_TYPE,
+      BIGQUERY_ERROR_CODES.PARTITION_COLUMN_TYPE,
       `Table ${tableFqn} has '${columnName}' typed as ${field.type}, but the BigQuery target ` +
         `requires INT64. Reason: ${type === 'FLOAT64' || type === 'FLOAT' || type === 'NUMERIC' || type === 'BIGNUMERIC' ? `${type} loses precision above 2^53 (Solana slot numbers exceed this), making BETWEEN predicates inexact during reorg cleanup.` : `${type} cannot be used with RANGE_BUCKET partitioning, and BETWEEN compares lexicographically — wrong across digit-length transitions.`}`,
     )
@@ -143,7 +143,7 @@ export function assertInt64NotNull(metadata: TableMetadata, columnName: string, 
   const mode = (field.mode || 'NULLABLE').toUpperCase()
   if (mode !== 'REQUIRED') {
     throw new BigQueryTargetError(
-      BQ_ERR.PARTITION_COLUMN_NULLABLE,
+      BIGQUERY_ERROR_CODES.PARTITION_COLUMN_NULLABLE,
       `Table ${tableFqn} has '${columnName}' as ${mode}, but the BigQuery target requires NOT NULL. ` +
         `Reason: SQL three-valued logic means rows with NULL ${columnName} do NOT match ` +
         `the WHERE predicate during fork DELETE, leaving them uncleaned forever.`,
@@ -164,7 +164,7 @@ export function assertRangePartitionedOn(
   const field = metadata.rangePartitioning?.field
   if (field !== columnName) {
     throw new BigQueryTargetError(
-      BQ_ERR.TABLE_NOT_PARTITIONED,
+      BIGQUERY_ERROR_CODES.TABLE_NOT_PARTITIONED,
       `Table ${tableFqn} is not range-partitioned on '${columnName}' ` +
         `(found: ${field ? `range-partitioned on '${field}'` : 'no range partitioning'}). ` +
         `Reorg DELETE without partition pruning scans the whole table — unaffordable at scale. ` +

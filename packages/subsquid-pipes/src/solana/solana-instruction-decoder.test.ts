@@ -2,16 +2,16 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { solanaInstructionDecoder } from '~/solana/solana-instruction-decoder.js'
 import { solanaPortalStream } from '~/solana/solana-portal-source.js'
-import { MockPortal, MockResponse, createMockPortal, readAll } from '~/testing/index.js'
+import { MockPortal, MockResponse, mockPortal, readAll } from '~/testing/index.js'
 
 import * as tokenProgram from './abi/tokenProgram/index.js'
 
 describe('solanaInstructionDecoder transform', () => {
-  let mockPortal: MockPortal
+  let portal: MockPortal
 
   beforeEach(async () => {
-    await mockPortal?.close()
-    mockPortal = await createMockPortal(PORTAL_MOCK_RESPONSE)
+    await portal?.close()
+    portal = await mockPortal(PORTAL_MOCK_RESPONSE)
   })
 
   const PORTAL_MOCK_RESPONSE: MockResponse[] = [
@@ -41,7 +41,7 @@ describe('solanaInstructionDecoder transform', () => {
   it('should decode the events', async () => {
     const stream = solanaPortalStream({
       id: 'test',
-      portal: mockPortal.url,
+      portal: portal.url,
       logger: false,
       outputs: solanaInstructionDecoder({
         range: { from: 0, to: 1 },
@@ -73,7 +73,7 @@ describe('solanaInstructionDecoder transform', () => {
   it('should filter events by programId across multiple decoders', async () => {
     const stream = solanaPortalStream({
       id: 'test',
-      portal: mockPortal.url,
+      portal: portal.url,
       logger: false,
       outputs: {
         validProgramId: solanaInstructionDecoder({

@@ -1,6 +1,6 @@
 import z from 'zod'
 
-import { NetworkType, packageManagerTypes, sinkTypes } from '~/types/init.js'
+import { NetworkType, packageManagerTypes, targetTypes } from '~/types/init.js'
 
 import { TemplateNotFoundError } from '../init.errors.js'
 import { getTemplate, getTemplates } from '../templates/registry.js'
@@ -28,7 +28,7 @@ function getTemplateSchemas<N extends NetworkType>(networkType: N) {
 const baseSchemaRaw = z.object({
   projectFolder: z.string().min(1),
   packageManager: z.enum(packageManagerTypes.map((p) => p.value)),
-  sink: z.enum(sinkTypes.map((s) => s.value)),
+  target: z.enum(targetTypes.map((t) => t.value)).describe('Storage target for the pipeline data.'),
 })
 
 const evmConfig = baseSchemaRaw
@@ -54,7 +54,7 @@ export const configJsonSchema = configJsonSchemaRaw.transform((data) => {
   return {
     ...data,
     networkType,
-    sink: data.sink,
+    sink: data.target,
     packageManager: data.packageManager,
     templates: data.templates.map((t) => {
       const template = getTemplate(networkType, t.templateId)

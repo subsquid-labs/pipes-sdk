@@ -27,7 +27,7 @@ export default defineConfig([
     entry: {
       'config/networks': 'src/commands/init/config/networks.ts',
       'config/templates': 'src/commands/init/config/templates.ts',
-      'config/sinks': 'src/commands/init/config/sinks.ts',
+      'config/targets': 'src/commands/init/config/targets.ts',
       'services/sqd-abi': 'src/services/sqd-abi.ts',
     },
     outDir: 'dist',

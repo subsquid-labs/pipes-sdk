@@ -38,9 +38,9 @@
 
 import { ApolloServer } from '@apollo/server'
 import { startStandaloneServer } from '@apollo/server/standalone'
-import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
+import { commonAbis, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 import { metricsServer } from '@subsquid/pipes/metrics/node'
-import { batchForInsert, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
+import { chunkForInsert, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
 import { buildSchema } from 'drizzle-graphql'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { integer, numeric, pgTable, primaryKey, timestamp, varchar } from 'drizzle-orm/pg-core'
@@ -75,7 +75,7 @@ async function main() {
       url: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
     },
     // Configure decoder to extract ERC20 Transfer events from raw blockchain data
-    outputs: evmDecoder({
+    outputs: evmEventDecoder({
       range: { from: '0' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,
@@ -114,7 +114,7 @@ async function main() {
       onData: async ({ tx, data, ctx }) => {
         ctx.logger.debug(`Processing batch with ${data.transfers.length} transfer events...`)
 
-        for (const values of batchForInsert(data.transfers)) {
+        for (const values of chunkForInsert(data.transfers)) {
           ctx.logger.debug(`Inserting ${values.length} transfer events...`)
 
           await tx.insert(transfersTable).values(

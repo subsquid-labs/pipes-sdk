@@ -22,7 +22,7 @@
 
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
 import { NodeSDK } from '@opentelemetry/sdk-node'
-import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
+import { commonAbis, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 import { opentelemetryProfiler } from '@subsquid/pipes/opentelemetry'
 
 // ─── 1. Bootstrap OTEL SDK ────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ async function cli() {
     // Optionally pass an OTEL context to attach pipe spans to an existing trace:
     //   profiler: opentelemetryProfiler(requestContext)
     profiler: opentelemetryProfiler(),
-    outputs: evmDecoder({
+    outputs: evmEventDecoder({
       range: { from: 'latest' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,

@@ -1,19 +1,26 @@
-import { BlockCursor, formatNumber, lines } from '~/core/index.js'
+import { BlockCursor, formatNumber, joinLines } from '~/core/index.js'
+
 import { last } from '../internal/array.js'
 
 export class ForkException extends Error {
   override readonly name = 'ForkError'
 
+  /**
+   * The portal's view of the canonical chain at the fork point
+   * (a.k.a. `previousBlocks` from Portal API `/stream` 409 responses).
+   */
+  readonly canonicalBlocks: BlockCursor[]
+
   constructor(
-    readonly previousBlocks: BlockCursor[],
+    canonicalBlocks: BlockCursor[],
     readonly query: { fromBlock?: number; parentBlockHash?: string },
   ) {
-    const parent = last(previousBlocks)
+    const parent = last(canonicalBlocks)
 
     const block = query.fromBlock ? formatNumber(query.fromBlock) : 'last'
 
     super(
-      lines([
+      joinLines([
         `A blockchain fork was detected at ${block} block.`,
         `-----------------------------------------`,
         `The correct hash:        "${parent.hash}".`,
@@ -22,6 +29,8 @@ export class ForkException extends Error {
         `Please refer to the documentation on how to handle forks.`,
       ]),
     )
+
+    this.canonicalBlocks = canonicalBlocks
   }
 }
 

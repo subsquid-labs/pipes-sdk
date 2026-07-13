@@ -575,9 +575,7 @@ export function describeError(error: Error): string {
     parts.push(`cause: ${c.code ?? c.name ?? c.message ?? String(cause)}`)
 
     if (cause instanceof AggregateError) {
-      const inner = cause.errors
-        .map((e: any) => e?.code ?? e?.message ?? String(e))
-        .join(', ')
+      const inner = cause.errors.map((e: any) => e?.code ?? e?.message ?? String(e)).join(', ')
       parts.push(`errors: [${inner}]`)
     }
 

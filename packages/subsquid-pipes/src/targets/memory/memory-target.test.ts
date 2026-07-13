@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { commonAbis } from '~/evm/abi/common.js'
-import { evmDecoder } from '~/evm/evm-decoder.js'
+import { evmEventDecoder } from '~/evm/evm-decoder.js'
 import { evmPortalStream } from '~/evm/evm-portal-source.js'
 import { encodeEvent, mockBlock, resetMockBlockCounter } from '~/testing/evm/index.js'
-import { MockPortal, createMockPortal } from '~/testing/index.js'
+import { MockPortal, mockPortal } from '~/testing/index.js'
 
 import { createMemoryTarget } from './memory-target.js'
 
@@ -33,7 +33,7 @@ function streamTo(portal: MockPortal, to: number, emitted: Row[][]) {
   return evmPortalStream({
     id: 'memory-target-test',
     portal: portal.url,
-    outputs: evmDecoder({
+    outputs: evmEventDecoder({
       range: { from: 1, to },
       events: {
         transfers: commonAbis.erc20.events.Transfer,
@@ -49,20 +49,20 @@ function streamTo(portal: MockPortal, to: number, emitted: Row[][]) {
 }
 
 describe('createMemoryTarget', () => {
-  let mockPortal: MockPortal
+  let portal: MockPortal
 
   beforeEach(() => {
     resetMockBlockCounter()
   })
 
   afterEach(async () => {
-    await mockPortal?.close()
+    await portal?.close()
   })
 
   it('emits only finalized rows and releases buffered rows once a later head finalizes them', async () => {
     const [b1, b2, b3, b4, b5] = [1, 2, 3, 4, 5].map(blockWithTransfer)
 
-    mockPortal = await createMockPortal([
+    portal = await mockPortal([
       // finalized head = 1: block 1 is emitted, blocks 2 & 3 are held back
       {
         statusCode: 200,
@@ -78,7 +78,7 @@ describe('createMemoryTarget', () => {
     ])
 
     const emitted: Row[][] = []
-    await streamTo(mockPortal, 5, emitted)
+    await streamTo(portal, 5, emitted)
 
     // Block 5 is never finalized, so it must not be emitted.
     const blockNumbers = emitted.flat().map((r) => r.blockNumber)
@@ -91,7 +91,7 @@ describe('createMemoryTarget', () => {
   it('passes every row straight through when the dataset has no finalized head', async () => {
     const [b1, b2] = [1, 2].map(blockWithTransfer)
 
-    mockPortal = await createMockPortal([
+    portal = await mockPortal([
       {
         statusCode: 200,
         data: [b1, b2],
@@ -100,7 +100,7 @@ describe('createMemoryTarget', () => {
     ])
 
     const emitted: Row[][] = []
-    await streamTo(mockPortal, 2, emitted)
+    await streamTo(portal, 2, emitted)
 
     expect(emitted.flat().map((r) => r.blockNumber)).toEqual([1, 2])
   })

@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from 'vitest'
 
 import { commonAbis } from '~/evm/abi/common.js'
-import { evmDecoder } from '~/evm/evm-decoder.js'
+import { evmEventDecoder } from '~/evm/evm-decoder.js'
 import { evmPortalStream } from '~/evm/evm-portal-source.js'
 
 import { MockPortal, readAll } from '../index.js'
-import { evmPortalMockStream } from './evm-portal-mock-stream.js'
+import { mockEvmPortalStream } from './evm-portal-mock-stream.js'
 import { encodeEvent, mockBlock, resetMockBlockCounter } from './mock-block.js'
 
 const WETH_ADDRESS = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2' as const
@@ -124,8 +124,8 @@ describe('test-evm-data helpers', () => {
     })
   })
 
-  describe('evmPortalMockStream', () => {
-    it('should work end-to-end with evmDecoder', async () => {
+  describe('mockEvmPortalStream', () => {
+    it('should work end-to-end with evmEventDecoder', async () => {
       const transfer = encodeEvent({
         abi: commonAbis.erc20.abi,
         eventName: 'Transfer',
@@ -133,7 +133,7 @@ describe('test-evm-data helpers', () => {
         args: { from: ALICE, to: BOB, value: 100n },
       })
 
-      mockPortal = await evmPortalMockStream({
+      mockPortal = await mockEvmPortalStream({
         blocks: [
           mockBlock({ transactions: [{ logs: [transfer] }] }),
           mockBlock({ transactions: [{ logs: [transfer] }] }),
@@ -143,7 +143,7 @@ describe('test-evm-data helpers', () => {
       const stream = evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
-        outputs: evmDecoder({
+        outputs: evmEventDecoder({
           range: { from: 0, to: 2 },
           events: {
             transfers: commonAbis.erc20.events.Transfer,
@@ -176,7 +176,7 @@ describe('test-evm-data helpers', () => {
         args: { from: BOB, to: ALICE, value: 50n },
       })
 
-      mockPortal = await evmPortalMockStream({
+      mockPortal = await mockEvmPortalStream({
         blocks: [
           mockBlock({
             transactions: [{ logs: [transfer1, transfer2] }],
@@ -187,7 +187,7 @@ describe('test-evm-data helpers', () => {
       const stream = evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
-        outputs: evmDecoder({
+        outputs: evmEventDecoder({
           range: { from: 0, to: 1 },
           events: {
             transfers: commonAbis.erc20.events.Transfer,
@@ -217,7 +217,7 @@ describe('test-evm-data helpers', () => {
         args: { owner: ALICE, spender: BOB, value: 200n },
       })
 
-      mockPortal = await evmPortalMockStream({
+      mockPortal = await mockEvmPortalStream({
         blocks: [
           mockBlock({
             transactions: [{ logs: [transfer, approval] }],
@@ -228,7 +228,7 @@ describe('test-evm-data helpers', () => {
       const stream = evmPortalStream({
         id: 'test',
         portal: mockPortal.url,
-        outputs: evmDecoder({
+        outputs: evmEventDecoder({
           range: { from: 0, to: 1 },
           events: {
             transfers: commonAbis.erc20.events.Transfer,

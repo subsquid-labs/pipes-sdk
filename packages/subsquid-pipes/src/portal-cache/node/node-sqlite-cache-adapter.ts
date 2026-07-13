@@ -1,7 +1,8 @@
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
-import { loadSqlite, SqliteOptions, SqliteSync } from '~/drivers/sqlite/sqlite.js'
+import { SqliteOptions, SqliteSync, loadSqlite } from '~/drivers/sqlite/sqlite.js'
+
 import { Options, PortalCacheNodeJs, SaveBatch, StreamBatch } from './node-portal-cache.js'
 
 export type PortalSqliteCacheOptions = Options<SqliteOptions>

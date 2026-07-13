@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import { type BlockCursor, type Logger, type TargetState, formatBlock } from '~/core/index.js'
 
-import { PQ_ERR, ParquetTargetError } from './errors.js'
+import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { fsyncDir, fsyncFile } from './fs-durable.js'
 import { TMP_PREFIX } from './writer.js'
 
@@ -137,7 +137,7 @@ export class ParquetState {
       return parsed
     } catch (error) {
       throw new ParquetTargetError(
-        PQ_ERR.STATE_CORRUPT,
+        PARQUET_ERROR_CODES.STATE_CORRUPT,
         `Parquet state file '${this.#statePath}' exists but could not be parsed: ` +
           `${error instanceof Error ? error.message : String(error)}. Inspect or remove it to recover.`,
       )
@@ -181,7 +181,7 @@ export class ParquetState {
           await unlink(filePath)
         } catch (error) {
           throw new ParquetTargetError(
-            PQ_ERR.RECOVERY_DELETE_FAILED,
+            PARQUET_ERROR_CODES.RECOVERY_DELETE_FAILED,
             `Crash recovery could not delete the over-cursor Parquet file '${filePath}' ` +
               `(its blocks exceed the committed cursor ${formatBlock(cursorNumber)}): ` +
               `${error instanceof Error ? error.message : String(error)}. Leaving it would duplicate or ` +

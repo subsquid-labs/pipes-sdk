@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { Finalization, createFinalizationBuffer } from './finalization-buffer.js'
+import { Finalization, finalizationBuffer } from './finalization-buffer.js'
 
 type Row = { block: number; tag: string }
 
@@ -22,10 +22,10 @@ function head(finalizedNumber?: number, rollbackChain: { number: number; hash: s
 }
 
 function make() {
-  return createFinalizationBuffer<Row>({ getBlockNumber: (r) => r.block })
+  return finalizationBuffer<Row>({ getBlockNumber: (r) => r.block })
 }
 
-describe('createFinalizationBuffer', () => {
+describe('finalizationBuffer', () => {
   describe('push', () => {
     it('releases rows at or below the finalized head and buffers the rest', () => {
       const buffer = make()
@@ -140,13 +140,13 @@ describe('createFinalizationBuffer', () => {
     })
   })
 
-  describe('fork', () => {
+  describe('resolveFork', () => {
     it('resolves the safe cursor and drops every buffered row above it', async () => {
       const buffer = make()
 
       buffer.push([row(5), row(6), row(7)], head(4, [block(5), block(6), block(7)]))
 
-      const safe = await buffer.fork([block(5), block(6, '0x6a'), block(7, '0x7a')])
+      const safe = await buffer.resolveFork([block(5), block(6, '0x6a'), block(7, '0x7a')])
 
       expect(safe).toEqual(block(5))
       expect(buffer.size).toBe(1) // only row(5) survives
@@ -157,7 +157,7 @@ describe('createFinalizationBuffer', () => {
 
       buffer.push([row(5), row(6)], head(4, [block(5, '0x5a'), block(6, '0x6a')]))
 
-      const safe = await buffer.fork([block(5, '0x5b'), block(6, '0x6b')])
+      const safe = await buffer.resolveFork([block(5, '0x5b'), block(6, '0x6b')])
 
       expect(safe).toBeNull()
       expect(buffer.size).toBe(2) // rows left untouched on a dead end
@@ -171,22 +171,22 @@ describe('createFinalizationBuffer', () => {
       // …then the head advances past them, pruning them from the chain.
       buffer.push([], head(6))
 
-      expect(await buffer.fork([block(5), block(6)])).toBeNull()
+      expect(await buffer.resolveFork([block(5), block(6)])).toBeNull()
     })
   })
 
-  describe('resolveFork / dropAbove (split fork for shared-chain buffers)', () => {
-    it('resolveFork resolves the safe cursor without mutating the buffer', async () => {
+  describe('resolveForkCursor / dropAbove (split fork for shared-chain buffers)', () => {
+    it('resolveForkCursor resolves the safe cursor without mutating the buffer', async () => {
       const buffer = make()
       buffer.push([row(5), row(6), row(7)], head(4, [block(5), block(6), block(7)]))
 
-      const safe = await buffer.resolveFork([block(5), block(6, '0x6a'), block(7, '0x7a')])
+      const safe = await buffer.resolveForkCursor([block(5), block(6, '0x6a'), block(7, '0x7a')])
 
       expect(safe).toEqual(block(5))
-      // Side-effect-free (unlike fork): rows stay buffered…
+      // Side-effect-free (unlike resolveFork): rows stay buffered…
       expect(buffer.size).toBe(3)
       // …and a second resolve on the untouched chain returns the same cursor.
-      expect(await buffer.resolveFork([block(5), block(6, '0x6a'), block(7, '0x7a')])).toEqual(block(5))
+      expect(await buffer.resolveForkCursor([block(5), block(6, '0x6a'), block(7, '0x7a')])).toEqual(block(5))
       expect(buffer.size).toBe(3)
     })
 
@@ -217,7 +217,7 @@ describe('createFinalizationBuffer', () => {
       a.push([row(5), row(6), row(7)], fin)
       b.push([row(5), row(6), row(7)], fin)
 
-      const safe = await a.resolveFork([block(5), block(6, '0x6a'), block(7, '0x7a')])
+      const safe = await a.resolveForkCursor([block(5), block(6, '0x6a'), block(7, '0x7a')])
       a.dropAbove(safe)
       b.dropAbove(safe)
 

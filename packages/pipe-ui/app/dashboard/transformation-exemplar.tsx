@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, ChevronsDownUp, ChevronsUpDown, Maximize2, M
 import { Code } from '~/components/ui/code'
 import { Toggle } from '~/components/ui/toggle'
 import { PanelLoading } from '~/dashboard/panel-loading'
-import { type ApiExemplarResult, useTransformationExemplar } from '~/hooks/use-metrics'
+import { type ApiPreviewResult, useTransformationPreview } from '~/hooks/use-metrics'
 import { useServerIndex } from '~/hooks/use-server-context'
 import { useUrlParam } from '~/hooks/use-url-param'
 
@@ -129,13 +129,13 @@ function findFirstChildShape(node: TransformerExample): DataShape | null {
 type BatchInfo = { from: number; to: number; blocksCount: number; bytesSize?: number }
 
 type Snapshot = {
-  transformation: ApiExemplarResult
+  transformation: ApiPreviewResult
   batch?: BatchInfo
 }
 
 const MAX_SNAPSHOTS = 20
 
-function useExemplarHistory(current: ApiExemplarResult | undefined, batch: BatchInfo | undefined) {
+function useExemplarHistory(current: ApiPreviewResult | undefined, batch: BatchInfo | undefined) {
   const historyRef = useRef<Snapshot[]>([])
   const prevDataRef = useRef<string | undefined>(undefined)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
@@ -684,7 +684,7 @@ function FlowStageNode({
 export function TransformationExemplar({ pipeId }: { pipeId: string }) {
   const { serverIndex } = useServerIndex()
   const [expandAll, setExpandAll] = useState(false)
-  const { data, isLoading } = useTransformationExemplar({ serverIndex, pipeId })
+  const { data, isLoading } = useTransformationPreview({ serverIndex, pipeId })
 
   const [fullscreen, setFullscreen] = useUrlParam('fullscreen', false)
   const toggleFullscreen = () => setFullscreen(!fullscreen)

@@ -32,12 +32,12 @@ describe('TronQueryBuilder', () => {
   describe('addRequest', () => {
     it('registers every TRON request kind under its own key', () => {
       const builder = new TronQueryBuilder()
-        .addTransaction({ range: { from: 0 }, request: { type: ['TriggerSmartContract'], logs: true } })
-        .addTransferTransaction({ range: { from: 100, to: 200 }, request: { to: ['41abc'] } })
-        .addTransferAssetTransaction({ range: { from: 300 }, request: { asset: ['1002000'] } })
-        .addTriggerSmartContractTransaction({ range: { from: 400 }, request: { sighash: ['a9059cbb'] } })
-        .addLog({ range: { from: 500 }, request: { topic0: ['ddf252ad'] } })
-        .addInternalTransaction({ range: { from: 600 }, request: { caller: ['4111'] } })
+        .addTransactionRequest({ range: { from: 0 }, request: { type: ['TriggerSmartContract'], logs: true } })
+        .addTransferTransactionRequest({ range: { from: 100, to: 200 }, request: { to: ['41abc'] } })
+        .addTransferAssetTransactionRequest({ range: { from: 300 }, request: { asset: ['1002000'] } })
+        .addTriggerSmartContractTransactionRequest({ range: { from: 400 }, request: { sighash: ['a9059cbb'] } })
+        .addLogRequest({ range: { from: 500 }, request: { topic0: ['ddf252ad'] } })
+        .addInternalTransactionRequest({ range: { from: 600 }, request: { caller: ['4111'] } })
 
       expect(builder.getRequests()).toMatchInlineSnapshot(`
         [

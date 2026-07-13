@@ -28,10 +28,10 @@
       "import": "./dist/config/templates.js",
       "require": "./dist/config/templates.cjs"
     },
-    "./config/sinks": {
-      "types": "./dist/config/sinks.d.ts",
-      "import": "./dist/config/sinks.js",
-      "require": "./dist/config/sinks.cjs"
+    "./config/targets": {
+      "types": "./dist/config/targets.d.ts",
+      "import": "./dist/config/targets.js",
+      "require": "./dist/config/targets.cjs"
     },
     "./services/sqd-abi": {
       "types": "./dist/services/sqd-abi.d.ts",

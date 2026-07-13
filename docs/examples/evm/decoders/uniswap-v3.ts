@@ -1,5 +1,5 @@
 import { PortalRange } from '@subsquid/pipes'
-import { FactoryPersistentAdapter, contractFactory as createFactory, evmDecoder } from '@subsquid/pipes/evm'
+import { FactoryPersistentAdapter, contractFactory as createFactory, evmEventDecoder } from '@subsquid/pipes/evm'
 
 import { events as factoryAbi } from '../abi/uniswap.v3/factory'
 import { events as swapsAbi } from '../abi/uniswap.v3/swaps'
@@ -29,7 +29,7 @@ export function uniswapV3Decoder({
     database: Promise<FactoryPersistentAdapter<any>> | FactoryPersistentAdapter<any>
   }
 }) {
-  return evmDecoder({
+  return evmEventDecoder({
     profiler: { name: 'UniswapV3 decode' },
     range: range || { from: 'latest' },
     contracts: createFactory({

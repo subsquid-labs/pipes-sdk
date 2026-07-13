@@ -2,7 +2,7 @@ import { BigQuery } from '@google-cloud/bigquery'
 import { managedwriter } from '@google-cloud/bigquery-storage'
 
 import type { BatchContext, BlockCursor } from '~/core/index.js'
-import { createMockMetricServer, createTestLogger } from '~/testing/index.js'
+import { mockMetricsServer, testLogger } from '~/testing/index.js'
 
 import { type TrackedTable, partitioningWithDefaults } from './tables.js'
 
@@ -81,9 +81,9 @@ export function makeBatchContext(current: BlockCursor): BatchContext {
 
   return {
     id: 'integration-test',
-    logger: createTestLogger(),
+    logger: testLogger(),
     profiler: profilerStub,
-    metrics: createMockMetricServer().server.metrics,
+    metrics: mockMetricsServer().server.metrics,
     stream: {
       state: { current, rollbackChain: [current] },
       head: { finalized: undefined, latest: current },

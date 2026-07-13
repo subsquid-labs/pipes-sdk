@@ -4,12 +4,12 @@ import * as protobuf from 'protobufjs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { BatchContext, BlockCursor } from '~/core/index.js'
-import { createMockMetricServer, createTestLogger } from '~/testing/index.js'
+import { mockMetricsServer, testLogger } from '~/testing/index.js'
 
-import { BigQueryState } from './bigquery-state.js'
-import { BigQueryStore, type ProtoWriterFactory } from './bigquery-store.js'
+import { BigQuerySyncState } from './bigquery-state.js'
+import { BigQueryWriter, type ProtoWriterFactory } from './bigquery-store.js'
 import { bigqueryTarget } from './bigquery-target.js'
-import { BQ_ERR } from './errors.js'
+import { BIGQUERY_ERROR_CODES } from './errors.js'
 import type { TrackedTable } from './tables.js'
 
 /** Decode pre-encoded proto rows back to JSON for assertion-side inspection. */
@@ -151,7 +151,7 @@ function makeBatchContext(
   current: BlockCursor,
   rollbackChain: BlockCursor[] = [],
   initial = 0,
-  metrics?: ReturnType<typeof createMockMetricServer>,
+  metrics?: ReturnType<typeof mockMetricsServer>,
 ): BatchContext {
   const profilerStub: Record<string, unknown> = {
     start: () => profilerStub,
@@ -160,9 +160,9 @@ function makeBatchContext(
   }
   return {
     id: 'test-pipe',
-    logger: createTestLogger(),
+    logger: testLogger(),
     profiler: profilerStub,
-    metrics: (metrics ?? createMockMetricServer()).server.metrics,
+    metrics: (metrics ?? mockMetricsServer()).server.metrics,
     stream: {
       state: { current, rollbackChain, initial },
       head: { finalized: undefined, latest: current },
@@ -171,10 +171,10 @@ function makeBatchContext(
 }
 
 // -----------------------------------------------------------------------------
-// BigQueryStore — Pending pipeline (covers the SDK-mocked path)
+// BigQueryWriter — Pending pipeline (covers the SDK-mocked path)
 // -----------------------------------------------------------------------------
 
-describe('BigQueryStore — Committed stream pipeline', () => {
+describe('BigQueryWriter — Committed stream pipeline', () => {
   afterEach(() => vi.restoreAllMocks())
 
   it('reuses one long-lived proto Writer per table across batches (no per-batch churn)', async () => {
@@ -185,7 +185,7 @@ describe('BigQueryStore — Committed stream pipeline', () => {
     let writersClosed = 0
     const { writer } = makeWriter()
     const { bq } = makeBigQuery()
-    const store = new BigQueryStore(bq, writer, {
+    const store = new BigQueryWriter(bq, writer, {
       projectId: 'p',
       dataset: 'd',
       trackedTables: TABLES,
@@ -222,7 +222,7 @@ describe('BigQueryStore — Committed stream pipeline', () => {
     const appendCalls: { rowCount: number; offset: number | string | null | undefined }[] = []
     const { writer } = makeWriter()
     const { bq } = makeBigQuery()
-    const store = new BigQueryStore(bq, writer, {
+    const store = new BigQueryWriter(bq, writer, {
       projectId: 'p',
       dataset: 'd',
       trackedTables: TABLES,
@@ -252,7 +252,7 @@ describe('BigQueryStore — Committed stream pipeline', () => {
   it('opens one Committed stream per table on first write, reuses it for subsequent batches', async () => {
     const { writer, calls } = makeWriter()
     const { bq } = makeBigQuery()
-    const store = new BigQueryStore(bq, writer, {
+    const store = new BigQueryWriter(bq, writer, {
       projectId: 'p',
       dataset: 'd',
       trackedTables: TABLES,
@@ -277,7 +277,7 @@ describe('BigQueryStore — Committed stream pipeline', () => {
   it('opens a separate Committed stream per tracked table', async () => {
     const { writer, calls } = makeWriter()
     const { bq } = makeBigQuery()
-    const store = new BigQueryStore(bq, writer, {
+    const store = new BigQueryWriter(bq, writer, {
       projectId: 'p',
       dataset: 'd',
       trackedTables: TABLES,
@@ -309,7 +309,7 @@ describe('BigQueryStore — Committed stream pipeline', () => {
     }) as typeof writer.createWriteStream
 
     const { bq } = makeBigQuery()
-    const store = new BigQueryStore(bq, writer, {
+    const store = new BigQueryWriter(bq, writer, {
       projectId: 'p',
       dataset: 'd',
       trackedTables: TABLES,
@@ -327,7 +327,7 @@ describe('BigQueryStore — Committed stream pipeline', () => {
   it('commitBatch is a no-op when buffer is empty', async () => {
     const { writer, calls } = makeWriter()
     const { bq } = makeBigQuery()
-    const store = new BigQueryStore(bq, writer, {
+    const store = new BigQueryWriter(bq, writer, {
       projectId: 'p',
       dataset: 'd',
       trackedTables: TABLES,
@@ -341,7 +341,7 @@ describe('BigQueryStore — Committed stream pipeline', () => {
   it('commitSyncRow uses the sync table FQN and bypasses the allowlist', async () => {
     const { writer, calls } = makeWriter()
     const { bq } = makeBigQuery()
-    const store = new BigQueryStore(bq, writer, {
+    const store = new BigQueryWriter(bq, writer, {
       projectId: 'p',
       dataset: 'd',
       trackedTables: TABLES,
@@ -355,7 +355,7 @@ describe('BigQueryStore — Committed stream pipeline', () => {
   it('executeDml calls createQueryJob and parses numDmlAffectedRows', async () => {
     const { writer } = makeWriter()
     const { bq, dmlCalls } = makeBigQuery({ numDmlAffectedRows: '42' })
-    const store = new BigQueryStore(bq, writer, {
+    const store = new BigQueryWriter(bq, writer, {
       projectId: 'p',
       dataset: 'd',
       trackedTables: TABLES,
@@ -371,7 +371,7 @@ describe('BigQueryStore — Committed stream pipeline', () => {
   it('query passes params and returns rows from the BQ client', async () => {
     const { writer } = makeWriter()
     const { bq, queryCalls } = makeBigQuery({ queryRows: [{ a: 1 }, { a: 2 }] })
-    const store = new BigQueryStore(bq, writer, {
+    const store = new BigQueryWriter(bq, writer, {
       projectId: 'p',
       dataset: 'd',
       trackedTables: TABLES,
@@ -386,7 +386,7 @@ describe('BigQueryStore — Committed stream pipeline', () => {
   it('close() invokes WriterClient.close()', () => {
     const { writer, calls } = makeWriter()
     const { bq } = makeBigQuery()
-    const store = new BigQueryStore(bq, writer, {
+    const store = new BigQueryWriter(bq, writer, {
       projectId: 'p',
       dataset: 'd',
       trackedTables: TABLES,
@@ -424,7 +424,7 @@ describe('BigQueryStore — Committed stream pipeline', () => {
     }
 
     const { bq } = makeBigQuery()
-    const store = new BigQueryStore(bq, writerFake as unknown as managedwriter.WriterClient, {
+    const store = new BigQueryWriter(bq, writerFake as unknown as managedwriter.WriterClient, {
       projectId: 'p',
       dataset: 'd',
       trackedTables: TABLES,
@@ -473,8 +473,8 @@ describe('bigqueryTarget — write lifecycle', () => {
   afterEach(() => vi.restoreAllMocks())
 
   function buildTarget(opts?: {
-    onData?: (ctx: { store: BigQueryStore; data: unknown; ctx: unknown }) => void | Promise<void>
-    onStart?: (ctx: { store: BigQueryStore; logger: unknown }) => void | Promise<void>
+    onData?: (ctx: { store: BigQueryWriter; data: unknown; ctx: unknown }) => void | Promise<void>
+    onStart?: (ctx: { store: BigQueryWriter; logger: unknown }) => void | Promise<void>
     onBeforeRollback?: (ctx: { cursor: BlockCursor }) => void | Promise<void>
     onAfterRollback?: (ctx: { cursor: BlockCursor }) => void | Promise<void>
   }) {
@@ -507,14 +507,14 @@ describe('bigqueryTarget — write lifecycle', () => {
     async function* read() {
       // empty
     }
-    await target.write({ read: read as never, logger: createTestLogger() })
+    await target.write({ read: read as never, logger: testLogger() })
     expect(onStart).toHaveBeenCalledTimes(1)
   })
 
   it('validates / auto-creates each tracked table during onStart phase', async () => {
     const target = buildTarget()
     async function* read() {}
-    await target.write({ read: read as never, logger: createTestLogger() })
+    await target.write({ read: read as never, logger: testLogger() })
     // dataset().table() should have been called for each tracked table.
     expect(bqSetup.bq.dataset).toHaveBeenCalled()
   })
@@ -529,7 +529,7 @@ describe('bigqueryTarget — write lifecycle', () => {
       yield { data: { block_number: 10, tx_hash: '0xa' }, ctx: makeBatchContext(cursor(10)) }
     }
 
-    await target.write({ read: read as never, logger: createTestLogger() })
+    await target.write({ read: read as never, logger: testLogger() })
 
     // Committed streams: one CreateWriteStream per table per process, then long-lived. So a
     // single batch over one tracked table opens TWO streams: sync + events. The two sync
@@ -579,7 +579,7 @@ describe('bigqueryTarget — write lifecycle', () => {
         ctx: makeBatchContext(cursor(12_345_678), [], 12_345_678 /* initial */),
       }
     }
-    await target.write({ read: read as never, logger: createTestLogger() })
+    await target.write({ read: read as never, logger: testLogger() })
 
     const inFlightRow = syncRowsAppended[0] as { range_low: string | number; committed: boolean }
     expect(inFlightRow.committed).toBe(false)
@@ -600,7 +600,7 @@ describe('bigqueryTarget — write lifecycle', () => {
       yield { data: { block_number: 10 }, ctx: makeBatchContext(cursor(10)) }
     }
 
-    await target.write({ read: read as never, logger: createTestLogger() })
+    await target.write({ read: read as never, logger: testLogger() })
 
     // First create: sync (from saveCommitPre). Second: events (from commitBatch). The
     // post-commit sync row writes through the existing sync stream — no third create.
@@ -622,7 +622,7 @@ describe('bigqueryTarget — write lifecycle', () => {
     async function* read() {
       yield { data: {}, ctx: makeBatchContext(cursor(10)) }
     }
-    await expect(target.write({ read: read as never, logger: createTestLogger() })).rejects.toThrow(/user code blew up/)
+    await expect(target.write({ read: read as never, logger: testLogger() })).rejects.toThrow(/user code blew up/)
     expect(writerSetup.calls.close).toBe(0)
   })
 
@@ -651,7 +651,7 @@ describe('bigqueryTarget — write lifecycle', () => {
         onData: () => {},
       })
       async function* read() {}
-      await expect(target.write({ read: read as never, logger: createTestLogger() })).rejects.toThrow(/startup blew up/)
+      await expect(target.write({ read: read as never, logger: testLogger() })).rejects.toThrow(/startup blew up/)
       expect(closed).toBe(1) // writer closed despite startup throw
     } finally {
       Object.defineProperty(managedwriter, 'WriterClient', desc)
@@ -686,7 +686,7 @@ describe('bigqueryTarget — write lifecycle', () => {
         onData: () => {},
       })
       async function* read() {}
-      await target.write({ read: read as never, logger: createTestLogger() })
+      await target.write({ read: read as never, logger: testLogger() })
       expect(constructed).toBe(1)
       expect(closed).toBe(1)
     } finally {
@@ -718,7 +718,7 @@ describe('bigqueryTarget — commit metrics', () => {
   })
 
   function buildTarget(opts?: {
-    onData?: (ctx: { store: BigQueryStore; data: unknown; ctx: unknown }) => void | Promise<void>
+    onData?: (ctx: { store: BigQueryWriter; data: unknown; ctx: unknown }) => void | Promise<void>
     protoWriterFactory?: ProtoWriterFactory
   }) {
     return bigqueryTarget<unknown>({
@@ -737,7 +737,7 @@ describe('bigqueryTarget — commit metrics', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(1_700_000_005 * 1000))
 
-    const metrics = createMockMetricServer()
+    const metrics = mockMetricsServer()
     const target = buildTarget({
       onData: async ({ store, data }) => {
         store.insert('events', [data as Record<string, unknown>])
@@ -750,7 +750,7 @@ describe('bigqueryTarget — commit metrics', () => {
         ctx: makeBatchContext({ number: 10, hash: '0xa', timestamp: 1_700_000_000 }, [], 0, metrics),
       }
     }
-    await target.write({ read: read as never, logger: createTestLogger() })
+    await target.write({ read: read as never, logger: testLogger() })
 
     const histogram = metrics.histogram('sqd_bigquery_block_to_commit_lag_seconds')
     expect(histogram.observations).toEqual([5])
@@ -759,7 +759,7 @@ describe('bigqueryTarget — commit metrics', () => {
   it('skips block_to_commit_lag observation when cursor.timestamp is missing', async () => {
     // Cursor timestamp is optional — emitting `now − 0` would put a 50+ year lag into the
     // histogram and ruin the rate(...) bucket counts. Better to skip the observation.
-    const metrics = createMockMetricServer()
+    const metrics = mockMetricsServer()
     const target = buildTarget({
       onData: async ({ store, data }) => {
         store.insert('events', [data as Record<string, unknown>])
@@ -770,7 +770,7 @@ describe('bigqueryTarget — commit metrics', () => {
       // cursor() helper returns { number, hash } — no timestamp by design.
       yield { data: { block_number: 10, tx_hash: '0xa' }, ctx: makeBatchContext(cursor(10), [], 0, metrics) }
     }
-    await target.write({ read: read as never, logger: createTestLogger() })
+    await target.write({ read: read as never, logger: testLogger() })
 
     const histogram = metrics.histogram('sqd_bigquery_block_to_commit_lag_seconds')
     expect(histogram.observations).toEqual([])
@@ -779,7 +779,7 @@ describe('bigqueryTarget — commit metrics', () => {
   it('observes commit_duration once per batch', async () => {
     // Two batches → two observations on the same registered histogram. We don't pin values
     // (that's wallclock-dependent and brittle); we just assert count and non-negativity.
-    const metrics = createMockMetricServer()
+    const metrics = mockMetricsServer()
     const target = buildTarget({
       onData: async ({ store, data }) => {
         store.insert('events', [data as Record<string, unknown>])
@@ -790,7 +790,7 @@ describe('bigqueryTarget — commit metrics', () => {
       yield { data: { block_number: 10, tx_hash: '0xa' }, ctx: makeBatchContext(cursor(10), [], 0, metrics) }
       yield { data: { block_number: 11, tx_hash: '0xb' }, ctx: makeBatchContext(cursor(11), [], 0, metrics) }
     }
-    await target.write({ read: read as never, logger: createTestLogger() })
+    await target.write({ read: read as never, logger: testLogger() })
 
     const histogram = metrics.histogram('sqd_bigquery_commit_duration_seconds')
     expect(histogram.observations).toHaveLength(2)
@@ -803,7 +803,7 @@ describe('bigqueryTarget — commit metrics', () => {
     // Using doWithRetry's transient retry: code 8 is retried up to 8 times before bubbling —
     // we want a NON-transient code here so the failure surfaces immediately to the metric path.
     // Use code 3 (INVALID_ARGUMENT) which is non-retried and maps to "invalid_argument".
-    const metrics = createMockMetricServer()
+    const metrics = mockMetricsServer()
     const failingFactory: ProtoWriterFactory = () => ({
       appendRows: () => ({
         getResult: async () => {
@@ -828,7 +828,7 @@ describe('bigqueryTarget — commit metrics', () => {
         ctx: makeBatchContext({ number: 10, hash: '0xa', timestamp: 1_700_000_000 }, [], 0, metrics),
       }
     }
-    await expect(target.write({ read: read as never, logger: createTestLogger() })).rejects.toThrow(/schema mismatch/)
+    await expect(target.write({ read: read as never, logger: testLogger() })).rejects.toThrow(/schema mismatch/)
 
     const counter = metrics.counter('sqd_bigquery_append_errors_total')
     // Exactly one increment, labeled with the pipe id and the classified kind.
@@ -844,7 +844,7 @@ describe('bigqueryTarget — commit metrics', () => {
     // The metrics-server interface returns the same registered metric on duplicate names; we
     // also cache the handles in a closure variable so we don't re-resolve on every batch. Two
     // batches → exactly one registered histogram with two observations on it.
-    const metrics = createMockMetricServer()
+    const metrics = mockMetricsServer()
     const target = buildTarget({
       onData: async ({ store, data }) => {
         store.insert('events', [data as Record<string, unknown>])
@@ -861,7 +861,7 @@ describe('bigqueryTarget — commit metrics', () => {
         ctx: makeBatchContext({ number: 11, hash: '0xb', timestamp: 1_700_000_001 }, [], 0, metrics),
       }
     }
-    await target.write({ read: read as never, logger: createTestLogger() })
+    await target.write({ read: read as never, logger: testLogger() })
 
     const lag = metrics.histogram('sqd_bigquery_block_to_commit_lag_seconds')
     expect(lag.observations).toHaveLength(2)
@@ -877,7 +877,7 @@ describe('bigqueryTarget — commit metrics', () => {
     // Failing call 3 leaves the batch uncommitted from the recovery POV (next getCursor()
     // re-runs the bounded DELETE for the in-flight range). The success metrics MUST NOT
     // observe — otherwise the dashboard shows a happy commit lag for a batch that wasn't.
-    const metrics = createMockMetricServer()
+    const metrics = mockMetricsServer()
     let appendCalls = 0
     // Use a NON-transient code so doWithRetry doesn't retry past the failure — code 3
     // (INVALID_ARGUMENT) is fatal in `isTransientError`, so the first throw on call 3
@@ -910,9 +910,7 @@ describe('bigqueryTarget — commit metrics', () => {
         ctx: makeBatchContext({ number: 10, hash: '0xa', timestamp: 1_700_000_000 }, [], 0, metrics),
       }
     }
-    await expect(target.write({ read: read as never, logger: createTestLogger() })).rejects.toThrow(
-      /post-commit broke/,
-    )
+    await expect(target.write({ read: read as never, logger: testLogger() })).rejects.toThrow(/post-commit broke/)
 
     // Error counter increments — trackBqErrors classifies the post-commit gRPC failure.
     const counter = metrics.counter('sqd_bigquery_append_errors_total')
@@ -927,10 +925,10 @@ describe('bigqueryTarget — commit metrics', () => {
 })
 
 // -----------------------------------------------------------------------------
-// BigQueryState — crash recovery (the "no permanent corruption" keystone)
+// BigQuerySyncState — crash recovery (the "no permanent corruption" keystone)
 // -----------------------------------------------------------------------------
 
-describe('BigQueryState — crash recovery on getCursor', () => {
+describe('BigQuerySyncState — crash recovery on getCursor', () => {
   // The lifecycle paths above all seed `committed: true` rows. The recovery code path runs
   // when `committed: false` is the latest row — i.e. process crashed between IN_FLIGHT and
   // COMMITTED markers. This block exercises the three branches:
@@ -962,14 +960,14 @@ describe('BigQueryState — crash recovery on getCursor', () => {
         },
       ],
     })
-    const store = new BigQueryStore(bq, writer, {
+    const store = new BigQueryWriter(bq, writer, {
       projectId: 'p',
       dataset: 'd',
       trackedTables: TABLES,
       syncTable: { dataset: 'd', table: 'sync' },
       protoWriterFactory: fakeProtoWriterFactory,
     })
-    const state = new BigQueryState({
+    const state = new BigQuerySyncState({
       store,
       bigquery: bq,
       trackedTables: TABLES.map((t) => ({
@@ -992,7 +990,7 @@ describe('BigQueryState — crash recovery on getCursor', () => {
       cursorBlock: 99, // pre-batch cursor recorded in the IN_FLIGHT row
     })
 
-    const cur = await state.getCursor({ logger: createTestLogger() })
+    const cur = await state.getCursor({ logger: testLogger() })
 
     // Recovery DELETE fired for every tracked table over the in-flight range.
     expect(dmlCalls).toHaveLength(TABLES.length)
@@ -1016,7 +1014,7 @@ describe('BigQueryState — crash recovery on getCursor', () => {
       finalized: { number: 90, hash: '0x90' },
     })
 
-    const cur = await state.getCursor({ logger: createTestLogger() })
+    const cur = await state.getCursor({ logger: testLogger() })
 
     // The recovery branch returns the same TargetState shape as the committed branch, including
     // the persisted finalized head so the source can re-seed its watermark after the crash.
@@ -1033,7 +1031,7 @@ describe('BigQueryState — crash recovery on getCursor', () => {
       cursorBlock: 50, // safe cursor from the original fork
     })
 
-    const cur = await state.getCursor({ logger: createTestLogger() })
+    const cur = await state.getCursor({ logger: testLogger() })
 
     expect(dmlCalls).toHaveLength(TABLES.length)
     for (const call of dmlCalls) {
@@ -1050,11 +1048,11 @@ describe('BigQueryState — crash recovery on getCursor', () => {
       range_high: null,
     })
 
-    await expect(state.getCursor({ logger: createTestLogger() })).rejects.toThrow(
+    await expect(state.getCursor({ logger: testLogger() })).rejects.toThrow(
       /sync row in commit IN_FLIGHT state has NULL range_low\/range_high/,
     )
-    await expect(state.getCursor({ logger: createTestLogger() })).rejects.toMatchObject({
-      code: BQ_ERR.CORRUPT_INFLIGHT_ROW,
+    await expect(state.getCursor({ logger: testLogger() })).rejects.toMatchObject({
+      code: BIGQUERY_ERROR_CODES.CORRUPT_INFLIGHT_ROW,
     })
   })
 })
@@ -1084,7 +1082,7 @@ describe('bigqueryTarget — fork lifecycle', () => {
     })
 
     // No prior sync rows → fork can't resolve a safe cursor.
-    const result = await target.fork!([cursor(5, 'BAD')])
+    const result = await target.resolveFork!([cursor(5, 'BAD')])
     expect(result).toBeNull()
   })
 
@@ -1120,7 +1118,7 @@ describe('bigqueryTarget — fork lifecycle', () => {
         syncStreamOpenedAtHookEntry = writerSetup.calls.createWriteStream.some((p) => p.endsWith('/sync'))
       },
     })
-    await target.fork!([cursor(10, '0x10'), cursor(11, 'BAD11')])
+    await target.resolveFork!([cursor(10, '0x10'), cursor(11, 'BAD11')])
     expect(syncStreamOpenedAtHookEntry).toBe(true) // IN_FLIGHT_ROLLBACK already written when hook fires
   })
 
@@ -1158,7 +1156,7 @@ describe('bigqueryTarget — fork lifecycle', () => {
       },
     })
 
-    const result = await target.fork!([cursor(10, '0x10'), cursor(11, 'BAD11')])
+    const result = await target.resolveFork!([cursor(10, '0x10'), cursor(11, 'BAD11')])
     expect(result?.hash).toBe('0x10')
 
     // The DELETE-then-mark cycle ran:
@@ -1183,7 +1181,7 @@ describe('bigqueryTarget — fork lifecycle', () => {
       onAfterRollback,
     })
 
-    await target.fork!([cursor(5, 'BAD')])
+    await target.resolveFork!([cursor(5, 'BAD')])
     expect(onAfterRollback).not.toHaveBeenCalled()
   })
 
@@ -1247,7 +1245,7 @@ describe('bigqueryTarget — fork lifecycle', () => {
 
     // The new canonical chain diverges from ours above block 5 (hashes 0xB6..0xB10), so the fork
     // resolves the safe cursor to block 5.
-    const previousBlocks = [
+    const canonicalBlocks = [
       cursor(5, '0x5'),
       cursor(6, '0xB6'),
       cursor(7, '0xB7'),
@@ -1258,7 +1256,7 @@ describe('bigqueryTarget — fork lifecycle', () => {
 
     async function* read() {
       // The reorg fires while write()'s for-await is suspended, before the first reprocessed batch.
-      const safe = await target.fork!(previousBlocks)
+      const safe = await target.resolveFork!(canonicalBlocks)
       expect(safe?.number).toBe(5) // fork resolved to S=5
 
       // First reprocessed batch on the new chain, ending at block 7 (S=5 < 7 <= P=10).
@@ -1268,7 +1266,7 @@ describe('bigqueryTarget — fork lifecycle', () => {
       }
     }
 
-    await target.write({ read: read as never, logger: createTestLogger() })
+    await target.write({ read: read as never, logger: testLogger() })
 
     // Among the sync rows (fork's rollback pair, then the batch's commit pair), the first
     // op='commit' row is the reprocessed batch's IN_FLIGHT_COMMIT (pre-commit) row.

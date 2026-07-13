@@ -7,9 +7,6 @@ import { Terminal } from 'lucide-react'
 // @ts-ignore
 import { Sparklines, SparklinesLine } from 'react-sparklines'
 
-import { PipeStatus, useStats } from '~/hooks/use-metrics'
-import { useServerIndex } from '~/hooks/use-server-context'
-import { useUrlParam } from '~/hooks/use-url-param'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { humanBytes } from '~/dashboard/formatters'
@@ -17,6 +14,9 @@ import { PipelineDisconnected } from '~/dashboard/pipeline-disconnected'
 import { Profiler } from '~/dashboard/profiler'
 import { QueryExemplar } from '~/dashboard/query-exemplar'
 import { TransformationExemplar } from '~/dashboard/transformation-exemplar'
+import { PipeStatus, useStats } from '~/hooks/use-metrics'
+import { useServerIndex } from '~/hooks/use-server-context'
+import { useUrlParam } from '~/hooks/use-url-param'
 
 const sparklineStyle = { fill: '#d0a9e2' }
 const sparklineColor = 'rgb(170, 140, 235)'
@@ -88,11 +88,7 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
           <div>{pipe.progress.percent.toFixed(2)}%</div>
         </div>
 
-        <Tabs
-          className="mt-4 mb-6"
-          value={tab}
-          onValueChange={setTab}
-        >
+        <Tabs className="mt-4 mb-6" value={tab} onValueChange={setTab}>
           <TabsList className="bg-gray-950">
             <TabsTrigger className="" value="profiler">
               Profiler

@@ -7,15 +7,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { createTarget } from '~/core/index.js'
 import { evmPortalStream } from '~/evm/index.js'
-import {
-  type MockPortal,
-  type MockResponse,
-  blockDecoder,
-  createMockPortal,
-  createTestLogger,
-} from '~/testing/index.js'
+import { type MockPortal, type MockResponse, blockDecoder, mockPortal, testLogger } from '~/testing/index.js'
 
-import { PQ_ERR, ParquetTargetError } from './errors.js'
+import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { ParquetState } from './parquet-state.js'
 import { ParquetStore } from './parquet-store.js'
 import { parquetTarget } from './parquet-target.js'
@@ -128,7 +122,7 @@ async function seedParquetFile(filePath: string, rows: BlockRow[]): Promise<void
 // ---------------------------------------------------------------------------------------------
 
 describe('parquetTarget', () => {
-  let mockPortal: MockPortal | undefined
+  let portal: MockPortal | undefined
   let dir: string
 
   beforeEach(async () => {
@@ -136,8 +130,8 @@ describe('parquetTarget', () => {
   })
 
   afterEach(async () => {
-    await mockPortal?.close()
-    mockPortal = undefined
+    await portal?.close()
+    portal = undefined
     await rm(dir, { recursive: true, force: true })
   })
 
@@ -146,11 +140,11 @@ describe('parquetTarget', () => {
       // Disable the dev-mode value check so the always-on block guard is what trips.
       const prev = process.env.NODE_ENV
       process.env.NODE_ENV = 'production'
-      mockPortal = await createMockPortal([blocksResponse([1], 1)])
+      portal = await mockPortal([blocksResponse([1], 1)])
 
       try {
         await expect(
-          evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 1 }) }).pipeTo(
+          evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 1 }) }).pipeTo(
             parquetTarget({
               dir,
               tables: [BLOCKS_TABLE],
@@ -172,9 +166,9 @@ describe('parquetTarget', () => {
 
   describe('finalized-only', () => {
     it('does not write blocks above the finalized head', async () => {
-      mockPortal = await createMockPortal([blocksResponse([1, 2, 3, 4, 5], 2)])
+      portal = await mockPortal([blocksResponse([1, 2, 3, 4, 5], 2)])
 
-      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 5 }) }).pipeTo(
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 5 }) }).pipeTo(
         parquetTarget({ dir, tables: [BLOCKS_TABLE], onData: insertBlocks }),
       )
 
@@ -183,13 +177,13 @@ describe('parquetTarget', () => {
     })
 
     it('publishes previously-unfinalized blocks once a later batch finalizes them', async () => {
-      mockPortal = await createMockPortal([blocksResponse([1, 2, 3, 4, 5], 2), blocksResponse([6, 7], 7)])
+      portal = await mockPortal([blocksResponse([1, 2, 3, 4, 5], 2), blocksResponse([6, 7], 7)])
 
       // maxBytes:1 keeps the two responses as distinct batches so the second batch's higher
       // finalized head genuinely releases what the first batch left buffered.
       await evmPortalStream({
         id: 'test',
-        portal: { url: mockPortal.url, maxBytes: 1 },
+        portal: { url: portal.url, maxBytes: 1 },
         outputs: blockDecoder({ from: 0, to: 7 }),
       }).pipeTo(parquetTarget({ dir, tables: [BLOCKS_TABLE], onData: insertBlocks }))
 
@@ -200,9 +194,9 @@ describe('parquetTarget', () => {
 
   describe('read-back correctness', () => {
     it('writes exactly the finalized rows with correct types and <min>-<max> filename', async () => {
-      mockPortal = await createMockPortal([blocksResponse([1, 2, 3], 3)])
+      portal = await mockPortal([blocksResponse([1, 2, 3], 3)])
 
-      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 3 }) }).pipeTo(
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 3 }) }).pipeTo(
         parquetTarget({ dir, tables: [BLOCKS_TABLE], onData: insertBlocks }),
       )
 
@@ -215,9 +209,9 @@ describe('parquetTarget', () => {
     })
 
     it('reads INT64 columns back as bigint (input contract)', async () => {
-      mockPortal = await createMockPortal([blocksResponse([1], 1)])
+      portal = await mockPortal([blocksResponse([1], 1)])
 
-      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 1 }) }).pipeTo(
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 1 }) }).pipeTo(
         parquetTarget({ dir, tables: [BLOCKS_TABLE], onData: insertBlocks }),
       )
 
@@ -249,8 +243,8 @@ describe('parquetTarget', () => {
       }
       const at = new Date('2024-01-01T15:30:45.123Z')
 
-      mockPortal = await createMockPortal([blocksResponse([1, 2], 2)])
-      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 2 }) }).pipeTo(
+      portal = await mockPortal([blocksResponse([1, 2], 2)])
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 2 }) }).pipeTo(
         parquetTarget({
           dir,
           tables: [kitchenSink],
@@ -324,11 +318,11 @@ describe('parquetTarget', () => {
 
   describe('rotation', () => {
     it('rotates into multiple files with disjoint, contiguous ranges under a small maxBytes', async () => {
-      mockPortal = await createMockPortal([blocksResponse([1], 1), blocksResponse([2], 2), blocksResponse([3], 3)])
+      portal = await mockPortal([blocksResponse([1], 1), blocksResponse([2], 2), blocksResponse([3], 3)])
 
       await evmPortalStream({
         id: 'test',
-        portal: { url: mockPortal.url, maxBytes: 1 },
+        portal: { url: portal.url, maxBytes: 1 },
         outputs: blockDecoder({ from: 0, to: 3 }),
       }).pipeTo(
         parquetTarget({
@@ -363,7 +357,7 @@ describe('parquetTarget', () => {
       ])
       await writeFile(path.join(blocksDir, '.tmp-orphan.parquet'), 'garbage')
 
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           ...blocksResponse([3, 4, 5], 5),
           validateRequest: (req) => {
@@ -372,7 +366,7 @@ describe('parquetTarget', () => {
         },
       ])
 
-      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 5 }) }).pipeTo(
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 5 }) }).pipeTo(
         parquetTarget({ dir, tables: [BLOCKS_TABLE], onData: insertBlocks }),
       )
 
@@ -389,9 +383,9 @@ describe('parquetTarget', () => {
 
   describe('finalized watermark (persist + restart)', () => {
     it('persists the source-clamped finalized head through the loop at checkpoint', async () => {
-      mockPortal = await createMockPortal([blocksResponse([1, 2, 3], 3)])
+      portal = await mockPortal([blocksResponse([1, 2, 3], 3)])
 
-      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 3 }) }).pipeTo(
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 3 }) }).pipeTo(
         parquetTarget({ dir, tables: [BLOCKS_TABLE], onData: insertBlocks }),
       )
 
@@ -404,18 +398,18 @@ describe('parquetTarget', () => {
 
     it('re-seeds the watermark from a real persisted finalized head and clamps a regression below it', async () => {
       // A real ParquetState persists a finalized head of 5, exactly as the target loop would.
-      const persistState = new ParquetState({ dir, tables: ['blocks'], logger: createTestLogger() })
+      const persistState = new ParquetState({ dir, tables: ['blocks'], logger: testLogger() })
       await persistState.getCursor()
       await persistState.saveCursor({ number: 5, hash: '0x5' }, { number: 5, hash: '0x5f' })
 
       // Restart: a real getCursor hands that finalized head back as resume state.
-      const resume = await new ParquetState({ dir, tables: ['blocks'], logger: createTestLogger() }).getCursor()
+      const resume = await new ParquetState({ dir, tables: ['blocks'], logger: testLogger() }).getCursor()
       expect(resume).toEqual({ latest: { number: 5, hash: '0x5' }, finalized: { number: 5, hash: '0x5f' } })
 
       // The source seeds its floor from the persisted finalized and clamps a lower reported head.
-      mockPortal = await createMockPortal([blocksResponse([6], 3)])
+      portal = await mockPortal([blocksResponse([6], 3)])
       const seen: unknown[] = []
-      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 6 }) }).pipeTo(
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 6 }) }).pipeTo(
         createTarget({
           write: async ({ read }) => {
             for await (const { ctx } of read(resume)) {
@@ -432,7 +426,7 @@ describe('parquetTarget', () => {
 
   describe('fork', () => {
     it('drops buffered forked rows and leaves the pre-fork published file intact', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         blocksResponse([1, 2, 3, 4, 5], 1),
         {
           statusCode: 409,
@@ -460,7 +454,7 @@ describe('parquetTarget', () => {
         },
       ])
 
-      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 7 }) }).pipeTo(
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 7 }) }).pipeTo(
         parquetTarget({
           dir,
           tables: [BLOCKS_TABLE],
@@ -493,7 +487,7 @@ describe('parquetTarget', () => {
           address: { type: 'UTF8' },
         },
       }
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         blocksResponse([1, 2, 3, 4, 5], 1),
         {
           statusCode: 409,
@@ -518,7 +512,7 @@ describe('parquetTarget', () => {
         },
       ])
 
-      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 7 }) }).pipeTo(
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 7 }) }).pipeTo(
         parquetTarget({
           dir,
           tables: [BLOCKS_TABLE, logsTable],
@@ -552,9 +546,9 @@ describe('parquetTarget', () => {
   describe('empty table', () => {
     it('produces no file for a declared table that receives no rows', async () => {
       const emptyTable: ParquetTable = { table: 'empty', schema: { blockNumber: { type: 'INT64' } } }
-      mockPortal = await createMockPortal([blocksResponse([1, 2, 3], 3)])
+      portal = await mockPortal([blocksResponse([1, 2, 3], 3)])
 
-      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 3 }) }).pipeTo(
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 3 }) }).pipeTo(
         parquetTarget({ dir, tables: [BLOCKS_TABLE, emptyTable], onData: insertBlocks }),
       )
 
@@ -567,9 +561,9 @@ describe('parquetTarget', () => {
   describe('no-finality passthrough', () => {
     it('writes every row immediately when there is no finalized head', async () => {
       // No `head` → no finalized head → threshold Infinity → nothing is buffered.
-      mockPortal = await createMockPortal([blocksResponse([1, 2, 3])])
+      portal = await mockPortal([blocksResponse([1, 2, 3])])
 
-      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 3 }) }).pipeTo(
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 3 }) }).pipeTo(
         parquetTarget({ dir, tables: [BLOCKS_TABLE], onData: insertBlocks }),
       )
 
@@ -587,9 +581,9 @@ describe('parquetTarget', () => {
           address: { type: 'UTF8' },
         },
       }
-      mockPortal = await createMockPortal([blocksResponse([1, 2, 3], 3)])
+      portal = await mockPortal([blocksResponse([1, 2, 3], 3)])
 
-      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 3 }) }).pipeTo(
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 3 }) }).pipeTo(
         parquetTarget({
           dir,
           tables: [BLOCKS_TABLE, logsTable],
@@ -627,10 +621,10 @@ describe('parquetTarget', () => {
 
   describe('store.insert guard', () => {
     it('throws synchronously when inserting into an undeclared table', async () => {
-      mockPortal = await createMockPortal([blocksResponse([1], 1)])
+      portal = await mockPortal([blocksResponse([1], 1)])
 
       await expect(
-        evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 1 }) }).pipeTo(
+        evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 1 }) }).pipeTo(
           parquetTarget({
             dir,
             tables: [BLOCKS_TABLE],
@@ -643,9 +637,9 @@ describe('parquetTarget', () => {
     })
 
     it('accumulates multiple inserts into the same table within a batch', async () => {
-      mockPortal = await createMockPortal([blocksResponse([1, 2], 2)])
+      portal = await mockPortal([blocksResponse([1, 2], 2)])
 
-      await evmPortalStream({ id: 'test', portal: mockPortal.url, outputs: blockDecoder({ from: 0, to: 2 }) }).pipeTo(
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 2 }) }).pipeTo(
         parquetTarget({
           dir,
           tables: [BLOCKS_TABLE],
@@ -667,13 +661,13 @@ describe('parquetTarget', () => {
       // Batch 1 opens a writer with a finalized row (no checkpoint — huge default maxBytes);
       // batch 2 throws before any checkpoint, so the open temp file must be discarded and the
       // cursor must never be persisted. maxBytes:1 forces one batch per response.
-      mockPortal = await createMockPortal([blocksResponse([1], 1), blocksResponse([2], 2)])
+      portal = await mockPortal([blocksResponse([1], 1), blocksResponse([2], 2)])
 
       let batches = 0
       await expect(
         evmPortalStream({
           id: 'test',
-          portal: { url: mockPortal.url, maxBytes: 1 },
+          portal: { url: portal.url, maxBytes: 1 },
           outputs: blockDecoder({ from: 0, to: 2 }),
         }).pipeTo(
           parquetTarget({
@@ -767,13 +761,13 @@ describe('parquetTarget', () => {
   describe('ParquetState', () => {
     it('throws STATE_CORRUPT on an unparseable state file', async () => {
       await writeFile(path.join(dir, '_sqd_parquet_state.json'), 'not-json')
-      const state = new ParquetState({ dir, tables: ['blocks'], logger: createTestLogger() })
+      const state = new ParquetState({ dir, tables: ['blocks'], logger: testLogger() })
 
       await expect(state.getCursor()).rejects.toThrowError(/could not be parsed/)
     })
 
     it('returns undefined on a cold start and creates table directories', async () => {
-      const state = new ParquetState({ dir, tables: ['blocks'], logger: createTestLogger() })
+      const state = new ParquetState({ dir, tables: ['blocks'], logger: testLogger() })
 
       expect(await state.getCursor()).toBeUndefined()
       expect(await listAll(dir, 'blocks')).toEqual([])
@@ -784,7 +778,7 @@ describe('parquetTarget', () => {
         path.join(dir, '_sqd_parquet_state.json'),
         JSON.stringify({ cursor: { number: 5, hash: '0x5' }, finalized: { number: 5, hash: '0x5f' } }),
       )
-      const state = new ParquetState({ dir, tables: ['blocks'], logger: createTestLogger() })
+      const state = new ParquetState({ dir, tables: ['blocks'], logger: testLogger() })
 
       expect(await state.getCursor()).toEqual({
         latest: { number: 5, hash: '0x5' },
@@ -794,13 +788,13 @@ describe('parquetTarget', () => {
 
     it('returns finalized: null for state written before the finalized field existed', async () => {
       await writeFile(path.join(dir, '_sqd_parquet_state.json'), JSON.stringify({ cursor: { number: 5, hash: '0x5' } }))
-      const state = new ParquetState({ dir, tables: ['blocks'], logger: createTestLogger() })
+      const state = new ParquetState({ dir, tables: ['blocks'], logger: testLogger() })
 
       expect(await state.getCursor()).toEqual({ latest: { number: 5, hash: '0x5' }, finalized: null })
     })
 
     it('persists the finalized head alongside the cursor so the source can re-seed on restart', async () => {
-      const state = new ParquetState({ dir, tables: ['blocks'], logger: createTestLogger() })
+      const state = new ParquetState({ dir, tables: ['blocks'], logger: testLogger() })
       await state.getCursor()
 
       await state.saveCursor({ number: 7, hash: '0x7' }, { number: 7, hash: '0x7f' })
@@ -817,13 +811,13 @@ describe('parquetTarget', () => {
       // A *directory* named like a data file cannot be unlink()-ed (EISDIR/EPERM, even as root),
       // forcing the recovery delete to fail; it must surface rather than leave a duplicate-causing file.
       await mkdir(path.join(dir, 'blocks', '000000000003-000000000005.parquet'), { recursive: true })
-      const state = new ParquetState({ dir, tables: ['blocks'], logger: createTestLogger() })
+      const state = new ParquetState({ dir, tables: ['blocks'], logger: testLogger() })
 
       expect.assertions(1)
       try {
         await state.getCursor()
       } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.RECOVERY_DELETE_FAILED)
+        expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.RECOVERY_DELETE_FAILED)
       }
     })
   })
@@ -835,6 +829,6 @@ describe('parquet index barrel', () => {
     expect(typeof mod.parquetTarget).toBe('function')
     expect(typeof mod.ParquetStore).toBe('function')
     expect(typeof mod.ParquetTargetError).toBe('function')
-    expect(mod.PQ_ERR.NO_TABLES).toBe('E1201')
+    expect(mod.PARQUET_ERROR_CODES.NO_TABLES).toBe('E1201')
   })
 })

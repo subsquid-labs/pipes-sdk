@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PortalBatch } from '~/core/index.js'
 import { evmPortalStream } from '~/evm/index.js'
 import { portalSqliteCache } from '~/portal-cache/node/node-sqlite-cache-adapter.js'
-import { MockPortal, blockDecoder, createMockPortal } from '~/testing/index.js'
+import { MockPortal, blockDecoder, mockPortal } from '~/testing/index.js'
 
 // Transform batch to only include data and meta without any functions or complex objects
 const transformBatch = ({
@@ -53,10 +53,10 @@ export async function readAllChunks<T>(stream: AsyncIterable<T>) {
 const DB_PATH = './test.db'
 
 describe('Portal cache', () => {
-  let mockPortal: MockPortal
+  let portal: MockPortal
 
   afterEach(async () => {
-    await mockPortal?.close()
+    await portal?.close()
   })
 
   beforeEach(async () => {
@@ -65,7 +65,7 @@ describe('Portal cache', () => {
 
   describe('Sqlite adapter', () => {
     it('should store requests and get the same result on second pass', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [
@@ -86,7 +86,7 @@ describe('Portal cache', () => {
 
       const stream = evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
         cache,
       })
@@ -183,7 +183,7 @@ describe('Portal cache', () => {
     })
 
     it('should not reuse data that has from greater than request', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [
@@ -218,7 +218,7 @@ describe('Portal cache', () => {
 
       const stream = evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 6, to: 10 }),
         cache,
       })
@@ -228,7 +228,7 @@ describe('Portal cache', () => {
       // now request from 0 to 5, should not reuse data from 6 to 10
       const stream2 = evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
         cache,
       })
@@ -319,7 +319,7 @@ describe('Portal cache', () => {
     })
 
     it('should support block gaps and exclude latest blocks', async () => {
-      mockPortal = await createMockPortal([
+      portal = await mockPortal([
         {
           statusCode: 200,
           data: [
@@ -352,7 +352,7 @@ describe('Portal cache', () => {
 
       const stream = evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
+        portal: portal.url,
         outputs: blockDecoder({ from: 0, to: 5 }),
         cache,
       })

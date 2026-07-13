@@ -1,10 +1,10 @@
 import { promisify } from 'node:util'
 import zlib from 'node:zlib'
 
-import { BlockCursor, cursorFromHeader, Logger, PortalCache } from '~/core/index.js'
+import { BlockCursor, Logger, PortalCache, cursorFromHeader } from '~/core/index.js'
 import { hashQuery } from '~/core/query-builder.js'
 import { last } from '~/internal/array.js'
-import { GetBlock, PortalClient, PortalStream, StreamData, Query } from '~/portal-client/index.js'
+import { GetBlock, PortalBlockStream, PortalClient, Query, StreamData } from '~/portal-client/index.js'
 
 // @ts-ignore
 const compressAsync = promisify('zstdCompress' in zlib ? (zlib.zstdCompress as any) : zlib.gzip)
@@ -68,7 +68,7 @@ export abstract class PortalCacheNodeJs<ImplOptions> implements PortalCache {
     portal: PortalClient
     query: Query
     logger: Logger
-  }): PortalStream<GetBlock<Q>> {
+  }): PortalBlockStream<GetBlock<Q>> {
     const queryHash = await hashQuery(query)
 
     await this.ensureInitialized()

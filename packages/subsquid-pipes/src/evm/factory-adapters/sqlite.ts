@@ -157,9 +157,9 @@ class SqliteFactoryAdapter<T extends EventArgs> implements FactoryPersistentAdap
   }
 }
 
-export async function contractFactoryStore<T extends EventArgs>(options: SqliteOptions) {
+export async function contractFactorySqliteStore<T extends EventArgs>(options: SqliteOptions) {
   return new SqliteFactoryAdapter<T>(await loadSqlite(options), options)
 }
 
-/** @deprecated Use {@link contractFactoryStore} instead. */
-export const factorySqliteDatabase = contractFactoryStore
+/** @deprecated Use {@link contractFactorySqliteStore} instead. */
+export const factorySqliteDatabase = contractFactorySqliteStore

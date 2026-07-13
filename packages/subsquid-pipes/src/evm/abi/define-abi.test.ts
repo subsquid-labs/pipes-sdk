@@ -2,9 +2,9 @@ import { event, indexed } from '@subsquid/evm-abi'
 import * as p from '@subsquid/evm-codec'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from 'vitest'
 
-import { MockPortal, MockResponse, createMockPortal, readAll } from '~/testing/index.js'
+import { MockPortal, MockResponse, mockPortal, readAll } from '~/testing/index.js'
 
-import { evmDecoder } from '../evm-decoder.js'
+import { evmEventDecoder } from '../evm-decoder.js'
 import { evmPortalStream } from '../evm-portal-source.js'
 import { commonAbis } from './common.js'
 import { defineAbi } from './define-abi.js'
@@ -691,12 +691,12 @@ describe('defineAbi', () => {
     })
   })
 
-  describe('compatibility with evmDecoder', () => {
-    it('should produce events compatible with evmDecoder indexed param types', () => {
+  describe('compatibility with evmEventDecoder', () => {
+    it('should produce events compatible with evmEventDecoder indexed param types', () => {
       const abi = defineAbi(erc20JsonAbi)
 
       // The params property of the event should have the `indexed: true` marker
-      // This is needed for evmDecoder to know which params can be filtered
+      // This is needed for evmEventDecoder to know which params can be filtered
       const transferParams = abi.events.Transfer.params as Record<string, { indexed?: boolean }>
 
       expect(transferParams['from'].indexed).toBe(true)
@@ -704,10 +704,10 @@ describe('defineAbi', () => {
       expect(transferParams['value'].indexed).toBeUndefined()
     })
 
-    it('should be usable in evmDecoder config shape', () => {
+    it('should be usable in evmEventDecoder config shape', () => {
       const abi = defineAbi(erc20JsonAbi)
 
-      // This simulates what evmDecoder does internally
+      // This simulates what evmEventDecoder does internally
       const event = abi.events.Transfer
       expect(event.topic).toBeDefined()
       expect(typeof event.decode).toBe('function')
@@ -715,8 +715,8 @@ describe('defineAbi', () => {
     })
   })
 
-  describe('end-to-end with evmDecoder + evmPortalStream', () => {
-    let mockPortal: MockPortal
+  describe('end-to-end with evmEventDecoder + evmPortalStream', () => {
+    let portal: MockPortal
 
     const PORTAL_MOCK_RESPONSE: MockResponse[] = [
       {
@@ -756,20 +756,20 @@ describe('defineAbi', () => {
     ]
 
     beforeEach(async () => {
-      mockPortal = await createMockPortal(PORTAL_MOCK_RESPONSE)
+      portal = await mockPortal(PORTAL_MOCK_RESPONSE)
     })
 
     afterEach(async () => {
-      await mockPortal?.close()
+      await portal?.close()
     })
 
-    it('should decode events through evmDecoder with defineAbi events', async () => {
+    it('should decode events through evmEventDecoder with defineAbi events', async () => {
       const abi = defineAbi(erc20JsonAbi)
 
       const stream = evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
-        outputs: evmDecoder({
+        portal: portal.url,
+        outputs: evmEventDecoder({
           range: { from: 0, to: 1 },
           events: {
             transfers: abi.events.Transfer,
@@ -811,13 +811,13 @@ describe('defineAbi', () => {
       `)
     })
 
-    it('should decode mixed events (defineAbi + generated) through evmDecoder', async () => {
+    it('should decode mixed events (defineAbi + generated) through evmEventDecoder', async () => {
       const abi = defineAbi(erc20JsonAbi)
 
       const stream = evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
-        outputs: evmDecoder({
+        portal: portal.url,
+        outputs: evmEventDecoder({
           range: { from: 0, to: 1 },
           events: {
             transfers: abi.events.Transfer,
@@ -891,8 +891,8 @@ describe('defineAbi', () => {
 
       const stream = evmPortalStream({
         id: 'test',
-        portal: mockPortal.url,
-        outputs: evmDecoder({
+        portal: portal.url,
+        outputs: evmEventDecoder({
           range: { from: 0, to: 1 },
           events: {
             transfers: {
@@ -943,11 +943,11 @@ describe('defineAbi', () => {
       const abi = defineAbi(erc20JsonAbi)
 
       // Run with defineAbi events
-      const mockPortal1 = await createMockPortal(PORTAL_MOCK_RESPONSE)
+      const mockPortal1 = await mockPortal(PORTAL_MOCK_RESPONSE)
       const stream1 = evmPortalStream({
         id: 'test',
         portal: mockPortal1.url,
-        outputs: evmDecoder({
+        outputs: evmEventDecoder({
           range: { from: 0, to: 1 },
           events: {
             transfers: abi.events.Transfer,
@@ -959,11 +959,11 @@ describe('defineAbi', () => {
       await mockPortal1?.close()
 
       // Run with generated code events
-      const mockPortal2 = await createMockPortal(PORTAL_MOCK_RESPONSE)
+      const mockPortal2 = await mockPortal(PORTAL_MOCK_RESPONSE)
       const stream2 = evmPortalStream({
         id: 'test',
         portal: mockPortal2.url,
-        outputs: evmDecoder({
+        outputs: evmEventDecoder({
           range: { from: 0, to: 1 },
           events: {
             transfers: commonAbis.erc20.events.Transfer,

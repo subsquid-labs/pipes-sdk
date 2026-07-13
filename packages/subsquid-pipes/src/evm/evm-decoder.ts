@@ -1,7 +1,14 @@
 import type { AbiEvent, EventParams } from '@subsquid/evm-abi'
 import { Codec, Sink } from '@subsquid/evm-codec'
 
-import { BatchContext, PortalRange, ProfilerOptions, Transformer, formatWarning, parsePortalRange } from '~/core/index.js'
+import {
+  BatchContext,
+  PortalRange,
+  ProfilerOptions,
+  Transformer,
+  formatWarning,
+  parsePortalRange,
+} from '~/core/index.js'
 import { arrayify, findDuplicates } from '~/internal/array.js'
 import { Log, LogRequest } from '~/portal-client/query/evm.js'
 
@@ -61,12 +68,8 @@ export type IndexedKeys<T> = {
   [K in keyof T]: T[K] extends { indexed: true } ? K : never
 }[keyof T]
 
-type CodecValueType<T extends AbiEvent<any>, K extends keyof T['params']> = T['params'][K] extends Codec<
-  any,
-  infer TOut
->
-  ? TOut
-  : never
+type CodecValueType<T extends AbiEvent<any>, K extends keyof T['params']> =
+  T['params'][K] extends Codec<any, infer TOut> ? TOut : never
 
 export type IndexedParamsInput<T extends AbiEvent<any>> = Partial<{
   [K in IndexedKeys<T['params']>]: CodecValueType<T, K> | CodecValueType<T, K>[]
@@ -297,7 +300,7 @@ function getDuplicateEvents<T extends Events>(events: T, duplicates: string[]) {
  *
  * @example
  * ```ts
- * evmDecoder({
+ * evmEventDecoder({
  *   range: { from: 'latest' },
  *   events: {
  *     // Use the AbiEvent instance directly for convenience if you need all the emitted events
@@ -316,7 +319,7 @@ function getDuplicateEvents<T extends Events>(events: T, duplicates: string[]) {
  * })
  * ```
  */
-export function evmDecoder<T extends Events, C extends Contracts>({
+export function evmEventDecoder<T extends Events, C extends Contracts>({
   range,
   contracts,
   events,
@@ -333,11 +336,11 @@ export function evmDecoder<T extends Events, C extends Contracts>({
   const query = evmQuery().addFields(decodedEventFields)
 
   if (Factory.isFactory(contracts)) {
-    query.addLog({ range: decodedRange, request: contracts.buildFactoryEventRequest() })
+    query.addLogRequest({ range: decodedRange, request: contracts.buildFactoryEventRequest() })
   }
 
   if (eventsWithoutParams.length > 0) {
-    query.addLog({
+    query.addLogRequest({
       range: decodedRange,
       request: {
         address: !Factory.isFactory(contracts) ? contracts : undefined,
@@ -348,7 +351,7 @@ export function evmDecoder<T extends Events, C extends Contracts>({
   }
 
   for (const request of buildEventRequests(eventsWithParams, contracts)) {
-    query.addLog({ range: decodedRange, request })
+    query.addLogRequest({ range: decodedRange, request })
   }
 
   return query
@@ -463,10 +466,10 @@ export function evmDecoder<T extends Events, C extends Contracts>({
 
         return result
       },
-      fork(cursor) {
+      rollback(cursor) {
         if (!Factory.isFactory(contracts)) return
 
-        return contracts.fork(cursor)
+        return contracts.rollback(cursor)
       },
     })
 }

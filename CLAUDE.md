@@ -11,8 +11,8 @@
 
 - Tests live next to source files: `feature.ts` → `feature.test.ts`
 - Always use the internal testing framework from `~/testing/` — do NOT create ad-hoc HTTP mocks
-- EVM test helpers: `mockBlock`, `encodeEvent`, `evmPortalMockStream`, `resetMockBlockCounter` from `~/testing/evm/`
-- General helpers: `createMockPortal`, `readAll`, `createTestLogger` from `~/testing/`
+- EVM test helpers: `mockBlock`, `encodeEvent`, `mockEvmPortalStream`, `resetMockBlockCounter` from `~/testing/evm/`
+- General helpers: `mockPortal`, `readAll`, `testLogger` from `~/testing/`
 - Clean up mock portals in `afterEach`, not `try/finally`
 - Run tests: `pnpm vitest run src/path/to/file.test.ts` (from `packages/subsquid-pipes/`)
 - Some tests require external services (ClickHouse, PostgreSQL) — exclude with `--exclude` flags when running locally

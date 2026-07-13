@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import chalk from 'chalk'
 import { z } from 'zod'
 
-import { type Config, type NetworkType, sinkTypes } from '~/types/init.js'
+import { type Config, type NetworkType, targetTypes } from '~/types/init.js'
 import { deriveProjectName } from '~/utils/project-name.js'
 import { ProjectWriter } from '~/utils/project-writer.js'
 import { createSpinner } from '~/utils/spinner.js'
@@ -78,7 +78,7 @@ export class InitHandler {
   1) Enter the project folder
      ${chalk.gray.italic(`cd ${this.config.projectFolder}`)}
 
-  2) Start your ${sinkTypes.find((s) => s.value === this.config.sink)?.name} database
+  2) Start your ${targetTypes.find((t) => t.value === this.config.sink)?.name} database
      ${chalk.gray.italic('docker compose up -d')}
 
   ${this.config.sink === 'postgresql' ? pgMessage : clickhouseMessage}

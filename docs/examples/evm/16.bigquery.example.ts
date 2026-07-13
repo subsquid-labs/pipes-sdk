@@ -48,7 +48,7 @@
  */
 
 import { BigQuery } from '@google-cloud/bigquery'
-import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
+import { commonAbis, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 import { bigqueryTarget } from '@subsquid/pipes/targets/bigquery'
 
 // Default BIGNUMERIC is precision 76, scale 38 — i.e. up to 38 integer digits before the
@@ -81,7 +81,7 @@ async function main() {
   await evmPortalStream({
     id: 'erc20-transfers',
     portal: { url: 'https://portal.sqd.dev/datasets/ethereum-mainnet' },
-    outputs: evmDecoder({
+    outputs: evmEventDecoder({
       // 'latest' starts near the head — useful for exercising reorg handling. Use a fixed
       // block number for deterministic backfills.
       range: { from: '0' },
@@ -91,7 +91,7 @@ async function main() {
       },
     }),
   }).pipeTo(
-    // The decoded data type is inferred from the evmDecoder events configuration above.
+    // The decoded data type is inferred from the evmEventDecoder events configuration above.
     bigqueryTarget({
       // Pass only the BigQuery client — the target constructs the Storage Write API client
       // internally from the same projectId / apiEndpoint. Pass `client.writer` explicitly

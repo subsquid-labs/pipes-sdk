@@ -60,10 +60,7 @@ describe('groupContractsForDecoders', () => {
   })
 
   it('splits into per-contract decoders when ranges differ by `to`', () => {
-    const grouping = groupContractsForDecoders([
-      weth({ from: '4719568', to: '10000000' }),
-      usdc({ from: '4719568' }),
-    ])
+    const grouping = groupContractsForDecoders([weth({ from: '4719568', to: '10000000' }), usdc({ from: '4719568' })])
     expect(grouping.shared).toBe(false)
     expect(grouping.groups).toHaveLength(2)
   })

@@ -4,7 +4,7 @@ import path from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { PQ_ERR, ParquetTargetError } from './errors.js'
+import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { ParquetStore } from './parquet-store.js'
 import type { ParquetTable } from './schema.js'
 
@@ -40,7 +40,7 @@ describe('ParquetStore', () => {
       try {
         store.insert('t', [{ blockNumber: 1, raw: '0xdeadbeef' }])
       } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.VALUE_INVALID)
+        expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.VALUE_INVALID)
       }
     })
 
@@ -50,7 +50,7 @@ describe('ParquetStore', () => {
       try {
         store.insert('blocks', [{ blockNumber: 2 ** 53, hash: '0x1', timestamp: 1 }])
       } catch (e) {
-        expect((e as ParquetTargetError).code).toBe(PQ_ERR.VALUE_INVALID)
+        expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.VALUE_INVALID)
       }
     })
 
@@ -96,7 +96,7 @@ describe('ParquetStore', () => {
         try {
           store.insert('stamps', [{ blockNumber: 1, at: new Date(0), day }])
         } catch (e) {
-          expect((e as ParquetTargetError).code).toBe(PQ_ERR.VALUE_INVALID)
+          expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.VALUE_INVALID)
         }
       }
     })
@@ -113,7 +113,7 @@ describe('ParquetStore', () => {
         try {
           store.insert('stamps', [{ blockNumber: 1, at: new Date(0), meta }])
         } catch (e) {
-          expect((e as ParquetTargetError).code).toBe(PQ_ERR.VALUE_INVALID)
+          expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.VALUE_INVALID)
         }
       }
     })
@@ -155,7 +155,7 @@ describe('ParquetStore', () => {
         try {
           store.insert('n', [row])
         } catch (e) {
-          expect((e as ParquetTargetError).code).toBe(PQ_ERR.VALUE_INVALID)
+          expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.VALUE_INVALID)
           expect((e as ParquetTargetError).message).toMatch(fragment)
         }
       }
@@ -172,7 +172,7 @@ describe('ParquetStore', () => {
         try {
           store.insert('n', [{ blockNumber: 1, user, tags: null }])
         } catch (e) {
-          expect((e as ParquetTargetError).code).toBe(PQ_ERR.VALUE_INVALID)
+          expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.VALUE_INVALID)
           expect((e as ParquetTargetError).message).toMatch(/user.*expects a plain object/)
         }
       }

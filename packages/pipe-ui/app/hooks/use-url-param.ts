@@ -8,13 +8,7 @@ type ParamType = string | number | boolean
 
 // Widen literal types inferred from `defaultValue` (e.g. `'profiler'` → `string`)
 // so consumers get a mutable API: `setTab('query')` rather than `setTab('profiler')` only.
-type Widen<T> = T extends string
-  ? string
-  : T extends number
-    ? number
-    : T extends boolean
-      ? boolean
-      : T
+type Widen<T> = T extends string ? string : T extends number ? number : T extends boolean ? boolean : T
 
 type Options<T extends ParamType> = {
   /** If the parsed value fails validation, the default is returned. */
@@ -59,11 +53,7 @@ export function useUrlParam<T extends ParamType>(
   return [value, setValue]
 }
 
-function parseValue<T extends ParamType>(
-  raw: string | null,
-  defaultValue: T,
-  validate?: (value: T) => boolean,
-): T {
+function parseValue<T extends ParamType>(raw: string | null, defaultValue: T, validate?: (value: T) => boolean): T {
   if (raw === null) return defaultValue
 
   let parsed: ParamType

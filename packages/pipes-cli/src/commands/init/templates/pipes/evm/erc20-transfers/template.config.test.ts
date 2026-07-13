@@ -25,7 +25,7 @@ describe('erc20TransfersTemplate.render', () => {
 
   it('has correct identity metadata', () => {
     expect(erc20TransfersTemplate.id).toBe('erc20Transfers')
-    expect(erc20TransfersTemplate.name).toBe('Erc20 Transfers')
+    expect(erc20TransfersTemplate.name).toBe('ERC-20 Transfers')
     expect(erc20TransfersTemplate.networkType).toBe('evm')
   })
 })

@@ -51,13 +51,13 @@ export type MockPortal = {
   close(): Promise<void>
 }
 
-export async function createFinalizedMockPortal(mockResponses: MockResponse[]) {
-  return createMockPortal(mockResponses, {
+export async function finalizedMockPortal(mockResponses: MockResponse[]) {
+  return mockPortal(mockResponses, {
     finalized: true,
   })
 }
 
-export async function createMockPortal(
+export async function mockPortal(
   mockResponses: MockResponse[],
   { finalized = false }: { finalized?: boolean } = {},
 ): Promise<MockPortal> {

@@ -1,4 +1,4 @@
-import type { BigQueryStore } from './bigquery-store.js'
+import type { BigQueryWriter } from './bigquery-store.js'
 import type { TrackedTable } from './tables.js'
 
 export type TrackedTableLocation = {
@@ -18,9 +18,9 @@ export type TrackedTableLocation = {
  * job latency (1-5s each) by the number of tracked tables, which makes a 10-table fork
  * take 10-50 seconds instead of one round trip.
  */
-export class BigQueryTracker {
+export class BigQueryTableRegistry {
   readonly #tables: TrackedTableLocation[]
-  readonly #store: BigQueryStore
+  readonly #store: BigQueryWriter
 
   constructor({
     store,
@@ -28,7 +28,7 @@ export class BigQueryTracker {
     dataset,
     projectId,
   }: {
-    store: BigQueryStore
+    store: BigQueryWriter
     tables: TrackedTable[]
     dataset: string
     projectId: string

@@ -1,30 +1,31 @@
 import {
   ANY,
   ANY_OBJECT,
-  array,
   BIG_NAT,
   BOOLEAN,
   BYTES,
-  constant,
   NAT,
+  STRING,
+  Validator,
+  array,
+  constant,
   nullable,
   object,
   oneOf,
   option,
-  STRING,
-  Validator,
   withDefault,
 } from '@subsquid/util-internal-validation'
+
 import {
   type Hex,
   ObjectValidatorShape,
   type PortalQuery,
-  project,
   type Select,
   type Selected,
   type Selector,
   type Simplify,
   type Trues,
+  project,
 } from './common.js'
 
 /**

@@ -36,19 +36,19 @@ export class EvmQueryBuilder<F extends evm.FieldSelection = {}> extends QueryBui
     return this
   }
 
-  addLog(options: RequestOptions<evm.LogRequest>): this {
+  addLogRequest(options: RequestOptions<evm.LogRequest>): this {
     return this.addRequest('logs', options)
   }
 
-  addTransaction(options: RequestOptions<evm.TransactionRequest>): this {
+  addTransactionRequest(options: RequestOptions<evm.TransactionRequest>): this {
     return this.addRequest('transactions', options)
   }
 
-  addTrace(options: RequestOptions<evm.TraceRequest>): this {
+  addTraceRequest(options: RequestOptions<evm.TraceRequest>): this {
     return this.addRequest('traces', options)
   }
 
-  addStateDiff(options: RequestOptions<evm.StateDiffRequest>): this {
+  addStateDiffRequest(options: RequestOptions<evm.StateDiffRequest>): this {
     return this.addRequest('stateDiffs', options)
   }
 

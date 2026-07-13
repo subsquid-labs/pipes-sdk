@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { MockPortal, createMockPortal } from '../testing/index.js'
+import { MockPortal, mockPortal } from '../testing/index.js'
 import { tronPortalStream } from './tron-portal-source.js'
 import { TronQueryBuilder } from './tron-query-builder.js'
 
@@ -11,16 +11,16 @@ const fixture = (name: string) =>
   JSON.parse(readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url)), 'utf8'))
 
 describe('Tron portal stream', () => {
-  let mockPortal: MockPortal
+  let portal: MockPortal
 
   afterEach(async () => {
-    await mockPortal?.close()
+    await portal?.close()
   })
 
   it('streams blocks with selected fields and array defaults', async () => {
     // Hashes/addresses are bare hex (no `0x`) and amounts are decimal strings —
     // matching the real TRON portal wire format.
-    mockPortal = await createMockPortal([
+    portal = await mockPortal([
       {
         statusCode: 200,
         data: [
@@ -37,7 +37,7 @@ describe('Tron portal stream', () => {
 
     const stream = tronPortalStream({
       id: 'test',
-      portal: mockPortal.url,
+      portal: portal.url,
       outputs: new TronQueryBuilder()
         .addFields({
           block: { number: true, hash: true, timestamp: true },
@@ -69,7 +69,7 @@ describe('Tron portal stream', () => {
   it('validates a real portal response (block #84000000) end-to-end', async () => {
     const block = fixture('block-84000000.json')
 
-    mockPortal = await createMockPortal([
+    portal = await mockPortal([
       {
         statusCode: 200,
         data: [block],
@@ -78,7 +78,7 @@ describe('Tron portal stream', () => {
 
     const stream = tronPortalStream({
       id: 'real-data',
-      portal: mockPortal.url,
+      portal: portal.url,
       outputs: new TronQueryBuilder()
         .addFields({
           block: {

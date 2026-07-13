@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createTestLogger } from '~/testing/test-logger.js'
+import { testLogger } from '~/testing/test-logger.js'
 
 import { EvmQueryBuilder } from './evm-query-builder.js'
 import { evmRpcLatencyWatcher } from './evm-rpc-latency-watcher.js'
@@ -9,7 +9,7 @@ describe('evmRpcLatencyWatcher factory', () => {
   let transformer: ReturnType<typeof evmRpcLatencyWatcher> | undefined
 
   afterEach(async () => {
-    await transformer?.stop({ logger: createTestLogger() })
+    await transformer?.stop({ logger: testLogger() })
     transformer = undefined
   })
 
@@ -17,7 +17,7 @@ describe('evmRpcLatencyWatcher factory', () => {
     transformer = evmRpcLatencyWatcher({ rpcUrl: ['ws://127.0.0.1:1'] })
 
     const builder = new EvmQueryBuilder<{ block: { number: true; timestamp: true } }>()
-    await transformer.setupQuery({ query: builder, logger: createTestLogger() })
+    await transformer.setupQuery({ query: builder, logger: testLogger() })
 
     expect(builder.getFields()).toEqual({
       block: { number: true, timestamp: true },
@@ -28,11 +28,9 @@ describe('evmRpcLatencyWatcher factory', () => {
     transformer = evmRpcLatencyWatcher({ rpcUrl: ['ws://127.0.0.1:1'] })
 
     const builder = new EvmQueryBuilder<{ block: { number: true; timestamp: true } }>()
-    await transformer.setupQuery({ query: builder, logger: createTestLogger() })
+    await transformer.setupQuery({ query: builder, logger: testLogger() })
 
     const requests = builder.getRequests()
-    expect(requests).toContainEqual(
-      expect.objectContaining({ range: { from: 'latest' } }),
-    )
+    expect(requests).toContainEqual(expect.objectContaining({ range: { from: 'latest' } }))
   })
 })

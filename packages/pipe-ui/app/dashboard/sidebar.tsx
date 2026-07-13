@@ -381,7 +381,7 @@ export function Sidebar({
       </div>
 
       <PipeSelector pipes={pipes} selectedPipeId={selectedPipeId} onSelectPipe={onSelectPipe} />
-      <RuntimeInfo runtime={data?.runtime} sdkVersion={data?.sdk?.version} entryPoint={data?.code?.filename} />
+      <RuntimeInfo runtime={data?.runtime} sdkVersion={data?.sdk?.version} entryPoint={data?.entrypoint} />
     </div>
   )
 }

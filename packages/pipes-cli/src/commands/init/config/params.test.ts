@@ -57,7 +57,7 @@ describe('--config params schema', () => {
     networkType: 'evm',
     network: 'ethereum-mainnet',
     packageManager: 'bun',
-    sink: 'clickhouse',
+    target: 'clickhouse',
     templates: [
       {
         templateId: 'custom',
@@ -288,7 +288,7 @@ describe('--config params schema', () => {
           },
         },
       ],
-      sink: 'clickhouse',
+      target: 'clickhouse',
     }
 
     expect(() => configJsonSchemaRaw.parse(configJson)).to.not.throw()

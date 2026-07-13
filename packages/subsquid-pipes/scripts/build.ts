@@ -1,5 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
 import 'zx/globals'
+
 import cpy from 'cpy'
 
 await fs.remove('dist')

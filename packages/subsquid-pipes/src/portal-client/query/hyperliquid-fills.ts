@@ -1,27 +1,28 @@
 import {
-  array,
   BOOLEAN,
   BYTES,
-  constant,
   NAT,
+  STRING,
+  Validator,
+  array,
+  constant,
   object,
   oneOf,
   option,
-  STRING,
-  Validator,
   withDefault,
 } from '@subsquid/util-internal-validation'
+
 import {
   FLOAT,
   type Hex,
   type ObjectValidatorShape,
   type PortalQuery,
-  project,
   type Select,
   type Selected,
   type Selector,
   type Simplify,
   type Trues,
+  project,
 } from './common.js'
 
 export type BlockHeaderFields = {

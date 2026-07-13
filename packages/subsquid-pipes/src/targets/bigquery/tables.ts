@@ -1,6 +1,6 @@
 import type { BigQuery, TableField, TableMetadata } from '@google-cloud/bigquery'
 
-import { BQ_ERR, BigQueryTargetError } from './errors.js'
+import { BIGQUERY_ERROR_CODES, BigQueryTargetError } from './errors.js'
 import { assertInt64NotNull, assertRangePartitionedOn, findField, isNotFoundError } from './utils.js'
 
 export type TrackedTable = {
@@ -133,7 +133,7 @@ ${fields}
  *
  * Used in two places that must agree byte-for-byte (review fix #4):
  *   1. `trackedTableDdl` — the CREATE TABLE statement materializes this type.
- *   2. `BigQueryStore` constructor — the proto descriptor used for AppendRows is built
+ *   2. `BigQueryWriter` constructor — the proto descriptor used for AppendRows is built
  *      from THIS normalized schema, not the user's original. Without that, a user who
  *      declares the partition column as STRING gets a table with INT64 (from the DDL
  *      coercion) but a proto descriptor saying STRING → first append fails with a
@@ -146,7 +146,7 @@ export function normalizePartitionColumn(schema: TableField[], blockNumberColumn
 function assertSchemaIncludesPartitionColumn(t: TrackedTable, fqn: string): void {
   if (!t.schema.some((f) => f.name === t.blockNumberColumn)) {
     throw new BigQueryTargetError(
-      BQ_ERR.PARTITION_COLUMN_MISSING,
+      BIGQUERY_ERROR_CODES.PARTITION_COLUMN_MISSING,
       `Tracked table '${fqn}' schema does not include the partition column ` +
         `'${t.blockNumberColumn}'. Add it to the tables[].schema config as ` +
         `INT64 NOT NULL — the target forces this type/mode regardless of what you declare, ` +
@@ -171,7 +171,7 @@ function assertFlatSchema(schema: TableField[], fqn: string): void {
     const mode = (f.mode || '').toUpperCase()
     if (mode === 'REPEATED') {
       throw new BigQueryTargetError(
-        BQ_ERR.UNSUPPORTED_FIELD_SHAPE,
+        BIGQUERY_ERROR_CODES.UNSUPPORTED_FIELD_SHAPE,
         `Tracked table '${fqn}' field '${f.name}' has mode=REPEATED. The target's ` +
           `auto-creation does not support array fields — pre-create the table manually with ` +
           `the proper ARRAY<...> column and re-run; the target will validate without recreating.`,
@@ -179,7 +179,7 @@ function assertFlatSchema(schema: TableField[], fqn: string): void {
     }
     if (type === 'RECORD' || type === 'STRUCT') {
       throw new BigQueryTargetError(
-        BQ_ERR.UNSUPPORTED_FIELD_SHAPE,
+        BIGQUERY_ERROR_CODES.UNSUPPORTED_FIELD_SHAPE,
         `Tracked table '${fqn}' field '${f.name}' has type=${f.type}. The target's ` +
           `auto-creation does not support nested fields — pre-create the table manually with ` +
           `the proper STRUCT<...> column and re-run.`,
@@ -275,7 +275,7 @@ export function assertSchemaMatches(metadata: TableMetadata, declared: TableFiel
     const live = findField(metadata, decl.name!)
     if (!live) {
       throw new BigQueryTargetError(
-        BQ_ERR.SCHEMA_FIELD_MISSING,
+        BIGQUERY_ERROR_CODES.SCHEMA_FIELD_MISSING,
         `Table ${tableFqn} is missing declared column '${decl.name}' of type ${decl.type}.`,
       )
     }
@@ -284,7 +284,7 @@ export function assertSchemaMatches(metadata: TableMetadata, declared: TableFiel
     // round-trip would falsely fail validation. Canonicalize both sides before comparing.
     if (canonicalType(live.type) !== canonicalType(decl.type)) {
       throw new BigQueryTargetError(
-        BQ_ERR.SCHEMA_TYPE_MISMATCH,
+        BIGQUERY_ERROR_CODES.SCHEMA_TYPE_MISMATCH,
         `Table ${tableFqn} column '${decl.name}' has type ${live.type}, but declared as ${decl.type}.`,
       )
     }
@@ -296,7 +296,7 @@ export function assertSchemaMatches(metadata: TableMetadata, declared: TableFiel
     const declMode = (decl.mode || 'NULLABLE').toUpperCase()
     if (liveMode !== declMode) {
       throw new BigQueryTargetError(
-        BQ_ERR.SCHEMA_TYPE_MISMATCH,
+        BIGQUERY_ERROR_CODES.SCHEMA_TYPE_MISMATCH,
         `Table ${tableFqn} column '${decl.name}' has mode ${liveMode}, but declared as ${declMode}.`,
       )
     }

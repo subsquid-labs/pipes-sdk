@@ -7,7 +7,8 @@ export type RollbackRecord = {
 
 /**
  * Given an async/sync iterable of historical rollback records (newest first)
- * and the portal's previousBlocks from a ForkException,
+ * and the portal's view of the canonical chain from a ForkException
+ * (a.k.a. `previousBlocks` from Portal API `/stream` 409 responses),
  * finds the safe cursor to roll back to.
  *
  * The algorithm walks through each record's rollback chain (sorted DESC by block number)
@@ -17,9 +18,9 @@ export type RollbackRecord = {
  */
 export async function resolveForkCursor(
   records: AsyncIterable<RollbackRecord> | Iterable<RollbackRecord>,
-  previousBlocks: BlockCursor[],
+  canonicalBlocks: BlockCursor[],
 ): Promise<BlockCursor | null> {
-  let remaining = [...previousBlocks]
+  let remaining = [...canonicalBlocks]
 
   for await (const { rollbackChain, finalized } of records) {
     if (!rollbackChain.length) continue

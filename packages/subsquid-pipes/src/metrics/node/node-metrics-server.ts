@@ -33,9 +33,8 @@ export type Stats = {
     name: 'bun' | 'node' | 'deno' | 'unknown'
     version: string
   }
-  code: {
-    filename: string
-  }
+  /** Path of the process entrypoint (process.argv[1]). */
+  entrypoint: string
   pipes: {
     id: string
     dataset: BatchContext['stream']['dataset'] | null
@@ -118,7 +117,7 @@ type TransformationResult = {
   children: TransformationResult[]
 }
 
-function packExemplar(value: any): any {
+function packPreview(value: any): any {
   if (Array.isArray(value)) {
     if (
       value.length <= 10 &&
@@ -128,10 +127,10 @@ function packExemplar(value: any): any {
     }
 
     if (value.length > 10) {
-      return [packExemplar(value[0]), `... ${value.length - 1} more ...`]
+      return [packPreview(value[0]), `... ${value.length - 1} more ...`]
     }
 
-    return value.map(packExemplar)
+    return value.map(packPreview)
   }
 
   if (value === null || value instanceof Date) return value
@@ -139,7 +138,7 @@ function packExemplar(value: any): any {
   if (typeof value === 'object') {
     const res: any = {}
     for (const key in value) {
-      res[key] = packExemplar(value[key])
+      res[key] = packPreview(value[key])
     }
     return res
   }
@@ -163,7 +162,7 @@ function patchMetricsProcessing(root: ProfilerResult, metricsElapsed: number): v
   root.totalTime += metricsElapsed
 }
 
-function patchMetricsProcessingExemplar(root: TransformationResult, metricsElapsed: number): void {
+function patchMetricsProcessingPreview(root: TransformationResult, metricsElapsed: number): void {
   const lastChild = root.children.at(-1)
   if (!lastChild || lastChild.name !== 'metrics processing') return
 
@@ -173,12 +172,12 @@ function patchMetricsProcessingExemplar(root: TransformationResult, metricsElaps
   root.elapsed = rootElapsed + metricsElapsed
 }
 
-function transformExemplar(profiler: Profiler): TransformationResult {
+function transformPreview(profiler: Profiler): TransformationResult {
   const rootStarted = profiler.started
   return profiler.transform((span, children) => {
     const data =
       span.data != null
-        ? JSON.stringify(packExemplar(span.data), (k: string, v: any) => {
+        ? JSON.stringify(packPreview(span.data), (k: string, v: any) => {
             if (typeof v === 'bigint') return v.toString() + 'n'
             if (v instanceof Date) return v.toISOString()
             return v
@@ -203,7 +202,7 @@ const DEFAULT_PORT = 9090
 type PipeData = {
   lastBatch?: BatchContext
   profilers: { profiler: ProfilerResult; collectedAt: Date }[]
-  transformationExemplar?: TransformationResult
+  transformationPreview?: TransformationResult
 }
 
 class ExpressMetricServer implements MetricsServer {
@@ -306,9 +305,7 @@ class ExpressMetricServer implements MetricsServer {
         usage: {
           memory: memory?.values?.[0]?.value || 0,
         },
-        code: {
-          filename: process.argv[1],
-        },
+        entrypoint: process.argv[1],
         pipes: Array.from(this.#pipes.keys()).map((id) => {
           const pipeData = this.getPipe(id)
           const lastBatch = pipeData?.lastBatch
@@ -328,8 +325,8 @@ class ExpressMetricServer implements MetricsServer {
               etaSeconds: lastBatch?.stream.progress?.state.etaSeconds || 0,
             },
             speed: {
-              blocksPerSecond: lastBatch?.stream.progress?.interval.processedBlocks.perSecond || 0,
-              bytesPerSecond: lastBatch?.stream.progress?.interval.bytesDownloaded.perSecond || 0,
+              blocksPerSecond: lastBatch?.stream.progress?.intervalStats.processedBlocks.perSecond || 0,
+              bytesPerSecond: lastBatch?.stream.progress?.intervalStats.bytesDownloaded.perSecond || 0,
             },
           }
         }),
@@ -343,22 +340,24 @@ class ExpressMetricServer implements MetricsServer {
       const pipeData = this.getPipe(req.query['id'] as string | undefined)
       const profilers = pipeData?.profilers || []
 
+      const profiles = profilers.filter((p) => p.collectedAt >= from).map((p) => p.profiler)
+
       return res.json({
         // FIXME: remove hardcoded field
         payload: {
           enabled: true,
-          profilers: profilers.filter((p) => p.collectedAt >= from).map((p) => p.profiler),
+          profiles,
         },
       })
     })
 
-    this.#app.get('/exemplars/transformation', async (req, res) => {
+    const transformationPreviewHandler: express.RequestHandler = async (req, res) => {
       const pipeData = this.getPipe(req.query['id'] as string | undefined)
       const lastBatch = pipeData?.lastBatch
 
-      return res.json({
+      res.json({
         payload: {
-          transformation: pipeData?.transformationExemplar,
+          transformation: pipeData?.transformationPreview,
           batch: lastBatch
             ? {
                 from:
@@ -372,7 +371,9 @@ class ExpressMetricServer implements MetricsServer {
             : undefined,
         },
       })
-    })
+    }
+
+    this.#app.get('/preview/transformation', transformationPreviewHandler)
 
     this.#app.get('/metrics', async (req, res) => {
       res.set('Content-Type', registry.contentType)
@@ -426,7 +427,7 @@ class ExpressMetricServer implements MetricsServer {
     const data = this.registerPipe(ctx.id)
 
     data.lastBatch = ctx
-    const exemplar = transformExemplar(ctx.profiler)
+    const preview = transformPreview(ctx.profiler)
     const profiler = transformProfiler(ctx.profiler)
 
     data.profilers.push({
@@ -443,12 +444,12 @@ class ExpressMetricServer implements MetricsServer {
     //    off the right edge of the flame chart canvas.
     //
     // Reposition the child at the end of the root and extend the root's
-    // duration so both visualizations (profiler tree and exemplar) stay
+    // duration so both visualizations (profiler tree and preview) stay
     // internally consistent.
     patchMetricsProcessing(profiler, span.elapsed)
-    patchMetricsProcessingExemplar(exemplar, span.elapsed)
+    patchMetricsProcessingPreview(preview, span.elapsed)
 
-    data.transformationExemplar = exemplar
+    data.transformationPreview = preview
   }
 
   get metrics() {

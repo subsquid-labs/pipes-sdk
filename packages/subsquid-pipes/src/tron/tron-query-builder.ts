@@ -39,27 +39,27 @@ export class TronQueryBuilder<F extends api.FieldSelection = {}> extends QueryBu
     return this
   }
 
-  addTransaction(options: RequestOptions<api.TransactionRequest>): this {
+  addTransactionRequest(options: RequestOptions<api.TransactionRequest>): this {
     return this.addRequest('transactions', options)
   }
 
-  addTransferTransaction(options: RequestOptions<api.TransferTransactionRequest>): this {
+  addTransferTransactionRequest(options: RequestOptions<api.TransferTransactionRequest>): this {
     return this.addRequest('transferTransactions', options)
   }
 
-  addTransferAssetTransaction(options: RequestOptions<api.TransferAssetTransactionRequest>): this {
+  addTransferAssetTransactionRequest(options: RequestOptions<api.TransferAssetTransactionRequest>): this {
     return this.addRequest('transferAssetTransactions', options)
   }
 
-  addTriggerSmartContractTransaction(options: RequestOptions<api.TriggerSmartContractTransactionRequest>): this {
+  addTriggerSmartContractTransactionRequest(options: RequestOptions<api.TriggerSmartContractTransactionRequest>): this {
     return this.addRequest('triggerSmartContractTransactions', options)
   }
 
-  addLog(options: RequestOptions<api.LogRequest>): this {
+  addLogRequest(options: RequestOptions<api.LogRequest>): this {
     return this.addRequest('logs', options)
   }
 
-  addInternalTransaction(options: RequestOptions<api.InternalTransactionRequest>): this {
+  addInternalTransactionRequest(options: RequestOptions<api.InternalTransactionRequest>): this {
     return this.addRequest('internalTransactions', options)
   }
 

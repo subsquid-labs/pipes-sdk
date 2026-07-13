@@ -1,6 +1,6 @@
 import assert from 'assert'
 
-import { contractFactory, contractFactoryStore, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
+import { contractFactory, contractFactorySqliteStore, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 
 import { events as factoryAbi } from './abi/uniswap.v3/factory'
 import { events as swapsAbi } from './abi/uniswap.v3/swaps'
@@ -17,7 +17,7 @@ async function cli() {
   const stream = evmPortalStream({
     id: 'factory-event-filter',
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-    outputs: evmDecoder({
+    outputs: evmEventDecoder({
       range: { from: '12,369,621' },
       contracts: contractFactory({
         address: '0x1f98431c8ad98523631ae4a59f267346ea31f984',
@@ -33,7 +33,7 @@ async function cli() {
           },
         },
         childAddressField: 'pool',
-        database: contractFactoryStore({
+        database: contractFactorySqliteStore({
           path: './uniswap3-eth-pools.sqlite',
         }),
       }),

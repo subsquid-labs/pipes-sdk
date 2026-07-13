@@ -4,6 +4,22 @@ Step-by-step instructions for updating from the previous release.
 
 ---
 
+## ⚠️ Naming overhaul: hard renames, and one name that changed meaning
+
+The public API naming overhaul renames symbols **without** compatibility aliases — this lands in a major release, so old names simply stop existing and the compiler will point you at each one (`resolveFork`, `canonicalBlocks`, `rollback` hooks, `PortalStream`, `add*Request` builder methods, `evmEventDecoder`, `chunkForInsert`, `contractFactorySqliteStore`, CLI `target` config key, `/preview/transformation`, `sqd_processed_block`/`sqd_end_block`, and friends). Deprecated aliases that existed *before* this overhaul (`evmPortalSource`, `contractFactory`'s `factory`, `factorySqliteDatabase`, `chunk`, `createClickhouseTarget`) are still present and will be removed separately.
+
+**One rename will NOT surface as a compile error — the name changed meaning:**
+
+- Before, `FinalizationBuffer.resolveFork(blocks)` was the **pure** resolver: it returned the safe cursor and did **not** touch the buffer.
+- Now, `buffer.resolveFork(blocks)` **resolves and drops** — it also removes every buffered row above the safe cursor (it is the old `buffer.fork()`).
+- The old pure behavior lives on under a new name: `buffer.resolveForkCursor(blocks)`.
+
+If you called `resolveFork` to inspect the cursor without mutating (e.g. resolving once and applying `dropAbove` to several sibling buffers yourself), switch those calls to `resolveForkCursor` — the call is no longer side-effect-free, and your code will compile without complaint.
+
+Other silent-at-compile-time changes to check: the ClickHouse `onRollback` callback receives `reason: 'recovery' | 'fork'` instead of `type: 'offset_check' | 'blockchain_fork'`; Prometheus dashboards must move to `sqd_processed_block`/`sqd_end_block`; Pipes UI older than this release reads endpoints/payload keys that no longer exist.
+
+---
+
 ## 1. Rename portal sources to portal streams
 
 All portal source functions have been renamed to portal streams. Old names are available as deprecated aliases.

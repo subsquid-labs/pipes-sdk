@@ -1,4 +1,4 @@
-import { type MockPortal, type MockResponse, createMockPortal } from '../test-portal.js'
+import { type MockPortal, type MockResponse, mockPortal } from '../test-portal.js'
 import { type PortalBlock } from './mock-block.js'
 
 export { type MockPortal } from '../test-portal.js'
@@ -10,7 +10,7 @@ export { type MockPortal } from '../test-portal.js'
  * ```ts
  * const event1 = encodeEvent({ abi, eventName: 'Transfer', address, args: { ... } })
  *
- * const portal = await evmPortalMockStream({
+ * const portal = await mockEvmPortalStream({
  *   blocks: [
  *     mockBlock({ transactions: [{ logs: [event1] }] }),
  *     mockBlock({ transactions: [{ logs: [event1] }] }),
@@ -18,7 +18,7 @@ export { type MockPortal } from '../test-portal.js'
  * })
  * ```
  */
-export async function evmPortalMockStream({
+export async function mockEvmPortalStream({
   blocks,
   finalized,
 }: {
@@ -34,5 +34,5 @@ export async function evmPortalMockStream({
     head: head ? { finalized: head } : undefined,
   }
 
-  return createMockPortal([response])
+  return mockPortal([response])
 }

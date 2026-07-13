@@ -1,12 +1,13 @@
-import { is, Table } from 'drizzle-orm'
+import { Table, is } from 'drizzle-orm'
 import { PrimaryKeyBuilder } from 'drizzle-orm/pg-core'
+
 import {
+  SQD_PRIMARY_COLS,
   getDrizzleForeignKeys,
   getDrizzleTableColumns,
   getDrizzleTableExtraColumns,
   getDrizzleTableExtraConfig,
   getDrizzleTableName,
-  SQD_PRIMARY_COLS,
 } from './consts.js'
 
 export function generateTriggerSQL(from: string, to: string, table: Table) {

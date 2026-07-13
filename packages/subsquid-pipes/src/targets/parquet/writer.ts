@@ -4,7 +4,7 @@ import path from 'node:path'
 
 import { ParquetSchema, ParquetWriter } from '@dsnp/parquetjs'
 
-import { PQ_ERR, ParquetTargetError } from './errors.js'
+import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { fsyncDir, fsyncFile, openWriteStream, pathExists } from './fs-durable.js'
 
 /** Zero-pad block numbers in published filenames so they sort lexically (`0000000042`). */
@@ -138,7 +138,7 @@ export class ParquetSegmentWriter {
   async publish(): Promise<PublishedSegment> {
     if (!this.#writer || this.#minBlock === undefined || this.#maxBlock === undefined) {
       throw new ParquetTargetError(
-        PQ_ERR.FILE_COLLISION,
+        PARQUET_ERROR_CODES.FILE_COLLISION,
         `Internal: publish() called on an empty segment in '${this.#dir}'. Only segments with ` +
           `at least one row may be published.`,
       )
@@ -156,7 +156,7 @@ export class ParquetSegmentWriter {
     const finalPath = path.join(this.#dir, `${pad(this.#minBlock)}-${pad(this.#maxBlock)}.parquet`)
     if (await pathExists(finalPath)) {
       throw new ParquetTargetError(
-        PQ_ERR.FILE_COLLISION,
+        PARQUET_ERROR_CODES.FILE_COLLISION,
         `Refusing to overwrite existing Parquet file '${finalPath}'. A file for block range ` +
           `${this.#minBlock}-${this.#maxBlock} already exists — this indicates overlapping segments ` +
           `or a dirty output directory.`,

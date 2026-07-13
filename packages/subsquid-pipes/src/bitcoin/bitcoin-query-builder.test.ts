@@ -32,9 +32,9 @@ describe('BitcoinQueryBuilder', () => {
   describe('addRequest', () => {
     it('registers transaction, input and output requests', () => {
       const builder = new BitcoinQueryBuilder()
-        .addTransaction({ range: { from: 0 }, request: { inputs: true, outputs: true } })
-        .addInput({ range: { from: 100, to: 200 }, request: { type: ['witness_v0_keyhash'] } })
-        .addOutput({ range: { from: 300 }, request: { scriptPubKeyType: ['scripthash'] } })
+        .addTransactionRequest({ range: { from: 0 }, request: { inputs: true, outputs: true } })
+        .addInputRequest({ range: { from: 100, to: 200 }, request: { type: ['witness_v0_keyhash'] } })
+        .addOutputRequest({ range: { from: 300 }, request: { scriptPubKeyType: ['scripthash'] } })
 
       expect(builder.getRequests()).toMatchInlineSnapshot(`
         [

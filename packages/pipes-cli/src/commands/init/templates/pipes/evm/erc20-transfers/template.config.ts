@@ -27,7 +27,7 @@ export type Erc20TransfersPipeTemplateParams = z.infer<typeof Erc20TransfersPipe
 
 export const erc20TransfersTemplate = defineTemplate({
   id: 'erc20Transfers',
-  name: 'Erc20 Transfers',
+  name: 'ERC-20 Transfers',
   networkType: 'evm',
   paramsSchema: Erc20TransfersPipeTemplateParamsSchema,
   defaultParams: defaults,
