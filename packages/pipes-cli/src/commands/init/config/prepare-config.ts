@@ -54,7 +54,10 @@ function mergeDuplicateDeployments(deployments: DeploymentShape[], contractName?
       return
     }
 
-    if (first.range && deployment.range) first.range = oldestRange(first.range, deployment.range)
+    // Prefer whichever range exists; an absent range means 'latest', so any explicit
+    // range on the duplicate is the older (wider) choice.
+    first.range =
+      first.range && deployment.range ? oldestRange(first.range, deployment.range) : (first.range ?? deployment.range)
     toRemove.push(i)
     console.warn(
       `Deployment ${deployment.address}${contractName ? ` of ${contractName}` : ''} is listed more than once; merged.`,
@@ -67,8 +70,19 @@ function mergeDuplicateDeployments(deployments: DeploymentShape[], contractName?
 /**
  * Two contract entries sharing a deployment address are the same on-chain contract:
  * merge them (union of events, union of deployments) into the first entry.
+ *
+ * A merge can bridge two previously-distinct contracts (an entry listing addresses
+ * owned by different owners), so passes repeat until a fixpoint — a single pass
+ * would leave the earlier owner sharing an address with the merge survivor.
  */
 function mergeContractsSharingDeployments(contracts: ContractShape[]): void {
+  let changed = true
+  while (changed) {
+    changed = mergeContractsOnce(contracts)
+  }
+}
+
+function mergeContractsOnce(contracts: ContractShape[]): boolean {
   const ownerByAddress = new Map<string, ContractShape>()
   const toRemove: number[] = []
 
@@ -94,7 +108,10 @@ function mergeContractsSharingDeployments(contracts: ContractShape[]): void {
     for (const deployment of contract.deployments) {
       if (ownedAddresses.has(deployment.address.toLowerCase())) {
         const existing = owner.deployments.find((d) => d.address.toLowerCase() === deployment.address.toLowerCase())!
-        if (existing.range && deployment.range) existing.range = oldestRange(existing.range, deployment.range)
+        existing.range =
+          existing.range && deployment.range
+            ? oldestRange(existing.range, deployment.range)
+            : (existing.range ?? deployment.range)
       } else {
         owner.deployments.push(deployment)
         ownerByAddress.set(deployment.address.toLowerCase(), owner)
@@ -108,6 +125,8 @@ function mergeContractsSharingDeployments(contracts: ContractShape[]): void {
   })
 
   for (let i = toRemove.length - 1; i >= 0; i--) contracts.splice(toRemove[i]!, 1)
+
+  return toRemove.length > 0
 }
 
 /** Duplicate contract names are resolved once, here — at the contract level, using the reference address for display. */

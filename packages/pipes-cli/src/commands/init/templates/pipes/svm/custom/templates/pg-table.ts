@@ -55,11 +55,11 @@ export function renderSchema({ contracts: contractEntries }: CustomTemplateParam
     contractEvents: c.contractEvents,
     contractAddress: referenceAddress(c),
   }))
-  const contracsWithDbTypes = getContractWithDbTypes(contracts)
+  const contractsWithDbTypes = getContractWithDbTypes(contracts)
 
   return Mustache.render(customContractPgTemplate, {
-    typeImports: generateDrizzleImports(contracsWithDbTypes),
-    contracts: contracsWithDbTypes,
+    typeImports: generateDrizzleImports(contractsWithDbTypes),
+    contracts: contractsWithDbTypes,
   })
 }
 

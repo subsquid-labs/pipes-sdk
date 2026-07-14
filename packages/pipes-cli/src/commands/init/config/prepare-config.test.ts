@@ -282,3 +282,41 @@ describe('prepareConfig', () => {
     warnSpy.mockRestore()
   })
 })
+
+describe('prepareConfig — Copilot review regressions', () => {
+  it('keeps a duplicate deployment range when the first occurrence has none', async () => {
+    const contract = {
+      contractName: 'Weth',
+      contractEvents: [],
+      deployments: [{ address: '0xAAA' }, { address: '0xaaa', range: { from: '100' } }],
+    }
+    const config = configWithContracts([contract])
+
+    await prepareConfig(config, { resolveContracts: async () => {} })
+
+    expect(contract.deployments).toHaveLength(1)
+    expect(contract.deployments[0]!.range).toEqual({ from: '100' })
+  })
+
+  it('collapses transitive contract overlaps (bridging entry) to a single contract', async () => {
+    const a = { contractName: 'A', contractEvents: [], deployments: [{ address: '0x1', range: { from: '1' } }] }
+    const b = { contractName: 'B', contractEvents: [], deployments: [{ address: '0x2', range: { from: '2' } }] }
+    const bridge = {
+      contractName: 'C',
+      contractEvents: [],
+      deployments: [
+        { address: '0x1', range: { from: '3' } },
+        { address: '0x2', range: { from: '4' } },
+      ],
+    }
+    const config = configWithContracts([a, b, bridge])
+
+    await prepareConfig(config, { resolveContracts: async () => {} })
+
+    const contracts = (config.templates[0]!.params as { contracts: TestContract[] }).contracts
+    expect(contracts).toHaveLength(1)
+    const survivor = contracts[0]!
+    const addresses = survivor.deployments.map((d) => d.address).sort()
+    expect(addresses).toEqual(['0x1', '0x2'])
+  })
+})
