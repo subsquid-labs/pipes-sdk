@@ -15,7 +15,7 @@ describe('clickhouse target template builder', () => {
       target: 'clickhouse',
       packageManager: 'pnpm',
     }
-    expect(buildTarget(config).sinkCode).toMatchInlineSnapshot(`
+    expect(buildTarget(config).targetCode).toMatchInlineSnapshot(`
       "
       import path from 'node:path'
       import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
@@ -74,7 +74,7 @@ describe('clickhouse target template builder', () => {
       packageManager: 'pnpm',
     }
 
-    expect(buildTarget(config).sinkCode).toMatchInlineSnapshot(`
+    expect(buildTarget(config).targetCode).toMatchInlineSnapshot(`
       "
       import path from 'node:path'
       import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
@@ -140,7 +140,7 @@ describe('postgres target template builder', () => {
       target: 'postgresql',
       packageManager: 'pnpm',
     }
-    expect(buildTarget(config).sinkCode).toMatchInlineSnapshot(`
+    expect(buildTarget(config).targetCode).toMatchInlineSnapshot(`
       "
       import { chunkForInsert, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
       import { drizzle } from 'drizzle-orm/node-postgres'
@@ -171,7 +171,7 @@ describe('postgres target template builder', () => {
       target: 'postgresql',
       packageManager: 'pnpm',
     }
-    expect(buildTarget(config).sinkCode).toMatchInlineSnapshot(`
+    expect(buildTarget(config).targetCode).toMatchInlineSnapshot(`
       "
       import { chunkForInsert, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
       import { drizzle } from 'drizzle-orm/node-postgres'
@@ -208,7 +208,7 @@ describe('postgres target template builder', () => {
       packageManager: 'pnpm',
     }
 
-    expect(buildTarget(config).sinkCode).toMatchInlineSnapshot(`
+    expect(buildTarget(config).targetCode).toMatchInlineSnapshot(`
       "
       import { chunkForInsert, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
       import { drizzle } from 'drizzle-orm/node-postgres'
@@ -245,7 +245,7 @@ describe('postgres target template builder', () => {
       packageManager: 'pnpm',
     }
 
-    expect(buildTarget(config).sinkCode).toMatchInlineSnapshot(`
+    expect(buildTarget(config).targetCode).toMatchInlineSnapshot(`
       "
       import { chunkForInsert, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
       import { drizzle } from 'drizzle-orm/node-postgres'

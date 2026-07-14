@@ -100,7 +100,7 @@ function renderCtx(config: Config<NetworkType>) {
   }
 }
 
-function renderSinkCode(config: Config<NetworkType>): string {
+function renderTargetCode(config: Config<NetworkType>): string {
   const ctx = renderCtx(config)
 
   const templates = config.templates
@@ -140,7 +140,7 @@ function renderMigrationFiles(config: Config<NetworkType>): TargetFile[] {
 
 export function buildClickhouseTarget(config: Config<NetworkType>): TargetArtifacts {
   return {
-    sinkCode: renderSinkCode(config),
+    targetCode: renderTargetCode(config),
     envSchema,
     files: [{ path: '.env', content: envFileContent }, ...renderMigrationFiles(config)],
     postSteps: [],

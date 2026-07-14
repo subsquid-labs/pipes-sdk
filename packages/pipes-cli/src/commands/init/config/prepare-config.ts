@@ -23,34 +23,41 @@ export type PrepareConfigOptions = {
  */
 export async function prepareConfig(config: Config<NetworkType>, options: PrepareConfigOptions = {}): Promise<void> {
   const resolve = options.resolveContracts ?? realResolver
+  // EVM addresses are case-insensitive hex; SVM addresses are case-sensitive base58.
+  const normalize =
+    config.networkType === 'evm' ? (address: string) => address.toLowerCase() : (address: string) => address
 
   for (const { params } of config.templates) {
     const contracts = (params as { contracts?: ContractShape[] } | undefined)?.contracts
     if (Array.isArray(contracts)) {
       for (const contract of contracts) {
-        mergeDuplicateDeployments(contract.deployments, contract.contractName)
+        mergeDuplicateDeployments(contract.deployments, normalize, contract.contractName)
       }
-      mergeContractsSharingDeployments(contracts)
+      mergeContractsSharingDeployments(contracts, normalize)
       await resolveNames(contracts, resolve)
     }
 
     // Templates with a fixed ABI (e.g. ERC-20 transfers) carry a bare deployments list.
     const deployments = (params as { deployments?: DeploymentShape[] } | undefined)?.deployments
     if (Array.isArray(deployments) && !Array.isArray(contracts)) {
-      mergeDuplicateDeployments(deployments)
+      mergeDuplicateDeployments(deployments, normalize)
     }
   }
 }
 
 /** Same address listed twice within one contract: keep the first, widen to the oldest range. */
-function mergeDuplicateDeployments(deployments: DeploymentShape[], contractName?: string): void {
+function mergeDuplicateDeployments(
+  deployments: DeploymentShape[],
+  normalize: (address: string) => string,
+  contractName?: string,
+): void {
   const firstByAddress = new Map<string, DeploymentShape>()
   const toRemove: number[] = []
 
   deployments.forEach((deployment, i) => {
-    const first = firstByAddress.get(deployment.address.toLowerCase())
+    const first = firstByAddress.get(normalize(deployment.address))
     if (!first) {
-      firstByAddress.set(deployment.address.toLowerCase(), deployment)
+      firstByAddress.set(normalize(deployment.address), deployment)
       return
     }
 
@@ -75,22 +82,22 @@ function mergeDuplicateDeployments(deployments: DeploymentShape[], contractName?
  * owned by different owners), so passes repeat until a fixpoint — a single pass
  * would leave the earlier owner sharing an address with the merge survivor.
  */
-function mergeContractsSharingDeployments(contracts: ContractShape[]): void {
+function mergeContractsSharingDeployments(contracts: ContractShape[], normalize: (address: string) => string): void {
   let changed = true
   while (changed) {
-    changed = mergeContractsOnce(contracts)
+    changed = mergeContractsOnce(contracts, normalize)
   }
 }
 
-function mergeContractsOnce(contracts: ContractShape[]): boolean {
+function mergeContractsOnce(contracts: ContractShape[], normalize: (address: string) => string): boolean {
   const ownerByAddress = new Map<string, ContractShape>()
   const toRemove: number[] = []
 
   contracts.forEach((contract, i) => {
-    const owner = contract.deployments.map((d) => ownerByAddress.get(d.address.toLowerCase())).find(Boolean)
+    const owner = contract.deployments.map((d) => ownerByAddress.get(normalize(d.address))).find(Boolean)
 
     if (!owner) {
-      for (const d of contract.deployments) ownerByAddress.set(d.address.toLowerCase(), contract)
+      for (const d of contract.deployments) ownerByAddress.set(normalize(d.address), contract)
       return
     }
 
@@ -104,17 +111,17 @@ function mergeContractsOnce(contracts: ContractShape[]): boolean {
       }
     }
 
-    const ownedAddresses = new Set(owner.deployments.map((d) => d.address.toLowerCase()))
+    const ownedAddresses = new Set(owner.deployments.map((d) => normalize(d.address)))
     for (const deployment of contract.deployments) {
-      if (ownedAddresses.has(deployment.address.toLowerCase())) {
-        const existing = owner.deployments.find((d) => d.address.toLowerCase() === deployment.address.toLowerCase())!
+      if (ownedAddresses.has(normalize(deployment.address))) {
+        const existing = owner.deployments.find((d) => normalize(d.address) === normalize(deployment.address))!
         existing.range =
           existing.range && deployment.range
             ? oldestRange(existing.range, deployment.range)
             : (existing.range ?? deployment.range)
       } else {
         owner.deployments.push(deployment)
-        ownerByAddress.set(deployment.address.toLowerCase(), owner)
+        ownerByAddress.set(normalize(deployment.address), owner)
       }
     }
 

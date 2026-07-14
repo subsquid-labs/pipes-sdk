@@ -53,9 +53,9 @@ export class TransformerBuilder<N extends NetworkType> {
 
   async render() {
     const transformerTemplates = await this.transformerBuilder.getTransformerTemplates()
-    const sinkArtifacts = buildTarget(this.config)
-    const targetTemplates = sinkArtifacts.sinkCode
-    const envTemplate = sinkArtifacts.envSchema
+    const targetArtifacts = buildTarget(this.config)
+    const targetTemplates = targetArtifacts.targetCode
+    const envTemplate = targetArtifacts.envSchema
 
     // TODO: rename this variable
     const componentsCode = [
@@ -68,7 +68,7 @@ export class TransformerBuilder<N extends NetworkType> {
 
     const deduplicatedImports = this.deduplicateImports(componentsCode)
 
-    const { code: sinkCode } = splitImportsAndCode(targetTemplates)
+    const { code: targetCode } = splitImportsAndCode(targetTemplates)
     const { code: envCode } = splitImportsAndCode(envTemplate)
     const transformersCode = transformerTemplates.map((t) => ({
       templateId: t.templateId,
@@ -86,7 +86,7 @@ export class TransformerBuilder<N extends NetworkType> {
       deduplicatedImports,
       envTemplate: envCode,
       transformerTemplates: transformersCode,
-      targetTemplate: sinkCode,
+      targetTemplate: targetCode,
     })
   }
 

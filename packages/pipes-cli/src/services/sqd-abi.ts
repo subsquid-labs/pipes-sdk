@@ -80,7 +80,9 @@ export class SqdAbiService {
 
     return Promise.all(
       contractAddresses.map((address) => {
-        const key = `${networkType}:${network}:${address.toLowerCase()}`
+        // EVM addresses are case-insensitive hex; SVM addresses are case-sensitive base58.
+        const normalized = networkType === 'evm' ? address.toLowerCase() : address
+        const key = `${networkType}:${network}:${normalized}`
         let cached = this.#contractData.get(key)
         if (!cached) {
           cached = service.getContractData([address], chainId).then(([metadata]) => metadata!)

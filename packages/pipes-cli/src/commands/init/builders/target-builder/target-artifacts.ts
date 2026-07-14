@@ -11,7 +11,7 @@ export interface TargetPostStep {
 }
 
 export interface TargetArtifacts {
-  sinkCode: string
+  targetCode: string
   envSchema: string
   files: TargetFile[]
   postSteps: TargetPostStep[]

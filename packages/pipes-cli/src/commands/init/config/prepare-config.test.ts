@@ -320,3 +320,29 @@ describe('prepareConfig — Copilot review regressions', () => {
     expect(addresses).toEqual(['0x1', '0x2'])
   })
 })
+
+describe('prepareConfig — SVM address case sensitivity', () => {
+  it('does not merge base58 deployments differing only by case', async () => {
+    const contract = {
+      contractName: 'jupiter',
+      contractEvents: [],
+      deployments: [
+        { address: 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4', range: { from: '1' } },
+        { address: 'jup6lkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4', range: { from: '2' } },
+      ],
+    }
+    const svmCustom = getTemplate('svm', 'custom')!
+    const config: Config<NetworkType> = {
+      projectFolder: '/tmp/proj',
+      networkType: 'svm',
+      defaultNetwork: 'solana-mainnet',
+      target: 'clickhouse',
+      packageManager: 'pnpm',
+      templates: [{ template: svmCustom, params: { contracts: [contract] } }],
+    }
+
+    await prepareConfig(config, { resolveContracts: async () => {} })
+
+    expect(contract.deployments).toHaveLength(2)
+  })
+})
