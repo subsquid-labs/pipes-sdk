@@ -39,23 +39,4 @@ export class EvmTransformerBuilder extends BaseTransformerBuilder<'evm'> {
   getNetworkImports() {
     return ['import { evmPortalStream } from "@subsquid/pipes/evm"']
   }
-
-  getTransformerTemplates() {
-    const ctx = {
-      network: this.config.defaultNetwork,
-      projectPath: '',
-      networkType: this.config.networkType,
-    }
-    return Promise.all(
-      this.config.templates.map(async ({ template, params }) => {
-        const artifacts = template.render(params, ctx)
-        const { transformer: code, decoderIds } = artifacts
-
-        if (decoderIds.length === 1) {
-          return { code, templateId: decoderIds[0] }
-        }
-        return { code, templateIds: decoderIds }
-      }),
-    )
-  }
 }

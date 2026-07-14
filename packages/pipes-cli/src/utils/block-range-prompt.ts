@@ -10,6 +10,8 @@ export interface BlockRange {
 }
 
 interface PromptBlockRangeOpts {
+  /** Context line shown with the prompts, e.g. "Block range for WETH9". */
+  message?: string
   networkType: NetworkType
   network: string
   contractAddresses?: string[]
@@ -55,7 +57,11 @@ async function promptFromBlock(opts: PromptBlockRangeOpts): Promise<string> {
 
   choices.push({ name: 'Start from a specific block', value: 'custom' })
 
-  const choice = await select<FromChoice>({ message: 'Where should indexing start?', choices })
+  const prefix = opts.message ? `${opts.message} — ` : ''
+  const choice = await select<FromChoice>({
+    message: prefix ? `${prefix}where should indexing start?` : 'Where should indexing start?',
+    choices,
+  })
 
   if (choice === 'latest') return 'latest'
   if (choice === 'deployment') return formatBlock(deploymentBlock!)

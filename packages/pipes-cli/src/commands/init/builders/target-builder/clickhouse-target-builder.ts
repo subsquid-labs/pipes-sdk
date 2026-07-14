@@ -3,9 +3,9 @@ import Mustache from 'mustache'
 import type { Config, NetworkType } from '~/types/init.js'
 
 import { clickhouseDefaults } from '../../templates/config-files/dynamic/docker-compose.js'
-import { groupContractsForDecoders } from '../../templates/pipes/evm/custom/decoder-grouping.js'
-import { tableName as chTableName, extractCreateTableNames } from './shared.js'
+import { type RenderedTemplate, renderTemplates } from '../render-templates.js'
 import type { TargetArtifacts, TargetFile } from './target-artifacts.js'
+import { insertEntries, uniqueTables } from './target-tables.js'
 
 const targetTemplate = `
 import path from 'node:path'
@@ -36,38 +36,20 @@ clickhouseTarget({
       await store.executeFiles(migrationsDir)
     },
     onData: async ({ data, store }) => {
-    {{#templates}}
-    {{#tableNames}}
+    {{#inserts}}
       await store.insert({
-        table: '{{{.}}}',
-        values: toSnakeCaseKeysArray(data.{{{templateId}}}),
+        table: '{{{table}}}',
+        values: toSnakeCaseKeysArray(data.{{{dataPath}}}),
         format: 'JSONEachRow',
       });
-    {{/tableNames}}
-    {{/templates}}
-    {{#customTemplates}}
-    {{#schemaNames}}
-      await store.insert({
-        table: '{{{tableName}}}',
-        values: toSnakeCaseKeysArray(data.{{decoderId}}.{{{event}}}),
-        format: 'JSONEachRow',
-      });
-    {{/schemaNames}}
-    {{/customTemplates}}
+    {{/inserts}}
     },
     onRollback: async ({ safeCursor, store }) => {
       await store.removeAllRows({
         tables: [
-        {{#templates}}
-        {{#tableNames}}
+        {{#tables}}
           '{{.}}',
-        {{/tableNames}}
-        {{/templates}}
-        {{#customTemplates}}
-        {{#schemaNames}}
-          '{{tableName}}',
-        {{/schemaNames}}
-        {{/customTemplates}}
+        {{/tables}}
         ],
         where: 'block_number > {latest:UInt32}',
         params: { latest: safeCursor.number },
@@ -92,57 +74,27 @@ CLICKHOUSE_USER=${clickhouseDefaults.user}
 CLICKHOUSE_PASSWORD=${clickhouseDefaults.password}
     `
 
-function renderCtx(config: Config<NetworkType>) {
-  return {
-    network: config.defaultNetwork,
-    projectPath: '',
-    networkType: config.networkType,
-  }
-}
-
-function renderTargetCode(config: Config<NetworkType>): string {
-  const ctx = renderCtx(config)
-
-  const templates = config.templates
-    .filter(({ template }) => template.id !== 'custom')
-    .map(({ template, params }) => ({
-      templateId: template.id,
-      tableNames: extractCreateTableNames(template.render(params, ctx).clickhouseTable),
-    }))
-
-  const customTemplates = config.templates
-    .filter(({ template }) => template.id === 'custom')
-    .flatMap(({ params }) => {
-      const contracts = (params as { contracts: Array<any> }).contracts
-      const grouping = groupContractsForDecoders(contracts)
-      return grouping.groups.map((group) => ({
-        decoderId: group.decoderId,
-        schemaNames: group.events.map((e) => ({
-          event: e.name,
-          tableName: chTableName(grouping, group.contracts[0].contractName, e, group.events),
-        })),
-      }))
-    })
-
+function renderTargetCode(rendered: RenderedTemplate[]): string {
   return Mustache.render(targetTemplate, {
-    templates,
-    customTemplates,
+    inserts: insertEntries(rendered),
+    tables: uniqueTables(rendered),
   })
 }
 
-function renderMigrationFiles(config: Config<NetworkType>): TargetFile[] {
-  const ctx = renderCtx(config)
-  return config.templates.map(({ template, params }) => ({
+function renderMigrationFiles(rendered: RenderedTemplate[]): TargetFile[] {
+  return rendered.map(({ template, artifacts }) => ({
     path: `migrations/${template.id}-migration.sql`,
-    content: template.render(params, ctx).clickhouseTable,
+    content: artifacts.clickhouseTable,
   }))
 }
 
 export function buildClickhouseTarget(config: Config<NetworkType>): TargetArtifacts {
+  const rendered = renderTemplates(config)
+
   return {
-    targetCode: renderTargetCode(config),
+    targetCode: renderTargetCode(rendered),
     envSchema,
-    files: [{ path: '.env', content: envFileContent }, ...renderMigrationFiles(config)],
+    files: [{ path: '.env', content: envFileContent }, ...renderMigrationFiles(rendered)],
     postSteps: [],
   }
 }

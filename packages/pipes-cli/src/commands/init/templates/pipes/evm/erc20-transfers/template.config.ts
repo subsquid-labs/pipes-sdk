@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { getTemplateDirname } from '~/utils/fs.js'
 import { TemplateReader } from '~/utils/template-reader.js'
 
+import { extractCreateTableNames } from '../../../../builders/target-builder/shared.js'
 import { type Deployment, DeploymentSchema } from '../../../contract-params.js'
 import { defineTemplate } from '../../../define-template.js'
 import { erc20DecoderGroups, renderTransformer } from './templates/transformer.js'
@@ -50,11 +51,18 @@ export const erc20TransfersTemplate = defineTemplate({
     return { deployments }
   },
   render(params) {
+    const clickhouseTable = templateReader.readClickhouseTable()
+    const tableNames = extractCreateTableNames(clickhouseTable)
+
     return {
       transformer: renderTransformer(params),
       postgresSchema: templateReader.readPgTable(),
-      clickhouseTable: templateReader.readClickhouseTable(),
+      clickhouseTable,
       decoderIds: erc20DecoderGroups(params).map((g) => g.decoderId),
+      // Every range-group decoder writes into the same static table(s).
+      tables: erc20DecoderGroups(params).flatMap((group) =>
+        tableNames.map((table) => ({ decoderId: group.decoderId, table })),
+      ),
     }
   },
 })

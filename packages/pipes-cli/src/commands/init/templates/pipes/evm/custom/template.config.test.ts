@@ -58,11 +58,9 @@ describe('evm customTemplate', () => {
     ])
   })
 
-  it('getGrouping() returns a stable reference on repeated calls for the same params', () => {
+  it('getGrouping() is deterministic for the same params', () => {
     const params = { contracts: [weth] }
-    const first = getGrouping(params)
-    const second = getGrouping(params)
-    expect(second).toBe(first)
+    expect(getGrouping(params)).toEqual(getGrouping(params))
   })
 
   it('prompt() fetches contract metadata, selects events, and collects deployments', async () => {

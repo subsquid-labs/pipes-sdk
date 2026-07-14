@@ -100,7 +100,7 @@ export class SqdAbiService {
     const key = `${network}:${address.toLowerCase()}`
     let cached = this.#creationBlocks.get(key)
     if (!cached) {
-      cached = new EvmAbiService().getContractCreationBlock(address, getEvmChainId(network))
+      cached = this.#evm.getContractCreationBlock(address, getEvmChainId(network))
       cached.catch(() => this.#creationBlocks.delete(key))
       this.#creationBlocks.set(key, cached)
     }
@@ -108,13 +108,11 @@ export class SqdAbiService {
     return cached
   }
 
+  readonly #evm = new EvmAbiService()
+  readonly #svm = new SvmAbiService()
+
   private getService(networkType: NetworkType): AbiService {
-    switch (networkType) {
-      case 'evm':
-        return new EvmAbiService()
-      case 'svm':
-        return new SvmAbiService()
-    }
+    return networkType === 'evm' ? this.#evm : this.#svm
   }
 }
 

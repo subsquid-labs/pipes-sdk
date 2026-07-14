@@ -34,18 +34,4 @@ export class SvmTransformerBuilder extends BaseTransformerBuilder<'svm'> {
   getNetworkImports(): string[] {
     return ['import { solanaPortalStream } from "@subsquid/pipes/solana"']
   }
-
-  getTransformerTemplates() {
-    const ctx = {
-      network: this.config.defaultNetwork,
-      projectPath: '',
-      networkType: this.config.networkType,
-    }
-    return Promise.all(
-      this.config.templates.map(({ template, params }) => {
-        const artifacts = template.render(params, ctx)
-        return { code: artifacts.transformer, templateId: template.id }
-      }),
-    )
-  }
 }

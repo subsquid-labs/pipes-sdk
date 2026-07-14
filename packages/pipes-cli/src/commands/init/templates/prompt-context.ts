@@ -26,8 +26,8 @@ export function createPromptContext(
     async checkbox<T>(message: string, choices: Array<{ name: string; value: T }>): Promise<T[]> {
       return checkbox<T>({ message, choices, pageSize: 15 })
     },
-    async blockRange(_message: string, opts?: { contractAddresses?: string[] }) {
-      return promptBlockRange({ networkType, network, contractAddresses: opts?.contractAddresses, abiService })
+    async blockRange(message: string, opts?: { contractAddresses?: string[] }) {
+      return promptBlockRange({ message, networkType, network, contractAddresses: opts?.contractAddresses, abiService })
     },
     abiService,
     network,
