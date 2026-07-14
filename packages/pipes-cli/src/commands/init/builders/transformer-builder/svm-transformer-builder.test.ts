@@ -39,7 +39,7 @@ describe('SVM Template Builder', () => {
       import path from "node:path";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
       import { createClient } from "@clickhouse/client";
-      import { enrichEvents, serializeJsonWithBigInt, toSnakeKeysArray } from "./utils/index.js";
+      import { enrichEvents, serializeJsonWithBigInt, toSnakeCaseKeysArray } from "./utils/index.js";
       import { instructions as whirpoolInstructions } from "./contracts/0x0000000000000000000000000000000000000000/index.js";
 
       const env = z.object({
@@ -98,7 +98,7 @@ describe('SVM Template Builder', () => {
           onData: async ({ data, store }) => {
             await store.insert({
               table: 'whirpool_swap',
-              values: toSnakeKeysArray(data.custom.Swap),
+              values: toSnakeCaseKeysArray(data.custom.Swap),
               format: 'JSONEachRow',
             });
           },

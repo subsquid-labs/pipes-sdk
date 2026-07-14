@@ -83,7 +83,7 @@ export class InitHandler {
 
   ${this.config.sink === 'postgresql' ? pgMessage : clickhouseMessage}
 
-  ${chalk.gray('Need help? Check our documentation at')} ${chalk.bold.gray.underline('https://beta.docs.sqd.dev/en/sdk/pipes-sdk')}`
+  ${chalk.gray('Need help? Check our documentation at')} ${chalk.bold.gray.underline('https://docs.sqd.dev/en/sdk/pipes-sdk')}`
 
     console.log(message)
   }

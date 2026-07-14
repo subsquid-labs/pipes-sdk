@@ -39,7 +39,7 @@ describe('EVM Template Builder', () => {
       import path from "node:path";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
       import { createClient } from "@clickhouse/client";
-      import { serializeJsonWithBigInt, toSnakeKeysArray } from "./utils/index.js";
+      import { serializeJsonWithBigInt, toSnakeCaseKeysArray } from "./utils/index.js";
 
       const env = z.object({
         CLICKHOUSE_USER: z.string(),
@@ -103,7 +103,7 @@ describe('EVM Template Builder', () => {
           onData: async ({ data, store }) => {
             await store.insert({
               table: 'erc20_transfers',
-              values: toSnakeKeysArray(data.erc20Transfers),
+              values: toSnakeCaseKeysArray(data.erc20Transfers),
               format: 'JSONEachRow',
             });
           },
@@ -143,7 +143,7 @@ describe('EVM Template Builder', () => {
       import path from "node:path";
       import { clickhouseTarget } from "@subsquid/pipes/targets/clickhouse";
       import { createClient } from "@clickhouse/client";
-      import { serializeJsonWithBigInt, toSnakeKeysArray } from "./utils/index.js";
+      import { serializeJsonWithBigInt, toSnakeCaseKeysArray } from "./utils/index.js";
       import { events as factoryEvents } from "./contracts/factory.js";
       import { events as poolEvents } from "./contracts/pool.js";
 
@@ -238,12 +238,12 @@ describe('EVM Template Builder', () => {
           onData: async ({ data, store }) => {
             await store.insert({
               table: 'erc20_transfers',
-              values: toSnakeKeysArray(data.erc20Transfers),
+              values: toSnakeCaseKeysArray(data.erc20Transfers),
               format: 'JSONEachRow',
             });
             await store.insert({
               table: 'uniswap_v3_swaps',
-              values: toSnakeKeysArray(data.uniswapV3Swaps),
+              values: toSnakeCaseKeysArray(data.uniswapV3Swaps),
               format: 'JSONEachRow',
             });
           },

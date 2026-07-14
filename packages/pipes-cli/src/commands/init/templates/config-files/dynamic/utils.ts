@@ -10,15 +10,15 @@ export type SnakeTopKeys<T> =
     ? { [K in keyof T as K extends string ? SnakeCase<K> : K]: T[K] }
     : T
 
-export const toSnakeKeys = <T extends Record<string, any>>(obj: T): SnakeTopKeys<T> => {
+export const toSnakeCaseKeys = <T extends Record<string, any>>(obj: T): SnakeTopKeys<T> => {
   const toSnake = (k: string) => k.replace(/[A-Z]/g, (m) => \`_\${m.toLowerCase()}\`)
   return Object.fromEntries(Object.entries(obj).map(([k, v]) => [toSnake(k), v])) as SnakeTopKeys<T>
 }
 
-export const toSnakeKeysArray = <T extends Record<string, any>>(
+export const toSnakeCaseKeysArray = <T extends Record<string, any>>(
   obj: T[],
 ): SnakeTopKeys<T>[] => {
-  return obj.map((o) => toSnakeKeys(o))
+  return obj.map((o) => toSnakeCaseKeys(o))
 }
 
 export function serializeJsonWithBigInt(obj: unknown): string {
