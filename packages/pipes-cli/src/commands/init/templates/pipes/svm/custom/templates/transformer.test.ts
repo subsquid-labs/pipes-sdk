@@ -96,3 +96,35 @@ describe('SVM custom transformer', () => {
     expect(keys).toEqual(['Swap', 'Claim'])
   })
 })
+
+describe('multi-deployment programs (Copilot round-2 regression)', () => {
+  it('does not duplicate instruction keys when one program has several same-range deployments', () => {
+    const params = {
+      contracts: [
+        {
+          contractName: 'jupiter',
+          contractEvents: [{ name: 'swap', type: 'event', inputs: [] }],
+          deployments: [
+            { address: 'Addr1111111111111111111111111111', range: { from: '10' } },
+            { address: 'Addr2222222222222222222222222222', range: { from: '10' } },
+          ],
+        },
+      ],
+    }
+
+    const groups = buildDecoderGroups(params)
+    expect(groups).toHaveLength(1)
+    // programId keeps every deployment address...
+    expect(groups[0]!.programs.map((p) => p.contractAddress)).toEqual([
+      'Addr1111111111111111111111111111',
+      'Addr2222222222222222222222222222',
+    ])
+    // ...but each instruction key appears exactly once.
+    const keys = groups[0]!.instructions.map((i) => i.uniqueKey)
+    expect(keys).toEqual([...new Set(keys)])
+    expect(keys).toEqual(['swap'])
+
+    const rendered = renderTransformer(params)
+    expect(rendered.match(/swap: jupiterInstructions\.swap/g)).toHaveLength(1)
+  })
+})

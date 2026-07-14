@@ -29,7 +29,7 @@ export function splitImportsAndCode(content: string): {
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement)) continue
 
-    const parsed = parseImportDeclaration(statement, sourceFile, normalized)
+    const parsed = parseImportDeclaration(statement, normalized)
     if (!parsed) continue
 
     imports.push(parsed)
@@ -48,11 +48,7 @@ export function splitImportsAndCode(content: string): {
   return { imports, code: code.trim() }
 }
 
-function parseImportDeclaration(
-  node: ts.ImportDeclaration,
-  sourceFile: ts.SourceFile,
-  content: string,
-): ParsedImport | undefined {
+function parseImportDeclaration(node: ts.ImportDeclaration, content: string): ParsedImport | undefined {
   if (!ts.isStringLiteral(node.moduleSpecifier)) return undefined
 
   const from = node.moduleSpecifier.text

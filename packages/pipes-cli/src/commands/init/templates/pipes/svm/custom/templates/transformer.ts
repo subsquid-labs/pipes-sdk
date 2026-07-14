@@ -83,7 +83,12 @@ export function buildDecoderGroups(params: CustomTemplateParams): DecoderGroup[]
 
 function makeGroup(decoderId: string, programs: Program[]): DecoderGroup {
   const range = programs[0]!.range
-  const instructions = programs.flatMap((p) =>
+
+  // Instructions are program-level: deployments of the same program share its
+  // IDL, so only the first entry per program name contributes — otherwise a
+  // multi-deployment program would emit duplicate instruction keys.
+  const uniquePrograms = [...new Map(programs.map((p) => [p.contractName, p])).values()]
+  const instructions = uniquePrograms.flatMap((p) =>
     p.contractEvents.map((e) => ({ contractName: p.contractName, name: e.name })),
   )
   const nameCounts = new Map<string, number>()
