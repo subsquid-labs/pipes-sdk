@@ -59,7 +59,7 @@ async function promptFromBlock(opts: PromptBlockRangeOpts): Promise<string> {
 
   const prefix = opts.message ? `${opts.message} — ` : ''
   const choice = await select<FromChoice>({
-    message: prefix ? `${prefix}where should indexing start?` : 'Where should indexing start?',
+    message: `${prefix}Where should indexing start?`,
     choices,
   })
 
