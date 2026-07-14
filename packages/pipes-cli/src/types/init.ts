@@ -1,7 +1,4 @@
 import type { ConfiguredTemplate } from '~/commands/init/templates/template.js'
-import { ContractMetadata } from '~/services/sqd-abi.js'
-
-export type WithContractMetadata<T extends object> = T & { contracts: ContractMetadata[] }
 
 export const packageManagerTypes = [
   { name: 'pnpm', value: 'pnpm', lockFile: 'pnpm-lock.yaml' },
@@ -20,15 +17,19 @@ export type NetworkType = (typeof networkTypes)[number]['value']
 export const targetTypes = [
   { name: 'ClickHouse', value: 'clickhouse' },
   { name: 'PostgreSQL', value: 'postgresql' },
-  { name: 'Memory', value: 'memory' },
 ] as const
-export type Sink = (typeof targetTypes)[number]['value']
+export type Target = (typeof targetTypes)[number]['value']
 
 export interface Config<N extends NetworkType> {
   projectFolder: string
   networkType: N
-  network: string
+  /**
+   * The network every template indexes. Named "default" because it is the
+   * project-wide fallback: when per-deployment networks land, a deployment
+   * without an explicit network inherits this one.
+   */
+  defaultNetwork: string
   templates: ConfiguredTemplate<N, any>[]
-  sink: Sink
+  target: Target
   packageManager: PackageManager
 }

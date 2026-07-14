@@ -60,6 +60,12 @@ abstract class AbiService {
 }
 
 export class SqdAbiService {
+  // Both remote lookups are pure per (network, address), and one init run asks for the
+  // same contract from several places (prompt, range prompt, typegen planning) — cache
+  // the promises so each contract is fetched at most once per service instance.
+  readonly #contractData = new Map<string, Promise<ContractMetadata>>()
+  readonly #creationBlocks = new Map<string, Promise<string>>()
+
   generateTypes(networkType: NetworkType, network: string, projectPath: string, contractAddresses: string[]) {
     return this.getService(networkType).generateTypes(
       projectPath,
@@ -69,15 +75,35 @@ export class SqdAbiService {
   }
 
   getContractData(networkType: NetworkType, network: string, contractAddresses: string[]): Promise<ContractMetadata[]> {
-    return this.getService(networkType).getContractData(
-      contractAddresses,
-      networkType === 'evm' ? getEvmChainId(network) : undefined,
+    const service = this.getService(networkType)
+    const chainId = networkType === 'evm' ? getEvmChainId(network) : undefined
+
+    return Promise.all(
+      contractAddresses.map((address) => {
+        const key = `${networkType}:${network}:${address.toLowerCase()}`
+        let cached = this.#contractData.get(key)
+        if (!cached) {
+          cached = service.getContractData([address], chainId).then(([metadata]) => metadata!)
+          // A failed fetch must not poison the cache — the user may retry with a fixed address.
+          cached.catch(() => this.#contractData.delete(key))
+          this.#contractData.set(key, cached)
+        }
+
+        return cached
+      }),
     )
   }
 
   async getContractCreationBlock(network: string, address: string): Promise<string> {
-    const chainid = getEvmChainId(network)
-    return new EvmAbiService().getContractCreationBlock(address, chainid)
+    const key = `${network}:${address.toLowerCase()}`
+    let cached = this.#creationBlocks.get(key)
+    if (!cached) {
+      cached = new EvmAbiService().getContractCreationBlock(address, getEvmChainId(network))
+      cached.catch(() => this.#creationBlocks.delete(key))
+      this.#creationBlocks.set(key, cached)
+    }
+
+    return cached
   }
 
   private getService(networkType: NetworkType): AbiService {
@@ -145,8 +171,15 @@ class EvmAbiService extends AbiService {
         contractEvents: this.parseEvents(JSON.parse(contractData.ABI)),
       }
     } catch (e) {
-      throw e
-      // TODO: handle error
+      // Domain errors already carry user-facing context; wrap raw fetch/parse
+      // failures (network down, API error body, malformed ABI JSON) with the
+      // address and network so the user knows which input to fix.
+      if (e instanceof ContractCodeNotVerifiedError) throw e
+      if (e instanceof Error && e.message.includes('deeply nested Proxy')) throw e
+
+      const network = getNetworkFromChainId(chainid)
+      const cause = e instanceof Error ? e.message : String(e)
+      throw new Error(`Failed to fetch the ABI for ${address} on ${network.name}: ${cause}`, { cause: e })
     }
   }
 

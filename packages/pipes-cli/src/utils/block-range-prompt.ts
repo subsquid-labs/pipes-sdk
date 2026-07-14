@@ -13,15 +13,19 @@ interface PromptBlockRangeOpts {
   networkType: NetworkType
   network: string
   contractAddresses?: string[]
+  abiService?: SqdAbiService
 }
 
 function formatBlock(block: string): string {
   return Number(block).toLocaleString('en-US')
 }
 
-async function fetchOldestDeploymentBlock(network: string, addresses: string[]): Promise<string | null> {
+async function fetchOldestDeploymentBlock(
+  network: string,
+  addresses: string[],
+  abiService = new SqdAbiService(),
+): Promise<string | null> {
   try {
-    const abiService = new SqdAbiService()
     const blocks = await Promise.all(addresses.map((a) => abiService.getContractCreationBlock(network, a)))
     const oldest = blocks.reduce((min, b) => (Number(b) < Number(min) ? b : min))
     return oldest
@@ -35,7 +39,7 @@ async function promptFromBlock(opts: PromptBlockRangeOpts): Promise<string> {
 
   let deploymentBlock: string | null = null
   if (canFetchDeployment) {
-    deploymentBlock = await fetchOldestDeploymentBlock(opts.network, opts.contractAddresses!)
+    deploymentBlock = await fetchOldestDeploymentBlock(opts.network, opts.contractAddresses!, opts.abiService)
   }
 
   type FromChoice = 'latest' | 'deployment' | 'custom'

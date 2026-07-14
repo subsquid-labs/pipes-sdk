@@ -4,6 +4,7 @@ import Mustache from 'mustache'
 import { ContractMetadata } from '~/services/sqd-abi.js'
 import { svmToClickhouseType } from '~/utils/db-type-map.js'
 
+import { referenceAddress } from '../../../../contract-params.js'
 import { CustomTemplateParams } from '../template.config.js'
 
 export const customContractChTemplate = `
@@ -28,7 +29,13 @@ ORDER BY (block_number, transaction_index, instruction_address);
 {{/contracts}}
 `
 
-export function renderClickhouse({ contracts }: CustomTemplateParams) {
+export function renderClickhouse({ contracts: contractEntries }: CustomTemplateParams) {
+  // Tables are contract-level (shaped by the event set); deployments share them.
+  const contracts = contractEntries.map((c) => ({
+    contractName: c.contractName,
+    contractEvents: c.contractEvents,
+    contractAddress: referenceAddress(c),
+  }))
   const contractsWithDbTypes = getContractWithDbTypes(contracts)
 
   return Mustache.render(customContractChTemplate, {

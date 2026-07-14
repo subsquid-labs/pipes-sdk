@@ -25,15 +25,19 @@ const approvalEvent = {
   ],
 }
 
-function configWithContracts(
-  contracts: Array<{ contractAddress: string; contractName: string; [key: string]: unknown }>,
-): Config<NetworkType> {
+type TestContract = {
+  contractName: string
+  contractEvents?: Array<typeof transferEvent>
+  deployments: Array<{ address: string; range?: { from: string; to?: string } }>
+}
+
+function configWithContracts(contracts: TestContract[]): Config<NetworkType> {
   const custom = getTemplate('evm', 'custom')!
   return {
     projectFolder: '/tmp/proj',
     networkType: 'evm',
-    network: 'ethereum-mainnet',
-    sink: 'clickhouse',
+    defaultNetwork: 'ethereum-mainnet',
+    target: 'clickhouse',
     packageManager: 'pnpm',
     templates: [
       {
@@ -44,24 +48,31 @@ function configWithContracts(
   }
 }
 
+function contractsOf(config: Config<NetworkType>): TestContract[] {
+  return (config.templates[0]!.params as { contracts: TestContract[] }).contracts
+}
+
 describe('prepareConfig', () => {
-  it('invokes the resolver for templates whose params contain contracts', async () => {
+  it('invokes the resolver with reference-address views of the contracts', async () => {
     const config = configWithContracts([
-      { contractAddress: '0x1111', contractName: 'TokenA' },
-      { contractAddress: '0x2222', contractName: 'TokenB' },
+      { contractName: 'TokenA', deployments: [{ address: '0x1111' }] },
+      { contractName: 'TokenB', deployments: [{ address: '0x2222' }, { address: '0x3333' }] },
     ])
     const resolveContracts = vi.fn(async () => {})
 
     await prepareConfig(config, { resolveContracts })
 
     expect(resolveContracts).toHaveBeenCalledTimes(1)
-    expect(resolveContracts).toHaveBeenCalledWith((config.templates[0]!.params as { contracts: unknown }).contracts)
+    expect(resolveContracts).toHaveBeenCalledWith([
+      { contractAddress: '0x1111', contractName: 'TokenA' },
+      { contractAddress: '0x2222', contractName: 'TokenB' },
+    ])
   })
 
   it('lets the resolver mutate contract names to make them unique', async () => {
     const config = configWithContracts([
-      { contractAddress: '0x1111aaaa', contractName: 'Token' },
-      { contractAddress: '0x2222bbbb', contractName: 'Token' },
+      { contractName: 'Token', deployments: [{ address: '0x1111aaaa' }] },
+      { contractName: 'Token', deployments: [{ address: '0x2222bbbb' }] },
     ])
     const resolveContracts = vi.fn(async (contracts: Array<{ contractAddress: string; contractName: string }>) => {
       const seen = new Set<string>()
@@ -75,15 +86,11 @@ describe('prepareConfig', () => {
 
     await prepareConfig(config, { resolveContracts })
 
-    const renamed = (
-      config.templates[0]!.params as {
-        contracts: Array<{ contractName: string }>
-      }
-    ).contracts.map((c) => c.contractName)
+    const renamed = contractsOf(config).map((c) => c.contractName)
     expect(new Set(renamed).size).toBe(renamed.length)
   })
 
-  describe('duplicate-address merging', () => {
+  describe('deployment and contract merging', () => {
     let warnSpy: ReturnType<typeof vi.spyOn>
 
     beforeEach(() => {
@@ -94,141 +101,184 @@ describe('prepareConfig', () => {
       warnSpy.mockRestore()
     })
 
-    it('collapses identical addresses with identical events into one entry', async () => {
-      const contracts = [
+    it('dedupes an address listed twice within one contract, keeping the oldest range', async () => {
+      const config = configWithContracts([
         {
-          contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
           contractName: 'WETH',
           contractEvents: [transferEvent],
-          range: { from: '4719568' },
+          deployments: [
+            { address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: '20000000' } },
+            { address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: '4719568' } },
+          ],
         },
-        {
-          contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-          contractName: 'WETH',
-          contractEvents: [transferEvent],
-          range: { from: '4719568' },
-        },
-      ]
-      const config = configWithContracts(contracts)
+      ])
       await prepareConfig(config, { resolveContracts: vi.fn(async () => {}) })
 
-      const merged = (config.templates[0]!.params as { contracts: typeof contracts }).contracts
+      const merged = contractsOf(config)
       expect(merged).toHaveLength(1)
-      expect(merged[0]!.contractEvents).toHaveLength(1)
+      expect(merged[0]!.deployments).toEqual([
+        { address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: '4719568' } },
+      ])
       expect(warnSpy).toHaveBeenCalledOnce()
     })
 
-    it('unions contractEvents when duplicate addresses have disjoint event sets', async () => {
-      const contracts = [
+    it('collapses contract entries sharing a deployment address into one entry', async () => {
+      const config = configWithContracts([
         {
-          contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
           contractName: 'WETH',
           contractEvents: [transferEvent],
-          range: { from: '4719568' },
+          deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: '4719568' } }],
         },
         {
-          contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-          contractName: 'WETH2',
-          contractEvents: [approvalEvent],
-          range: { from: '4719568' },
+          contractName: 'WETH',
+          contractEvents: [transferEvent],
+          deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: '4719568' } }],
         },
-      ]
-      const config = configWithContracts(contracts)
+      ])
       await prepareConfig(config, { resolveContracts: vi.fn(async () => {}) })
 
-      const merged = (config.templates[0]!.params as { contracts: typeof contracts }).contracts
+      const merged = contractsOf(config)
       expect(merged).toHaveLength(1)
-      expect(merged[0]!.contractName).toBe('WETH')
-      expect(merged[0]!.contractEvents.map((e) => e.name).sort()).toEqual(['Approval', 'Transfer'])
+      expect(merged[0]!.contractEvents).toHaveLength(1)
+      expect(merged[0]!.deployments).toHaveLength(1)
+      expect(warnSpy).toHaveBeenCalledOnce()
     })
 
-    it('dedups overlapping events by signature across duplicate addresses', async () => {
-      const contracts = [
+    it('unions contractEvents when merged contract entries have disjoint event sets', async () => {
+      const config = configWithContracts([
         {
-          contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
           contractName: 'WETH',
-          contractEvents: [transferEvent, approvalEvent],
-          range: { from: '4719568' },
+          contractEvents: [transferEvent],
+          deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: '4719568' } }],
         },
         {
-          contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
           contractName: 'WETH2',
           contractEvents: [approvalEvent],
-          range: { from: '4719568' },
+          deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: '4719568' } }],
         },
-      ]
-      const config = configWithContracts(contracts)
+      ])
       await prepareConfig(config, { resolveContracts: vi.fn(async () => {}) })
 
-      const merged = (config.templates[0]!.params as { contracts: typeof contracts }).contracts
+      const merged = contractsOf(config)
+      expect(merged).toHaveLength(1)
+      expect(merged[0]!.contractName).toBe('WETH')
+      expect(merged[0]!.contractEvents!.map((e) => e.name).sort()).toEqual(['Approval', 'Transfer'])
+    })
+
+    it('dedups overlapping events by signature when merging contract entries', async () => {
+      const config = configWithContracts([
+        {
+          contractName: 'WETH',
+          contractEvents: [transferEvent, approvalEvent],
+          deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: '4719568' } }],
+        },
+        {
+          contractName: 'WETH2',
+          contractEvents: [approvalEvent],
+          deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: '4719568' } }],
+        },
+      ])
+      await prepareConfig(config, { resolveContracts: vi.fn(async () => {}) })
+
+      const merged = contractsOf(config)
       expect(merged).toHaveLength(1)
       expect(merged[0]!.contractEvents).toHaveLength(2)
     })
 
-    it('keeps the oldest numeric range when merging duplicate addresses', async () => {
-      const contracts = [
+    it('keeps the oldest numeric range when merging a shared deployment across contract entries', async () => {
+      const config = configWithContracts([
         {
-          contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
           contractName: 'WETH',
           contractEvents: [transferEvent],
-          range: { from: '20000000' },
+          deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: '20000000' } }],
         },
         {
-          contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
           contractName: 'WETH2',
           contractEvents: [transferEvent],
-          range: { from: '4719568' },
+          deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: '4719568' } }],
         },
-      ]
-      const config = configWithContracts(contracts)
+      ])
       await prepareConfig(config, { resolveContracts: vi.fn(async () => {}) })
 
-      const merged = (config.templates[0]!.params as { contracts: typeof contracts }).contracts
-      expect(merged[0]!.range.from).toBe('4719568')
+      const merged = contractsOf(config)
+      expect(merged[0]!.deployments[0]!.range!.from).toBe('4719568')
+    })
+
+    it('unions deployments when two contract entries share one address but not the others', async () => {
+      const config = configWithContracts([
+        {
+          contractName: 'WETH',
+          contractEvents: [transferEvent],
+          deployments: [{ address: '0x1111', range: { from: '100' } }],
+        },
+        {
+          contractName: 'AlsoWeth',
+          contractEvents: [transferEvent],
+          deployments: [
+            { address: '0x1111', range: { from: '100' } },
+            { address: '0x2222', range: { from: '200' } },
+          ],
+        },
+      ])
+      await prepareConfig(config, { resolveContracts: vi.fn(async () => {}) })
+
+      const merged = contractsOf(config)
+      expect(merged).toHaveLength(1)
+      expect(merged[0]!.contractName).toBe('WETH')
+      expect(merged[0]!.deployments).toEqual([
+        { address: '0x1111', range: { from: '100' } },
+        { address: '0x2222', range: { from: '200' } },
+      ])
     })
 
     it('treats case-insensitive addresses as duplicates', async () => {
-      const contracts = [
+      const config = configWithContracts([
         {
-          contractAddress: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
           contractName: 'WETH',
           contractEvents: [transferEvent],
-          range: { from: 'latest' },
+          deployments: [{ address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', range: { from: 'latest' } }],
         },
         {
-          contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
           contractName: 'weth',
           contractEvents: [transferEvent],
-          range: { from: 'latest' },
+          deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: 'latest' } }],
         },
-      ]
-      const config = configWithContracts(contracts)
+      ])
       await prepareConfig(config, { resolveContracts: vi.fn(async () => {}) })
 
-      const merged = (config.templates[0]!.params as { contracts: typeof contracts }).contracts
-      expect(merged).toHaveLength(1)
+      expect(contractsOf(config)).toHaveLength(1)
     })
   })
 
-  it('skips templates whose params do not contain a contracts array', async () => {
+  it('dedupes bare deployments (fixed-ABI templates) without invoking the resolver', async () => {
     const erc20 = getTemplate('evm', 'erc20Transfers')!
     const config: Config<NetworkType> = {
       projectFolder: '/tmp/proj',
       networkType: 'evm',
-      network: 'ethereum-mainnet',
-      sink: 'clickhouse',
+      defaultNetwork: 'ethereum-mainnet',
+      target: 'clickhouse',
       packageManager: 'pnpm',
       templates: [
         {
           template: erc20,
-          params: { contractAddresses: [], range: { from: '1' } },
+          params: {
+            deployments: [
+              { address: '0xaaaa', range: { from: '200' } },
+              { address: '0xAAAA', range: { from: '100' } },
+            ],
+          },
         },
       ],
     }
     const resolveContracts = vi.fn(async () => {})
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     await prepareConfig(config, { resolveContracts })
 
     expect(resolveContracts).not.toHaveBeenCalled()
+    expect((config.templates[0]!.params as { deployments: unknown[] }).deployments).toEqual([
+      { address: '0xaaaa', range: { from: '100' } },
+    ])
+    warnSpy.mockRestore()
   })
 })

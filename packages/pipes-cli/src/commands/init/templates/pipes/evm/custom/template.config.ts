@@ -1,38 +1,23 @@
 import z from 'zod'
 
-import { ContractMetadata, SqdAbiService } from '~/services/sqd-abi.js'
-import { resolveDuplicateContractNames } from '~/utils/resolve-duplicate-contracts.js'
+import { RawAbiEvent, SqdAbiService } from '~/services/sqd-abi.js'
 
+import {
+  type ContractParams,
+  ContractSchema,
+  type Deployment,
+  flattenContracts,
+  referenceAddress,
+} from '../../../contract-params.js'
+import type { PromptContext } from '../../../define-template.js'
 import { defineTemplate } from '../../../define-template.js'
 import { DecoderGrouping, groupContractsForDecoders } from './decoder-grouping.js'
 import { renderClickhouse } from './templates/clickhouse-table.sql.js'
 import { renderSchema } from './templates/pg-table.js'
 import { renderTransformer } from './templates/transformer.js'
 
-const RawInputSchema: z.ZodType<{ name: string; type: string; components?: unknown }> = z.lazy(() =>
-  z.object({
-    name: z.string(),
-    type: z.string(),
-    components: z.array(RawInputSchema).optional(),
-  }),
-)
-
-const RawAbiEventSchema = z.object({ name: z.string(), type: z.string(), inputs: z.array(RawInputSchema) })
-
-const BlockRangeSchema = z.object({
-  from: z.string(),
-  to: z.string().optional(),
-})
-
 export const CustomTemplateParamsSchema = z.object({
-  contracts: z.array(
-    z.object({
-      contractAddress: z.string(),
-      contractName: z.string(),
-      contractEvents: z.array(RawAbiEventSchema),
-      range: BlockRangeSchema.default({ from: 'latest' }),
-    }),
-  ),
+  contracts: z.array(ContractSchema).describe('Contracts to track: ABI-level identity plus its deployments'),
 })
 
 export type CustomTemplateParams = z.infer<typeof CustomTemplateParamsSchema>
@@ -42,9 +27,45 @@ const groupingCache = new WeakMap<CustomTemplateParams['contracts'], DecoderGrou
 export function getGrouping(params: CustomTemplateParams): DecoderGrouping {
   const cached = groupingCache.get(params.contracts)
   if (cached) return cached
-  const grouping = groupContractsForDecoders(params.contracts)
+  const grouping = groupContractsForDecoders(flattenContracts(params.contracts))
   groupingCache.set(params.contracts, grouping)
   return grouping
+}
+
+async function promptContract(ctx: PromptContext): Promise<ContractParams> {
+  // Contract level: the reference deployment's address is how we obtain the ABI.
+  const address = (await ctx.text('Contract address')).trim()
+  const [metadata] = await ctx.abiService.getContractData('evm', ctx.network, [address])
+
+  const choices = metadata!.contractEvents
+    .map((event) => ({ name: event.name, value: event }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  const events = (await ctx.checkbox(
+    `Pick the events to track for ${metadata!.contractName}`,
+    choices,
+  )) as RawAbiEvent[]
+
+  // Deployment level: the reference deployment first, then any further ones.
+  const deployments: Deployment[] = [
+    {
+      address,
+      range: await ctx.blockRange(`Block range for ${metadata!.contractName}`, { contractAddresses: [address] }),
+    },
+  ]
+
+  while (await ctx.confirm(`Add another deployment of ${metadata!.contractName}?`, false)) {
+    const extraAddress = (await ctx.text(`Deployment address of ${metadata!.contractName}`)).trim()
+    deployments.push({
+      address: extraAddress,
+      range: await ctx.blockRange(`Block range for ${extraAddress}`, { contractAddresses: [extraAddress] }),
+    })
+  }
+
+  return {
+    contractName: metadata!.contractName,
+    contractEvents: events,
+    deployments,
+  }
 }
 
 export const customTemplate = defineTemplate({
@@ -53,42 +74,20 @@ export const customTemplate = defineTemplate({
   networkType: 'evm',
   paramsSchema: CustomTemplateParamsSchema,
   async prompt(ctx) {
-    const addressesInput = await ctx.text('Contract addresses (comma separated)')
-    const addresses = addressesInput
-      .split(',')
-      .map((address) => address.trim())
-      .filter(Boolean)
+    const contracts: ContractParams[] = [await promptContract(ctx)]
 
-    const metadata = await ctx.abiService.getContractData('evm', ctx.network, addresses)
-    await resolveDuplicateContractNames(metadata)
-
-    const contracts: (ContractMetadata & { range: { from: string; to?: string } })[] = []
-    for (const contract of metadata) {
-      const choices = contract.contractEvents
-        .map((event) => ({ name: event.name, value: event }))
-        .sort((a, b) => a.name.localeCompare(b.name))
-
-      const events = await ctx.checkbox(`Pick the events to track for ${contract.contractName}`, choices)
-      const range = await ctx.blockRange(`Block range for ${contract.contractName}`)
-
-      contracts.push({
-        contractAddress: contract.contractAddress,
-        contractName: contract.contractName,
-        contractEvents: events as any,
-        range,
-      })
+    while (await ctx.confirm('Add another contract?', false)) {
+      contracts.push(await promptContract(ctx))
     }
 
+    // Duplicate-name resolution is centralized in prepareConfig, which runs for
+    // both the interactive and --config paths.
     return { contracts }
   },
   async postSetup(params, ctx) {
-    const abiService = new SqdAbiService()
-    await abiService.generateTypes(
-      'evm',
-      ctx.network,
-      ctx.projectPath,
-      params.contracts.map((c) => c.contractAddress),
-    )
+    // Typegen needs one deployment per contract — every deployment shares the ABI.
+    const abiService = ctx.abiService ?? new SqdAbiService()
+    await abiService.generateTypes('evm', ctx.network, ctx.projectPath, params.contracts.map(referenceAddress))
   },
   render(params) {
     const grouping = getGrouping(params)

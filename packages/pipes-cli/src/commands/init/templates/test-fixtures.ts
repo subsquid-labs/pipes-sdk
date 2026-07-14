@@ -16,10 +16,13 @@ export function configured<N extends NetworkType>(
 }
 
 export const fixtures = {
-  erc20Transfers: (overrides: Partial<{ contractAddresses: string[]; range: { from: string; to?: string } }> = {}) =>
+  erc20Transfers: (
+    overrides: Partial<{ deployments: Array<{ address: string; range: { from: string; to?: string } }> }> = {},
+  ) =>
     configured('evm', 'erc20Transfers', {
-      contractAddresses: overrides.contractAddresses ?? ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
-      range: overrides.range ?? { from: '12,369,621' },
+      deployments: overrides.deployments ?? [
+        { address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: '12,369,621' } },
+      ],
     }),
 
   uniswapV3Swaps: (overrides: Partial<{ factoryAddress: string; range: { from: string; to?: string } }> = {}) =>
@@ -36,7 +39,6 @@ export const fixtures = {
 }
 
 export const wethContract = {
-  contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
   contractName: 'WETH9',
   contractEvents: [
     {
@@ -58,11 +60,10 @@ export const wethContract = {
       ],
     },
   ],
-  range: { from: 'latest' },
+  deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: 'latest' } }],
 }
 
 export const overloadedApprovalContract = {
-  contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
   contractName: 'OverloadedToken',
   contractEvents: [
     {
@@ -94,11 +95,10 @@ export const overloadedApprovalContract = {
       ],
     },
   ],
-  range: { from: 'latest' },
+  deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: 'latest' } }],
 }
 
 export const seaportContract = {
-  contractAddress: '0x00000000000001ad428e4906aE43D8F9852d0dD6',
   contractName: 'Seaport',
   contractEvents: [
     {
@@ -133,11 +133,10 @@ export const seaportContract = {
       ],
     },
   ],
-  range: { from: 'latest' },
+  deployments: [{ address: '0x00000000000001ad428e4906aE43D8F9852d0dD6', range: { from: 'latest' } }],
 }
 
 export const whirlpoolContract = {
-  contractAddress: '0x0000000000000000000000000000000000000000',
   contractName: 'whirpool',
   contractEvents: [
     {
@@ -150,5 +149,5 @@ export const whirlpoolContract = {
       ],
     },
   ],
-  range: { from: 'latest' },
+  deployments: [{ address: '0x0000000000000000000000000000000000000000', range: { from: 'latest' } }],
 }

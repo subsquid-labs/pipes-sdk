@@ -5,6 +5,7 @@ import { ContractMetadata, RawAbiItem } from '~/services/sqd-abi.js'
 import { svmToPostgresType } from '~/utils/db-type-map.js'
 
 import { tableToSchemaName } from '../../../../../builders/schema-builder/index.js'
+import { referenceAddress } from '../../../../contract-params.js'
 import { CustomTemplateParams } from '../template.config.js'
 
 export const customContractPgTemplate = `
@@ -47,7 +48,13 @@ export const {{schemaName}} = pgTable(
 export const eventTableName = (contract: ContractMetadata, event: RawAbiItem) =>
   toSnakeCase(`${contract.contractName}_${event.name}`)
 
-export function renderSchema({ contracts }: CustomTemplateParams) {
+export function renderSchema({ contracts: contractEntries }: CustomTemplateParams) {
+  // Tables are contract-level (shaped by the event set); deployments share them.
+  const contracts = contractEntries.map((c) => ({
+    contractName: c.contractName,
+    contractEvents: c.contractEvents,
+    contractAddress: referenceAddress(c),
+  }))
   const contracsWithDbTypes = getContractWithDbTypes(contracts)
 
   return Mustache.render(customContractPgTemplate, {

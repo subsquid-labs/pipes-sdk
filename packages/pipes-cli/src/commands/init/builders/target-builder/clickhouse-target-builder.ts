@@ -5,9 +5,9 @@ import type { Config, NetworkType } from '~/types/init.js'
 import { clickhouseDefaults } from '../../templates/config-files/dynamic/docker-compose.js'
 import { groupContractsForDecoders } from '../../templates/pipes/evm/custom/decoder-grouping.js'
 import { tableName as chTableName, extractCreateTableNames } from './shared.js'
-import type { SinkArtifacts, SinkFile } from './sink-artifacts.js'
+import type { TargetArtifacts, TargetFile } from './target-artifacts.js'
 
-const sinkTemplate = `
+const targetTemplate = `
 import path from 'node:path'
 import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
 import { createClient } from '@clickhouse/client'
@@ -94,7 +94,7 @@ CLICKHOUSE_PASSWORD=${clickhouseDefaults.password}
 
 function renderCtx(config: Config<NetworkType>) {
   return {
-    network: config.network,
+    network: config.defaultNetwork,
     projectPath: '',
     networkType: config.networkType,
   }
@@ -124,13 +124,13 @@ function renderSinkCode(config: Config<NetworkType>): string {
       }))
     })
 
-  return Mustache.render(sinkTemplate, {
+  return Mustache.render(targetTemplate, {
     templates,
     customTemplates,
   })
 }
 
-function renderMigrationFiles(config: Config<NetworkType>): SinkFile[] {
+function renderMigrationFiles(config: Config<NetworkType>): TargetFile[] {
   const ctx = renderCtx(config)
   return config.templates.map(({ template, params }) => ({
     path: `migrations/${template.id}-migration.sql`,
@@ -138,7 +138,7 @@ function renderMigrationFiles(config: Config<NetworkType>): SinkFile[] {
   }))
 }
 
-export function buildClickhouseSink(config: Config<NetworkType>): SinkArtifacts {
+export function buildClickhouseTarget(config: Config<NetworkType>): TargetArtifacts {
   return {
     sinkCode: renderSinkCode(config),
     envSchema,

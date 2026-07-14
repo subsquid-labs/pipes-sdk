@@ -25,14 +25,13 @@ export async function main() {
 {{/transformerTemplates}}
     },
   })
-  .pipeTo({{{sinkTemplate}}})
+  .pipeTo({{{targetTemplate}}})
 }
 
 void main()
 `
 
 export class EvmTransformerBuilder extends BaseTransformerBuilder<'evm'> {
-  // TODO: move deduplication logic to this function
   getTemplate(): string {
     return template
   }
@@ -43,7 +42,7 @@ export class EvmTransformerBuilder extends BaseTransformerBuilder<'evm'> {
 
   getTransformerTemplates() {
     const ctx = {
-      network: this.config.network,
+      network: this.config.defaultNetwork,
       projectPath: '',
       networkType: this.config.networkType,
     }

@@ -35,7 +35,7 @@ export const uniswapV3SwapsTemplate = defineTemplate({
   copySrc: 'src',
   async prompt(ctx) {
     const factoryAddress = await ctx.text('Uniswap V3 compatible factory address', defaults.factoryAddress)
-    const range = await ctx.blockRange('Block range')
+    const range = await ctx.blockRange('Block range', { contractAddresses: [factoryAddress.trim()] })
     return { factoryAddress: factoryAddress.trim(), range }
   },
   render(params) {

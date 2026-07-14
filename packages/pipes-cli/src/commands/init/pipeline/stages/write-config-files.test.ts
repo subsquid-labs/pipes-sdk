@@ -5,7 +5,7 @@ import { writeConfigFilesStage } from './write-config-files.js'
 
 describe('writeConfigFilesStage', () => {
   it('writes the ordered config files for pnpm + clickhouse', async () => {
-    const { ctx, writer } = makeTestContext({ packageManager: 'pnpm', sink: 'clickhouse' })
+    const { ctx, writer } = makeTestContext({ packageManager: 'pnpm', target: 'clickhouse' })
 
     await writeConfigFilesStage.run(ctx)
 
@@ -38,7 +38,7 @@ describe('writeConfigFilesStage', () => {
   })
 
   it('does not write .env or drizzle.config.ts', async () => {
-    const { ctx, writer } = makeTestContext({ sink: 'postgresql' })
+    const { ctx, writer } = makeTestContext({ target: 'postgresql' })
 
     await writeConfigFilesStage.run(ctx)
 

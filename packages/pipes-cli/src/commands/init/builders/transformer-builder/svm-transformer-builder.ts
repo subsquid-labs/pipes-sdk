@@ -20,7 +20,7 @@ export async function main() {
 {{/transformerTemplates}}
     },
   })
-  .pipeTo({{{sinkTemplate}}})
+  .pipeTo({{{targetTemplate}}})
 }
 
 void main()
@@ -37,7 +37,7 @@ export class SvmTransformerBuilder extends BaseTransformerBuilder<'svm'> {
 
   getTransformerTemplates() {
     const ctx = {
-      network: this.config.network,
+      network: this.config.defaultNetwork,
       projectPath: '',
       networkType: this.config.networkType,
     }

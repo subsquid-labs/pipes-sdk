@@ -20,11 +20,11 @@ src/
 │   └── init/
 │       ├── builders/           # Code generation builders
 │       │   ├── schema-builder/ # Database schema generation
-│       │   ├── sink-builder/   # Database target configuration
+│       │   ├── target-builder/ # Database target configuration
 │       │   └── transformer-builder/ # Data transformer generation
 │       ├── config/
 │       │   ├── networks.ts     # Network configurations (EVM/SVM)
-│       │   ├── targets.ts      # Available targets (ClickHouse, PostgreSQL, Memory)
+│       │   ├── targets.ts      # Available targets (ClickHouse, PostgreSQL)
 │       │   └── templates.ts    # Template registry
 │       ├── templates/
 │       │   ├── config-files/   # Project scaffolding files
@@ -36,7 +36,7 @@ src/
 ├── services/
 │   └── sqd-abi.ts              # ABI fetching and typegen
 ├── types/
-│   └── init.ts                 # Core types and PipeTemplateMeta class
+│   └── init.ts                 # Core types (Config, NetworkType, Target)
 └── utils/                      # Helper utilities
 ```
 
@@ -48,8 +48,7 @@ src/
 
 ### Targets
 - **ClickHouse**: Fast columnar database
-- **PostgreSQL**: Traditional relational database  
-- **Memory**: In-memory target (coming soon)
+- **PostgreSQL**: Traditional relational database
 
 ### Package Managers
 - pnpm
@@ -75,289 +74,103 @@ Major networks include: Ethereum, Arbitrum, Base, BSC, Polygon, Optimism, Avalan
 
 ### SVM Templates
 - **custom**: Bring your own programs with IDL-based typegen
+- **tokenBalances**: Track SPL token balance changes
 
 ## Adding New Templates
 
-Templates are defined using the `PipeTemplateMeta` abstract class which provides a structured way to create reusable pipeline configurations.
-
-### Step 1: Create Template Directory Structure
+Templates are defined with the `defineTemplate` helper (`src/commands/init/templates/define-template.ts`).
 
 ```
 src/commands/init/templates/pipes/{evm|svm}/your-template-name/
-├── template.config.ts         # Required: Template configuration class
-├── templates/                 # Required: Template files
-│   ├── transformer.ts         # Required: Transformer logic
-│   ├── pg-table.ts           # Required: PostgreSQL/Drizzle schema
-│   └── clickhouse-table.sql  # Required: ClickHouse schema
-└── src/                       # Optional: Additional source files (contracts, utilities)
+├── template.config.ts         # Required: defineTemplate(...) call
+├── templates/                 # Required: render sources
+│   ├── transformer.ts         # Transformer code (static string or Mustache render fn)
+│   ├── pg-table.ts            # PostgreSQL/Drizzle schema
+│   └── clickhouse-table.sql.ts# ClickHouse schema
+└── src/                       # Optional: files copied into the project (copySrc)
 ```
-
-### Step 2: Implement Template Config Class
-
-Create `template.config.ts` extending `PipeTemplateMeta`:
 
 ```ts
 import { z } from 'zod'
-import { PipeTemplateMeta } from '~/types/init.js'
-import { getTemplateDirname } from '~/utils/fs.js'
-import { TemplateReader } from '~/utils/template-reader.js'
 
-// 1. Define parameter schema (optional)
-const YourTemplateParamsSchema = z.object({
-  contractAddresses: z.array(z.string())
-    .default(['0x...'])
-    .describe('Array of contract addresses to track'),
-  someOption: z.string()
-    .default('value')
-    .describe('Description shown in prompt'),
+import { defineTemplate } from '../../../define-template.js'
+
+const ParamsSchema = z.object({
+  deployments: z
+    .array(z.object({ address: z.string(), range: z.object({ from: z.string(), to: z.string().optional() }) }))
+    .describe('Deployments to track'),
 })
 
-type YourTemplateParams = z.infer<typeof YourTemplateParamsSchema>
-
-// 2. Create template reader
-const templateReader = new TemplateReader(
-  getTemplateDirname('evm'), // or 'svm'
-  'your-template-name'
-)
-
-// 3. Implement template class
-class YourTemplate extends PipeTemplateMeta<'evm', typeof YourTemplateParamsSchema> {
-  // Required properties
-  templateId = 'yourTemplateName'      // Unique identifier (camelCase)
-  templateName = 'Your Template Name'  // Display name
-  networkType = 'evm' as const         // 'evm' or 'svm'
-
-  // Optional: Parameter schema
-  override paramsSchema = YourTemplateParamsSchema
-  override defaultParams = { contractAddresses: ['0x...'], someOption: 'value' }
-  
-  // Optional: Disable template in TUI
-  override disabled = false
-
-  // Required: Render transformer code
-  override renderTransformers() {
-    // Option 1: Use template reader for static templates
-    return templateReader.readTransformer()
-    
-    // Option 2: Use custom render function for dynamic templates
-    return renderTransformer(this.getParams())
-  }
-
-  // Required: Render PostgreSQL schema
-  override renderPostgresSchemas() {
-    return templateReader.readPgTable()
-  }
-
-  // Required: Render ClickHouse schema
-  override renderClickhouseTables() {
-    return templateReader.readClickhouseTable()
-  }
-
-  // Optional: Custom parameter collection
-  override async collectParamsCustom(network: string) {
-    // Implement complex interactive prompts
-    // Example: Use SqdAbiService to fetch contract data
-    // Set params using this.setParams({ ... })
-  }
-
-  // Optional: Post-setup hook
-  override async postSetup(network: string, projectPath: string) {
-    // Run after project scaffolding (e.g., typegen)
-  }
-}
-
-// 4. Export instance
-export const yourTemplate = new YourTemplate()
-```
-
-### Step 3: Create Template Files
-
-#### `templates/transformer.ts`
-For static templates:
-```ts
-export const transformer = `
-const myPipe = evmDecoder({
-  range: { from: 'latest' },
-  // ... transformer configuration
-})`
-```
-
-For dynamic templates (using params):
-```ts
-import Mustache from 'mustache'
-import type { YourTemplateParams } from '../template.config.js'
-
-const template = `
-const myPipe = evmDecoder({
-  contracts: [
-    {{#contractAddresses}}
-    '{{{.}}}',
-    {{/contractAddresses}}
-  ],
-})`
-
-export function renderTransformer(params: YourTemplateParams) {
-  return Mustache.render(template, params)
-}
-```
-
-#### `templates/pg-table.ts`
-```ts
-export const pgTableTemplate = `
-import { pgTable, text, bigint, index } from 'drizzle-orm/pg-core'
-
-export const myTable = pgTable('my_table', {
-  blockNumber: bigint('block_number', { mode: 'number' }).notNull(),
-  // ... table definition
-}, (table) => ({
-  blockNumberIdx: index('my_table_block_number_idx').on(table.blockNumber),
-}))`
-```
-
-#### `templates/clickhouse-table.sql`
-For static SQL:
-```sql
-CREATE TABLE IF NOT EXISTS my_table (
-  block_number UInt64,
-  -- ... column definitions
-) ENGINE = MergeTree()
-ORDER BY (block_number)
-```
-
-For dynamic SQL (TypeScript file):
-```ts
-import Mustache from 'mustache'
-
-const template = `
-CREATE TABLE IF NOT EXISTS {{tableName}} (
-  -- ... columns
-)`
-
-export function renderClickhouse(params: YourParams) {
-  return Mustache.render(template, params)
-}
-```
-
-### Step 4: Register Template
-
-Add to `src/commands/init/templates/pipes/{evm|svm}/index.ts`:
-
-```ts
-import { yourTemplate } from './your-template-name/template.config.js'
-
-export const evmTemplates = {
-  custom,
-  erc20Transfers,
-  yourTemplate,  // Add here
-} as const satisfies Record<string, PipeTemplateMeta<'evm', any>>
-```
-
-That's it! The CLI automatically:
-- Discovers templates from the registry
-- Shows them in interactive prompts
-- Handles parameter collection via schema or custom logic
-- Generates code using your render methods
-- Runs post-setup hooks if defined
-
-### Template Methods Reference
-
-#### Required Methods
-- `renderTransformers()`: Returns transformer code string
-- `renderPostgresSchemas()`: Returns Drizzle ORM schema string
-- `renderClickhouseTables()`: Returns ClickHouse SQL string
-
-#### Optional Hooks
-- `collectParamsCustom(network)`: Custom interactive parameter collection
-- `postSetup(network, projectPath)`: Post-scaffolding setup (e.g., typegen)
-
-#### Utility Methods
-- `setParams(params)`: Set and validate template parameters
-- `getParams()`: Get current parameters (throws if not set)
-- `promptParams(network)`: Trigger parameter collection (automatic in CLI)
-
-### Advanced Features
-
-#### Custom Parameter Collection
-Override `collectParamsCustom` for complex workflows:
-
-```ts
-override async collectParamsCustom(network: string) {
-  const abiService = new SqdAbiService()
-  
-  // Fetch contract metadata
-  const addresses = await input({ message: 'Contract addresses (comma-separated):' })
-  const metadata = await abiService.getContractData('evm', network, addresses.split(','))
-  
-  // Interactive event selection
-  const events = await checkbox({
-    message: 'Select events to track:',
-    choices: metadata.contractEvents.map(e => ({ name: e.name, value: e }))
-  })
-  
-  this.setParams({ contracts: metadata, events })
-}
-```
-
-#### Post-Setup Hooks
-Run operations after project creation:
-
-```ts
-override async postSetup(network: string, projectPath: string) {
-  const abiService = new SqdAbiService()
-  
-  // Generate TypeScript types from ABIs
-  await abiService.generateTypes(
-    'evm',
-    network,
-    projectPath,
-    this.getParams().contracts.map(c => c.address)
-  )
-}
-```
-
-#### Dynamic Rendering
-Use Mustache templates for parameter-based code generation:
-
-```ts
-import Mustache from 'mustache'
-
-const template = `
-export const transformer = evmDecoder({
-  contracts: [
-    {{#addresses}}
-    '{{{.}}}',
-    {{/addresses}}
-  ],
-  events: {
-    {{#events}}
-    {{name}}: contract.events.{{name}},
-    {{/events}}
+export const yourTemplate = defineTemplate({
+  id: 'yourTemplateName',            // unique camelCase id (the config templateId)
+  name: 'Your Template Name',        // display name in the picker
+  networkType: 'evm',                // 'evm' or 'svm'
+  paramsSchema: ParamsSchema,        // optional; exposed via `pipes init --schema`
+  async prompt(ctx) {
+    // Interactive parameter collection. ctx provides:
+    //   text / confirm / checkbox — inquirer wrappers
+    //   blockRange(message, { contractAddresses? }) — range prompt (offers the
+    //     deployment block when addresses are supplied on EVM)
+    //   abiService — cached ABI/IDL fetcher shared across the whole init run
+    const address = (await ctx.text('Contract address')).trim()
+    const range = await ctx.blockRange('Block range', { contractAddresses: [address] })
+    return { deployments: [{ address, range }] }
   },
-})`
-
-override renderTransformers() {
-  return Mustache.render(template, this.getParams())
-}
+  render(params) {
+    return {
+      transformer: '...',            // code merged into src/index.ts
+      postgresSchema: '...',
+      clickhouseTable: '...',
+      decoderIds: ['yourTemplateName'], // keys added to the stream's outputs record
+    }
+  },
+  async postSetup(params, ctx) {
+    // optional: runs after scaffolding, e.g. typegen via ctx.abiService
+  },
+})
 ```
+
+Register it in `src/commands/init/templates/pipes/{evm|svm}/index.ts` and the CLI picks it up everywhere: the interactive picker, `--config` validation, and `--schema` output.
 
 ## JSON Configuration
+
+The config hierarchy is contract-first: a contract is an ABI-level entity (name + tracked
+events) with one or more deployments; each deployment is an address plus its own block range.
+`defaultNetwork` is the project-wide network — when per-deployment networks land, deployments
+will be able to override it additively.
 
 ```json
 {
   "projectFolder": "./my-project",
   "networkType": "evm",
-  "network": "ethereum-mainnet",
+  "defaultNetwork": "ethereum-mainnet",
   "target": "postgresql",
   "packageManager": "pnpm",
   "templates": [
     {
+      "templateId": "custom",
+      "params": {
+        "contracts": [
+          {
+            "contractName": "MyToken",
+            "contractEvents": [{ "name": "Transfer", "type": "event", "inputs": [] }],
+            "deployments": [
+              { "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", "range": { "from": "12,369,621" } }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "templateId": "erc20Transfers",
       "params": {
-        "contractAddresses": ["0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"]
+        "deployments": [
+          { "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", "range": { "from": "latest" } }
+        ]
       }
     }
   ]
 }
 ```
 
-The `sink` key is still accepted as a deprecated alias for `target`.
+Print the full JSON schema with `pipes init --schema`.

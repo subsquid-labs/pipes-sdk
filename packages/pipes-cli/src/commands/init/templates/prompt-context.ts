@@ -1,4 +1,4 @@
-import { checkbox, input } from '@inquirer/prompts'
+import { checkbox, confirm, input } from '@inquirer/prompts'
 import chalk from 'chalk'
 
 import { SqdAbiService } from '~/services/sqd-abi.js'
@@ -7,7 +7,11 @@ import { promptBlockRange } from '~/utils/block-range-prompt.js'
 
 import type { PromptContext } from './define-template.js'
 
-export function createPromptContext(networkType: NetworkType, network: string): PromptContext {
+export function createPromptContext(
+  networkType: NetworkType,
+  network: string,
+  abiService: SqdAbiService = new SqdAbiService(),
+): PromptContext {
   return {
     async text(message: string, defaultValue?: string) {
       return input({
@@ -16,13 +20,16 @@ export function createPromptContext(networkType: NetworkType, network: string): 
         validate: (v: string) => (v.trim().length > 0 ? true : 'Value cannot be empty'),
       })
     },
+    async confirm(message: string, defaultValue = false) {
+      return confirm({ message, default: defaultValue })
+    },
     async checkbox<T>(message: string, choices: Array<{ name: string; value: T }>): Promise<T[]> {
       return checkbox<T>({ message, choices, pageSize: 15 })
     },
-    async blockRange(_message: string) {
-      return promptBlockRange({ networkType, network })
+    async blockRange(_message: string, opts?: { contractAddresses?: string[] }) {
+      return promptBlockRange({ networkType, network, contractAddresses: opts?.contractAddresses, abiService })
     },
-    abiService: new SqdAbiService(),
+    abiService,
     network,
   }
 }

@@ -3,7 +3,7 @@ import Mustache from 'mustache'
 import { evmToPostgresType } from '~/utils/db-type-map.js'
 
 import { tableToSchemaName } from '../../../../../builders/schema-builder/index.js'
-import { tableName } from '../../../../../builders/sink-builder/shared.js'
+import { tableName } from '../../../../../builders/target-builder/shared.js'
 import { type DecoderGrouping } from '../decoder-grouping.js'
 
 export const customContractPgTemplate = `

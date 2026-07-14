@@ -1,6 +1,6 @@
 import Mustache from 'mustache'
 
-import { PackageManager, Sink } from '~/types/init.js'
+import { PackageManager, Target } from '~/types/init.js'
 
 interface DbConfig {
   user: string
@@ -80,16 +80,16 @@ const dockerComposeTemplate = `services:
 
 interface DockerComposeTemplateValues {
   projectName: string
-  sink: Sink
+  target: Target
   packageManager: PackageManager
 }
 
 export function renderDockerCompose(values: DockerComposeTemplateValues): string {
-  const isPostgres = values.sink === 'postgresql'
+  const isPostgres = values.target === 'postgresql'
 
   const indexer = Mustache.render(indexerService, {
     ...values,
-    ...(values.sink === 'postgresql' ? postgresDefaults : clickhouseDefaults),
+    ...(values.target === 'postgresql' ? postgresDefaults : clickhouseDefaults),
     isPostgres,
   })
 

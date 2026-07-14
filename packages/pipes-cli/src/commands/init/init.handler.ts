@@ -78,10 +78,10 @@ export class InitHandler {
   1) Enter the project folder
      ${chalk.gray.italic(`cd ${this.config.projectFolder}`)}
 
-  2) Start your ${targetTypes.find((t) => t.value === this.config.sink)?.name} database
+  2) Start your ${targetTypes.find((t) => t.value === this.config.target)?.name} database
      ${chalk.gray.italic('docker compose up -d')}
 
-  ${this.config.sink === 'postgresql' ? pgMessage : clickhouseMessage}
+  ${this.config.target === 'postgresql' ? pgMessage : clickhouseMessage}
 
   ${chalk.gray('Need help? Check our documentation at')} ${chalk.bold.gray.underline('https://docs.sqd.dev/en/sdk/pipes-sdk')}`
 

@@ -5,7 +5,7 @@ import { installDependenciesStage } from './install-dependencies.js'
 import { lintProjectStage } from './lint-project.js'
 import { writeConfigFilesStage } from './write-config-files.js'
 import { writeIndexTsStage } from './write-index-ts.js'
-import { writeSinkFilesStage } from './write-sink-files.js'
+import { writeTargetFilesStage } from './write-target-files.js'
 
 export {
   checkProjectPathStage,
@@ -14,7 +14,7 @@ export {
   lintProjectStage,
   writeConfigFilesStage,
   writeIndexTsStage,
-  writeSinkFilesStage,
+  writeTargetFilesStage,
 }
 
 export const initStages: InitStage[] = [
@@ -23,6 +23,6 @@ export const initStages: InitStage[] = [
   copySrcContentStage,
   installDependenciesStage,
   writeIndexTsStage,
-  writeSinkFilesStage,
+  writeTargetFilesStage,
   lintProjectStage,
 ]

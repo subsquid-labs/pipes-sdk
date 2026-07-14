@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 
+import type { SqdAbiService } from '~/services/sqd-abi.js'
 import type { NetworkType } from '~/types/init.js'
 
 export interface TemplateArtifacts {
@@ -13,6 +14,7 @@ export interface TemplateContext<N extends NetworkType> {
   network: string
   projectPath: string
   networkType: N
+  abiService?: SqdAbiService
 }
 
 export type InferTemplateParams<Schema extends z.ZodObject | undefined> = Schema extends z.ZodObject

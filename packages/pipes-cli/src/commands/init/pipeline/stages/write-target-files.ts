@@ -1,11 +1,11 @@
-import { buildSink } from '../../builders/sink-builder/index.js'
+import { buildTarget } from '../../builders/target-builder/index.js'
 import type { InitStage } from '../types.js'
 
-export const writeSinkFilesStage: InitStage = {
-  id: 'write-sink-files',
+export const writeTargetFilesStage: InitStage = {
+  id: 'write-target-files',
   label: 'Creating target files',
   run: async (ctx) => {
-    const artifacts = buildSink(ctx.config)
+    const artifacts = buildTarget(ctx.config)
     for (const file of artifacts.files) {
       ctx.projectWriter.createFile(file.path, file.content)
     }

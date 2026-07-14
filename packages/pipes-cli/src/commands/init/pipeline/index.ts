@@ -9,6 +9,6 @@ export {
   lintProjectStage,
   writeConfigFilesStage,
   writeIndexTsStage,
-  writeSinkFilesStage,
+  writeTargetFilesStage,
 } from './stages/index.js'
 export type { InitContext, InitStage } from './types.js'

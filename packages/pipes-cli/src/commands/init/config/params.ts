@@ -17,8 +17,13 @@ function getTemplateSchemas<N extends NetworkType>(networkType: N) {
       .strict(),
   )
 
-  if (options.length < 2) {
-    throw new Error(`Expected at least two templates for network ${networkType}, got ${options.length}`)
+  if (options.length === 0) {
+    throw new Error(`Expected at least one template for network ${networkType}, got none`)
+  }
+
+  // discriminatedUnion needs two options; a single-template network degrades to its one schema.
+  if (options.length === 1) {
+    return z.array(options[0]!)
   }
 
   const [first, second, ...rest] = options
@@ -34,7 +39,9 @@ const baseSchemaRaw = z.object({
 const evmConfig = baseSchemaRaw
   .extend({
     networkType: z.literal('evm'),
-    network: z.enum(getPortalNetworkSlugs('evm')),
+    defaultNetwork: z
+      .enum(getPortalNetworkSlugs('evm'))
+      .describe('Network every template indexes; per-deployment networks may override it in the future.'),
     templates: getTemplateSchemas('evm'),
   })
   .strict()
@@ -42,7 +49,9 @@ const evmConfig = baseSchemaRaw
 const svmConfig = baseSchemaRaw
   .extend({
     networkType: z.literal('svm'),
-    network: z.enum(getPortalNetworkSlugs('svm')),
+    defaultNetwork: z
+      .enum(getPortalNetworkSlugs('svm'))
+      .describe('Network every template indexes; per-deployment networks may override it in the future.'),
     templates: getTemplateSchemas('svm'),
   })
   .strict()
@@ -54,7 +63,6 @@ export const configJsonSchema = configJsonSchemaRaw.transform((data) => {
   return {
     ...data,
     networkType,
-    sink: data.target,
     packageManager: data.packageManager,
     templates: data.templates.map((t) => {
       const template = getTemplate(networkType, t.templateId)

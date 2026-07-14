@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Config, NetworkType, PackageManager, Sink } from '~/types/init.js'
+import type { Config, NetworkType, PackageManager, Target } from '~/types/init.js'
 
 import { planConfigFiles } from './plan-config-files.js'
 
@@ -8,9 +8,9 @@ function makeConfig(overrides: Partial<Config<NetworkType>> = {}): Config<Networ
   return {
     projectFolder: '/tmp/proj',
     networkType: 'evm',
-    network: 'ethereum-mainnet',
+    defaultNetwork: 'ethereum-mainnet',
     templates: [],
-    sink: 'clickhouse',
+    target: 'clickhouse',
     packageManager: 'pnpm',
     ...overrides,
   }
@@ -18,15 +18,15 @@ function makeConfig(overrides: Partial<Config<NetworkType>> = {}): Config<Networ
 
 type Slice = {
   packageManager: PackageManager
-  sink: Sink
+  target: Target
   networkType: NetworkType
 }
 
 const slices: Slice[] = [
-  { packageManager: 'pnpm', sink: 'clickhouse', networkType: 'evm' },
-  { packageManager: 'pnpm', sink: 'postgresql', networkType: 'evm' },
-  { packageManager: 'npm', sink: 'clickhouse', networkType: 'evm' },
-  { packageManager: 'pnpm', sink: 'clickhouse', networkType: 'svm' },
+  { packageManager: 'pnpm', target: 'clickhouse', networkType: 'evm' },
+  { packageManager: 'pnpm', target: 'postgresql', networkType: 'evm' },
+  { packageManager: 'npm', target: 'clickhouse', networkType: 'evm' },
+  { packageManager: 'pnpm', target: 'clickhouse', networkType: 'svm' },
 ]
 
 const basePaths = [
@@ -47,8 +47,8 @@ function expectedPaths(packageManager: PackageManager): string[] {
 }
 
 describe('planConfigFiles', () => {
-  describe.each(slices)('$packageManager + $sink + $networkType', ({ packageManager, sink, networkType }) => {
-    const specs = planConfigFiles(makeConfig({ packageManager, sink, networkType }), 'proj')
+  describe.each(slices)('$packageManager + $target + $networkType', ({ packageManager, target, networkType }) => {
+    const specs = planConfigFiles(makeConfig({ packageManager, target, networkType }), 'proj')
     const paths = specs.map((s) => s.path)
 
     it('returns the expected ordered list of file paths', () => {
@@ -72,42 +72,42 @@ describe('planConfigFiles', () => {
     })
   })
 
-  describe('package.json snapshots per (packageManager, sink)', () => {
-    const pairs: Array<{ packageManager: PackageManager; sink: Sink }> = [
-      { packageManager: 'pnpm', sink: 'clickhouse' },
-      { packageManager: 'npm', sink: 'clickhouse' },
-      { packageManager: 'pnpm', sink: 'postgresql' },
+  describe('package.json snapshots per (packageManager, target)', () => {
+    const pairs: Array<{ packageManager: PackageManager; target: Target }> = [
+      { packageManager: 'pnpm', target: 'clickhouse' },
+      { packageManager: 'npm', target: 'clickhouse' },
+      { packageManager: 'pnpm', target: 'postgresql' },
     ]
 
-    it.each(pairs)('matches snapshot for $packageManager + $sink', ({ packageManager, sink }) => {
-      const specs = planConfigFiles(makeConfig({ packageManager, sink }), 'proj')
+    it.each(pairs)('matches snapshot for $packageManager + $target', ({ packageManager, target }) => {
+      const specs = planConfigFiles(makeConfig({ packageManager, target }), 'proj')
       const pkg = specs.find((s) => s.path === 'package.json')!
       expect(pkg.contents).toMatchSnapshot()
     })
   })
 
-  describe('src/utils/index.ts snapshots per (networkType, sink)', () => {
-    const pairs: Array<{ networkType: NetworkType; sink: Sink }> = [
-      { networkType: 'evm', sink: 'clickhouse' },
-      { networkType: 'evm', sink: 'postgresql' },
-      { networkType: 'svm', sink: 'clickhouse' },
+  describe('src/utils/index.ts snapshots per (networkType, target)', () => {
+    const pairs: Array<{ networkType: NetworkType; target: Target }> = [
+      { networkType: 'evm', target: 'clickhouse' },
+      { networkType: 'evm', target: 'postgresql' },
+      { networkType: 'svm', target: 'clickhouse' },
     ]
 
-    it.each(pairs)('matches snapshot for $networkType + $sink', ({ networkType, sink }) => {
-      const specs = planConfigFiles(makeConfig({ networkType, sink }), 'proj')
+    it.each(pairs)('matches snapshot for $networkType + $target', ({ networkType, target }) => {
+      const specs = planConfigFiles(makeConfig({ networkType, target }), 'proj')
       const utils = specs.find((s) => s.path === 'src/utils/index.ts')!
       expect(utils.contents).toMatchSnapshot()
     })
   })
 
-  it('package.json contains postgres drizzle scripts when sink is postgresql', () => {
-    const specs = planConfigFiles(makeConfig({ sink: 'postgresql' }), 'proj')
+  it('package.json contains postgres drizzle scripts when target is postgresql', () => {
+    const specs = planConfigFiles(makeConfig({ target: 'postgresql' }), 'proj')
     const pkg = specs.find((s) => s.path === 'package.json')!
     expect(pkg.contents).toContain('"db:migrate": "drizzle-kit migrate"')
   })
 
-  it('package.json omits postgres drizzle scripts when sink is clickhouse', () => {
-    const specs = planConfigFiles(makeConfig({ sink: 'clickhouse' }), 'proj')
+  it('package.json omits postgres drizzle scripts when target is clickhouse', () => {
+    const specs = planConfigFiles(makeConfig({ target: 'clickhouse' }), 'proj')
     const pkg = specs.find((s) => s.path === 'package.json')!
     expect(pkg.contents).not.toContain('"db:migrate": "drizzle-kit migrate"')
   })

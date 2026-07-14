@@ -1,13 +1,13 @@
-import type { Config, NetworkType, PackageManager, Sink } from '~/types/init.js'
+import type { Config, NetworkType, PackageManager, Target } from '~/types/init.js'
 
 import type { InitContext } from '../types.js'
 import { FakeProjectWriter } from './fake-project-writer.js'
 
 export type MakeContextOverrides = {
   packageManager?: PackageManager
-  sink?: Sink
+  target?: Target
   networkType?: NetworkType
-  network?: string
+  defaultNetwork?: string
   projectFolder?: string
   templates?: Config<NetworkType>['templates']
   writer?: FakeProjectWriter
@@ -21,9 +21,9 @@ export function makeTestContext(overrides: MakeContextOverrides = {}): {
   const config: Config<NetworkType> = {
     projectFolder: overrides.projectFolder ?? '/tmp/proj',
     networkType: overrides.networkType ?? 'evm',
-    network: overrides.network ?? 'ethereum-mainnet',
+    defaultNetwork: overrides.defaultNetwork ?? 'ethereum-mainnet',
     templates: overrides.templates ?? [],
-    sink: overrides.sink ?? 'clickhouse',
+    target: overrides.target ?? 'clickhouse',
     packageManager: overrides.packageManager ?? 'pnpm',
   }
   return {

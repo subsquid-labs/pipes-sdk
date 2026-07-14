@@ -7,9 +7,9 @@ import { drizzleConfigTemplate } from '../../templates/config-files/static/drizz
 import { groupContractsForDecoders } from '../../templates/pipes/evm/custom/decoder-grouping.js'
 import { renderSchemasTemplate, tableToSchemaName } from '../schema-builder/index.js'
 import { extractExportConstNames, tableName as pgTableName } from './shared.js'
-import type { SinkArtifacts } from './sink-artifacts.js'
+import type { TargetArtifacts } from './target-artifacts.js'
 
-const sinkTemplate = `
+const targetTemplate = `
 import { chunkForInsert, drizzleTarget } from '@subsquid/pipes/targets/drizzle/node-postgres'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import {
@@ -67,7 +67,7 @@ const env = z.object({
 
 function renderCtx(config: Config<NetworkType>) {
   return {
-    network: config.network,
+    network: config.defaultNetwork,
     projectPath: '',
     networkType: config.networkType,
   }
@@ -97,7 +97,7 @@ function renderSinkCode(config: Config<NetworkType>): string {
       }))
     })
 
-  return Mustache.render(sinkTemplate, {
+  return Mustache.render(targetTemplate, {
     templates,
     customTemplates,
   })
@@ -113,7 +113,7 @@ function renderSchemasFile(config: Config<NetworkType>): string {
   return renderSchemasTemplate(schemas)
 }
 
-export function buildPostgresSink(config: Config<NetworkType>): SinkArtifacts {
+export function buildPostgresTarget(config: Config<NetworkType>): TargetArtifacts {
   return {
     sinkCode: renderSinkCode(config),
     envSchema,
