@@ -35,6 +35,11 @@ export function getGrouping(params: CustomTemplateParams): DecoderGrouping {
 async function promptContract(ctx: PromptContext): Promise<ContractParams> {
   // Contract level: the reference deployment's address is how we obtain the ABI.
   const address = (await ctx.text('Contract address')).trim()
+  if (address.includes(',')) {
+    throw new Error(
+      'One address at a time: enter the reference deployment first, further deployments and contracts are added in the follow-up prompts.',
+    )
+  }
   const [metadata] = await ctx.abiService.getContractData('evm', ctx.network, [address])
 
   const choices = metadata!.contractEvents

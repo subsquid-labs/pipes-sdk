@@ -18,6 +18,11 @@ export type CustomTemplateParams = z.infer<typeof CustomTemplateParamsSchema>
 async function promptProgram(ctx: PromptContext): Promise<ContractParams> {
   // Program level: the reference deployment's address is how we obtain the IDL.
   const address = (await ctx.text('Program address')).trim()
+  if (address.includes(',')) {
+    throw new Error(
+      'One address at a time: enter the reference deployment first, further deployments and contracts are added in the follow-up prompts.',
+    )
+  }
   const [metadata] = await ctx.abiService.getContractData('svm', ctx.network, [address])
 
   const choices = metadata!.contractEvents
