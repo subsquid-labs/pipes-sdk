@@ -55,9 +55,10 @@ function parseImportDeclaration(node: ts.ImportDeclaration, content: string): Pa
   const clause = node.importClause
 
   if (!clause) {
-    // Only treat as side-effect if it's not followed by 'from' (which would be a
-    // malformed regular import that the parser recovered from)
-    if (content.slice(node.end).trimStart().startsWith('from')) return undefined
+    // Only treat as side-effect if it's not followed by a `from "..."` clause (a
+    // malformed regular import the parser recovered from). Match the keyword directly
+    // before a string literal so a following identifier like `fromage` doesn't misfire.
+    if (/^from\s*['"]/.test(content.slice(node.end).trimStart())) return undefined
 
     return { namedImports: [], from, typeOnly: false, sideEffect: true }
   }

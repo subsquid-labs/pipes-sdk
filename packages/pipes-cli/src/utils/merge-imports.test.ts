@@ -178,6 +178,20 @@ import { evmDecoder } from "@subsquid/pipes/evm";`
     // Should not be parsed as side-effect since it has 'from'
     expect(result.imports.some((imp) => imp.sideEffect && imp.from === './styles.css')).toBe(false)
   })
+
+  it('keeps a side-effect import when the next statement starts with an identifier like "from..."', () => {
+    const content = 'import "./polyfill.js";\nfromage()'
+    const result = splitImportsAndCode(content)
+
+    expect(result.imports).toHaveLength(1)
+    expect(result.imports[0]).toEqual({
+      namedImports: [],
+      from: './polyfill.js',
+      typeOnly: false,
+      sideEffect: true,
+    })
+    expect(result.code).toBe('fromage()')
+  })
 })
 
 describe('parseNamedImports', () => {
