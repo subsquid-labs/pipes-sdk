@@ -10,7 +10,11 @@ export const writeTargetFilesStage: InitStage = {
     // discarding the project.
     const artifacts = buildTarget(ctx.config)
     for (const file of artifacts.files) {
-      ctx.projectWriter.createFile(file.path, file.content)
+      if (file.preserveExisting) {
+        ctx.projectWriter.createFileIfAbsent(file.path, file.content)
+      } else {
+        ctx.projectWriter.createFile(file.path, file.content)
+      }
     }
   },
 }

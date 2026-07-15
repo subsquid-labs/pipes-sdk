@@ -94,7 +94,7 @@ export function buildClickhouseTarget(config: Config<NetworkType>): TargetArtifa
   return {
     targetCode: renderTargetCode(rendered),
     envSchema,
-    files: [{ path: '.env', content: envFileContent }, ...renderMigrationFiles(rendered)],
+    files: [{ path: '.env', content: envFileContent, preserveExisting: true }, ...renderMigrationFiles(rendered)],
     postSteps: [],
   }
 }

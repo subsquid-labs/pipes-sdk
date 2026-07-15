@@ -7,6 +7,7 @@ export type CopyFileCall = { absoluteSourcePath: string; relativeTargetPath: str
 
 export class FakeProjectWriter {
   readonly createFileCalls: CreateFileCall[] = []
+  readonly createFileIfAbsentCalls: CreateFileCall[] = []
   readonly copyFileCalls: CopyFileCall[] = []
   readonly executeCommandCalls: string[] = []
   private readonly projectAbsolutePath: string
@@ -21,6 +22,10 @@ export class FakeProjectWriter {
 
   createFile(relativePath: string, content: string): void {
     this.createFileCalls.push({ relativePath, content })
+  }
+
+  createFileIfAbsent(relativePath: string, content: string): void {
+    this.createFileIfAbsentCalls.push({ relativePath, content })
   }
 
   copyFile(absoluteSourcePath: string, relativeTargetPath: string): void {

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 import chalk from 'chalk'
@@ -27,11 +27,15 @@ export class InitHandler {
     const spinner = createSpinner('Setting up new Pipes SDK project...')
     spinner.start()
 
+    const projectPath = this.projectWriter.getAbsolutePath()
     const ctx: InitContext = {
       config: this.config,
       projectName: this.projectName,
-      projectPath: this.projectWriter.getAbsolutePath(),
+      projectPath,
       projectWriter: this.projectWriter,
+      // A re-run against an existing pipes project (identified by its saved
+      // config) regenerates in place rather than erroring on the existing folder.
+      regenerate: existsSync(path.join(projectPath, PIPE_CONFIG_FILENAME)),
     }
 
     let failures: StageFailure[]
@@ -80,7 +84,7 @@ export class InitHandler {
       : ''
 
     const configNote = `  ${chalk.gray('Config saved to')} ${chalk.cyan(configPath)}${chalk.gray('.')}
-  ${chalk.gray('To change the generated code, edit it and re-run')} ${chalk.gray.italic(`pipes init --config ${configPath}`)}
+  ${chalk.gray('To change the generated code, edit this config and re-run')} ${chalk.gray.italic(`pipes init --config ${configPath}`)}
 `
 
     const pgMessage = `3) Apply migrations

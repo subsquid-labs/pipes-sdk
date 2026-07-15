@@ -6,6 +6,12 @@ export type InitContext = {
   projectName: string
   projectPath: string
   projectWriter: ProjectWriter
+  /**
+   * The target folder already exists and is a pipes project (has a saved
+   * config): regenerate into it instead of erroring, and never delete it on
+   * failure since it predates this run.
+   */
+  regenerate?: boolean
 }
 
 export type InitStage = {

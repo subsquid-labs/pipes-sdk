@@ -19,8 +19,10 @@ describe('writeTargetFilesStage', () => {
 
     await writeTargetFilesStage.run(ctx)
 
-    const env = writer.createFileCalls.find((c) => c.relativePath === '.env')
+    // .env is written preserve-existing so regeneration keeps user secrets.
+    const env = writer.createFileIfAbsentCalls.find((c) => c.relativePath === '.env')
     expect(env?.content).toContain('CLICKHOUSE_URL=')
+    expect(writer.createFileCalls.some((c) => c.relativePath === '.env')).toBe(false)
   })
 
   it('creates per-template migration files for a clickhouse target', async () => {
@@ -55,7 +57,8 @@ describe('writeTargetFilesStage', () => {
 
     await writeTargetFilesStage.run(ctx)
 
-    const env = writer.createFileCalls.find((c) => c.relativePath === '.env')
+    const env = writer.createFileIfAbsentCalls.find((c) => c.relativePath === '.env')
     expect(env?.content).toContain('DB_CONNECTION_STR=')
+    expect(writer.createFileCalls.some((c) => c.relativePath === '.env')).toBe(false)
   })
 })

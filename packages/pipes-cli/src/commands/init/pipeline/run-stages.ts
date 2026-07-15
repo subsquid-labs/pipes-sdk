@@ -40,7 +40,8 @@ export async function runStages(
       }
 
       const pipelineError = new InitPipelineError(stage.id, error as Error)
-      if (i > 0 && isSafeToRemove(ctx.projectPath)) {
+      // Never delete a pre-existing project we were only regenerating into.
+      if (i > 0 && !ctx.regenerate && isSafeToRemove(ctx.projectPath)) {
         try {
           await cleanup(ctx.projectPath)
         } catch {

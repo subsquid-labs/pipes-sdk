@@ -181,6 +181,28 @@ describe('runStages', () => {
     await expect(pathExists(projectPath)).resolves.toBe(false)
   })
 
+  it('does not delete a pre-existing project when regenerating fails', async () => {
+    await fsPromises.mkdir(projectPath, { recursive: true })
+    await writeFile(path.join(projectPath, 'file.txt'), 'hello')
+
+    const stages: InitStage[] = [
+      { id: 'check-project-path', label: 'Check', run: async () => {} },
+      {
+        id: 'write-static-files',
+        label: 'Write static',
+        run: async () => {
+          throw new Error('disk full')
+        },
+      },
+    ]
+
+    await expect(runStages(stages, makeContext({ projectPath, regenerate: true }))).rejects.toBeInstanceOf(
+      InitPipelineError,
+    )
+    // The folder predated the run, so it must survive the failure.
+    await expect(pathExists(projectPath)).resolves.toBe(true)
+  })
+
   it('surfaces the original pipeline error even when cleanup fails', async () => {
     const original = new Error('stage boom')
     const cleanup = vi.fn(async () => {
