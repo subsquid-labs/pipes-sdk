@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import path from 'node:path'
 
 import chalk from 'chalk'
 import { z } from 'zod'
@@ -10,7 +11,8 @@ import { createSpinner } from '~/utils/spinner.js'
 
 import { CONFIG_SCHEMA_URL, configJsonSchema, configJsonSchemaRaw } from './config/params.js'
 import { prepareConfig } from './config/prepare-config.js'
-import { type InitContext, initStages, runStages } from './pipeline/index.js'
+import { PIPE_CONFIG_FILENAME } from './config/serialize-config.js'
+import { type InitContext, type StageFailure, initStages, runStages } from './pipeline/index.js'
 
 export class InitHandler {
   private readonly projectName: string
@@ -32,18 +34,54 @@ export class InitHandler {
       projectWriter: this.projectWriter,
     }
 
+    let failures: StageFailure[]
     try {
-      await runStages(initStages, ctx, { spinner })
-      spinner.succeed(`${this.config.projectFolder} project initialized successfully`)
-      this.nextSteps()
+      failures = await runStages(initStages, ctx, { spinner })
     } catch (error) {
       spinner.fail('Failed to initialize project')
       throw error
     }
+
+    if (failures.length > 0) {
+      spinner.warn(`${this.config.projectFolder} created — some steps need your attention`)
+      this.reportFailures(failures)
+    } else {
+      spinner.succeed(`${this.config.projectFolder} project initialized successfully`)
+    }
+
+    this.nextSteps(failures)
   }
 
-  private nextSteps(): void {
+  private reportFailures(failures: StageFailure[]): void {
+    for (const { label, error } of failures) {
+      const detail = (error.message || String(error))
+        .trimEnd()
+        .split('\n')
+        .map((line) => `    ${line}`)
+        .join('\n')
+
+      console.log('')
+      console.log(`  ${chalk.yellow('⚠')} ${chalk.bold(label)} didn't finish:`)
+      console.log(detail)
+    }
+  }
+
+  private nextSteps(failures: StageFailure[] = []): void {
     const sep = `${chalk.green('─'.repeat(64))}`
+    const installFailed = failures.some((failure) => failure.stageId === 'install-dependencies')
+    const configPath = path.join(this.config.projectFolder, PIPE_CONFIG_FILENAME)
+
+    const installFirst = installFailed
+      ? `  ${chalk.bold.yellow('⚠ FIRST — INSTALL DEPENDENCIES')}
+  They didn't install automatically (see the error above). Once you've resolved it:
+    ${chalk.gray.italic(`cd ${this.config.projectFolder} && ${this.config.packageManager} install`)}
+
+`
+      : ''
+
+    const configNote = `  ${chalk.gray('Config saved to')} ${chalk.cyan(configPath)}${chalk.gray('.')}
+  ${chalk.gray('To change the generated code, edit it and re-run')} ${chalk.gray.italic(`pipes init --config ${configPath}`)}
+`
 
     const pgMessage = `3) Apply migrations
      ${chalk.gray.italic(`${this.config.packageManager} run db:migrate`)}
@@ -64,7 +102,7 @@ export class InitHandler {
   ${chalk.gray.bold("What's next?")}
 
 
-  ${chalk.bold.yellow('⚡ QUICKSTART')}
+${installFirst}  ${chalk.bold.yellow('⚡ QUICKSTART')}
 
   1) Enter the project folder
     ${chalk.gray.italic(`cd ${this.config.projectFolder}`)}
@@ -83,6 +121,7 @@ export class InitHandler {
 
   ${this.config.target === 'postgresql' ? pgMessage : clickhouseMessage}
 
+${configNote}
   ${chalk.gray('Need help? Check our documentation at')} ${chalk.bold.gray.underline('https://docs.sqd.dev/en/sdk/pipes-sdk')}`
 
     console.log(message)

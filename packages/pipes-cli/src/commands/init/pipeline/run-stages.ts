@@ -7,13 +7,26 @@ import type { InitContext, InitStage } from './types.js'
 
 export type PipelineSpinner = { text: string }
 
+export type StageFailure = { stageId: string; label: string; error: Error }
+
 export type RunStagesOptions = {
   cleanup?: (projectPath: string) => Promise<void>
   spinner?: PipelineSpinner
 }
 
-export async function runStages(stages: InitStage[], ctx: InitContext, options: RunStagesOptions = {}): Promise<void> {
+/**
+ * Runs the init stages in order. An essential stage failure aborts the pipeline
+ * (removing the partial project); an `optional` stage failure is collected and
+ * returned so the caller can surface it while still finishing the project and
+ * printing next steps.
+ */
+export async function runStages(
+  stages: InitStage[],
+  ctx: InitContext,
+  options: RunStagesOptions = {},
+): Promise<StageFailure[]> {
   const cleanup = options.cleanup ?? defaultCleanup
+  const failures: StageFailure[] = []
 
   for (let i = 0; i < stages.length; i++) {
     const stage = stages[i]!
@@ -21,6 +34,11 @@ export async function runStages(stages: InitStage[], ctx: InitContext, options: 
     try {
       await stage.run(ctx)
     } catch (error) {
+      if (stage.optional) {
+        failures.push({ stageId: stage.id, label: stage.label, error: error as Error })
+        continue
+      }
+
       const pipelineError = new InitPipelineError(stage.id, error as Error)
       if (i > 0 && isSafeToRemove(ctx.projectPath)) {
         try {
@@ -32,6 +50,8 @@ export async function runStages(stages: InitStage[], ctx: InitContext, options: 
       throw pipelineError
     }
   }
+
+  return failures
 }
 
 async function defaultCleanup(projectPath: string): Promise<void> {
