@@ -161,6 +161,34 @@ describe('evm customTemplate', () => {
     expect(params.contracts[0].contractName).toBe('WETH9')
   })
 
+  it('prompt() tells the user when an entered address resolves to a proxy implementation', async () => {
+    const proxyAddress = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+    const implementationAddress = '0x43506849d7c04f9138d1a2050bbf3a0c054402dd'
+    const abiService = {
+      // getContractData resolves the proxy and returns the implementation's address + events.
+      getContractData: vi.fn(async () => [
+        { contractAddress: implementationAddress, contractName: 'FiatTokenV2_2', contractEvents: weth.contractEvents },
+      ]),
+    }
+    const promptCtx = {
+      text: vi.fn(async () => proxyAddress),
+      confirm: vi.fn(async () => false),
+      select: vi.fn(),
+      checkbox: vi.fn(async (_msg: string, choices: Array<{ value: any }>) => [choices[0].value]),
+      blockRange: vi.fn(async () => ({ from: 'latest' })),
+      abiService: abiService as any,
+      network: 'ethereum-mainnet',
+    }
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await customTemplate.prompt!(promptCtx)
+
+    const proxyNotice = logSpy.mock.calls.map((c) => String(c[0])).find((line) => line.includes('is a proxy'))
+    expect(proxyNotice).toBeDefined()
+    expect(proxyNotice).toContain(implementationAddress)
+    logSpy.mockRestore()
+  })
+
   it('prompt() cancels the template when the user skips after a fetch error', async () => {
     const badAddress = '0x1111111111111111111111111111111111111111'
     const abiService = {

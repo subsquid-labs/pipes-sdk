@@ -57,6 +57,14 @@ export function customContractsPrompt(wording: CustomPromptWording) {
         )
       }
 
+      // EVM proxies resolve to an implementation ABI: the events came from a
+      // different address than the one entered, so say which.
+      if (networkType === 'evm' && metadata!.contractAddress.toLowerCase() !== address.toLowerCase()) {
+        console.log(
+          chalk.dim(`  ↳ ${address} is a proxy — fetched the implementation ABI at ${metadata!.contractAddress}`),
+        )
+      }
+
       const choices = metadata!.contractEvents
         .map((event) => ({ name: event.name, value: event }))
         .sort((a, b) => a.name.localeCompare(b.name))
