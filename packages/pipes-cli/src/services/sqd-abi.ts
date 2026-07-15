@@ -129,23 +129,54 @@ class EvmAbiService extends AbiService {
     }
   }
 
+  private static ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
   override getContractData(contractAddresses: string[], chainid?: string) {
     if (!chainid) throw new Error('Missing chain id')
 
     return Promise.all(contractAddresses.map(async (address) => this.fetchEvmContractData(address, chainid)))
   }
 
-  private async fetchEvmContractData(address: string, chainid: string, iter = 0): Promise<ContractMetadata> {
-    /**
-     * It's unlikely to have a contract more than one level deep in a proxy setup,
-     * but this guard should be in place since this function is called recursively
-     */
-    if (iter && iter > 5) {
-      throw new Error(
-        'Unsupported deeply nested Proxy contract: this contract has more than 5 levels to the implementation contract',
-      )
+  /**
+   * Resolves the ABI events for a (possibly proxied) contract.
+   *
+   * `getsourcecode` reports `Proxy: '1'` on implementations too — USDC's
+   * FiatTokenV2_2 points at a linked library — and proxy shells declare their own
+   * admin events (`AdminChanged`/`Upgraded`). So neither "stop at `Proxy: '0'`"
+   * nor "stop at the first hop with events" is correct: we walk the whole proxy
+   * chain and keep the deepest hop that actually exposes events. USDC thus lands
+   * on FiatTokenV2_2's `Transfer`/`Approval` rather than the proxy shell or the
+   * trailing event-less library.
+   */
+  private async fetchEvmContractData(address: string, chainid: string): Promise<ContractMetadata> {
+    const visited = new Set<string>()
+    let target = address
+    let best: ContractMetadata | undefined
+
+    for (let depth = 0; depth <= 5; depth++) {
+      const key = target.toLowerCase()
+      if (visited.has(key)) break
+      visited.add(key)
+
+      const { metadata, proxyTarget } = await this.fetchHop(target, chainid)
+      if (metadata.contractEvents.length > 0) best = metadata
+      if (!proxyTarget) return best ?? metadata
+
+      target = proxyTarget
     }
 
+    if (best) return best
+
+    throw new Error(
+      'Unsupported deeply nested Proxy contract: this contract has more than 5 levels to the implementation contract',
+    )
+  }
+
+  /** Fetches and parses a single contract, reporting its proxy target (if any). */
+  private async fetchHop(
+    address: string,
+    chainid: string,
+  ): Promise<{ metadata: ContractMetadata; proxyTarget?: string }> {
     try {
       const params = new URLSearchParams({
         chainid,
@@ -163,19 +194,28 @@ class EvmAbiService extends AbiService {
 
       if (!this.isContractVerified(contractData.ABI)) throw new ContractCodeNotVerifiedError(address, chainid)
 
-      if (contractData.Proxy === '1') return this.fetchEvmContractData(contractData.Implementation, chainid, ++iter)
-
-      return {
+      const metadata: ContractMetadata = {
         contractAddress: address,
         contractName: contractData.ContractName,
         contractEvents: this.parseEvents(JSON.parse(contractData.ABI)),
       }
+
+      const implementation = contractData.Implementation?.trim()
+      const implementationKey = implementation?.toLowerCase()
+      const proxyTarget =
+        contractData.Proxy === '1' &&
+        implementation &&
+        implementationKey !== EvmAbiService.ZERO_ADDRESS &&
+        implementationKey !== address.toLowerCase()
+          ? implementation
+          : undefined
+
+      return { metadata, proxyTarget }
     } catch (e) {
       // Domain errors already carry user-facing context; wrap raw fetch/parse
       // failures (network down, API error body, malformed ABI JSON) with the
       // address and network so the user knows which input to fix.
       if (e instanceof ContractCodeNotVerifiedError) throw e
-      if (e instanceof Error && e.message.includes('deeply nested Proxy')) throw e
 
       const network = getNetworkFromChainId(chainid)
       const cause = e instanceof Error ? e.message : String(e)

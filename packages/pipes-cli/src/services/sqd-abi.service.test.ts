@@ -137,4 +137,23 @@ describe('SQD Typegen Service', () => {
       expect(eventNames).toContain(required)
     }
   }, 30_000)
+
+  it('keeps the deepest hop with events through a multi-level proxy chain', async () => {
+    // USDC's chain is FiatTokenProxy (Proxy=1, only AdminChanged/Upgraded) →
+    // FiatTokenV2_2 (Proxy=1, the real ERC-20 events) → SignatureChecker (a linked
+    // library with no events). Both earlier hops report Proxy=1, so the walk must
+    // land on FiatTokenV2_2's events rather than the proxy shell or the library.
+    const usdc = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+    const s = new SqdAbiService()
+    const [usdcData] = await s.getContractData('evm', 'ethereum-mainnet', [usdc])
+
+    expect(usdcData).toBeDefined()
+    const eventNames = usdcData!.contractEvents.map((e) => e.name)
+    for (const required of ['Transfer', 'Approval', 'Mint', 'Burn']) {
+      expect(eventNames).toContain(required)
+    }
+    // Not the bare proxy shell (AdminChanged/Upgraded only) and not the empty library.
+    expect(usdcData!.contractName).not.toMatch(/proxy/i)
+    expect(eventNames.length).toBeGreaterThan(2)
+  }, 30_000)
 })
