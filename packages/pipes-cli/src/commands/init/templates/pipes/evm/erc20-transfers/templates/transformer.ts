@@ -1,16 +1,18 @@
 import Mustache from 'mustache'
 
+import type { Deployment } from '../../../../contract-params.js'
 import { Erc20TransfersPipeTemplateParams } from '../template.config.js'
 
 const template = `import { commonAbis, evmEventDecoder } from '@subsquid/pipes/evm'
+{{#decoderGroups}}
 
-const erc20Transfers = evmEventDecoder({
-  profiler: { name: 'erc20-transfers' }, // Optional: add a profiler to measure the performance of the transformer
+const {{{decoderId}}} = evmEventDecoder({
+  profiler: { name: '{{{profilerName}}}' }, // Optional: add a profiler to measure the performance of the transformer
   range: { from: '{{{range.from}}}'{{#range.to}}, to: '{{{range.to}}}'{{/range.to}} },
   contracts: [
-    {{#contractAddresses}}
+    {{#addresses}}
     '{{.}}',
-    {{/contractAddresses}}
+    {{/addresses}}
   ],
   events: {
     transfers: commonAbis.erc20.events.Transfer,
@@ -27,8 +29,38 @@ const erc20Transfers = evmEventDecoder({
     tokenAddress: transfer.contract,
   })),
 )
+{{/decoderGroups}}
 `
 
+interface DecoderGroup {
+  decoderId: string
+  profilerName: string
+  range: { from: string; to?: string }
+  addresses: string[]
+}
+
+/**
+ * Ranges are deployment-level, but one decoder scans one range — deployments
+ * sharing a range share a decoder; divergent ranges get their own (suffixed)
+ * decoder rather than silently widening the shared scan.
+ */
+export function erc20DecoderGroups(params: Erc20TransfersPipeTemplateParams): DecoderGroup[] {
+  const byRange = new Map<string, { range: Deployment['range']; addresses: string[] }>()
+  for (const deployment of params.deployments) {
+    const key = `${deployment.range.from} ${deployment.range.to ?? ''}`
+    const group = byRange.get(key) ?? { range: deployment.range, addresses: [] }
+    group.addresses.push(deployment.address)
+    byRange.set(key, group)
+  }
+
+  return [...byRange.values()].map((group, i) => ({
+    decoderId: i === 0 ? 'erc20Transfers' : `erc20Transfers${i + 1}`,
+    profilerName: i === 0 ? 'erc20-transfers' : `erc20-transfers-${i + 1}`,
+    range: group.range,
+    addresses: group.addresses,
+  }))
+}
+
 export function renderTransformer(params: Erc20TransfersPipeTemplateParams) {
-  return Mustache.render(template, params)
+  return Mustache.render(template, { decoderGroups: erc20DecoderGroups(params) })
 }

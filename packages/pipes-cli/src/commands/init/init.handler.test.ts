@@ -46,8 +46,7 @@ function configuredErc20(range: { from: string; to?: string } = { from: '12,369,
   return {
     template,
     params: {
-      contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
-      range,
+      deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range }],
     },
   }
 }
@@ -70,7 +69,6 @@ function configuredCustomWeth() {
     params: {
       contracts: [
         {
-          contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
           contractName: 'WETH9',
           contractEvents: [
             {
@@ -92,7 +90,7 @@ function configuredCustomWeth() {
               ],
             },
           ],
-          range: { from: 'latest' },
+          deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: 'latest' } }],
         },
       ],
     },
@@ -117,9 +115,9 @@ describeIntegration('InitHandler', () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
       networkType: 'evm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [configuredErc20()],
-      sink: 'clickhouse',
+      target: 'clickhouse',
       packageManager: 'pnpm',
     }
 
@@ -135,9 +133,9 @@ describeIntegration('InitHandler', () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
       networkType: 'evm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [configuredErc20()],
-      sink: 'clickhouse',
+      target: 'clickhouse',
       packageManager: 'pnpm',
     }
 
@@ -159,13 +157,13 @@ describeIntegration('InitHandler', () => {
     )
   })
 
-  it('creates project specific folders and files for pre-built template sink is clickhouse ', async () => {
+  it('creates project specific folders and files for pre-built template target is clickhouse ', async () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
       networkType: 'evm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [configuredErc20()],
-      sink: 'clickhouse',
+      target: 'clickhouse',
       packageManager: 'pnpm',
     }
 
@@ -217,13 +215,13 @@ describeIntegration('InitHandler', () => {
     `)
   })
 
-  it('creates migration folder and file for custom template when sink is clickhouse', async () => {
+  it('creates migration folder and file for custom template when target is clickhouse', async () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
       networkType: 'evm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [configuredCustomWeth()],
-      sink: 'clickhouse',
+      target: 'clickhouse',
       packageManager: 'pnpm',
     }
 
@@ -233,13 +231,13 @@ describeIntegration('InitHandler', () => {
     await expect(isDirEmpty(path.join(projectDir, 'migrations'))).resolves.toBeFalsy()
   })
 
-  it('creates project specific folders and files for postgresql sink', async () => {
+  it('creates project specific folders and files for postgresql target', async () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
       networkType: 'evm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [configuredErc20()],
-      sink: 'postgresql',
+      target: 'postgresql',
       packageManager: 'pnpm',
     }
 
@@ -292,9 +290,9 @@ describeIntegration('InitHandler', () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
       networkType: 'evm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [configuredUniswap()],
-      sink: 'clickhouse',
+      target: 'clickhouse',
       packageManager: 'pnpm',
     }
 
@@ -311,9 +309,9 @@ describeIntegration('InitHandler', () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
       networkType: 'evm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [configuredErc20()],
-      sink: 'clickhouse',
+      target: 'clickhouse',
       packageManager: 'pnpm',
     }
 
@@ -326,9 +324,9 @@ describeIntegration('InitHandler', () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
       networkType: 'evm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [configuredErc20()],
-      sink: 'clickhouse',
+      target: 'clickhouse',
       packageManager: 'yarn',
     }
 
@@ -341,9 +339,9 @@ describeIntegration('InitHandler', () => {
     const config: Config<'evm'> = {
       projectFolder: projectDir,
       networkType: 'evm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [configuredErc20()],
-      sink: 'clickhouse',
+      target: 'clickhouse',
       packageManager: 'bun',
     }
 
@@ -353,14 +351,15 @@ describeIntegration('InitHandler', () => {
   })
 
   it('cleans up the project directory and surfaces the failing stage id when a stage fails', async () => {
-    // `memory` sink throws inside the `write-index-ts` stage via buildSink; this is
+    // An invalid target (cast past the type system, as a hand-written --config could produce
+    // before validation) makes buildTarget throw inside the `write-index-ts` stage; this is
     // a real stage failure occurring after the safe-to-clean check-project-path stage.
     const config: Config<'evm'> = {
       projectFolder: projectDir,
       networkType: 'evm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [configuredErc20()],
-      sink: 'memory',
+      target: 'bogus' as unknown as Config<'evm'>['target'],
       packageManager: 'pnpm',
     }
 

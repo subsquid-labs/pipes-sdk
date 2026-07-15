@@ -28,6 +28,12 @@ export function withErrorHandling(fn: (options: any) => Promise<void>) {
     try {
       await fn(options)
     } catch (error) {
+      // Ctrl-C surfaces from @inquirer as ExitPromptError — exit quietly like a
+      // normal SIGINT instead of printing it as an error.
+      if (error instanceof Error && error.name === 'ExitPromptError') {
+        process.exit(130)
+      }
+
       console.log('')
       console.log(formatError(error))
       console.log('')

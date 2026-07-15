@@ -1,17 +1,6 @@
 import { Config, NetworkType } from '~/types/init.js'
 
-export interface BuiltTransformerTemplate {
-  templateId: string
-  code: string
-}
-
-export interface TemplateValues {
-  network: string
-  deduplicatedImports: string[]
-  transformerTemplates: BuiltTransformerTemplate[]
-  sinkTemplate: string
-  envTemplate: string
-}
+import { renderTemplates } from '../render-templates.js'
 
 export interface TransformerTemplateBuilder {
   templateId?: string
@@ -24,12 +13,18 @@ export abstract class BaseTransformerBuilder<N extends NetworkType> {
 
   constructor(protected config: Config<N>) {}
 
-  // TODO: move deduplication logic to this function
-  // abstract renderTemplate(templateValues: TemplateValues): string
-
   abstract getTemplate(): string
 
-  abstract getTransformerTemplates(): Promise<TransformerTemplateBuilder[]>
-
   abstract getNetworkImports(): string[]
+
+  /** The stream's outputs record is keyed by decoder ids — never by template ids,
+   *  which diverge from the emitted decoder consts whenever a template splits
+   *  into several decoders (multi-deployment contracts, divergent ranges). */
+  getTransformerTemplates(): TransformerTemplateBuilder[] {
+    return renderTemplates(this.config).map(({ artifacts }) =>
+      artifacts.decoderIds.length === 1
+        ? { code: artifacts.transformer, templateId: artifacts.decoderIds[0] }
+        : { code: artifacts.transformer, templateIds: artifacts.decoderIds },
+    )
+  }
 }

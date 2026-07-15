@@ -7,8 +7,10 @@ import type { InferTemplateParams, Template, TemplateArtifacts, TemplateContext 
 
 export interface PromptContext {
   text(message: string, defaultValue?: string): Promise<string>
+  confirm(message: string, defaultValue?: boolean): Promise<boolean>
+  select<T>(message: string, choices: Array<{ name: string; value: T }>): Promise<T>
   checkbox<T>(message: string, choices: Array<{ name: string; value: T }>): Promise<T[]>
-  blockRange(message: string): Promise<{ from: string; to?: string }>
+  blockRange(message: string, opts?: { contractAddresses?: string[] }): Promise<{ from: string; to?: string }>
   abiService: SqdAbiService
   network: string
 }

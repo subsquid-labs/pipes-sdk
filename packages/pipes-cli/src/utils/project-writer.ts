@@ -40,9 +40,25 @@ export class ProjectWriter {
     }
   }
 
-  executeCommand(command: string) {
-    return execAsync(command, {
-      cwd: this.projectAbsolutePath,
-    })
+  async executeCommand(command: string) {
+    try {
+      return await execAsync(command, {
+        cwd: this.projectAbsolutePath,
+        // Installs can print more than the default 1 MB; don't fail on buffer size.
+        maxBuffer: 64 * 1024 * 1024,
+      })
+    } catch (error) {
+      // exec puts the child's output on the error object, not in its message —
+      // and package managers often write the real reason to stdout. Surface it
+      // so "Command failed" isn't the whole story.
+      const err = error as { stdout?: string; stderr?: string; message?: string }
+      const output = [err.stderr, err.stdout]
+        .map((chunk) => (chunk ?? '').toString().trim())
+        .filter(Boolean)
+        .join('\n')
+      const detail = output || err.message || 'unknown error'
+
+      throw new Error(`\`${command}\` failed:\n${detail}`, { cause: error })
+    }
   }
 }

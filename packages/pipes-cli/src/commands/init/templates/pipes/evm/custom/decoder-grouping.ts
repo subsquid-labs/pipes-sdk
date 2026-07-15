@@ -7,6 +7,8 @@ import { oldestRange as pickOldestRange } from '~/utils/range.js'
 
 export interface ContractWithRange extends ContractMetadata {
   range?: BlockRange
+  /** Reference-deployment address for typegen imports; defaults to `contractAddress`. */
+  typegenAddress?: string
 }
 
 export interface DecoderGroup {
@@ -75,12 +77,20 @@ export function groupContractsForDecoders(contracts: ContractWithRange[]): Decod
     }
   }
 
-  // Contracts differ (by events or by range): one decoder per contract
+  // Contracts differ (by events or by range): one decoder per (contract, deployment).
+  // Deployments of the same contract share a name, so decoder ids get a numeric
+  // suffix on collision (mirroring the SDK's transformer-id dedup).
+  const usedIds = new Set<string>()
   return {
     shared: false,
     groups: nonEmpty.map((c) => {
       const camelName = toCamelCase(c.contractName)
-      const decoderId = `custom${camelName.charAt(0).toUpperCase()}${camelName.slice(1)}`
+      let decoderId = `custom${camelName.charAt(0).toUpperCase()}${camelName.slice(1)}`
+      for (let n = 2; usedIds.has(decoderId); n++) {
+        decoderId = `custom${camelName.charAt(0).toUpperCase()}${camelName.slice(1)}${n}`
+      }
+      usedIds.add(decoderId)
+
       return {
         decoderId,
         contracts: [c],

@@ -1,14 +1,21 @@
-import type { Sink } from '~/types/init.js'
+import type { NetworkType, Target } from '~/types/init.js'
 
-// TODO: use only network specific dependencies
 const baseDependencies: Record<string, string> = {
   '@subsquid/pipes': '^1.0.0',
-  '@subsquid/evm-codec': '0.3.0',
-  '@subsquid/evm-abi': '0.3.1',
-  '@subsquid/borsh': '^0.3.0',
   dotenv: '^16.4.5',
-  'better-sqlite3': '^12.4.5',
   zod: '^4.3.4',
+}
+
+const networkDependencies: Record<NetworkType, Record<string, string>> = {
+  evm: {
+    '@subsquid/evm-codec': '0.3.0',
+    '@subsquid/evm-abi': '0.3.1',
+    // contractFactorySqliteStore (dynamic contract tracking) is SQLite-backed
+    'better-sqlite3': '^12.4.5',
+  },
+  svm: {
+    '@subsquid/borsh': '^0.3.0',
+  },
 }
 
 const baseDevDependencies: Record<string, string> = {
@@ -19,7 +26,7 @@ const baseDevDependencies: Record<string, string> = {
   '@types/node': '^22.14.1',
 }
 
-const sinkDependencies: Record<Sink, Record<string, string>> = {
+const targetDependencies: Record<Target, Record<string, string>> = {
   clickhouse: {
     '@clickhouse/client': '^1.14.0',
   },
@@ -28,14 +35,16 @@ const sinkDependencies: Record<Sink, Record<string, string>> = {
     'drizzle-orm': '^0.44.7',
     pg: '^8.16.3',
   },
-  memory: {},
 }
 
-export function renderDependencies(sink: Sink): {
+export function renderDependencies(
+  target: Target,
+  networkType: NetworkType,
+): {
   dependencies: Record<string, string>
   devDependencies: Record<string, string>
 } {
-  const dependencies = { ...baseDependencies, ...sinkDependencies[sink] }
+  const dependencies = { ...baseDependencies, ...networkDependencies[networkType], ...targetDependencies[target] }
   const devDependencies = { ...baseDevDependencies }
 
   return {

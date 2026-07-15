@@ -62,22 +62,17 @@ export class InitPrompt {
 
     const selectedTemplates = await templatePromptLoop(networkType, network)
 
-    const sink = await select({
+    const target = await select({
       message: 'Where would you like to store your data?',
-      choices: targets.map((t) => ({ name: t.name, value: t.id, disabled: 'disabled' in t && t.disabled })),
-      theme: {
-        style: {
-          disabled: (text: string) => chalk.dim(`  ${text.replace('disabled', 'Coming soon')}`),
-        },
-      },
+      choices: targets.map((t) => ({ name: t.name, value: t.id })),
     })
 
     return {
       projectFolder,
       networkType,
-      network,
+      defaultNetwork: network,
       templates: selectedTemplates,
-      sink,
+      target,
       packageManager,
     }
   }

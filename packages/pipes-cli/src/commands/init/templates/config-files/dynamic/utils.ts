@@ -1,4 +1,4 @@
-import { NetworkType, Sink } from '~/types/init.js'
+import { NetworkType, Target } from '~/types/init.js'
 
 export const snakeCaseUtilsTemplate = `export type SnakeCase<S extends string> =
   S extends \`\${infer H}\${infer T}\`
@@ -99,7 +99,7 @@ export function enrichEvents<T extends EventResponse<Instructions>>(
 }
 `
 
-export function renderUtilsTemplate({ networkType, sink }: { networkType: NetworkType; sink: Sink }) {
+export function renderUtilsTemplate({ networkType, target }: { networkType: NetworkType; target: Target }) {
   const baseTemplate = (() => {
     switch (networkType) {
       case 'evm':
@@ -109,5 +109,5 @@ export function renderUtilsTemplate({ networkType, sink }: { networkType: Networ
     }
   })()
 
-  return sink === 'clickhouse' ? snakeCaseUtilsTemplate + '\n' + baseTemplate : baseTemplate
+  return target === 'clickhouse' ? snakeCaseUtilsTemplate + '\n' + baseTemplate : baseTemplate
 }

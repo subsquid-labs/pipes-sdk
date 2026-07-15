@@ -18,8 +18,8 @@ export type ConfigFileSpec = {
 }
 
 export function planConfigFiles(config: Config<NetworkType>, projectName: string): ConfigFileSpec[] {
-  const isPostgres = config.sink === 'postgresql'
-  const { dependencies, devDependencies } = renderDependencies(config.sink)
+  const isPostgres = config.target === 'postgresql'
+  const { dependencies, devDependencies } = renderDependencies(config.target, config.networkType)
 
   const specs: ConfigFileSpec[] = [
     { path: 'biome.json', contents: biomeConfigTemplate },
@@ -54,7 +54,7 @@ export function planConfigFiles(config: Config<NetworkType>, projectName: string
       path: 'docker-compose.yml',
       contents: renderDockerCompose({
         projectName,
-        sink: config.sink,
+        target: config.target,
         packageManager: config.packageManager,
       }),
     },

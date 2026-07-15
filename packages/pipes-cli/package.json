@@ -62,7 +62,8 @@
     "inquirer": "^13.1.0",
     "mustache": "^4.2.0",
     "ora": "9.3.0",
-    "zod": "^4.3.4"
+    "zod": "^4.3.4",
+    "typescript": "5.9.2"
   },
   "devDependencies": {
     "@subsquid/evm-abi": "0.3.1",
@@ -70,7 +71,6 @@
     "@types/mustache": "^4.2.6",
     "@types/node": "22.14.1",
     "@vitest/coverage-v8": "3.2.4",
-    "typescript": "5.9.2",
     "vitest": "3.2.4"
   }
 }

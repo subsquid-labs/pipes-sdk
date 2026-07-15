@@ -3,7 +3,7 @@ import Mustache from 'mustache'
 
 import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
 
-import { extractExportConstNames } from '../sink-builder/shared.js'
+import { extractExportConstNames } from '../target-builder/shared.js'
 
 export const schemasTemplate = `{{#mergedImports}}
 {{{.}}}

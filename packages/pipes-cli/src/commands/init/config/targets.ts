@@ -7,9 +7,4 @@ export const targets = [
     name: 'PostgreSQL',
     id: 'postgresql',
   },
-  {
-    name: 'Memory',
-    id: 'memory',
-    disabled: true,
-  },
 ] as const

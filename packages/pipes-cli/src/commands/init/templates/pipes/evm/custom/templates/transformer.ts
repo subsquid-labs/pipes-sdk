@@ -1,15 +1,13 @@
 import { toCamelCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 
-import { uniqueEventKey } from '../../../../../builders/sink-builder/shared.js'
+import { uniqueEventKey } from '../../../../../builders/target-builder/shared.js'
 import { type DecoderGrouping } from '../decoder-grouping.js'
 
 export const customContractTemplate = `import { evmEventDecoder } from '@subsquid/pipes/evm'
-{{#decoderGroups}}
 {{#imports}}
 import { events as {{{alias}}} } from "./contracts/{{{address}}}.js"
 {{/imports}}
-{{/decoderGroups}}
 import { enrichEvents } from './utils/index.js'
 
 {{#decoderGroups}}
@@ -39,13 +37,17 @@ const {{{decoderId}}} = evmEventDecoder({
 `
 
 export function renderTransformer(grouping: DecoderGrouping) {
+  // One typegen import per contract, even when its deployments split into several
+  // decoder groups — imports are keyed by alias and deduped across groups.
+  const imports = new Map<string, string>()
+
   const decoderGroups = grouping.groups.map((group) => {
     const firstContract = group.contracts[0]
     const alias = `${toCamelCase(firstContract.contractName)}Events`
+    imports.set(alias, firstContract.typegenAddress ?? firstContract.contractAddress)
 
     return {
       decoderId: group.decoderId,
-      imports: [{ alias, address: firstContract.contractAddress }],
       contracts: group.contracts,
       rangeFrom: group.range.from,
       rangeTo: group.range.to,
@@ -61,5 +63,8 @@ export function renderTransformer(grouping: DecoderGrouping) {
     }
   })
 
-  return Mustache.render(customContractTemplate, { decoderGroups })
+  return Mustache.render(customContractTemplate, {
+    decoderGroups,
+    imports: [...imports].map(([alias, address]) => ({ alias, address })),
+  })
 }

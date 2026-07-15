@@ -25,38 +25,18 @@ export async function main() {
 {{/transformerTemplates}}
     },
   })
-  .pipeTo({{{sinkTemplate}}})
+  .pipeTo({{{targetTemplate}}})
 }
 
 void main()
 `
 
 export class EvmTransformerBuilder extends BaseTransformerBuilder<'evm'> {
-  // TODO: move deduplication logic to this function
   getTemplate(): string {
     return template
   }
 
   getNetworkImports() {
     return ['import { evmPortalStream } from "@subsquid/pipes/evm"']
-  }
-
-  getTransformerTemplates() {
-    const ctx = {
-      network: this.config.network,
-      projectPath: '',
-      networkType: this.config.networkType,
-    }
-    return Promise.all(
-      this.config.templates.map(async ({ template, params }) => {
-        const artifacts = template.render(params, ctx)
-        const { transformer: code, decoderIds } = artifacts
-
-        if (decoderIds.length === 1) {
-          return { code, templateId: decoderIds[0] }
-        }
-        return { code, templateIds: decoderIds }
-      }),
-    )
   }
 }

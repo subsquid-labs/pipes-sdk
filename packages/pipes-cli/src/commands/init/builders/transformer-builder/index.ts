@@ -1,11 +1,12 @@
 import Mustache from 'mustache'
 
+import { SqdAbiService } from '~/services/sqd-abi.js'
 import { Config, NetworkType } from '~/types/init.js'
 import { generateImportStatement, mergeImports, splitImportsAndCode } from '~/utils/merge-imports.js'
 import { ProjectWriter } from '~/utils/project-writer.js'
 import { generatePipeId } from '~/utils/random-id.js'
 
-import { buildSink } from '../sink-builder/index.js'
+import { buildTarget } from '../target-builder/index.js'
 import { BaseTransformerBuilder } from './base-transformer-builder.js'
 import { EvmTransformerBuilder } from './evm-transformer-builder.js'
 import { SvmTransformerBuilder } from './svm-transformer-builder.js'
@@ -34,13 +35,16 @@ export class TransformerBuilder<N extends NetworkType> {
   }
 
   async runPostSetups() {
+    const abiService = new SqdAbiService()
+
     await Promise.all(
       this.config.templates.map(async ({ template, params }) => {
         if (template.postSetup) {
           await template.postSetup(params, {
-            network: this.config.network,
+            network: this.config.defaultNetwork,
             projectPath: this.projectWriter.getAbsolutePath(),
             networkType: this.config.networkType,
+            abiService,
           })
         }
       }),
@@ -49,22 +53,22 @@ export class TransformerBuilder<N extends NetworkType> {
 
   async render() {
     const transformerTemplates = await this.transformerBuilder.getTransformerTemplates()
-    const sinkArtifacts = buildSink(this.config)
-    const sinkTemplates = sinkArtifacts.sinkCode
-    const envTemplate = sinkArtifacts.envSchema
+    const targetArtifacts = buildTarget(this.config)
+    const targetTemplates = targetArtifacts.targetCode
+    const envTemplate = targetArtifacts.envSchema
 
     // TODO: rename this variable
     const componentsCode = [
       TransformerBuilder.BASE_IMPORTS,
       this.transformerBuilder.getNetworkImports(),
       envTemplate,
-      sinkTemplates,
+      targetTemplates,
       transformerTemplates.map((t) => t.code),
     ].flat()
 
     const deduplicatedImports = this.deduplicateImports(componentsCode)
 
-    const { code: sinkCode } = splitImportsAndCode(sinkTemplates)
+    const { code: targetCode } = splitImportsAndCode(targetTemplates)
     const { code: envCode } = splitImportsAndCode(envTemplate)
     const transformersCode = transformerTemplates.map((t) => ({
       templateId: t.templateId,
@@ -78,11 +82,11 @@ export class TransformerBuilder<N extends NetworkType> {
        * will be the same for all transfomers
        */
       pipeId: generatePipeId(),
-      network: this.config.network,
+      network: this.config.defaultNetwork,
       deduplicatedImports,
       envTemplate: envCode,
       transformerTemplates: transformersCode,
-      sinkTemplate: sinkCode,
+      targetTemplate: targetCode,
     })
   }
 

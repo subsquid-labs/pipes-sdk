@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { getTemplateDirname } from '~/utils/fs.js'
 import { TemplateReader } from '~/utils/template-reader.js'
 
+import { extractCreateTableNames } from '../../../../builders/target-builder/shared.js'
 import { defineTemplate } from '../../../define-template.js'
 import { renderTemplate } from './templates/transformer.js'
 
@@ -35,15 +36,18 @@ export const uniswapV3SwapsTemplate = defineTemplate({
   copySrc: 'src',
   async prompt(ctx) {
     const factoryAddress = await ctx.text('Uniswap V3 compatible factory address', defaults.factoryAddress)
-    const range = await ctx.blockRange('Block range')
+    const range = await ctx.blockRange('Block range', { contractAddresses: [factoryAddress.trim()] })
     return { factoryAddress: factoryAddress.trim(), range }
   },
   render(params) {
+    const clickhouseTable = templateReader.readClickhouseTable()
+
     return {
       transformer: renderTemplate(params),
       postgresSchema: templateReader.readPgTable(),
-      clickhouseTable: templateReader.readClickhouseTable(),
+      clickhouseTable,
       decoderIds: ['uniswapV3Swaps'],
+      tables: extractCreateTableNames(clickhouseTable).map((table) => ({ decoderId: 'uniswapV3Swaps', table })),
     }
   },
 })

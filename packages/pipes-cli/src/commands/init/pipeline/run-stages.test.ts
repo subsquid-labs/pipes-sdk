@@ -97,6 +97,51 @@ describe('runStages', () => {
     expect(observedTexts).toEqual(['Writing static files', 'Installing dependencies'])
   })
 
+  it('collects an optional stage failure, keeps going, and does not clean up', async () => {
+    await fsPromises.mkdir(projectPath, { recursive: true })
+    await writeFile(path.join(projectPath, 'file.txt'), 'hello')
+
+    const boom = new Error('install failed')
+    const ranAfter: string[] = []
+    const cleanup = vi.fn(async () => {})
+    const stages: InitStage[] = [
+      { id: 'check-project-path', label: 'Check', run: async () => {} },
+      {
+        id: 'install-dependencies',
+        label: 'Installing dependencies',
+        optional: true,
+        run: async () => {
+          throw boom
+        },
+      },
+      {
+        id: 'write-index',
+        label: 'Write index',
+        run: async () => {
+          ranAfter.push('write-index')
+        },
+      },
+    ]
+
+    const failures = await runStages(stages, makeContext({ projectPath }), { cleanup })
+
+    expect(failures).toEqual([{ stageId: 'install-dependencies', label: 'Installing dependencies', error: boom }])
+    // The pipeline continued past the optional failure...
+    expect(ranAfter).toEqual(['write-index'])
+    // ...and the project was preserved (no cleanup).
+    expect(cleanup).not.toHaveBeenCalled()
+    await expect(pathExists(projectPath)).resolves.toBe(true)
+  })
+
+  it('returns an empty failure list when every stage succeeds', async () => {
+    const stages: InitStage[] = [
+      { id: 'a', label: 'A', run: async () => {} },
+      { id: 'b', label: 'B', optional: true, run: async () => {} },
+    ]
+
+    await expect(runStages(stages, makeContext())).resolves.toEqual([])
+  })
+
   it('wraps stage failures in InitPipelineError with stageId and cause', async () => {
     const original = new Error('boom')
     const stages: InitStage[] = [

@@ -6,56 +6,10 @@ import { getTemplate } from '../templates/registry.js'
 import { configJsonSchema, configJsonSchemaRaw } from './params.js'
 
 describe('--config params schema', () => {
-  const wethMetadata = [
-    {
-      contractAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-      contractName: 'WETH9',
-      contractEvents: [
-        {
-          inputs: [
-            {
-              name: 'src',
-              type: 'address',
-            },
-            {
-              name: 'guy',
-              type: 'address',
-            },
-            {
-              name: 'wad',
-              type: 'uint256',
-            },
-          ],
-          name: 'Approval',
-          type: 'event',
-        },
-        {
-          inputs: [
-            {
-              name: 'src',
-              type: 'address',
-            },
-            {
-              name: 'dst',
-              type: 'address',
-            },
-            {
-              name: 'wad',
-              type: 'uint256',
-            },
-          ],
-          name: 'Transfer',
-          type: 'event',
-        },
-      ],
-      range: { from: 'latest' },
-    },
-  ]
-
   const strictConfigSchema = {
     projectFolder: './morpho-blue-markets',
     networkType: 'evm',
-    network: 'ethereum-mainnet',
+    defaultNetwork: 'ethereum-mainnet',
     packageManager: 'bun',
     target: 'clickhouse',
     templates: [
@@ -64,7 +18,6 @@ describe('--config params schema', () => {
         params: {
           contracts: [
             {
-              contractAddress: '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb',
               contractName: 'MorphoBlue',
               contractEvents: [
                 {
@@ -138,7 +91,7 @@ describe('--config params schema', () => {
                   ],
                 },
               ],
-              range: { from: 'latest' },
+              deployments: [{ address: '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb', range: { from: 'latest' } }],
             },
           ],
         },
@@ -156,9 +109,9 @@ describe('--config params schema', () => {
 
     expect(config.projectFolder).toBe('./morpho-blue-markets')
     expect(config.networkType).toBe('evm')
-    expect(config.network).toBe('ethereum-mainnet')
+    expect(config.defaultNetwork).toBe('ethereum-mainnet')
     expect(config.packageManager).toBe('bun')
-    expect(config.sink).toBe('clickhouse')
+    expect(config.target).toBe('clickhouse')
     expect(config.templates).toHaveLength(1)
     expect(config.templates[0].template).toBe(customTemplate)
     expect(config.templates[0].params).toEqual(strictConfigSchema.templates[0].params)
@@ -169,14 +122,13 @@ describe('--config params schema', () => {
       projectFolder: 'test',
       networkType: 'evm',
       packageManager: 'pnpm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [
         {
           templateId: 'custom',
           params: {
             contracts: [
               {
-                contractAddress: '0xbbbbbbbbbb9cc5e90e3b3af64bdaf62c37eeffcb',
                 contractName: 'Morpho',
                 contractEvents: [
                   {
@@ -282,7 +234,7 @@ describe('--config params schema', () => {
                     type: 'event',
                   },
                 ],
-                range: { from: 'latest' },
+                deployments: [{ address: '0xbbbbbbbbbb9cc5e90e3b3af64bdaf62c37eeffcb', range: { from: 'latest' } }],
               },
             ],
           },
@@ -324,7 +276,7 @@ describe('--config params schema', () => {
       templates: [
         {
           templateId: 'erc20Transfers',
-          params: { contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'] },
+          params: { deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2' }] },
         },
       ],
     }
@@ -333,9 +285,15 @@ describe('--config params schema', () => {
     expect(parsed.templates[0]).toMatchObject({
       templateId: 'erc20Transfers',
       params: {
-        contractAddresses: ['0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'],
-        range: { from: '12,369,621' },
+        // A deployment without an explicit range gets the schema default.
+        deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: 'latest' } }],
       },
     })
+  })
+
+  it('should reject the removed memory target as an invalid enum value', () => {
+    const configJson = { ...strictConfigSchema, target: 'memory' }
+
+    expect(() => configJsonSchemaRaw.parse(configJson)).toThrow()
   })
 })

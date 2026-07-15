@@ -1,7 +1,7 @@
-import { NetworkType, Sink } from '~/types/init.js'
+import { NetworkType, Target } from '~/types/init.js'
 
 export class DbMappingError extends Error {
-  constructor(networkType: NetworkType, sink: Sink, type: string) {
+  constructor(networkType: NetworkType, target: Target, type: string) {
     let lang: string
     switch (networkType) {
       case 'evm':
@@ -11,7 +11,7 @@ export class DbMappingError extends Error {
         lang = 'Rust'
         break
     }
-    super(`Failed to map ${lang} to ${sink} type. Type ${type} doesn't have a correspondence in the mapping object`)
+    super(`Failed to map ${lang} to ${target} type. Type ${type} doesn't have a correspondence in the mapping object`)
   }
 }
 

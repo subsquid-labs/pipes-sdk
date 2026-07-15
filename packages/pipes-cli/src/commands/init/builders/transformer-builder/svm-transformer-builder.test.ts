@@ -24,9 +24,9 @@ describe('SVM Template Builder', () => {
     const config: Config<'svm'> = {
       projectFolder: 'mock-folder',
       networkType: 'svm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [fixtures.svmCustom([whirlpoolContract])],
-      sink: 'clickhouse',
+      target: 'clickhouse',
       packageManager: 'pnpm',
     }
 
@@ -123,9 +123,9 @@ describe('SVM Template Builder', () => {
     const config: Config<'svm'> = {
       projectFolder: 'mock-folder',
       networkType: 'svm',
-      network: 'solana-mainnet',
+      defaultNetwork: 'solana-mainnet',
       templates: [fixtures.tokenBalances()],
-      sink: 'postgresql',
+      target: 'postgresql',
       packageManager: 'pnpm',
     }
 

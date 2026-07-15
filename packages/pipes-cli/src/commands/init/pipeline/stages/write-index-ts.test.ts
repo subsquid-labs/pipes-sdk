@@ -11,7 +11,7 @@ describe('writeIndexTsStage', () => {
       templates: [
         {
           template: erc20,
-          params: { contractAddresses: [], range: { from: '1' } },
+          params: { deployments: [{ address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', range: { from: '1' } }] },
         },
       ],
     })

@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`planConfigFiles > package.json snapshots per (packageManager, sink) > matches snapshot for 'npm' + 'clickhouse' 1`] = `
+exports[`planConfigFiles > package.json snapshots per (packageManager, target) > matches snapshot for 'npm' + 'clickhouse' 1`] = `
 "{
   "name": "proj",
   "version": "0.0.1",
@@ -14,7 +14,6 @@ exports[`planConfigFiles > package.json snapshots per (packageManager, sink) > m
   },
   "dependencies": {
     "@clickhouse/client": "^1.14.0",
-    "@subsquid/borsh": "^0.3.0",
     "@subsquid/evm-abi": "0.3.1",
     "@subsquid/evm-codec": "0.3.0",
     "@subsquid/pipes": "^1.0.0",
@@ -32,7 +31,7 @@ exports[`planConfigFiles > package.json snapshots per (packageManager, sink) > m
 }"
 `;
 
-exports[`planConfigFiles > package.json snapshots per (packageManager, sink) > matches snapshot for 'pnpm' + 'clickhouse' 1`] = `
+exports[`planConfigFiles > package.json snapshots per (packageManager, target) > matches snapshot for 'pnpm' + 'clickhouse' 1`] = `
 "{
   "name": "proj",
   "version": "0.0.1",
@@ -46,7 +45,6 @@ exports[`planConfigFiles > package.json snapshots per (packageManager, sink) > m
   },
   "dependencies": {
     "@clickhouse/client": "^1.14.0",
-    "@subsquid/borsh": "^0.3.0",
     "@subsquid/evm-abi": "0.3.1",
     "@subsquid/evm-codec": "0.3.0",
     "@subsquid/pipes": "^1.0.0",
@@ -64,7 +62,7 @@ exports[`planConfigFiles > package.json snapshots per (packageManager, sink) > m
 }"
 `;
 
-exports[`planConfigFiles > package.json snapshots per (packageManager, sink) > matches snapshot for 'pnpm' + 'postgresql' 1`] = `
+exports[`planConfigFiles > package.json snapshots per (packageManager, target) > matches snapshot for 'pnpm' + 'postgresql' 1`] = `
 "{
   "name": "proj",
   "version": "0.0.1",
@@ -80,7 +78,6 @@ exports[`planConfigFiles > package.json snapshots per (packageManager, sink) > m
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
-    "@subsquid/borsh": "^0.3.0",
     "@subsquid/evm-abi": "0.3.1",
     "@subsquid/evm-codec": "0.3.0",
     "@subsquid/pipes": "^1.0.0",
@@ -101,7 +98,7 @@ exports[`planConfigFiles > package.json snapshots per (packageManager, sink) > m
 }"
 `;
 
-exports[`planConfigFiles > src/utils/index.ts snapshots per (networkType, sink) > matches snapshot for 'evm' + 'clickhouse' 1`] = `
+exports[`planConfigFiles > src/utils/index.ts snapshots per (networkType, target) > matches snapshot for 'evm' + 'clickhouse' 1`] = `
 "export type SnakeCase<S extends string> =
   S extends \`\${infer H}\${infer T}\`
     ? \`\${H extends Lowercase<H> ? H : \`_\${Lowercase<H>}\`}\${SnakeCase<T>}\`
@@ -164,7 +161,7 @@ export function enrichEvents<T extends EventResponse<Events, string[]>>(obj: T):
 "
 `;
 
-exports[`planConfigFiles > src/utils/index.ts snapshots per (networkType, sink) > matches snapshot for 'evm' + 'postgresql' 1`] = `
+exports[`planConfigFiles > src/utils/index.ts snapshots per (networkType, target) > matches snapshot for 'evm' + 'postgresql' 1`] = `
 "
 import { type EventResponse, Events } from '@subsquid/pipes/evm'
 
@@ -200,7 +197,7 @@ export function enrichEvents<T extends EventResponse<Events, string[]>>(obj: T):
 "
 `;
 
-exports[`planConfigFiles > src/utils/index.ts snapshots per (networkType, sink) > matches snapshot for 'svm' + 'clickhouse' 1`] = `
+exports[`planConfigFiles > src/utils/index.ts snapshots per (networkType, target) > matches snapshot for 'svm' + 'clickhouse' 1`] = `
 "export type SnakeCase<S extends string> =
   S extends \`\${infer H}\${infer T}\`
     ? \`\${H extends Lowercase<H> ? H : \`_\${Lowercase<H>}\`}\${SnakeCase<T>}\`

@@ -18,6 +18,9 @@ export default defineConfig([
     // Inline ora (and its pure-ESM transitive deps) into the CJS bundle to bypass
     // the broken shim path.
     noExternal: ['ora'],
+    // merge-imports uses the TypeScript compiler API at runtime; typescript is a
+    // real dependency and must stay external (bundling it would balloon the CLI).
+    external: ['typescript'],
     banner: {
       js: '#!/usr/bin/env node\n',
     },

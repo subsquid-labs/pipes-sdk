@@ -10,18 +10,24 @@ export interface BlockRange {
 }
 
 interface PromptBlockRangeOpts {
+  /** Context line shown with the prompts, e.g. "Block range for WETH9". */
+  message?: string
   networkType: NetworkType
   network: string
   contractAddresses?: string[]
+  abiService?: SqdAbiService
 }
 
 function formatBlock(block: string): string {
   return Number(block).toLocaleString('en-US')
 }
 
-async function fetchOldestDeploymentBlock(network: string, addresses: string[]): Promise<string | null> {
+async function fetchOldestDeploymentBlock(
+  network: string,
+  addresses: string[],
+  abiService = new SqdAbiService(),
+): Promise<string | null> {
   try {
-    const abiService = new SqdAbiService()
     const blocks = await Promise.all(addresses.map((a) => abiService.getContractCreationBlock(network, a)))
     const oldest = blocks.reduce((min, b) => (Number(b) < Number(min) ? b : min))
     return oldest
@@ -35,7 +41,7 @@ async function promptFromBlock(opts: PromptBlockRangeOpts): Promise<string> {
 
   let deploymentBlock: string | null = null
   if (canFetchDeployment) {
-    deploymentBlock = await fetchOldestDeploymentBlock(opts.network, opts.contractAddresses!)
+    deploymentBlock = await fetchOldestDeploymentBlock(opts.network, opts.contractAddresses!, opts.abiService)
   }
 
   type FromChoice = 'latest' | 'deployment' | 'custom'
@@ -51,7 +57,11 @@ async function promptFromBlock(opts: PromptBlockRangeOpts): Promise<string> {
 
   choices.push({ name: 'Start from a specific block', value: 'custom' })
 
-  const choice = await select<FromChoice>({ message: 'Where should indexing start?', choices })
+  const prefix = opts.message ? `${opts.message} — ` : ''
+  const choice = await select<FromChoice>({
+    message: `${prefix}Where should indexing start?`,
+    choices,
+  })
 
   if (choice === 'latest') return 'latest'
   if (choice === 'deployment') return formatBlock(deploymentBlock!)

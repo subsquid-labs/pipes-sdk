@@ -1,9 +1,11 @@
 import { input, select } from '@inquirer/prompts'
 import chalk from 'chalk'
 
+import { SqdAbiService } from '~/services/sqd-abi.js'
 import type { NetworkType } from '~/types/init.js'
 
 import { createPromptContext } from '../templates/prompt-context.js'
+import { TemplatePromptCancelled } from '../templates/prompt-resilience.js'
 import { getTemplate } from '../templates/registry.js'
 import type { ConfiguredTemplate } from '../templates/template.js'
 import { getTemplatePrompts } from './templates.js'
@@ -16,6 +18,9 @@ export async function templatePromptLoop<N extends NetworkType>(
 ): Promise<ConfiguredTemplate<N, unknown>[]> {
   const templateChoices = getTemplatePrompts(networkType)
   const selectedTemplates: ConfiguredTemplate<N, unknown>[] = []
+  // One ABI service for the whole loop: its cache spans templates, so a contract
+  // referenced twice is fetched once.
+  const abiService = new SqdAbiService()
   let addMore = true
 
   while (addMore) {
@@ -42,8 +47,17 @@ export async function templatePromptLoop<N extends NetworkType>(
 
     const template = getTemplate(networkType, templateId)
     if (!template) continue
-    const promptCtx = createPromptContext(networkType, network)
-    const params = template.prompt ? await template.prompt(promptCtx) : undefined
+
+    const promptCtx = createPromptContext(networkType, network, abiService)
+    let params: unknown
+    try {
+      params = template.prompt ? await template.prompt(promptCtx) : undefined
+    } catch (error) {
+      // The user backed out of this template's prompt: drop back to template
+      // selection with everything assembled so far intact.
+      if (error instanceof TemplatePromptCancelled) continue
+      throw error
+    }
     selectedTemplates.push({ template, params })
 
     addMore = await askAddMoreTemplates()

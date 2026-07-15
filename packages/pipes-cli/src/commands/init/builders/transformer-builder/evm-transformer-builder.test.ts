@@ -24,9 +24,9 @@ describe('EVM Template Builder', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [fixtures.erc20Transfers()],
-      sink: 'clickhouse',
+      target: 'clickhouse',
       packageManager: 'pnpm',
     }
 
@@ -128,9 +128,9 @@ describe('EVM Template Builder', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [fixtures.erc20Transfers(), fixtures.uniswapV3Swaps()],
-      sink: 'clickhouse',
+      target: 'clickhouse',
       packageManager: 'pnpm',
     }
 
@@ -269,9 +269,9 @@ describe('EVM Template Builder', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [fixtures.evmCustom([overloadedApprovalContract])],
-      sink: 'postgresql',
+      target: 'postgresql',
       packageManager: 'pnpm',
     }
 
@@ -289,9 +289,9 @@ describe('EVM Template Builder', () => {
     const config: Config<'evm'> = {
       projectFolder: 'mock-folder',
       networkType: 'evm',
-      network: 'ethereum-mainnet',
+      defaultNetwork: 'ethereum-mainnet',
       templates: [fixtures.evmCustom([wethContract])],
-      sink: 'postgresql',
+      target: 'postgresql',
       packageManager: 'pnpm',
     }
 
