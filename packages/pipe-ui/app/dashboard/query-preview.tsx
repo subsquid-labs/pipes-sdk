@@ -8,7 +8,7 @@ import { useServerIndex } from '~/hooks/use-server-context'
 
 type QueryView = 'json' | 'curl'
 
-export function QueryExemplar({ pipeId }: { pipeId: string }) {
+export function QueryPreview({ pipeId }: { pipeId: string }) {
   const { serverIndex } = useServerIndex()
   const data = usePipe(serverIndex, pipeId)
   const [view, setView] = useState<QueryView>('json')

@@ -12,8 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { humanBytes } from '~/dashboard/formatters'
 import { PipelineDisconnected } from '~/dashboard/pipeline-disconnected'
 import { Profiler } from '~/dashboard/profiler'
-import { QueryExemplar } from '~/dashboard/query-exemplar'
-import { TransformationExemplar } from '~/dashboard/transformation-exemplar'
+import { QueryPreview } from '~/dashboard/query-preview'
+import { TransformationPreview } from '~/dashboard/transformation-preview'
 import { PipeStatus, useStats } from '~/hooks/use-metrics'
 import { useServerIndex } from '~/hooks/use-server-context'
 import { useUrlParam } from '~/hooks/use-url-param'
@@ -100,10 +100,10 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
             <Profiler pipeId={pipeId} />
           </TabsContent>
           <TabsContent value="data-flow">
-            <TransformationExemplar pipeId={pipeId} />
+            <TransformationPreview pipeId={pipeId} />
           </TabsContent>
           <TabsContent value="query">
-            <QueryExemplar pipeId={pipeId} />
+            <QueryPreview pipeId={pipeId} />
           </TabsContent>
         </Tabs>
 
