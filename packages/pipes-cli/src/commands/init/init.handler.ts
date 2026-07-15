@@ -105,6 +105,8 @@ export class InitHandler {
   }
 
   static jsonSchema() {
-    console.log(JSON.stringify(z.toJSONSchema(configJsonSchemaRaw), null, 2))
+    const { $schema, ...rest } = z.toJSONSchema(configJsonSchemaRaw) as Record<string, unknown>
+    const schema = { $schema, title: 'Subsquid Pipes CLI configuration', ...rest }
+    console.log(JSON.stringify(schema, null, 2))
   }
 }

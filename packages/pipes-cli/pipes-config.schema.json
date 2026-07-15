@@ -1,0 +1,628 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Subsquid Pipes CLI configuration",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "projectFolder": {
+          "type": "string",
+          "minLength": 1
+        },
+        "packageManager": {
+          "type": "string",
+          "enum": [
+            "pnpm",
+            "yarn",
+            "npm",
+            "bun"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "enum": [
+            "clickhouse",
+            "postgresql"
+          ],
+          "description": "Storage target for the pipeline data."
+        },
+        "networkType": {
+          "type": "string",
+          "const": "evm"
+        },
+        "defaultNetwork": {
+          "type": "string",
+          "enum": [
+            "0g-testnet",
+            "abstract-mainnet",
+            "abstract-testnet",
+            "agung-evm",
+            "aleph-zero-evm-mainnet",
+            "gelato-arbitrum-blueberry",
+            "arbitrum-nova",
+            "arbitrum-one",
+            "arbitrum-sepolia",
+            "arthera-mainnet",
+            "astar-mainnet",
+            "astar-zkevm-mainnet",
+            "astar-zkyoto",
+            "avalanche-mainnet",
+            "avalanche-testnet",
+            "b3-mainnet",
+            "b3-sepolia",
+            "base-mainnet",
+            "base-sepolia",
+            "beam-mainnet",
+            "berachain-bartio",
+            "berachain-mainnet",
+            "binance-mainnet",
+            "binance-testnet",
+            "bitfinity-mainnet",
+            "bitfinity-testnet",
+            "bitgert-mainnet",
+            "bitgert-testnet",
+            "bittensor-mainnet-evm",
+            "bittensor-testnet-evm",
+            "blast-l2-mainnet",
+            "blast-sepolia",
+            "bob-mainnet",
+            "bob-sepolia",
+            "botanix-mainnet",
+            "botanix-testnet",
+            "camp-network-testnet-v2",
+            "canto",
+            "canto-testnet",
+            "celo-mainnet",
+            "celo-alfajores-testnet",
+            "core-mainnet",
+            "crossfi-mainnet",
+            "crossfi-testnet",
+            "cyber-mainnet",
+            "cyberconnect-l2-testnet",
+            "dancelight-testnet",
+            "degen-chain",
+            "dfk-chain",
+            "dogechain-mainnet",
+            "dogechain-testnet",
+            "ethereum-mainnet",
+            "ethereum-holesky",
+            "ethereum-hoodi",
+            "ethereum-sepolia",
+            "etherlink-mainnet",
+            "etherlink-testnet",
+            "exosama",
+            "fantom-mainnet",
+            "fantom-testnet",
+            "flare-mainnet",
+            "gelato-opcelestia-raspberry",
+            "gnosis-mainnet",
+            "galxe-gravity",
+            "hedera-mainnet",
+            "hemi-mainnet",
+            "hemi-testnet",
+            "hyperliquid-mainnet",
+            "hyperliquid-testnet",
+            "immutable-zkevm-mainnet",
+            "immutable-zkevm-testnet",
+            "ink-mainnet",
+            "ink-sepolia",
+            "kyoto-testnet",
+            "linea-mainnet",
+            "lukso-mainnet",
+            "manta-pacific",
+            "manta-pacific-sepolia",
+            "mantle-mainnet",
+            "mantle-sepolia",
+            "mega-testnet",
+            "memecore-mainnet",
+            "formicarium-testnet",
+            "merlin-mainnet",
+            "merlin-testnet",
+            "metis-mainnet",
+            "mode-mainnet",
+            "monad-mainnet",
+            "monad-testnet",
+            "moonbase-testnet",
+            "moonbeam-mainnet",
+            "moonriver-mainnet",
+            "moonsama",
+            "nakachain",
+            "neon-mainnet",
+            "neon-devnet",
+            "neox-testnet",
+            "opbnb-mainnet",
+            "opbnb-testnet",
+            "optimism-mainnet",
+            "optimism-sepolia",
+            "ozean-testnet",
+            "peaq-mainnet",
+            "plasma-mainnet",
+            "plasma-testnet",
+            "plume-devnet",
+            "plume-mainnet",
+            "plume-legacy",
+            "plume-testnet",
+            "polygon-mainnet",
+            "polygon-amoy-testnet",
+            "polygon-zkevm-mainnet",
+            "polygon-zkevm-cardona-testnet",
+            "poseidon-testnet",
+            "prom-mainnet",
+            "puppynet",
+            "scroll-mainnet",
+            "scroll-sepolia",
+            "shibarium",
+            "shibuya-testnet",
+            "shiden-mainnet",
+            "skale-nebula",
+            "soneium-mainnet",
+            "soneium-minato-testnet",
+            "sonic-mainnet",
+            "sonic-testnet",
+            "stratovm-sepolia",
+            "superseed-mainnet",
+            "superseed-sepolia",
+            "taiko-mainnet",
+            "tanssi",
+            "unichain-mainnet",
+            "unichain-sepolia",
+            "xlayer-mainnet",
+            "xlayer-testnet",
+            "x1-testnet",
+            "zklink-nova-mainnet",
+            "zksync-mainnet",
+            "zksync-sepolia",
+            "zora-mainnet",
+            "zora-sepolia"
+          ],
+          "description": "Network every template indexes; per-deployment networks may override it in the future."
+        },
+        "templates": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "templateId": {
+                    "type": "string",
+                    "const": "custom"
+                  },
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "contracts": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "contractName": {
+                              "type": "string",
+                              "description": "Contract name (ABI-level identity)"
+                            },
+                            "contractEvents": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "type": {
+                                    "type": "string"
+                                  },
+                                  "inputs": {
+                                    "type": "array",
+                                    "items": {
+                                      "$ref": "#/$defs/__schema0"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "type",
+                                  "inputs"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "description": "ABI events to track (shared by all deployments)"
+                            },
+                            "deployments": {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "address": {
+                                    "type": "string",
+                                    "description": "Deployed contract address"
+                                  },
+                                  "range": {
+                                    "default": {
+                                      "from": "latest"
+                                    },
+                                    "description": "Block range to index for this deployment",
+                                    "type": "object",
+                                    "properties": {
+                                      "from": {
+                                        "type": "string"
+                                      },
+                                      "to": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "from"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "address",
+                                  "range"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "description": "Deployed instances of this contract"
+                            }
+                          },
+                          "required": [
+                            "contractName",
+                            "contractEvents",
+                            "deployments"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "description": "Contracts to track: ABI-level identity plus its deployments"
+                      }
+                    },
+                    "required": [
+                      "contracts"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "templateId",
+                  "params"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "templateId": {
+                    "type": "string",
+                    "const": "erc20Transfers"
+                  },
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "deployments": {
+                        "default": [
+                          {
+                            "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                            "range": {
+                              "from": "12,369,621"
+                            }
+                          }
+                        ],
+                        "description": "ERC-20 token deployments to track, each with its own block range",
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "address": {
+                              "type": "string",
+                              "description": "Deployed contract address"
+                            },
+                            "range": {
+                              "default": {
+                                "from": "latest"
+                              },
+                              "description": "Block range to index for this deployment",
+                              "type": "object",
+                              "properties": {
+                                "from": {
+                                  "type": "string"
+                                },
+                                "to": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "from"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "address",
+                            "range"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "deployments"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "templateId",
+                  "params"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "templateId": {
+                    "type": "string",
+                    "const": "uniswapV3Swaps"
+                  },
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "factoryAddress": {
+                        "default": "0x1f98431c8ad98523631ae4a59f267346ea31f984",
+                        "description": "The Uniswap V3 compatible factory address to dynamically track pools",
+                        "type": "string"
+                      },
+                      "range": {
+                        "default": {
+                          "from": "12,369,621"
+                        },
+                        "description": "Block range for indexing",
+                        "type": "object",
+                        "properties": {
+                          "from": {
+                            "type": "string"
+                          },
+                          "to": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "from"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "factoryAddress",
+                      "range"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "templateId",
+                  "params"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "projectFolder",
+        "packageManager",
+        "target",
+        "networkType",
+        "defaultNetwork",
+        "templates"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "projectFolder": {
+          "type": "string",
+          "minLength": 1
+        },
+        "packageManager": {
+          "type": "string",
+          "enum": [
+            "pnpm",
+            "yarn",
+            "npm",
+            "bun"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "enum": [
+            "clickhouse",
+            "postgresql"
+          ],
+          "description": "Storage target for the pipeline data."
+        },
+        "networkType": {
+          "type": "string",
+          "const": "svm"
+        },
+        "defaultNetwork": {
+          "type": "string",
+          "enum": [
+            "solana-mainnet",
+            "solana-devnet",
+            "eclipse-mainnet",
+            "eclipse-testnet",
+            "soon-mainnet",
+            "soon-testnet",
+            "soon-devnet",
+            "svm-bnb-mainnet",
+            "svm-bnb-testnet"
+          ],
+          "description": "Network every template indexes; per-deployment networks may override it in the future."
+        },
+        "templates": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "templateId": {
+                    "type": "string",
+                    "const": "custom"
+                  },
+                  "params": {
+                    "type": "object",
+                    "properties": {
+                      "contracts": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "contractName": {
+                              "type": "string",
+                              "description": "Contract name (ABI-level identity)"
+                            },
+                            "contractEvents": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "type": {
+                                    "type": "string"
+                                  },
+                                  "inputs": {
+                                    "type": "array",
+                                    "items": {
+                                      "$ref": "#/$defs/__schema0"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "type",
+                                  "inputs"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "description": "ABI events to track (shared by all deployments)"
+                            },
+                            "deployments": {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "address": {
+                                    "type": "string",
+                                    "description": "Deployed contract address"
+                                  },
+                                  "range": {
+                                    "default": {
+                                      "from": "latest"
+                                    },
+                                    "description": "Block range to index for this deployment",
+                                    "type": "object",
+                                    "properties": {
+                                      "from": {
+                                        "type": "string"
+                                      },
+                                      "to": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "from"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "address",
+                                  "range"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "description": "Deployed instances of this contract"
+                            }
+                          },
+                          "required": [
+                            "contractName",
+                            "contractEvents",
+                            "deployments"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "description": "Programs to track: IDL-level identity plus its deployments"
+                      }
+                    },
+                    "required": [
+                      "contracts"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "templateId",
+                  "params"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "templateId": {
+                    "type": "string",
+                    "const": "tokenBalances"
+                  }
+                },
+                "required": [
+                  "templateId"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "projectFolder",
+        "packageManager",
+        "target",
+        "networkType",
+        "defaultNetwork",
+        "templates"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "__schema0": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
