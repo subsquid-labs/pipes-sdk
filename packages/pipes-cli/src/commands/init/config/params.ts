@@ -6,6 +6,9 @@ import { TemplateNotFoundError } from '../init.errors.js'
 import { getTemplate, getTemplates } from '../templates/registry.js'
 import { getPortalNetworkSlugs } from './networks.js'
 
+/** Canonical hosted location of the `--config` JSON schema (also its `$id`). */
+export const CONFIG_SCHEMA_URL = 'https://cdn.subsquid.io/schemas/pipes_cli_config.json'
+
 function getTemplateSchemas<N extends NetworkType>(networkType: N) {
   const networkTemplates = getTemplates(networkType)
   const options = networkTemplates.map((template) =>

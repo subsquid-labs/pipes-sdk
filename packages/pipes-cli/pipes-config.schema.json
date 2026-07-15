@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cdn.subsquid.io/schemas/pipes_cli_config.json",
   "title": "Subsquid Pipes CLI configuration",
   "oneOf": [
     {

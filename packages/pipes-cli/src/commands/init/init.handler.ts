@@ -8,7 +8,7 @@ import { deriveProjectName } from '~/utils/project-name.js'
 import { ProjectWriter } from '~/utils/project-writer.js'
 import { createSpinner } from '~/utils/spinner.js'
 
-import { configJsonSchema, configJsonSchemaRaw } from './config/params.js'
+import { CONFIG_SCHEMA_URL, configJsonSchema, configJsonSchemaRaw } from './config/params.js'
 import { prepareConfig } from './config/prepare-config.js'
 import { type InitContext, initStages, runStages } from './pipeline/index.js'
 
@@ -106,7 +106,7 @@ export class InitHandler {
 
   static jsonSchema() {
     const { $schema, ...rest } = z.toJSONSchema(configJsonSchemaRaw) as Record<string, unknown>
-    const schema = { $schema, title: 'Subsquid Pipes CLI configuration', ...rest }
+    const schema = { $schema, $id: CONFIG_SCHEMA_URL, title: 'Subsquid Pipes CLI configuration', ...rest }
     console.log(JSON.stringify(schema, null, 2))
   }
 }
