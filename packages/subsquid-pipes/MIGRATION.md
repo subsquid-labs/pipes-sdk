@@ -22,7 +22,7 @@ Other silent-at-compile-time changes to check: the ClickHouse `onRollback` callb
 
 ## 1. Rename portal sources to portal streams
 
-All portal source functions have been renamed to portal streams. Old names are available as deprecated aliases.
+All portal source functions have been renamed to portal streams. The old names are removed — there are no compatibility aliases.
 
 ```ts
 // before
@@ -40,7 +40,7 @@ import { hyperliquidFillsPortalStream } from '@subsquid/pipes/hyperliquid'
 
 ## 2. Move decoders from `.pipe()` into `outputs`
 
-This is the most common change. Instead of chaining `.pipe(decoder)` after the source, pass your decoder through the `outputs` option.
+This is the most common change. Instead of chaining `.pipe(decoder)` after the source, pass your decoder through the `outputs` option. The EVM decoder itself is renamed: `evmDecoder` → `evmEventDecoder` (it decodes event logs specifically, matching `solanaInstructionDecoder`).
 
 ### Single decoder
 
@@ -58,7 +58,7 @@ const stream = evmPortalSource({
 // after
 const stream = evmPortalStream({
   portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-  outputs: evmDecoder({
+  outputs: evmEventDecoder({
     range: { from: 'latest' },
     events: { transfers: commonAbis.erc20.events.Transfer },
   }),
@@ -106,13 +106,15 @@ await evmPortalSource({ portal: '...' })
 await evmPortalStream({
   id: 'eth-transfers',     // globally unique, stable ID for cursor persistence
   portal: '...',
-  outputs: evmDecoder({ ... }),
+  outputs: evmEventDecoder({ ... }),
 }).pipeTo(clickhouseTarget({ ... }))
 ```
 
 ---
 
 ## 4. Rename `factory()` to `contractFactory()`
+
+The SQLite store is backend-qualified: `factorySqliteDatabase` → `contractFactorySqliteStore` (an intermediate 1.0-alpha name `contractFactoryStore` was renamed again — the backend is part of the contract, since a `path` option writes a file to disk).
 
 ```ts
 // before
@@ -126,13 +128,13 @@ factory({
 })
 
 // after
-import { contractFactory, contractFactoryStore } from '@subsquid/pipes/evm'
+import { contractFactory, contractFactorySqliteStore } from '@subsquid/pipes/evm'
 
 contractFactory({
   address: '0x1f98...',
   event: factoryAbi.PoolCreated,
   childAddressField: 'pool',            // renamed from `parameter`
-  database: contractFactoryStore({ path: './pools.sqlite' }),
+  database: contractFactorySqliteStore({ path: './pools.sqlite' }),
 })
 ```
 
@@ -143,7 +145,7 @@ contractFactory({
   address: '0x1f98...',
   event: factoryAbi.PoolCreated,
   childAddressField: (decoded) => decoded.pool,
-  database: contractFactoryStore({ path: './pools.sqlite' }),
+  database: contractFactorySqliteStore({ path: './pools.sqlite' }),
 })
 ```
 
@@ -178,7 +180,7 @@ Note: `createSolanaInstructionDecoder` → `solanaInstructionDecoder` (rename, n
 
 ## 6. Update runner configuration
 
-The runner's `stream` field is now `handler`, and `RunConfig` is now `PipeContext`.
+The runner factory is now `devRunner` (was `createDevRunner`), its `stream` field is now `handler`, and `RunConfig` is now `PipeContext`.
 
 ```ts
 // before
@@ -191,11 +193,11 @@ createDevRunner([
 ])
 
 // after
-import { PipeContext, createDevRunner } from '@subsquid/pipes/runtime/node'
+import { PipeContext, devRunner } from '@subsquid/pipes/runtime/node'
 
 async function indexTransfers({ id, params }: PipeContext<{ portal: string }>) { ... }
 
-createDevRunner([
+devRunner([
   { id: 'eth', params: { portal: '...' }, handler: indexTransfers },
 ])
 ```
@@ -234,7 +236,7 @@ source.pipe({
 
 ## 8. Update custom query builder usage (`.build()`)
 
-If you use `evmQuery().build(...)` directly (e.g. in a custom decoder), separate the transform from the build call.
+If you use `evmQuery().build(...)` directly (e.g. in a custom decoder), separate the transform from the build call. The transformer's fork hook is renamed `fork` → `rollback` — it receives an already-resolved safe cursor and its job is the destructive undo, not fork resolution.
 
 ```ts
 // before
@@ -254,8 +256,18 @@ const decoder = evmQuery()
   .pipe({
     profiler: { name: 'my-decoder' },
     transform: (data, ctx) => data.map(decode),
-    fork: async (cursor, ctx) => { /* rollback state */ },
+    rollback: async (cursor, ctx) => { /* undo state above the cursor */ },
   })
+```
+
+The data-request methods on every query builder gained a `Request` suffix — the argument is a request/filter for the entity, not the entity itself (`addLog` → `addLogRequest`, `addTransaction` → `addTransactionRequest`, `addTrace` → `addTraceRequest`, `addStateDiff` → `addStateDiffRequest`, `addInstruction` → `addInstructionRequest`, and so on across the EVM, Solana, Bitcoin, Tron and Hyperliquid builders). `addFields` and `addRange` are unchanged — they add actual fields and ranges.
+
+```ts
+// before
+evmQuery().addLog({ range: { from: 0 }, request: { topic0: [transferTopic] } })
+
+// after
+evmQuery().addLogRequest({ range: { from: 0 }, request: { topic0: [transferTopic] } })
 ```
 
 ---
@@ -280,13 +292,15 @@ import { StartEvent, ProgressEvent } from '@subsquid/pipes'
 
 evmPortalStream({
   portal: '...',
-  outputs: evmDecoder({ ... }),
+  outputs: evmEventDecoder({ ... }),
   progress: {
     onStart:    (event: StartEvent)    => console.log(`starting from block ${event.state.initial}`),
-    onProgress: (event: ProgressEvent) => console.log(`${event.progress.state.current.number}`),
+    onProgress: (event: ProgressEvent) => console.log(`${event.progress.state.current}`),
   },
 })
 ```
+
+Inside `ProgressEvent`, the range bounds are named `from`/`to` (previously `initial`/`last`), matching the `range: { from, to }` option vocabulary — `to` is the end of the indexed range (the configured `to` bound, or the chain head when unbounded). `current` is a plain block number, and per-interval activity stats live under `progress.intervalStats` (previously `interval`).
 
 ---
 
@@ -337,6 +351,17 @@ one-time warning is logged.
 | `BatchCtx` | `BatchContext` |
 | `RunConfig` | `PipeContext` |
 | `FactoryOptions` | `ContractFactoryOptions` |
+| `StartState` | `StartEvent` |
+| `ProgressState` | `ProgressEvent` |
+| `PortalSource` / `PortalSourceOptions` | `PortalStream` / `PortalStreamOptions` |
+| `Ctx` | `HookContext` |
+| `StartCtx` / `StopCtx` | `StartContext` / `StopContext` |
+| `BatchStreamContext` | `StreamInfo` |
+| `SdkError` | `SdkErrorName` |
+| `Settings` (ClickHouse) | `ClickhouseSettings` |
+| `ForkNoPreviousBlocksError` | `MissingForkAncestorError` (code E1002 unchanged) |
+
+The `PortalClientOptions` duration keys are unit-suffixed: `maxIdleTime` → `maxIdleTimeMs`, `maxWaitTime` → `maxWaitTimeMs`, `headPollInterval` → `headPollIntervalMs` (all were already milliseconds).
 
 ---
 
@@ -344,7 +369,16 @@ one-time warning is logged.
 
 | Before | After |
 |---|---|
-| `chunk` | `batchForInsert` |
+| `chunk` (also `batchForInsert` in earlier 1.0 alphas) | `chunkForInsert` |
+| `createDefaultLogger` | `defaultLogger` |
+| `createFinalizationBuffer` | `finalizationBuffer` |
+| `toSnakeKeys` | `toSnakeCaseKeys` |
+| `displayEstimatedTime` | `formatEta` |
+| `coerceFinalized` | `normalizeFinalized` |
+| `lines` | `joinLines` |
+| `parseBlockFormatting` | `parseFormattedBlock` |
+| `BQ_ERR` / `PQ_ERR` | `BIGQUERY_ERROR_CODES` / `PARQUET_ERROR_CODES` |
+| `BigQueryState` / `BigQueryStore` / `BigQueryTracker` | `BigQuerySyncState` / `BigQueryWriter` / `BigQueryTableRegistry` |
 
 ---
 
@@ -355,16 +389,52 @@ one-time warning is logged.
 | `createEvmPortalSource` | `evmPortalStream` | Alias removed |
 | `createSolanaPortalSource` | `solanaPortalStream` | Alias removed |
 | `createSolanaInstructionDecoder` | `solanaInstructionDecoder` | Renamed, no alias |
+| `evmDecoder` | `evmEventDecoder` | Renamed, no alias |
+| `createClickhouseTarget` | `clickhouseTarget` | Alias removed |
+| `contractFactoryStore` (1.0 alphas only) | `contractFactorySqliteStore` | Renamed, no alias |
+| `createDevRunner` (1.0 alphas only) | `devRunner` | Renamed, no alias |
 | `new EvmQueryBuilder()` | `evmQuery()` | Shorthand factory, old still works |
 | `new SolanaQueryBuilder()` | `solanaQuery()` | Shorthand factory, old still works |
 | `new HyperliquidFillsQueryBuilder()` | `hyperliquidFillsQuery()` | Shorthand factory, old still works |
 
 ---
 
-## 14. ClickHouse rollbacks are engine-aware
+## 14. Update custom targets: `fork()` → `resolveFork(canonicalBlocks)`
 
-No code changes are required — `onRollback` implementations calling `store.removeAllRows` keep
-working. What changes is what happens under the hood, depending on each table's engine:
+If you implement the `Target` interface directly, the contract method the engine calls on a
+detected chain fork is renamed `fork(previousBlocks)` → `resolveFork(canonicalBlocks)`: it must
+find the common ancestor with the given canonical chain, undo everything above it, and return the
+resume cursor. The parameter rename matters too — the blocks are the portal's view of the
+*canonical* chain (a.k.a. `previousBlocks` in the Portal API's 409 response body), not the blocks
+you just processed.
+
+The word *rollback* is reserved for hooks that receive an **already-resolved** cursor and only
+undo state: the transformer hook (`fork` → `rollback`, see section 8) and the target callbacks
+(`onRollback`, `onBeforeRollback`/`onAfterRollback`), which fire for forks *and* startup recovery.
+
+`FinalizationBuffer` implements the resolution for you — but note its method names shifted (see
+the warning at the top: `resolveFork` now resolves *and drops*; the pure variant is
+`resolveForkCursor`):
+
+```ts
+// a single-buffer target's fork handler, before → after
+fork:        (blocks) => buffer.fork(blocks)
+resolveFork: (blocks) => buffer.resolveFork(blocks)
+```
+
+---
+
+## 15. ClickHouse rollbacks are engine-aware
+
+The `onRollback` discriminator changed: the callback now receives `reason: 'recovery' | 'fork'`
+instead of `type: 'offset_check' | 'blockchain_fork'` (`'recovery'` fires on every restart with a
+persisted cursor; `'fork'` on chain forks). The context also no longer carries the `cursor`
+duplicate — use `safeCursor`. Both are runtime-visible only if you branched on the old values, so
+grep for them.
+
+Beyond that, no code changes are required — `onRollback` implementations calling
+`store.removeAllRows` keep working. What changes is what happens under the hood, depending on each
+table's engine:
 
 | Table engine | Behaviour after upgrading |
 |---|---|
@@ -382,9 +452,9 @@ Recommended follow-ups:
 
 ---
 
-## 15. Parquet: rename `TIMESTAMP_MILLIS` to `TIMESTAMP`
+## 16. Parquet: rename `TIMESTAMP_MILLIS` to `TIMESTAMP`
 
-The Parquet format spec deprecates the `TIMESTAMP_MILLIS` converted type in favor of the `TIMESTAMP` logical type. The column type is renamed accordingly; the old name still works as a deprecated alias and both write byte-identical files (int64 epoch-ms, readable by every Parquet reader as `TIMESTAMP(isAdjustedToUTC=true, unit=MILLIS)`), so existing data needs no migration.
+The Parquet format spec deprecates the `TIMESTAMP_MILLIS` converted type in favor of the `TIMESTAMP` logical type. The column type is renamed accordingly; the old name is removed (no alias). Both spellings write byte-identical files (int64 epoch-ms, readable by every Parquet reader as `TIMESTAMP(isAdjustedToUTC=true, unit=MILLIS)`), so existing data needs no migration — only schemas change.
 
 ```ts
 // before
@@ -408,6 +478,20 @@ schema: {
 
 ---
 
+## 17. Observability: metric and endpoint renames
+
+- Prometheus gauges: `sqd_current_block` → `sqd_processed_block`, and `sqd_last_block` →
+  `sqd_end_block`. The second rename is semantic too: the value is the **end of the indexed range**
+  (the configured `to` bound, or the chain head when unbounded) — for a range-bounded run it is not
+  the chain head, and dashboards labelling it that way were wrong. Update dashboards and alerts.
+- Metrics server HTTP API: `GET /exemplars/transformation` → `GET /preview/transformation`
+  ("exemplar" collides with the Prometheus/OpenMetrics term of art); the `/profiler` payload key
+  `profilers` → `profiles`; the `/stats` payload's `code.filename` → `entrypoint`.
+- **Pipes UI:** upgrade `@subsquid/pipes-ui` together with the SDK — older UI versions read the
+  removed endpoints and payload keys and will show no data against a 1.0 pipe.
+
+---
+
 ## Quick checklist
 
 - [ ] `evmPortalSource` → `evmPortalStream`
@@ -418,16 +502,22 @@ schema: {
 - [ ] Add a globally unique, non-empty `id` to every portal stream
 - [ ] Cursor re-keying: nothing to do for single-pipe ClickHouse/Postgres (auto-migrated); BigQuery: pin `state: { id: 'stream' }` to keep the old cursor; Parquet: rename `_sqd_parquet_state.json` to `_sqd_parquet_state.<pipe-id>.json`
 - [ ] Pipes sharing one offset table under the old default: pin explicit per-target ids before upgrading
+- [ ] `evmDecoder` → `evmEventDecoder`
 - [ ] `factory()` → `contractFactory()`
-- [ ] `factorySqliteDatabase()` → `contractFactoryStore()`
+- [ ] `factorySqliteDatabase()` → `contractFactorySqliteStore()`
 - [ ] `parameter` → `childAddressField` in factory options
-- [ ] `stream` → `handler` in runner config
+- [ ] `createDevRunner` → `devRunner`, `stream` → `handler` in runner config
 - [ ] `RunConfig` → `PipeContext`
 - [ ] `ResultOf` → `OutputOf`
-- [ ] `chunk` → `batchForInsert`
+- [ ] `chunk` → `chunkForInsert`
 - [ ] `createSolanaInstructionDecoder` → `solanaInstructionDecoder`
-- [ ] Custom transformers: `data.blocks` → `data`
+- [ ] Query builders: `addLog` / `addTransaction` / `addInstruction` / … → `addLogRequest` / `addTransactionRequest` / `addInstructionRequest` / …
+- [ ] Custom transformers: `data.blocks` → `data`; `fork` hook → `rollback`
 - [ ] Custom `.build({ transform })` → `.build().pipe()`
-- [ ] `StartState` → `StartEvent`, `ProgressState` → `ProgressEvent`
+- [ ] Custom targets: `fork(previousBlocks)` → `resolveFork(canonicalBlocks)`; check `FinalizationBuffer.resolveFork` call sites (it now drops rows — use `resolveForkCursor` for pure resolution)
+- [ ] `StartState` → `StartEvent`, `ProgressState` → `ProgressEvent` (progress state reads `from`/`to`; interval stats under `intervalStats`)
+- [ ] ClickHouse `onRollback`: `type: 'offset_check' | 'blockchain_fork'` → `reason: 'recovery' | 'fork'`; `cursor` → `safeCursor`
 - [ ] ClickHouse rollbacks: nothing to do for CollapsingMergeTree tables (optionally call `store.ensureRollbackIndex` in `onStart` on large tables); non-collapsing tables now roll back via `DELETE` (needs ClickHouse ≥ 23.3) and their MVs keep rolled-back data
-- [ ] Parquet schemas: `TIMESTAMP_MILLIS` → `TIMESTAMP` (deprecated alias still accepted; files unchanged)
+- [ ] Parquet schemas: `TIMESTAMP_MILLIS` → `TIMESTAMP` (alias removed; files unchanged)
+- [ ] Prometheus dashboards: `sqd_current_block` → `sqd_processed_block`, `sqd_last_block` → `sqd_end_block`
+- [ ] Upgrade `@subsquid/pipes-ui` together with the SDK
