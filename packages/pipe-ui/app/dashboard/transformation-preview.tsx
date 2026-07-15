@@ -135,7 +135,7 @@ type Snapshot = {
 
 const MAX_SNAPSHOTS = 20
 
-function useExemplarHistory(current: ApiPreviewResult | undefined, batch: BatchInfo | undefined) {
+function usePreviewHistory(current: ApiPreviewResult | undefined, batch: BatchInfo | undefined) {
   const historyRef = useRef<Snapshot[]>([])
   const prevDataRef = useRef<string | undefined>(undefined)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
@@ -681,7 +681,7 @@ function FlowStageNode({
 // Main component
 // ---------------------------------------------------------------------------
 
-export function TransformationExemplar({ pipeId }: { pipeId: string }) {
+export function TransformationPreview({ pipeId }: { pipeId: string }) {
   const { serverIndex } = useServerIndex()
   const [expandAll, setExpandAll] = useState(false)
   const { data, isLoading } = useTransformationPreview({ serverIndex, pipeId })
@@ -702,7 +702,7 @@ export function TransformationExemplar({ pipeId }: { pipeId: string }) {
     goLatest,
     freeze,
     toggleFreeze,
-  } = useExemplarHistory(data?.transformation, data?.batch)
+  } = usePreviewHistory(data?.transformation, data?.batch)
 
   return (
     <div className={fullscreen ? 'fixed inset-0 z-50 bg-gray-950 p-6 overflow-auto' : 'relative space-y-1'}>
