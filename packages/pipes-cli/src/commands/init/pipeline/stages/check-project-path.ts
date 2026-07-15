@@ -7,6 +7,9 @@ export const checkProjectPathStage: InitStage = {
   id: 'check-project-path',
   label: 'Checking project path',
   run: async (ctx) => {
+    // Regeneration targets an existing pipes project on purpose — let it through.
+    if (ctx.regenerate) return
+
     try {
       const projectStat = statSync(ctx.projectPath)
       if (projectStat.isDirectory()) throw new ProjectAlreadyExistError(ctx.projectPath)

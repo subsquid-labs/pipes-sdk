@@ -23,6 +23,14 @@ export class ProjectWriter {
     writeFileSync(filePath, content)
   }
 
+  /** Writes the file only if it doesn't already exist, so regeneration keeps user edits. */
+  createFileIfAbsent(relativePath: string, content: string) {
+    const filePath = path.join(this.projectAbsolutePath, relativePath)
+    if (existsSync(filePath)) return
+
+    this.createFile(relativePath, content)
+  }
+
   copyFile(absoluteSourcePath: string, relativeTargetPath: string) {
     const absoluteTargetFilePath = path.join(this.projectAbsolutePath, relativeTargetPath)
 

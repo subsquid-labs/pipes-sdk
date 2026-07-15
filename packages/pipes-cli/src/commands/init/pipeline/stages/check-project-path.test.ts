@@ -30,4 +30,10 @@ describe('checkProjectPathStage', () => {
 
     await expect(checkProjectPathStage.run(ctx)).rejects.toBeInstanceOf(ProjectAlreadyExistError)
   })
+
+  it('allows an existing directory when regenerating', async () => {
+    const { ctx } = makeTestContext({ projectFolder: tmpRoot, regenerate: true })
+
+    await expect(checkProjectPathStage.run(ctx)).resolves.toBeUndefined()
+  })
 })

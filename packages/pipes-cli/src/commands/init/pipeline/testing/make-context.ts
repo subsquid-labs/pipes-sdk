@@ -11,6 +11,7 @@ export type MakeContextOverrides = {
   projectFolder?: string
   templates?: Config<NetworkType>['templates']
   writer?: FakeProjectWriter
+  regenerate?: boolean
 }
 
 export function makeTestContext(overrides: MakeContextOverrides = {}): {
@@ -33,6 +34,7 @@ export function makeTestContext(overrides: MakeContextOverrides = {}): {
       projectName: 'proj',
       projectPath: writer.getAbsolutePath(),
       projectWriter: writer.asProjectWriter(),
+      regenerate: overrides.regenerate,
     },
   }
 }

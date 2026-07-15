@@ -64,7 +64,7 @@ export function buildPostgresTarget(config: Config<NetworkType>): TargetArtifact
     targetCode: renderTargetCode(rendered),
     envSchema,
     files: [
-      { path: '.env', content: renderEnvFile() },
+      { path: '.env', content: renderEnvFile(), preserveExisting: true },
       { path: 'src/schemas.ts', content: renderSchemasFile(rendered) },
       { path: 'drizzle.config.ts', content: drizzleConfigTemplate },
     ],
