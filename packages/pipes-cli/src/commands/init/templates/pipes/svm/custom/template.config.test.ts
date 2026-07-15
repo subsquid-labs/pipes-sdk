@@ -68,6 +68,7 @@ describe('svm customTemplate', () => {
     const promptCtx = {
       text: vi.fn(async () => referenceAddress),
       confirm: vi.fn(async () => false),
+      select: vi.fn(),
       checkbox: vi.fn(async (_msg: string, choices: Array<{ value: any }>) => [choices[0].value]),
       blockRange: vi.fn(async () => ({ from: '0' })),
       abiService: abiService as any,

@@ -23,6 +23,8 @@ export const customTemplate = defineTemplate({
     networkType: 'svm',
     entity: 'program',
     members: 'instructions',
+    interfaceNoun: 'IDL',
+    verifiedSource: 'an on-chain Anchor program',
     rangeKnowsAddresses: false,
   }),
   postSetup: customTypegenPostSetup('svm'),

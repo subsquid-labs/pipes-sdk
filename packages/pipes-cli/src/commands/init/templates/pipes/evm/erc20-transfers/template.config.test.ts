@@ -62,6 +62,7 @@ describe('erc20TransfersTemplate.prompt', () => {
     const promptCtx = {
       text: vi.fn(async (_msg: string, def?: string) => def ?? '0xabc'),
       confirm: vi.fn(async () => false),
+      select: vi.fn(),
       checkbox: vi.fn(),
       blockRange: vi.fn(async () => ({ from: '500' })),
       abiService: {} as any,
@@ -82,6 +83,7 @@ describe('erc20TransfersTemplate.prompt', () => {
         .fn()
         .mockResolvedValueOnce(true) // add another deployment? yes
         .mockResolvedValueOnce(false), // add another deployment? no
+      select: vi.fn(),
       checkbox: vi.fn(),
       blockRange: vi.fn().mockResolvedValueOnce({ from: '500' }).mockResolvedValueOnce({ from: '600' }),
       abiService: {} as any,

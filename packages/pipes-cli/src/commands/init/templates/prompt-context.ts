@@ -1,4 +1,4 @@
-import { checkbox, confirm, input } from '@inquirer/prompts'
+import { checkbox, confirm, input, select } from '@inquirer/prompts'
 import chalk from 'chalk'
 
 import { SqdAbiService } from '~/services/sqd-abi.js'
@@ -22,6 +22,9 @@ export function createPromptContext(
     },
     async confirm(message: string, defaultValue = false) {
       return confirm({ message, default: defaultValue })
+    },
+    async select<T>(message: string, choices: Array<{ name: string; value: T }>): Promise<T> {
+      return select<T>({ message, choices })
     },
     async checkbox<T>(message: string, choices: Array<{ name: string; value: T }>): Promise<T[]> {
       return checkbox<T>({ message, choices, pageSize: 15 })

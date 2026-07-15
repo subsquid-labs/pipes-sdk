@@ -31,6 +31,7 @@ describe('uniswapV3SwapsTemplate', () => {
     const promptCtx = {
       text: vi.fn(async (_msg: string, def?: string) => def ?? '0xdefault'),
       confirm: vi.fn(async () => false),
+      select: vi.fn(),
       checkbox: vi.fn(),
       blockRange: vi.fn(async () => ({ from: '99' })),
       abiService: {} as any,

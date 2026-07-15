@@ -28,6 +28,8 @@ export const customTemplate = defineTemplate({
     networkType: 'evm',
     entity: 'contract',
     members: 'events',
+    interfaceNoun: 'ABI',
+    verifiedSource: 'an Etherscan-verified contract',
     rangeKnowsAddresses: true,
   }),
   postSetup: customTypegenPostSetup('evm'),

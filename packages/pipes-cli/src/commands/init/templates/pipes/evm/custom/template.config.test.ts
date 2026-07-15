@@ -78,6 +78,7 @@ describe('evm customTemplate', () => {
     const promptCtx = {
       text: vi.fn(async () => referenceAddress),
       confirm: vi.fn(async () => false),
+      select: vi.fn(),
       checkbox: vi.fn(async (_msg: string, choices: Array<{ value: any }>) => [choices[0].value]),
       blockRange: vi.fn(async () => ({ from: '10' })),
       abiService: abiService as any,
@@ -113,6 +114,7 @@ describe('evm customTemplate', () => {
         .mockResolvedValueOnce(true) // add another deployment? yes
         .mockResolvedValueOnce(false) // add another deployment? no
         .mockResolvedValueOnce(false), // add another contract? no
+      select: vi.fn(),
       checkbox: vi.fn(async (_msg: string, choices: Array<{ value: any }>) => [choices[0].value]),
       blockRange: vi.fn().mockResolvedValueOnce({ from: '10' }).mockResolvedValueOnce({ from: '20' }),
       abiService: abiService as any,
@@ -127,5 +129,57 @@ describe('evm customTemplate', () => {
       { address: referenceAddress, range: { from: '10' } },
       { address: extraAddress, range: { from: '20' } },
     ])
+  })
+
+  it('prompt() recovers from a contract with no trackable events and lets the user pick another', async () => {
+    const eventlessAddress = '0x1111111111111111111111111111111111111111'
+    const goodAddress = weth.deployments[0]!.address
+    const abiService = {
+      getContractData: vi
+        .fn()
+        .mockResolvedValueOnce([{ contractAddress: eventlessAddress, contractName: 'Eventless', contractEvents: [] }])
+        .mockResolvedValueOnce([
+          { contractAddress: goodAddress, contractName: 'WETH9', contractEvents: weth.contractEvents },
+        ]),
+    }
+    const promptCtx = {
+      text: vi.fn().mockResolvedValueOnce(eventlessAddress).mockResolvedValueOnce(goodAddress),
+      confirm: vi.fn(async () => false),
+      // The eventless contract triggers the retry menu; the user chooses to retry.
+      select: vi.fn(async () => 'retry'),
+      checkbox: vi.fn(async (_msg: string, choices: Array<{ value: any }>) => [choices[0].value]),
+      blockRange: vi.fn(async () => ({ from: 'latest' })),
+      abiService: abiService as any,
+      network: 'ethereum-mainnet',
+    }
+
+    const params = await customTemplate.prompt!(promptCtx)
+
+    expect(promptCtx.select).toHaveBeenCalledTimes(1)
+    expect(abiService.getContractData).toHaveBeenCalledTimes(2)
+    expect(params.contracts).toHaveLength(1)
+    expect(params.contracts[0].contractName).toBe('WETH9')
+  })
+
+  it('prompt() cancels the template when the user skips after a fetch error', async () => {
+    const badAddress = '0x1111111111111111111111111111111111111111'
+    const abiService = {
+      getContractData: vi.fn(async () => {
+        throw new Error('The contract code for 0x1111… is not verified on Polygon.')
+      }),
+    }
+    const promptCtx = {
+      text: vi.fn(async () => badAddress),
+      confirm: vi.fn(async () => false),
+      // The fetch error triggers the retry menu; the user chooses to skip.
+      select: vi.fn(async () => 'skip'),
+      checkbox: vi.fn(),
+      blockRange: vi.fn(),
+      abiService: abiService as any,
+      network: 'polygon-mainnet',
+    }
+
+    await expect(customTemplate.prompt!(promptCtx)).rejects.toMatchObject({ name: 'TemplatePromptCancelled' })
+    expect(promptCtx.select).toHaveBeenCalledTimes(1)
   })
 })
