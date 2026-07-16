@@ -238,6 +238,9 @@ importers:
       ora:
         specifier: 9.3.0
         version: 9.3.0
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
       zod:
         specifier: ^4.3.4
         version: 4.3.6
@@ -257,9 +260,6 @@ importers:
       '@vitest/coverage-v8':
         specifier: 3.2.4
         version: 3.2.4(vitest@3.2.4(@types/debug@4.1.12)(@types/node@22.14.1)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.20.6)(yaml@2.8.2))
-      typescript:
-        specifier: 5.9.2
-        version: 5.9.2
       vitest:
         specifier: 3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.14.1)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.20.6)(yaml@2.8.2)
