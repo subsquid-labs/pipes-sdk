@@ -47,4 +47,6 @@ export const PARQUET_ERROR_CODES = {
   RECOVERY_DELETE_FAILED: 'E2314',
   /** A nested column declaration is malformed (empty STRUCT fields, LIST without element, over-deep nesting). */
   NESTED_SCHEMA_INVALID: 'E2315',
+  /** duckdb engine: a column declares a per-column codec that differs from the file-level codec. */
+  DUCKDB_COLUMN_COMPRESSION: 'E2316',
 } as const
