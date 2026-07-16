@@ -36,7 +36,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # Build is the publish gate — the package must compile before we ship.
       # The full test suite (ClickHouse + Postgres services) runs in
-      # test-subsquid-pipes.yml on push to main/develop, so the tagged commit
+      # test.yml on push to main/develop, so the tagged commit
       # has already been tested; re-running the services here would only add
       # flakiness to the release path.
       - run: pnpm --filter @subsquid/pipes build
@@ -97,9 +97,9 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          PACKAGE_VERSION=$(jq -r '.version' packages/subsquid-pipes/package.json)
+          PACKAGE_VERSION=$(jq -r '.version' packages/pipes/package.json)
           if [ "$PACKAGE_VERSION" != "$VERSION" ]; then
-            echo "packages/subsquid-pipes/package.json is $PACKAGE_VERSION, expected $VERSION."
+            echo "packages/pipes/package.json is $PACKAGE_VERSION, expected $VERSION."
             echo "Bump and commit the version before tagging the release."
             exit 1
           fi
@@ -141,7 +141,7 @@ jobs:
       - name: Publish @subsquid/pipes
         env:
           DIST_TAG: ${{ steps.disttag.outputs.tag }}
-        run: pnpm publish packages/subsquid-pipes --access public --provenance --no-git-checks --tag "$DIST_TAG"
+        run: pnpm publish packages/pipes --access public --provenance --no-git-checks --tag "$DIST_TAG"
 
   github-release:
     needs: publish

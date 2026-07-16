@@ -1,20 +1,23 @@
 name: Test @subsquid/pipes
 
+# This job runs both the core and the CLI suites, so it must trigger on either.
 on:
   push:
     branches:
       - develop
       - main
     paths:
-      - 'packages/subsquid-pipes/**'
-      - '.github/workflows/test-subsquid-pipes.yml'
+      - 'packages/pipes/**'
+      - 'packages/pipes-cli/**'
+      - '.github/workflows/test.yml'
   pull_request:
     branches:
       - develop
       - main
     paths:
-      - 'packages/subsquid-pipes/**'
-      - '.github/workflows/test-subsquid-pipes.yml'
+      - 'packages/pipes/**'
+      - 'packages/pipes-cli/**'
+      - '.github/workflows/test.yml'
 
 jobs:
   test:
@@ -65,8 +68,8 @@ jobs:
       - name: Build packages
         run: pnpm run build
 
-      - name: Run subsquid-pipes tests
-        working-directory: packages/subsquid-pipes
+      - name: Run @subsquid/pipes tests
+        working-directory: packages/pipes
         env:
           TEST_CLICKHOUSE_URL: http://localhost:8123
           TEST_CLICKHOUSE_USERNAME: default

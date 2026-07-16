@@ -1,9 +1,9 @@
-# Project: subsquid-pipes SDK
+# Project: @subsquid/pipes SDK
 
 ## Key conventions
 
 - Package manager: **pnpm** (v10)
-- Test runner: **vitest** (run from `packages/subsquid-pipes/`)
+- Test runner: **vitest** (run from `packages/pipes/`)
 - Linter/formatter: **Biome**
 - Build: **tsup** via **turbo**
 
@@ -14,7 +14,7 @@
 - EVM test helpers: `mockBlock`, `encodeEvent`, `mockEvmPortalStream`, `resetMockBlockCounter` from `~/testing/evm/`
 - General helpers: `mockPortal`, `readAll`, `testLogger` from `~/testing/`
 - Clean up mock portals in `afterEach`, not `try/finally`
-- Run tests: `pnpm vitest run src/path/to/file.test.ts` (from `packages/subsquid-pipes/`)
+- Run tests: `pnpm vitest run src/path/to/file.test.ts` (from `packages/pipes/`)
 - Some tests require external services (ClickHouse, PostgreSQL) — exclude with `--exclude` flags when running locally
 
 ## PR workflow

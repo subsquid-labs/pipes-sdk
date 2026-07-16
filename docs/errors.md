@@ -7,11 +7,11 @@
   routing /en/sdk/pipes-sdk/errors/<code> to the matching section anchor below.
 
   Keep in sync with the code the messages come from:
-    - packages/subsquid-pipes/src/core/errors.ts                          (E0xxx, E1xxx)
-    - packages/subsquid-pipes/src/targets/clickhouse/errors.ts            (E20xx)
-    - packages/subsquid-pipes/src/targets/drizzle/node-postgres/errors.ts (E21xx)
-    - packages/subsquid-pipes/src/targets/bigquery/errors.ts              (E22xx)
-    - packages/subsquid-pipes/src/targets/parquet/errors.ts               (E23xx)
+    - packages/pipes/src/core/errors.ts                          (E0xxx, E1xxx)
+    - packages/pipes/src/targets/clickhouse/errors.ts            (E20xx)
+    - packages/pipes/src/targets/drizzle/node-postgres/errors.ts (E21xx)
+    - packages/pipes/src/targets/bigquery/errors.ts              (E22xx)
+    - packages/pipes/src/targets/parquet/errors.ts               (E23xx)
 -->
 
 # Error reference
@@ -268,7 +268,7 @@ target refuses to start.
 **Fix** — if you deliberately reset the sync table, also `TRUNCATE`/drop the tracked tables it names.
 If you're upgrading from a pre-`id`-keyed cursor, keep the old cursor by pinning
 `settings: { state: { id: 'stream' } }` — see the
-[migration guide](https://github.com/subsquid-labs/pipes-sdk/blob/main/packages/subsquid-pipes/MIGRATION.md#10-target-cursors-are-now-keyed-by-the-pipe-id).
+[migration guide](https://github.com/subsquid-labs/pipes-sdk/blob/main/packages/pipes/MIGRATION.md#10-target-cursors-are-now-keyed-by-the-pipe-id).
 
 ### E2213 · BigQuery rejected rows in AppendRows
 

@@ -70,7 +70,7 @@ importers:
         version: 0.3.0
       '@subsquid/pipes':
         specifier: workspace:*
-        version: link:../packages/subsquid-pipes
+        version: link:../packages/pipes
       '@subsquid/solana-stream':
         specifier: 0.3.1
         version: 0.3.1
@@ -112,159 +112,7 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.18.13)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.20.6)(yaml@2.8.2)
 
-  packages/pipe-ui:
-    dependencies:
-      '@number-flow/react':
-        specifier: ^0.5.10
-        version: 0.5.10(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@radix-ui/react-select':
-        specifier: ^2.2.6
-        version: 2.2.6(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@radix-ui/react-separator':
-        specifier: ^1.1.7
-        version: 1.1.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@radix-ui/react-slot':
-        specifier: ^1.2.3
-        version: 1.2.3(@types/react@19.2.14)(react@19.2.5)
-      '@radix-ui/react-switch':
-        specifier: ^1.2.6
-        version: 1.2.6(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@radix-ui/react-tabs':
-        specifier: ^1.1.13
-        version: 1.1.13(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@radix-ui/react-toggle':
-        specifier: ^1.1.10
-        version: 1.1.10(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@tanstack/react-query':
-        specifier: ^5.90.2
-        version: 5.90.2(react@19.2.5)
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
-      js-yaml:
-        specifier: ^4.1.0
-        version: 4.1.1
-      lucide-react:
-        specifier: ^0.544.0
-        version: 0.544.0(react@19.2.5)
-      motion:
-        specifier: ^12.23.22
-        version: 12.23.22(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      next:
-        specifier: ^15.3.3
-        version: 15.5.12(@opentelemetry/api@1.9.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      react:
-        specifier: ^19.2.5
-        version: 19.2.5
-      react-dom:
-        specifier: ^19.2.5
-        version: 19.2.5(react@19.2.5)
-      react-sparklines:
-        specifier: ^1.7.0
-        version: 1.7.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      react-syntax-highlighter:
-        specifier: ^15.6.6
-        version: 15.6.6(react@19.2.5)
-      recharts:
-        specifier: 2.15.4
-        version: 2.15.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      tailwind-merge:
-        specifier: ^3.3.1
-        version: 3.3.1
-    devDependencies:
-      '@tailwindcss/postcss':
-        specifier: ^4.1.13
-        version: 4.2.1
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
-      '@types/node':
-        specifier: ^22
-        version: 22.13.10
-      '@types/react':
-        specifier: ^19.2.14
-        version: 19.2.14
-      '@types/react-dom':
-        specifier: ^19.2.3
-        version: 19.2.3(@types/react@19.2.14)
-      '@types/react-syntax-highlighter':
-        specifier: ^15.5.13
-        version: 15.5.13
-      tailwindcss:
-        specifier: ^4.1.13
-        version: 4.1.13
-      tw-animate-css:
-        specifier: ^1.4.0
-        version: 1.4.0
-      typescript:
-        specifier: ^5.9.2
-        version: 5.9.2
-
-  packages/pipes-cli:
-    dependencies:
-      '@inquirer/prompts':
-        specifier: ^8.1.0
-        version: 8.4.2(@types/node@22.14.1)
-      '@solana/addresses':
-        specifier: ^5.4.0
-        version: 5.5.1(typescript@5.9.2)
-      '@subsquid/pipes':
-        specifier: workspace:*
-        version: link:../subsquid-pipes
-      '@subsquid/rpc-client':
-        specifier: ^4.14.0
-        version: 4.14.0
-      '@subsquid/solana-typegen':
-        specifier: ^0.9.0
-        version: 0.9.1(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@6.0.6)
-      chalk:
-        specifier: ^4.1.2
-        version: 4.1.2
-      commander:
-        specifier: ^14.0.2
-        version: 14.0.3
-      drizzle-orm:
-        specifier: ^0.44.7
-        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.5)(pg@8.16.3)
-      inquirer:
-        specifier: ^13.1.0
-        version: 13.4.2(@types/node@22.14.1)
-      mustache:
-        specifier: ^4.2.0
-        version: 4.2.0
-      ora:
-        specifier: 9.3.0
-        version: 9.3.0
-      typescript:
-        specifier: 5.9.2
-        version: 5.9.2
-      zod:
-        specifier: ^4.3.4
-        version: 4.3.6
-    devDependencies:
-      '@subsquid/evm-abi':
-        specifier: 0.3.1
-        version: 0.3.1
-      '@subsquid/evm-codec':
-        specifier: 0.3.0
-        version: 0.3.0
-      '@types/mustache':
-        specifier: ^4.2.6
-        version: 4.2.6
-      '@types/node':
-        specifier: 22.14.1
-        version: 22.14.1
-      '@vitest/coverage-v8':
-        specifier: 3.2.4
-        version: 3.2.4(vitest@3.2.4(@types/debug@4.1.12)(@types/node@22.14.1)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.20.6)(yaml@2.8.2))
-      vitest:
-        specifier: 3.2.4
-        version: 3.2.4(@types/debug@4.1.12)(@types/node@22.14.1)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.20.6)(yaml@2.8.2)
-
-  packages/subsquid-pipes:
+  packages/pipes:
     dependencies:
       '@clickhouse/client':
         specifier: 1.14.0
@@ -354,6 +202,158 @@ importers:
       vitest:
         specifier: 3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.14.1)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.20.6)(yaml@2.8.2)
+
+  packages/pipes-cli:
+    dependencies:
+      '@inquirer/prompts':
+        specifier: ^8.1.0
+        version: 8.4.2(@types/node@22.14.1)
+      '@solana/addresses':
+        specifier: ^5.4.0
+        version: 5.5.1(typescript@5.9.2)
+      '@subsquid/pipes':
+        specifier: workspace:*
+        version: link:../pipes
+      '@subsquid/rpc-client':
+        specifier: ^4.14.0
+        version: 4.14.0
+      '@subsquid/solana-typegen':
+        specifier: ^0.9.0
+        version: 0.9.1(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@6.0.6)
+      chalk:
+        specifier: ^4.1.2
+        version: 4.1.2
+      commander:
+        specifier: ^14.0.2
+        version: 14.0.3
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.15.6)(better-sqlite3@12.4.5)(bun-types@1.3.5)(pg@8.16.3)
+      inquirer:
+        specifier: ^13.1.0
+        version: 13.4.2(@types/node@22.14.1)
+      mustache:
+        specifier: ^4.2.0
+        version: 4.2.0
+      ora:
+        specifier: 9.3.0
+        version: 9.3.0
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      zod:
+        specifier: ^4.3.4
+        version: 4.3.6
+    devDependencies:
+      '@subsquid/evm-abi':
+        specifier: 0.3.1
+        version: 0.3.1
+      '@subsquid/evm-codec':
+        specifier: 0.3.0
+        version: 0.3.0
+      '@types/mustache':
+        specifier: ^4.2.6
+        version: 4.2.6
+      '@types/node':
+        specifier: 22.14.1
+        version: 22.14.1
+      '@vitest/coverage-v8':
+        specifier: 3.2.4
+        version: 3.2.4(vitest@3.2.4(@types/debug@4.1.12)(@types/node@22.14.1)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.20.6)(yaml@2.8.2))
+      vitest:
+        specifier: 3.2.4
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@22.14.1)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.20.6)(yaml@2.8.2)
+
+  packages/pipes-ui:
+    dependencies:
+      '@number-flow/react':
+        specifier: ^0.5.10
+        version: 0.5.10(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@radix-ui/react-select':
+        specifier: ^2.2.6
+        version: 2.2.6(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@radix-ui/react-separator':
+        specifier: ^1.1.7
+        version: 1.1.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@radix-ui/react-slot':
+        specifier: ^1.2.3
+        version: 1.2.3(@types/react@19.2.14)(react@19.2.5)
+      '@radix-ui/react-switch':
+        specifier: ^1.2.6
+        version: 1.2.6(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@radix-ui/react-tabs':
+        specifier: ^1.1.13
+        version: 1.1.13(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@radix-ui/react-toggle':
+        specifier: ^1.1.10
+        version: 1.1.10(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@tanstack/react-query':
+        specifier: ^5.90.2
+        version: 5.90.2(react@19.2.5)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.1.1
+      lucide-react:
+        specifier: ^0.544.0
+        version: 0.544.0(react@19.2.5)
+      motion:
+        specifier: ^12.23.22
+        version: 12.23.22(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      next:
+        specifier: ^15.3.3
+        version: 15.5.12(@opentelemetry/api@1.9.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      react:
+        specifier: ^19.2.5
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.2.5
+        version: 19.2.5(react@19.2.5)
+      react-sparklines:
+        specifier: ^1.7.0
+        version: 1.7.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      react-syntax-highlighter:
+        specifier: ^15.6.6
+        version: 15.6.6(react@19.2.5)
+      recharts:
+        specifier: 2.15.4
+        version: 2.15.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      tailwind-merge:
+        specifier: ^3.3.1
+        version: 3.3.1
+    devDependencies:
+      '@tailwindcss/postcss':
+        specifier: ^4.1.13
+        version: 4.2.1
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      '@types/node':
+        specifier: ^22
+        version: 22.18.13
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      '@types/react-syntax-highlighter':
+        specifier: ^15.5.13
+        version: 15.5.13
+      tailwindcss:
+        specifier: ^4.1.13
+        version: 4.2.1
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
 
 packages:
 
@@ -2406,17 +2406,11 @@ packages:
   '@subsquid/evm-codec@0.3.0':
     resolution: {integrity: sha512-W6EIiC7MJN2oWdbgzpUSDop+UtROdFAlvsrzc10g3AnCAaK31nH59tkTjylRxgECewWFCFWZrwsVp+a+lwvXMA==}
 
-  '@subsquid/http-client@1.7.0':
-    resolution: {integrity: sha512-dx5rGkBhip0zgjLQuY0x6ZaLIoartmb5RXziKPleVQCO5PpKors8C2utWWSDqDNaM8xxGQhRxfTzd83XL+F1FA==}
-
   '@subsquid/http-client@1.8.0':
     resolution: {integrity: sha512-HEwKjxBWoFdOT+BeC8j0aKCsNsNq8M4YO8peGlqAAYFw2Uhaztd5bWtygOhOYNrku9E8xm1mnH9p4ciKdyIK/Q==}
 
   '@subsquid/logger@1.4.0':
     resolution: {integrity: sha512-Yep4hzpLfmm4pJMXuTnd3n7Hlo18Dce8vwKZduGE9n/p56cHq4BTbAuaXLK50vYKWx7Lyt2obVbJ4otVMWkyYg==}
-
-  '@subsquid/rpc-client@4.13.0':
-    resolution: {integrity: sha512-61lY/aaopNyDIaHmwjXH+HW02D1c1LbWQnfY0G/BkCy1sHhhI/4pUX6UyhvZAxMuy09sMep8+tib3a+VJcIAcA==}
 
   '@subsquid/rpc-client@4.14.0':
     resolution: {integrity: sha512-YquFxFWc517A3G2peQYvSyK3ksmGYvlErOCMyREEGQTb9GwUl4DBaTi/+NO9ioy6Hk9Acg5hTeZzKxGnzqhBdQ==}
@@ -2718,9 +2712,6 @@ packages:
 
   '@types/node@20.19.39':
     resolution: {integrity: sha512-orrrD74MBUyK8jOAD/r0+lfa1I2MO6I+vAkmAWzMYbCcgrN4lCrmK52gRFQq/JRxfYPfonkr4b0jcY7Olqdqbw==}
-
-  '@types/node@22.13.10':
-    resolution: {integrity: sha512-I6LPUvlRH+O6VRUqYOcMudhaIdUVWfsjnZavnsraHvpBwaEyMN29ry+0UVJhImYL16xsscu0aske3yA+uPOWfw==}
 
   '@types/node@22.14.1':
     resolution: {integrity: sha512-u0HuPQwe/dHrItgHHpmw3N2fYCR6x4ivMNbPHRkBVP4CvN+kiRrKHWk3i8tXiO/joPwXLMYvF9TTF0eqgHIuOw==}
@@ -3269,9 +3260,6 @@ packages:
     resolution: {integrity: sha512-lyAZ0EMyjDkVvz8WOeVnuCPvKVBXcMv1l5SVqO1yC7PzTwrD/pPje/BIRbWhMoPe436U+Y2nD7f5bFx0kt+Sbg==}
     engines: {node: '>=8'}
 
-  csstype@3.1.3:
-    resolution: {integrity: sha512-M1uQkMl8rQK/szD0LNhtqxIPLpimGm8sOBwU7lLnCpSbTyY3yeU1Vc7l4KT5zT4s/yOxHH5O7tIuuLOCnLADRw==}
-
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
 
@@ -3380,10 +3368,6 @@ packages:
   depd@2.0.0:
     resolution: {integrity: sha512-g7nH6P6dyDioJogAAGprGpCtVImJhpPk/roCzdb3fIh61/s/nPsfR6onyMwkCAR/OlC3yBC0lESvUoQEAssIrw==}
     engines: {node: '>= 0.8'}
-
-  detect-libc@2.1.1:
-    resolution: {integrity: sha512-ecqj/sy1jcK1uWrwpR67UhYrIFQ+5WlGxth34WquCbamhFA6hkkwiu37o6J5xCHdo1oixJRfVRw+ywV+Hq/0Aw==}
-    engines: {node: '>=8'}
 
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
@@ -5142,9 +5126,6 @@ packages:
   tailwind-merge@3.3.1:
     resolution: {integrity: sha512-gBXpgUm/3rp1lMZZrM/w7D8GKqshif0zAymAhbCyIt8KMe+0v9DQ7cdYLR4FHH/cKpdTXb+A/tKKU3eolfsI+g==}
 
-  tailwindcss@4.1.13:
-    resolution: {integrity: sha512-i+zidfmTqtwquj4hMEwdjshYYgMbOrPzb9a0M3ZgNa0JMoZeFC6bxZvO8yr8ozS6ix2SDz0+mvryPeBs2TFE+w==}
-
   tailwindcss@4.2.1:
     resolution: {integrity: sha512-/tBrSQ36vCleJkAOsy9kbNTgaxvGbyOamC30PRePTQe/o1MFwEKHQk4Cn7BNGaPtjp+PuUrByJehM1hgxfq4sw==}
 
@@ -5359,9 +5340,6 @@ packages:
 
   ufo@1.6.1:
     resolution: {integrity: sha512-9a4/uxlTWJ4+a5i0ooc1rU7C7YOw3wT+UGqdeNNHWnOF9qcMBgLRS+4IYUqbczewFx4mLEig6gawh7X6mFlEkA==}
-
-  undici-types@6.20.0:
-    resolution: {integrity: sha512-Ny6QZ2Nju20vw1SRHe3d9jVu6gJ+4e3+MMpqu7pqE5HT6WsTSlce++GQmK5UXS8mzV8DSYHrQH+Xrf2jVcuKNg==}
 
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
@@ -7639,12 +7617,6 @@ snapshots:
     dependencies:
       '@subsquid/util-internal-hex': 1.2.2
 
-  '@subsquid/http-client@1.7.0':
-    dependencies:
-      '@subsquid/logger': 1.4.0
-      '@subsquid/util-internal': 3.2.0
-      node-fetch: 3.3.2
-
   '@subsquid/http-client@1.8.0':
     dependencies:
       '@subsquid/logger': 1.4.0
@@ -7656,18 +7628,6 @@ snapshots:
       '@subsquid/util-internal-hex': 1.2.2
       '@subsquid/util-internal-json': 1.2.3
       supports-color: 8.1.1
-
-  '@subsquid/rpc-client@4.13.0':
-    dependencies:
-      '@subsquid/http-client': 1.7.0
-      '@subsquid/logger': 1.4.0
-      '@subsquid/util-internal': 3.2.0
-      '@subsquid/util-internal-binary-heap': 1.0.0
-      '@subsquid/util-internal-counters': 1.3.2
-      '@subsquid/util-internal-json-fix-unsafe-integers': 0.0.0
-      websocket: 1.0.35
-    transitivePeerDependencies:
-      - supports-color
 
   '@subsquid/rpc-client@4.14.0':
     dependencies:
@@ -7693,10 +7653,10 @@ snapshots:
     dependencies:
       '@subsquid/util-internal-validation': 0.8.0(@subsquid/logger@1.4.0)
 
-  '@subsquid/solana-rpc@0.1.3(@subsquid/rpc-client@4.13.0)':
+  '@subsquid/solana-rpc@0.1.3(@subsquid/rpc-client@4.14.0)':
     dependencies:
       '@subsquid/logger': 1.4.0
-      '@subsquid/rpc-client': 4.13.0
+      '@subsquid/rpc-client': 4.14.0
       '@subsquid/solana-rpc-data': 0.2.1(@subsquid/util-internal-validation@0.8.0(@subsquid/logger@1.4.0))
       '@subsquid/util-internal': 3.2.0
       '@subsquid/util-internal-range': 0.3.0
@@ -7704,16 +7664,16 @@ snapshots:
 
   '@subsquid/solana-stream@0.3.1':
     dependencies:
-      '@subsquid/http-client': 1.7.0
+      '@subsquid/http-client': 1.8.0
       '@subsquid/logger': 1.4.0
-      '@subsquid/rpc-client': 4.13.0
+      '@subsquid/rpc-client': 4.14.0
       '@subsquid/solana-normalization': 0.1.3(@subsquid/logger@1.4.0)
-      '@subsquid/solana-rpc': 0.1.3(@subsquid/rpc-client@4.13.0)
+      '@subsquid/solana-rpc': 0.1.3(@subsquid/rpc-client@4.14.0)
       '@subsquid/solana-rpc-data': 0.2.1(@subsquid/util-internal-validation@0.8.0(@subsquid/logger@1.4.0))
       '@subsquid/util-internal': 3.2.0
-      '@subsquid/util-internal-archive-client': 0.1.2(@subsquid/http-client@1.7.0)(@subsquid/logger@1.4.0)
+      '@subsquid/util-internal-archive-client': 0.1.2(@subsquid/http-client@1.8.0)(@subsquid/logger@1.4.0)
       '@subsquid/util-internal-hex': 1.2.2
-      '@subsquid/util-internal-ingest-tools': 1.1.4(@subsquid/util-internal-archive-client@0.1.2(@subsquid/http-client@1.7.0)(@subsquid/logger@1.4.0))
+      '@subsquid/util-internal-ingest-tools': 1.1.4(@subsquid/util-internal-archive-client@0.1.2(@subsquid/http-client@1.8.0)(@subsquid/logger@1.4.0))
       '@subsquid/util-internal-processor-tools': 4.2.1
       '@subsquid/util-internal-range': 0.3.0
       '@subsquid/util-internal-validation': 0.8.0(@subsquid/logger@1.4.0)
@@ -7744,9 +7704,9 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@subsquid/util-internal-archive-client@0.1.2(@subsquid/http-client@1.7.0)(@subsquid/logger@1.4.0)':
+  '@subsquid/util-internal-archive-client@0.1.2(@subsquid/http-client@1.8.0)(@subsquid/logger@1.4.0)':
     dependencies:
-      '@subsquid/http-client': 1.7.0
+      '@subsquid/http-client': 1.8.0
       '@subsquid/util-internal': 3.2.0
       '@subsquid/util-internal-range': 0.3.0
     optionalDependencies:
@@ -7771,13 +7731,13 @@ snapshots:
       '@subsquid/logger': 1.4.0
       stoppable: 1.1.0
 
-  '@subsquid/util-internal-ingest-tools@1.1.4(@subsquid/util-internal-archive-client@0.1.2(@subsquid/http-client@1.7.0)(@subsquid/logger@1.4.0))':
+  '@subsquid/util-internal-ingest-tools@1.1.4(@subsquid/util-internal-archive-client@0.1.2(@subsquid/http-client@1.8.0)(@subsquid/logger@1.4.0))':
     dependencies:
       '@subsquid/logger': 1.4.0
       '@subsquid/util-internal': 3.2.0
       '@subsquid/util-internal-range': 0.3.0
     optionalDependencies:
-      '@subsquid/util-internal-archive-client': 0.1.2(@subsquid/http-client@1.7.0)(@subsquid/logger@1.4.0)
+      '@subsquid/util-internal-archive-client': 0.1.2(@subsquid/http-client@1.8.0)(@subsquid/logger@1.4.0)
 
   '@subsquid/util-internal-json-fix-unsafe-integers@0.0.0': {}
 
@@ -8002,10 +7962,6 @@ snapshots:
   '@types/node@20.19.39':
     dependencies:
       undici-types: 6.21.0
-
-  '@types/node@22.13.10':
-    dependencies:
-      undici-types: 6.20.0
 
   '@types/node@22.14.1':
     dependencies:
@@ -8577,8 +8533,6 @@ snapshots:
 
   crypto-hash@1.3.0: {}
 
-  csstype@3.1.3: {}
-
   csstype@3.2.3: {}
 
   d3-array@3.2.4:
@@ -8660,8 +8614,6 @@ snapshots:
 
   depd@2.0.0: {}
 
-  detect-libc@2.1.1: {}
-
   detect-libc@2.1.2: {}
 
   detect-node-es@1.1.0: {}
@@ -8671,7 +8623,7 @@ snapshots:
   dom-helpers@5.2.1:
     dependencies:
       '@babel/runtime': 7.28.4
-      csstype: 3.1.3
+      csstype: 3.2.3
 
   dot-case@3.0.4:
     dependencies:
@@ -9477,7 +9429,7 @@ snapshots:
 
   lightningcss@1.31.1:
     dependencies:
-      detect-libc: 2.1.1
+      detect-libc: 2.1.2
     optionalDependencies:
       lightningcss-android-arm64: 1.31.1
       lightningcss-darwin-arm64: 1.31.1
@@ -10548,8 +10500,6 @@ snapshots:
 
   tailwind-merge@3.3.1: {}
 
-  tailwindcss@4.1.13: {}
-
   tailwindcss@4.2.1: {}
 
   tapable@2.3.0: {}
@@ -10771,8 +10721,6 @@ snapshots:
   typical@7.3.0: {}
 
   ufo@1.6.1: {}
-
-  undici-types@6.20.0: {}
 
   undici-types@6.21.0: {}
 
