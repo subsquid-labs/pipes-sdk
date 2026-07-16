@@ -1,5 +1,22 @@
 name: Release @subsquid/pipes
 
+# ┌───────────────────────────────────────────────────────────────────────────┐
+# │ TEMPORARY SHIM — superseded by release.yml, which handles all three       │
+# │ packages. This file survives only because npm Trusted Publishing binds to │
+# │ an exact workflow filename: @subsquid/pipes' trusted publisher on         │
+# │ npmjs.com still points HERE, so deleting this file would 404 every core   │
+# │ release until the npm config is repointed.                                │
+# │                                                                           │
+# │ TO RETIRE THIS FILE (one commit, after npm config is updated):            │
+# │   1. npmjs.com → @subsquid/pipes → Settings → Trusted Publishing:         │
+# │      change the workflow from release-subsquid-pipes.yml to release.yml   │
+# │   2. add "- 'pipes-v*'" to the tags: trigger in release.yml               │
+# │   3. git rm this file                                                     │
+# │                                                                           │
+# │ Until then release.yml deliberately does NOT listen on 'pipes-v*', so the │
+# │ two workflows cannot both fire on one tag. Do not add it there early.     │
+# └───────────────────────────────────────────────────────────────────────────┘
+#
 # Publishes @subsquid/pipes to npm via Trusted Publishing (OIDC, no NPM_TOKEN).
 # Trigger by pushing a `pipes-v<version>` tag, or run manually with a version.
 # Prereleases (…-alpha.N / -beta.N / -rc.N) publish to a matching dist-tag
