@@ -4,29 +4,22 @@
 > APIs may change without notice.
 > Use with caution in production environments.
 
-Core package of the **SQD Pipes** ecosystem. It provides specialized, composable streams for blockchain data ingestion, transformation, and storage.
+Core package of the **SQD Pipes** ecosystem — composable streams for blockchain data ingestion,
+decoding, and storage.
 
 ---
 
 ## Overview
 
-`@subsquid/pipes` is a TypeScript library designed for **efficient blockchain data processing**.  
-It implements a **pipeline-based architecture** that makes it easy to consume, decode, and persist blockchain data, while remaining flexible and extensible.
+`@subsquid/pipes` is a TypeScript library for **efficient blockchain data processing**. A pipeline is
+built from three composable parts:
 
----
+- **Streams** pull data from managed SQD Portal datasets for EVM, Solana, Hyperliquid, Bitcoin, and Tron.
+- **Decoders** turn raw blocks, logs, and instructions into strongly-typed objects.
+- **Targets** persist or forward the decoded data, managing offsets and chain forks for you.
 
-## Features
-
-- **TypeScript-first** — full type safety with both ESM and CJS builds.
-- **Blockchain integration**:
-  - EVM helpers (portal sources, event decoders).
-- **Storage targets**:
-  - Built-in support for ClickHouse with batching and rollback handling.
-- **Observability**:
-  - Prometheus metrics.
-  - Pino-compatible logging.
-  - Benchmarking utilities.
-- **Extensible architecture** — create custom sources, decoders, and targets for any chain or sink.
+Storage targets ship for **ClickHouse**, **PostgreSQL** (via Drizzle), **Parquet**, and **BigQuery**.
+Observability comes built in: Prometheus metrics, Pino-compatible logging, and profiling utilities.
 
 ---
 
@@ -38,57 +31,47 @@ npm install @subsquid/pipes
 
 ---
 
-## Quick Start
+## Quick start
 
-Example: consume events from an EVM chain and write them into ClickHouse.
+Stream ERC-20 transfers from an EVM chain and print them:
 
 ```ts
-import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
+import { commonAbis, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 
-async function cli() {
+async function main() {
   const stream = evmPortalStream({
+    id: 'erc20-transfers',
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-  }).pipe(
-    evmDecoder({
-      profiler: { name: 'ERC20 transfers' },
+    outputs: evmEventDecoder({
       range: { from: '12,000,000' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,
       },
     }),
-  )
+  })
 
   for await (const { data } of stream) {
     console.log(`parsed ${data.transfers.length} transfers`)
   }
 }
 
-void cli()
+void main()
 ```
 
----
-
-## Usage
-
-Pipelines are fully composable:
-
-- **Sources** provide blockchain data (e.g., blocks, logs, transactions).
-- **Decoders** transform raw data into structured objects.
-- **Targets** handle persistence in databases, message queues, or custom sinks.
-
-You can easily extend the system by implementing custom components that conform to the `Transformer` / `Target` interfaces.
+To persist instead of printing, replace the loop with `.pipeTo(target)` — see the
+[ClickHouse](https://github.com/subsquid-labs/pipes-sdk/blob/main/docs/examples/evm/04.clickhouse.example.ts)
+and [Drizzle/PostgreSQL](https://github.com/subsquid-labs/pipes-sdk/blob/main/docs/examples/evm/08.drizzle.example.ts)
+examples.
 
 ---
 
-## Documentation
+## Documentation & examples
 
-Full documentation is available in the [project wiki](./docs) (WIP).
+- **Quickstart & guides** — https://docs.sqd.dev/en/sdk/pipes-sdk/evm/quickstart
+- **Examples** — [docs/examples](https://github.com/subsquid-labs/pipes-sdk/tree/main/docs/examples)
+  (EVM, Solana, Bitcoin, Hyperliquid, Tron)
 
----
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a PR with improvements.
+Extend the system by implementing custom components against the `Transformer` / `Target` interfaces.
 
 ---
 
