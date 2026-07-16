@@ -2,7 +2,7 @@ import { arrayify } from '~/internal/array.js'
 
 import { joinLines } from './formatters.js'
 
-const DOCS_BASE = 'https://docs.sqd.dev/errors'
+const DOCS_BASE = 'https://docs.sqd.dev/en/sdk/pipes-sdk/errors'
 
 export enum SdkErrorName {
   PipeConfiguration = 'PipeConfiguration',
@@ -46,7 +46,7 @@ export class BlockRangeConfigurationError extends PipeError {
   }
 }
 
-// ─── Target errors (E1xxx) ────────────────────────────────────────────────────
+// ─── Fork handling errors (E1xxx) ─────────────────────────────────────────────
 
 /**
  * E1001: Thrown when a fork is detected but the target does not implement fork handling.
@@ -81,5 +81,16 @@ export class ForkCursorMissingError extends PipeError {
       'A blockchain fork was detected, but the target resolveFork() did not return a new cursor.',
       'The resolveFork() method must return the cursor to resume from after rolling back.',
     ])
+  }
+}
+
+/**
+ * E1004: Thrown when the portal breaks its fork contract — it delivered a canonicalBlocks set whose
+ * highest block is below the target's persisted cursor. Rows above it would survive the fork
+ * rollback and corrupt the new chain, so the pipe refuses to proceed rather than write bad data.
+ */
+export class PortalContractViolationError extends PipeError {
+  constructor(message: string | string[]) {
+    super('E1004', SdkErrorName.ForkHandling, message)
   }
 }

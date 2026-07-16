@@ -9,6 +9,7 @@ import { nonNullable } from '~/internal/array.js'
 import { doWithRetry } from '~/internal/function.js'
 
 import { DrizzleTracker } from './drizzle-tracker.js'
+import { POSTGRES_ERROR_CODES, PostgresTargetError } from './errors.js'
 import { PostgresState, StateOptions } from './postgres-state.js'
 import { orderTablesForDelete } from './rollback.js'
 
@@ -62,7 +63,10 @@ export function drizzleTarget<T>({
   const tracker = new DrizzleTracker()
   const client = (db as any).$client
   if (!client) {
-    throw new Error('Drizzle client not found on the provided database instance')
+    throw new PostgresTargetError(
+      POSTGRES_ERROR_CODES.DRIZZLE_CLIENT_MISSING,
+      'Drizzle client not found on the provided database instance',
+    )
   }
 
   const state = new PostgresState(client, settings?.state)

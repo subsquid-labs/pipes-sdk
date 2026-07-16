@@ -17,6 +17,8 @@ import { parseNumber } from '~/internal/number.js'
 import { Transaction } from '~/targets/drizzle/node-postgres/drizzle-target.js'
 import { syncTable, tableNotExists } from '~/targets/drizzle/node-postgres/tables.js'
 
+import { POSTGRES_ERROR_CODES, PostgresTargetError } from './errors.js'
+
 type DeleteResult = {
   rowCount: number
 }
@@ -97,7 +99,7 @@ export class PostgresState {
     }
 
     if (this.options?.unfinalizedBlocksRetention && this.options?.unfinalizedBlocksRetention <= 0) {
-      throw new Error('Retention strategy must be greater than 0')
+      throw new PostgresTargetError(POSTGRES_ERROR_CODES.RETENTION_INVALID, 'Retention strategy must be greater than 0')
     }
 
     this.#key = new CursorKey(options?.id)
@@ -136,7 +138,8 @@ export class PostgresState {
 
     if (res.rows[0]?.got_lock) return
 
-    throw new Error(
+    throw new PostgresTargetError(
+      POSTGRES_ERROR_CODES.ADVISORY_LOCK_FAILED,
       [
         `Could not acquire advisory lock for state id "${this.#key.value}".`,
         `Another process might be holding the lock.`,

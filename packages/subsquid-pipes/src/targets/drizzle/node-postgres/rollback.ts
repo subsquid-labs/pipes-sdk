@@ -9,6 +9,7 @@ import {
   getDrizzleTableExtraConfig,
   getDrizzleTableName,
 } from './consts.js'
+import { POSTGRES_ERROR_CODES, PostgresTargetError } from './errors.js'
 
 export function generateTriggerSQL(from: string, to: string, table: Table) {
   const columns = getDrizzleTableColumns(table)
@@ -35,7 +36,10 @@ export function generateTriggerSQL(from: string, to: string, table: Table) {
   }
 
   if (primaryCols.length === 0) {
-    throw new Error(`Cannot generate snapshot trigger for table ${from} without primary key columns`)
+    throw new PostgresTargetError(
+      POSTGRES_ERROR_CODES.MISSING_PRIMARY_KEY,
+      `Cannot generate snapshot trigger for table ${from} without primary key columns`,
+    )
   }
 
   ;(table as any)[SQD_PRIMARY_COLS] = primaryCols
@@ -149,13 +153,11 @@ export function orderTablesForDelete(tables: Table[]): Table[] {
   }
 
   if (order.length !== nodes.size) {
-    throw new Error(
-      [
-        'Circular dependency detected in foreign key references.',
-        'Cannot determine a safe order for delete operations.',
-        'Please check your table definitions for circular foreign key constraints.',
-      ].join('\n'),
-    )
+    throw new PostgresTargetError(POSTGRES_ERROR_CODES.CIRCULAR_DEPENDENCY, [
+      'Circular dependency detected in foreign key references.',
+      'Cannot determine a safe order for delete operations.',
+      'Please check your table definitions for circular foreign key constraints.',
+    ])
   }
 
   // Reverse to get children→parents

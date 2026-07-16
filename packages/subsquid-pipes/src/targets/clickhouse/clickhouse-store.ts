@@ -12,6 +12,7 @@ import type {
 
 import type { Logger } from '~/core/index.js'
 
+import { CLICKHOUSE_ERROR_CODES, ClickhouseTargetError } from './errors.js'
 import { loadSqlFiles } from './fs.js'
 
 export type QueryParamsWithFormat<Format extends DataFormat> = Omit<QueryParams, 'format'> & {
@@ -125,7 +126,10 @@ export class ClickhouseStore {
     parts.push(current)
 
     if (parts.length > 2) {
-      throw new Error(`Invalid table name "${table}": expected "table" or "database.table"`)
+      throw new ClickhouseTargetError(
+        CLICKHOUSE_ERROR_CODES.INVALID_TABLE_NAME,
+        `Invalid table name "${table}": expected "table" or "database.table"`,
+      )
     }
 
     const [database, name] = parts.length === 2 ? parts : [null, parts[0]]
@@ -185,7 +189,8 @@ export class ClickhouseStore {
     const match = meta.engineFull.match(/^Distributed\('[^']*',\s*'([^']*)',\s*'([^']*)'/)
     const underlying = match ? `${match[1]}.${match[2]}` : 'the underlying local table'
 
-    throw new Error(
+    throw new ClickhouseTargetError(
+      CLICKHOUSE_ERROR_CODES.DISTRIBUTED_ROLLBACK,
       `Cannot roll back "${table}": it is a Distributed table. ` +
         `Rollback must target the local table (${underlying}) directly; multi-shard rollback is not supported.`,
     )
@@ -201,14 +206,18 @@ export class ClickhouseStore {
       .map((arg) => arg.trim())
       .find((arg) => arg && !arg.startsWith("'"))
     if (collapseColumn && collapseColumn !== 'sign') {
-      throw new Error(
+      throw new ClickhouseTargetError(
+        CLICKHOUSE_ERROR_CODES.ROLLBACK_COLLAPSE_COLUMN,
         `Cannot roll back "${table}": the engine collapses on "${collapseColumn}", not "sign". ` +
           `Rollback inserts cancel rows with sign = -1, so the collapse column must be named "sign".`,
       )
     }
 
     if (!meta.columns.some((c) => c.name === 'sign')) {
-      throw new Error(`Cannot roll back "${table}": the table has no "sign" column`)
+      throw new ClickhouseTargetError(
+        CLICKHOUSE_ERROR_CODES.ROLLBACK_MISSING_SIGN,
+        `Cannot roll back "${table}": the table has no "sign" column`,
+      )
     }
   }
 
@@ -227,7 +236,10 @@ export class ClickhouseStore {
   async ensureRollbackIndex({ table, column = 'block_number' }: { table: string; column?: string }) {
     // The column is interpolated into DDL below; restrict it to a plain identifier
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(column)) {
-      throw new Error(`Invalid rollback index column "${column}": expected a plain identifier`)
+      throw new ClickhouseTargetError(
+        CLICKHOUSE_ERROR_CODES.INVALID_ROLLBACK_INDEX_COLUMN,
+        `Invalid rollback index column "${column}": expected a plain identifier`,
+      )
     }
 
     const { database, name } = this.#parseTableName(table)
