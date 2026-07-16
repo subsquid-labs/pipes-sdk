@@ -14,7 +14,7 @@ Run this checklist **before** calling `gh pr create`. Do NOT skip any steps.
 ## Step 1: Verify new code has tests
 
 1. Run `git diff <base-branch>...HEAD --name-only` to list all changed files.
-2. For each new or modified `.ts` source file in `packages/subsquid-pipes/src/` (excluding `*.test.ts`, `index.ts`, and `types.ts`):
+2. For each new or modified `.ts` source file in `packages/pipes/src/` (excluding `*.test.ts`, `index.ts`, and `types.ts`):
    - Check if a corresponding `.test.ts` file exists next to it.
    - If the file contains new exported functions, classes, or significant logic changes — there MUST be tests covering them.
 3. If tests are missing, **write them** before proceeding or flag it explicitly in the PR description under a `## Missing tests` section.
@@ -57,7 +57,7 @@ import { MockPortal, createMockPortal, MockResponse } from '~/testing/index.js'
 Integration tests require ClickHouse and PostgreSQL. Start them using the project's `docker-compose.yml`:
 
 ```bash
-cd packages/subsquid-pipes
+cd packages/pipes
 docker compose up -d
 ```
 
@@ -83,7 +83,7 @@ CURRENT_BRANCH=$(git branch --show-current)
 BASE_BRANCH="design/sdk1"  # or the PR target branch
 
 # 2. Run coverage on current branch (JSON summary)
-cd packages/subsquid-pipes
+cd packages/pipes
 pnpm vitest run --coverage --coverage.reporter=json-summary --bail=0 2>/dev/null
 cp coverage/coverage-summary.json /tmp/coverage-head.json
 
@@ -91,7 +91,7 @@ cp coverage/coverage-summary.json /tmp/coverage-head.json
 cd ../..
 git stash
 git checkout $BASE_BRANCH
-cd packages/subsquid-pipes
+cd packages/pipes
 pnpm vitest run --coverage --coverage.reporter=json-summary --bail=0 2>/dev/null
 cp coverage/coverage-summary.json /tmp/coverage-base.json
 
