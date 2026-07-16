@@ -6,15 +6,16 @@
 
 Documentation: https://docs.sqd.dev  ·  Website: https://sqd.dev
 
-SQD Pipes is a TypeScript toolkit for streaming blockchain data, decoding it in flight, and writing the
-results to your own storage. A pipeline is a composition of three parts:
+SQD Pipes is a TypeScript library for building blockchain indexers. It streams onchain data from SQD
+Portal, decodes it in flight, handles chain reorgs, and writes the results to your own storage. A
+pipeline is a composition of three parts:
 
 - **Streams** tap managed SQD Portal datasets for EVM, Solana, Hyperliquid, Bitcoin, and Tron.
 - **Decoders** turn raw blocks, logs, and instructions into strongly-typed objects.
-- **Targets** persist or forward the decoded data, managing offsets and chain forks for you.
+- **Targets** persist or forward the decoded data, managing offsets and chain reorgs.
 
-Built-in profiling, structured logging, and Prometheus metrics come along for the ride, and the same
-pipeline runs in a CLI, a backend service, or a long-running worker.
+Profiling, structured logging, and Prometheus metrics are built in. The same pipeline runs in a CLI, a
+backend service, or a long-running worker.
 
 ## Install
 
@@ -64,7 +65,7 @@ pnpm dlx tsx erc20-transfers.ts
 ## Persist to a target
 
 Replace the `for await` loop with `.pipeTo(target)`. Each target batches writes, tracks the cursor under
-the stream `id`, and rolls back cleanly on chain forks.
+the stream `id`, and rolls back cleanly on chain reorgs.
 
 | Target | Import | Example |
 | --- | --- | --- |
@@ -97,9 +98,9 @@ await evmPortalStream({
 
 ## Learn more
 
-- **Quickstart & guides** — https://docs.sqd.dev/en/sdk/pipes-sdk/evm/quickstart
-- **EVM examples** — [docs/examples/evm](docs/examples/evm)
-- **Solana examples** — [docs/examples/solana](docs/examples/solana)
+- **Quickstart & guides:** https://docs.sqd.dev/en/sdk/pipes-sdk/evm/quickstart
+- **EVM examples:** [docs/examples/evm](docs/examples/evm)
+- **Solana examples:** [docs/examples/solana](docs/examples/solana)
 - Bitcoin, Hyperliquid, and Tron examples live alongside them under [docs/examples](docs/examples).
 
 Run any example from the repo root with `pnpm tsx <path/to/example.ts>`.
