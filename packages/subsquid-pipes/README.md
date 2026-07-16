@@ -59,8 +59,8 @@ void main()
 ```
 
 To persist instead of printing, replace the loop with `.pipeTo(target)`. See the
-[ClickHouse](https://github.com/subsquid-labs/pipes-sdk/blob/main/docs/examples/evm/04.clickhouse.example.ts)
-and [Drizzle/PostgreSQL](https://github.com/subsquid-labs/pipes-sdk/blob/main/docs/examples/evm/08.drizzle.example.ts)
+[ClickHouse](https://github.com/subsquid/pipes-sdk/blob/main/docs/examples/evm/04.clickhouse.example.ts)
+and [Drizzle/PostgreSQL](https://github.com/subsquid/pipes-sdk/blob/main/docs/examples/evm/08.drizzle.example.ts)
 examples.
 
 ---
@@ -68,7 +68,7 @@ examples.
 ## Documentation & examples
 
 - **Quickstart & guides:** https://docs.sqd.dev/en/sdk/pipes-sdk/evm/quickstart
-- **Examples:** [docs/examples](https://github.com/subsquid-labs/pipes-sdk/tree/main/docs/examples)
+- **Examples:** [docs/examples](https://github.com/subsquid/pipes-sdk/tree/main/docs/examples)
   (EVM, Solana, Bitcoin, Hyperliquid, Tron)
 
 Extend the system by implementing custom components against the `Transformer` / `Target` interfaces.
