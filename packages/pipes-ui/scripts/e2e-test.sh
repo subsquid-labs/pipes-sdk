@@ -13,7 +13,9 @@ cleanup() {
     wait "$SERVER_PID" 2>/dev/null || true
   fi
   rm -rf "$TEST_DIR"
-  rm -f "$TARBALL_PATH"
+  # Set after the trap is installed — unguarded, `set -u` makes the trap itself
+  # die here and mask whatever actually failed.
+  rm -f "${TARBALL_PATH:-}"
 }
 trap cleanup EXIT
 

@@ -17,7 +17,7 @@
       "outputs": ["dist/**", "dist-dts/**"],
       "outputLogs": "new-only"
     },
-    "@iankressin/pipes-cli#build": {
+    "@subsquid/pipes-cli#build": {
       "inputs": [
         "src/**/*.ts",
         "package.json",
@@ -31,13 +31,8 @@
       "outputs": ["dist/**", "dist-dts/**"],
       "outputLogs": "new-only"
     },
-    "@iankressin/pipes-cli#test": {
-      "inputs": [
-        "src/**/*.ts",
-        "package.json",
-        "tsconfig.json",
-        "vitest.config.ts"
-      ],
+    "@subsquid/pipes-cli#test": {
+      "inputs": ["src/**/*.ts", "package.json", "tsconfig.json", "vitest.config.ts"],
       "outputs": [],
       "outputLogs": "new-only"
     },
