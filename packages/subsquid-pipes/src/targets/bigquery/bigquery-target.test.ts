@@ -159,7 +159,7 @@ describe('chunkBuffersByByteSize', () => {
 // -----------------------------------------------------------------------------
 
 describe('BigQueryTargetError', () => {
-  it('every target throw is wrapped in BigQueryTargetError with a matching E11xx code', () => {
+  it('every target throw is wrapped in BigQueryTargetError with a matching E22xx code', () => {
     // Spot-check across the surface area: each thrown error is an instance of
     // BigQueryTargetError and carries the expected code. Downstream code can match on
     // `instanceof BigQueryTargetError` instead of scraping `.message`.

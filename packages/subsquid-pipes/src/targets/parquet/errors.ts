@@ -3,11 +3,11 @@ import { PipeError, SdkErrorName } from '~/core/errors.js'
 /**
  * Common error wrapper for everything thrown by the Parquet target.
  *
- * All target-originated errors extend this class and carry an `E12xx` code so
+ * All target-originated errors extend this class and carry an `E23xx` code so
  * downstream code can pattern-match on `instanceof ParquetTargetError` and react
- * (alerting, retries, etc.) without scraping `.message`. The numeric code prefix
- * follows the project's existing convention (E0xxx = source, E1xxx = targets);
- * BigQuery occupies E11xx, so the Parquet target uses E12xx.
+ * (alerting, retries, etc.) without scraping `.message`. Code bands: E0xxx = source,
+ * E1xxx = fork handling, E2xxx = targets (E20xx ClickHouse, E21xx Postgres, E22xx
+ * BigQuery, E23xx Parquet).
  */
 export class ParquetTargetError extends PipeError {
   constructor(code: string, message: string | string[]) {
@@ -15,36 +15,36 @@ export class ParquetTargetError extends PipeError {
   }
 }
 
-// E12xx — Parquet target codes
+// E23xx — Parquet target codes
 export const PARQUET_ERROR_CODES = {
   /** `tables[]` is empty — the target has nothing to write. */
-  NO_TABLES: 'E1201',
+  NO_TABLES: 'E2301',
   /** Two declared tables share the same name. */
-  DUPLICATE_TABLE: 'E1202',
+  DUPLICATE_TABLE: 'E2302',
   /** A table schema is empty (no columns declared). */
-  EMPTY_SCHEMA: 'E1203',
+  EMPTY_SCHEMA: 'E2303',
   /** Table schema is missing the declared block-number column. */
-  BLOCK_COLUMN_MISSING: 'E1204',
+  BLOCK_COLUMN_MISSING: 'E2304',
   /** Block-number column is not an integer type (must be INT64/INT32). */
-  BLOCK_COLUMN_TYPE: 'E1205',
+  BLOCK_COLUMN_TYPE: 'E2305',
   /** A column declared an unsupported compression codec. */
-  UNSUPPORTED_COMPRESSION: 'E1206',
+  UNSUPPORTED_COMPRESSION: 'E2306',
   /** A column declared an unsupported Parquet type. */
-  UNSUPPORTED_TYPE: 'E1207',
+  UNSUPPORTED_TYPE: 'E2307',
   /** User wrote to a table that wasn't registered in `tables[]`. */
-  UNREGISTERED_TABLE: 'E1208',
+  UNREGISTERED_TABLE: 'E2308',
   /** `publish()` refused to overwrite an existing data file (would lose data). */
-  FILE_COLLISION: 'E1209',
+  FILE_COLLISION: 'E2309',
   /** Persisted state file exists but could not be parsed. */
-  STATE_CORRUPT: 'E1210',
+  STATE_CORRUPT: 'E2310',
   /** The block-number column is declared `optional` — it must be present on every row. */
-  BLOCK_COLUMN_OPTIONAL: 'E1211',
+  BLOCK_COLUMN_OPTIONAL: 'E2311',
   /** A row carried a missing/non-finite block number (would corrupt finalization & recovery). */
-  BLOCK_VALUE_INVALID: 'E1212',
+  BLOCK_VALUE_INVALID: 'E2312',
   /** A row value does not match its declared column type (dev-mode value check). */
-  VALUE_INVALID: 'E1213',
+  VALUE_INVALID: 'E2313',
   /** Crash recovery could not delete an over-cursor data file (leaving it would duplicate data). */
-  RECOVERY_DELETE_FAILED: 'E1214',
+  RECOVERY_DELETE_FAILED: 'E2314',
   /** A nested column declaration is malformed (empty STRUCT fields, LIST without element, over-deep nesting). */
-  NESTED_SCHEMA_INVALID: 'E1215',
+  NESTED_SCHEMA_INVALID: 'E2315',
 } as const

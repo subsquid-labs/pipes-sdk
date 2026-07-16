@@ -5,6 +5,7 @@ import { BlockCursor } from '~/core/index.js'
 
 import { SQD_PRIMARY_COLS, getDrizzleTableName } from './consts.js'
 import { Transaction } from './drizzle-target.js'
+import { POSTGRES_ERROR_CODES, PostgresTargetError } from './errors.js'
 import { generateTriggerSQL } from './rollback.js'
 
 /** @internal */
@@ -100,7 +101,8 @@ export class DrizzleTracker {
 
       tx[method] = (table: Table, ...args: any[]) => {
         if (!this.#knownTables.has(table)) {
-          throw new Error(
+          throw new PostgresTargetError(
+            POSTGRES_ERROR_CODES.UNTRACKED_TABLE,
             `Table "${getDrizzleTableName(table)}" is not tracked for rollbacks. Make sure to include it in the "tables" array when creating the target.`,
           )
         }

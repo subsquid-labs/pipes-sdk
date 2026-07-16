@@ -544,7 +544,7 @@ and each gets its own scoped logger and cursor persistence keyed by `id`.
 
 ### 7. Typed error system with documentation links
 
-All framework errors extend `PipeError` and carry a unique code linking to the docs (`https://docs.sqd.dev/errors/<code>`).
+All framework errors extend `PipeError` and carry a unique code linking to the docs (`https://docs.sqd.dev/en/sdk/pipes-sdk/errors/<code>`).
 
 | Error | Code | Thrown when |
 |---|---|---|
@@ -553,6 +553,9 @@ All framework errors extend `PipeError` and carry a unique code linking to the d
 | `TargetForkNotSupportedError` | E1001 | Fork detected but target has no `resolveFork()` method |
 | `MissingForkAncestorError` | E1002 | Fork exception carried an empty canonical block list |
 | `ForkCursorMissingError` | E1003 | Target `resolveFork()` returned `null` |
+| `PortalContractViolationError` | E1004 | Portal delivered `canonicalBlocks` whose highest block is below the persisted cursor |
+
+Targets carry their own codes in the `E2xxx` band — `E20xx` ClickHouse, `E21xx` Postgres, `E22xx` BigQuery, `E23xx` Parquet — thrown as `ClickhouseTargetError`, `PostgresTargetError`, `BigQueryTargetError` and `ParquetTargetError`. Every code is documented in the [error reference](https://docs.sqd.dev/en/sdk/pipes-sdk/errors).
 
 
 ### 8. New Prometheus metrics

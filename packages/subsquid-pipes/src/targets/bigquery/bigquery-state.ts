@@ -5,6 +5,7 @@ import {
   CursorKey,
   LEGACY_DEFAULT_CURSOR_ID,
   type Logger,
+  PortalContractViolationError,
   type RollbackRecord,
   type TargetState,
   formatBlock,
@@ -392,8 +393,7 @@ export class BigQuerySyncState {
   async fork(canonicalBlocks: BlockCursor[]): Promise<{ safeCursor: BlockCursor | null; upper: number }> {
     const upper = canonicalBlocks.reduce((m, b) => (b.number > m ? b.number : m), Number.NEGATIVE_INFINITY)
     if (this.#lastCommittedCursor && upper < this.#lastCommittedCursor.number) {
-      throw new BigQueryTargetError(
-        BIGQUERY_ERROR_CODES.PORTAL_INVARIANT,
+      throw new PortalContractViolationError(
         `Portal invariant violated: max(canonicalBlocks).number=${upper} is below the persisted cursor ` +
           `(${this.#lastCommittedCursor.number}). The portal must include every block above the safe ` +
           `cursor in canonicalBlocks, otherwise rows in (${upper}, ${this.#lastCommittedCursor.number}] ` +

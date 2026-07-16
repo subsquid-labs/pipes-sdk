@@ -825,6 +825,6 @@ describe('parquet index barrel', () => {
     expect(typeof mod.parquetTarget).toBe('function')
     expect(typeof mod.ParquetStore).toBe('function')
     expect(typeof mod.ParquetTargetError).toBe('function')
-    expect(mod.PARQUET_ERROR_CODES.NO_TABLES).toBe('E1201')
+    expect(mod.PARQUET_ERROR_CODES.NO_TABLES).toBe('E2301')
   })
 })

@@ -12,6 +12,7 @@ import {
 } from '~/core/index.js'
 
 import { ClickhouseStore } from './clickhouse-store.js'
+import { CLICKHOUSE_ERROR_CODES, ClickhouseTargetError } from './errors.js'
 
 // FIXME: we need refactor it to make order more deterministic and predictable - WHY?
 // ORDER BY (timestamp, id) isn't a good choice
@@ -78,7 +79,7 @@ export class ClickhouseState {
 
     const maxRows = options.maxRows ?? 10_000
     if (maxRows <= 0) {
-      throw new Error('Max rows must be greater than 0')
+      throw new ClickhouseTargetError(CLICKHOUSE_ERROR_CODES.MAX_ROWS, 'Max rows must be greater than 0')
     }
 
     this.options = {
