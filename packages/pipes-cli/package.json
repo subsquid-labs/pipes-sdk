@@ -3,6 +3,11 @@
   "type": "module",
   "version": "1.0.0-alpha.1",
   "author": "Subsquid Team",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/subsquid-labs/pipes-sdk.git",
+    "directory": "packages/pipes-cli"
+  },
   "files": [
     "dist",
     "src",

@@ -1,0 +1,456 @@
+name: Release
+
+# One workflow, three packages. Publishes to npm via Trusted Publishing
+# (OIDC, no NPM_TOKEN) with provenance.
+#
+#   @subsquid/pipes      pipes-v<version>       packages/pipes
+#   @subsquid/pipes-cli  pipes-cli-v<version>   packages/pipes-cli
+#   @subsquid/pipes-ui   pipes-ui-v<version>    packages/pipes-ui   -> publishes dist/
+#
+# npm Trusted Publishing binds to (repository, exact workflow filename), so every
+# publish MUST come from a job defined literally in this file. Do NOT extract the
+# publish job into a reusable workflow (`workflow_call`): the OIDC
+# `job_workflow_ref` claim would resolve to the called file rather than
+# release.yml, and npm would reject the token.
+
+on:
+  push:
+    tags:
+      # 'pipes-v*' is deliberately ABSENT. release-subsquid-pipes.yml still owns
+      # the core package until its trusted publisher on npmjs.com is repointed at
+      # release.yml. Listing it here too would double-publish.
+      #
+      # THE FLIP — one commit, once npm config is updated:
+      #   1. add "- 'pipes-v*'" below
+      #   2. git rm .github/workflows/release-subsquid-pipes.yml
+      #
+      # These globs are ANCHORED: GitHub matches the pattern against the whole ref
+      # name, so 'pipes-cli-v*'/'pipes-ui-v*' cannot collide with 'pipes-v*'
+      # ("pipes-cli-v1.0.0" does not start with "pipes-v"). Overlap with the shim
+      # is impossible, not merely unlikely.
+      - 'pipes-cli-v*'
+      - 'pipes-ui-v*'
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to publish'
+        required: true
+        type: choice
+        options: [pipes, pipes-cli, pipes-ui]
+      version:
+        description: 'Version to publish (e.g. 1.0.0-alpha.17, or a stable 1.0.0)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Run every gate, but skip the npm publish and GitHub release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Never cancel an in-flight publish. Serialise runs targeting the same ref so a
+# tag push and a manual dispatch cannot race each other onto the registry.
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # resolve — the ONLY place user-controlled input is parsed. Everything
+  # downstream consumes validated, table-derived values.
+  # ---------------------------------------------------------------------------
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      package: ${{ steps.resolve.outputs.package }}
+      npm_name: ${{ steps.resolve.outputs.npm_name }}
+      dir: ${{ steps.resolve.outputs.dir }}
+      publish_dir: ${{ steps.resolve.outputs.publish_dir }}
+      build_filter: ${{ steps.resolve.outputs.build_filter }}
+      build_script: ${{ steps.resolve.outputs.build_script }}
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      dist_tag: ${{ steps.resolve.outputs.dist_tag }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
+      make_latest: ${{ steps.resolve.outputs.make_latest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve package and version
+        id: resolve
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_PACKAGE: ${{ inputs.package }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            PACKAGE="$INPUT_PACKAGE"
+            VERSION="$INPUT_VERSION"
+          else
+            # Longest prefix first. The three prefixes are mutually exclusive
+            # ("pipes-cli-v..." does not start with "pipes-v"), so ordering is
+            # defence in depth rather than a live requirement — but keep it:
+            # "pipes" is a proper prefix of "pipes-cli"/"pipes-ui", and only the
+            # "-v" separator keeps them apart.
+            #
+            # Each arm strips its OWN literal prefix. Do NOT hoist this into a
+            # shared ${REF_NAME#$PREFIX}: a non-matching '#' strip silently
+            # returns the string UNCHANGED instead of failing.
+            case "$REF_NAME" in
+              pipes-cli-v*) PACKAGE=pipes-cli; VERSION="${REF_NAME#pipes-cli-v}" ;;
+              pipes-ui-v*)  PACKAGE=pipes-ui;  VERSION="${REF_NAME#pipes-ui-v}"  ;;
+              pipes-v*)     PACKAGE=pipes;     VERSION="${REF_NAME#pipes-v}"     ;;
+              *)
+                echo "::error::Tag '$REF_NAME' matches no known release prefix (pipes-v*, pipes-cli-v*, pipes-ui-v*)"
+                exit 1
+                ;;
+            esac
+          fi
+
+          # Strict semver-ish. Rejects anything that could smuggle shell
+          # metacharacters downstream, and catches tags that matched the trigger
+          # glob without being a real release: 'pipes-v*' also matches a future
+          # 'pipes-view-v1.0.0', which resolves VERSION='iew-v1.0.0' and dies here.
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::Invalid version '$VERSION' (from '$REF_NAME')"
+            exit 1
+          fi
+
+          # The ONLY place per-package differences live. Directory names do not
+          # track npm names, so both are spelled out rather than derived — a
+          # reviewer should be able to read the mapping, not compute it.
+          case "$PACKAGE" in
+            pipes)
+              NPM_NAME='@subsquid/pipes'
+              DIR='packages/pipes'
+              PUBLISH_DIR='packages/pipes'
+              BUILD_FILTER='@subsquid/pipes'
+              BUILD_SCRIPT='build'
+              ;;
+            pipes-cli)
+              NPM_NAME='@subsquid/pipes-cli'
+              DIR='packages/pipes-cli'
+              PUBLISH_DIR='packages/pipes-cli'
+              # '...' = "and its workspace dependencies". The CLI's dts build
+              # resolves @subsquid/pipes types, so packages/pipes must be built
+              # first; pnpm orders the two topologically.
+              BUILD_FILTER='@subsquid/pipes-cli...'
+              BUILD_SCRIPT='build'
+              ;;
+            pipes-ui)
+              NPM_NAME='@subsquid/pipes-ui'
+              DIR='packages/pipes-ui'
+              # 'pnpm package' (next build + scripts/package.js) generates a
+              # SEPARATE, pruned dist/package.json (adds bin, prunes deps, sets
+              # files). That directory — not the package root — is what ships.
+              PUBLISH_DIR='packages/pipes-ui/dist'
+              BUILD_FILTER='@subsquid/pipes-ui'
+              BUILD_SCRIPT='package'
+              ;;
+            *)
+              echo "::error::Unknown package '$PACKAGE'"
+              exit 1
+              ;;
+          esac
+
+          # Prereleases must not land on 'latest', or a plain `npm i` serves an
+          # alpha. 'case' globbing (not grep) so the hyphen test can't be mistaken
+          # for a grep option across grep implementations.
+          case "$VERSION" in
+            *-*)
+              LABEL="${VERSION#*-}"   # 1.0.0-alpha.14 -> alpha.14
+              LABEL="${LABEL%%.*}"    #                -> alpha
+              case "$LABEL" in
+                alpha|beta|rc) DIST_TAG="$LABEL" ;;
+                *) DIST_TAG=next ;;
+              esac
+              PRERELEASE=true
+              ;;
+            *)
+              DIST_TAG=latest
+              PRERELEASE=false
+              ;;
+          esac
+
+          # GitHub has ONE "Latest release" slot per repo, but this workflow now
+          # feeds it from three packages. Reserve it for the flagship SDK so a
+          # stable pipes-ui cut can't displace @subsquid/pipes on the repo page.
+          # Non-latest releases still appear in the releases list.
+          if [ "$PACKAGE" = "pipes" ] && [ "$PRERELEASE" = "false" ]; then
+            MAKE_LATEST=true
+          else
+            MAKE_LATEST=false
+          fi
+
+          {
+            echo "package=$PACKAGE"
+            echo "npm_name=$NPM_NAME"
+            echo "dir=$DIR"
+            echo "publish_dir=$PUBLISH_DIR"
+            echo "build_filter=$BUILD_FILTER"
+            echo "build_script=$BUILD_SCRIPT"
+            echo "version=$VERSION"
+            echo "tag=$PACKAGE-v$VERSION"
+            echo "dist_tag=$DIST_TAG"
+            echo "prerelease=$PRERELEASE"
+            echo "make_latest=$MAKE_LATEST"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Releasing $NPM_NAME@$VERSION from $PUBLISH_DIR -> dist-tag '$DIST_TAG'"
+
+      # Fail before spending a build. The tagged commit is the source of truth:
+      # package.json must ALREADY carry the version in the tag.
+      #
+      # Checking '.name' is what catches a half-finished directory rename — if
+      # packages/pipes is missing or holds something else, stop here rather than
+      # publish the wrong thing under the right name.
+      - name: Verify source manifest
+        shell: bash
+        env:
+          NPM_NAME: ${{ steps.resolve.outputs.npm_name }}
+          DIR: ${{ steps.resolve.outputs.dir }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          MANIFEST="$DIR/package.json"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "::error::$MANIFEST not found. Was a package directory renamed without updating the table in this workflow?"
+            exit 1
+          fi
+          ACTUAL_NAME=$(jq -r '.name' "$MANIFEST")
+          if [ "$ACTUAL_NAME" != "$NPM_NAME" ]; then
+            echo "::error::$MANIFEST is '$ACTUAL_NAME', expected '$NPM_NAME'"
+            exit 1
+          fi
+          ACTUAL_VERSION=$(jq -r '.version' "$MANIFEST")
+          if [ "$ACTUAL_VERSION" != "$VERSION" ]; then
+            echo "::error::$MANIFEST is $ACTUAL_VERSION, expected $VERSION. Bump and commit the version before tagging."
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
+  # check — every gate that does NOT need a credential. No id-token: write here:
+  # the expensive, code-executing work (builds; booting a server for the pipes-ui
+  # e2e) runs in a job that cannot mint an npm publish token. Only once it is
+  # green does the privileged job start.
+  # ---------------------------------------------------------------------------
+  check:
+    needs: resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No 'version:' here — the root package.json pins pnpm via "packageManager"
+      # (pnpm@10.17.0). Setting both makes pnpm/action-setup error on the duplicate.
+      - uses: pnpm/action-setup@v4
+
+      # Same Node as the publish job on purpose: this job's only reason to exist
+      # is "would publish succeed", and for pipes-ui the e2e must exercise the very
+      # build that ships. Node 22 coverage lives in test.yml.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Build is the publish gate — the package must compile before we ship. The
+      # full test suite (ClickHouse + Postgres services) runs in test.yml on push
+      # to main/develop, so the tagged commit has already been tested; re-running
+      # the services here would only add flakiness to the release path.
+      - name: Build
+        shell: bash
+        env:
+          BUILD_FILTER: ${{ needs.resolve.outputs.build_filter }}
+          BUILD_SCRIPT: ${{ needs.resolve.outputs.build_script }}
+        run: pnpm --filter "$BUILD_FILTER" run "$BUILD_SCRIPT"
+
+      # The published artifact is packages/pipes-ui/dist, not the package root.
+      # e2e-test.sh packs that dist, installs it into a scratch dir, boots the
+      # server and curls it — the only thing that actually proves the pruned,
+      # generated dist/package.json is installable and runnable.
+      - name: Smoke-test the pipes-ui tarball
+        if: needs.resolve.outputs.package == 'pipes-ui'
+        working-directory: ${{ needs.resolve.outputs.dir }}
+        shell: bash
+        run: bash scripts/e2e-test.sh
+
+  # ---------------------------------------------------------------------------
+  # publish — the only job holding id-token: write.
+  # ---------------------------------------------------------------------------
+  publish:
+    needs: [resolve, check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance + Trusted Publishing OIDC
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm 10+ is required for Trusted Publishing's OIDC auth — pnpm 9 delegates
+      # auth to the bundled npm, which can sign provenance but can't exchange the
+      # OIDC token for a publish credential. The version is pinned by the root
+      # package.json "packageManager" field (pnpm@10.17.0) — don't add a 'version:'
+      # here or action-setup errors on the duplicate.
+      - uses: pnpm/action-setup@v4
+
+      # Node 24 ships with npm 11+, required for the OIDC token-exchange that
+      # backs Trusted Publishing. Node 22 (npm 10.x) signs provenance fine but
+      # 404s on the publish PUT because it can't mint a publish credential.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        shell: bash
+        env:
+          BUILD_FILTER: ${{ needs.resolve.outputs.build_filter }}
+          BUILD_SCRIPT: ${{ needs.resolve.outputs.build_script }}
+        run: pnpm --filter "$BUILD_FILTER" run "$BUILD_SCRIPT"
+
+      # Re-verify against the manifest that will ACTUALLY be published. For
+      # pipes-ui that is the generated dist/package.json, which `resolve` never
+      # saw — it doesn't exist until the build runs. --provenance hard-fails with
+      # E422 '"repository.url" is ""' when repository is missing, so check it here
+      # rather than burn a publish attempt on it.
+      - name: Verify publish manifest
+        shell: bash
+        env:
+          NPM_NAME: ${{ needs.resolve.outputs.npm_name }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          PUBLISH_DIR: ${{ needs.resolve.outputs.publish_dir }}
+        run: |
+          MANIFEST="$PUBLISH_DIR/package.json"
+          [ -f "$MANIFEST" ] || { echo "::error::$MANIFEST not found — did the build produce it?"; exit 1; }
+
+          ACTUAL_NAME=$(jq -r '.name' "$MANIFEST")
+          [ "$ACTUAL_NAME" = "$NPM_NAME" ] || { echo "::error::$MANIFEST name is '$ACTUAL_NAME', expected '$NPM_NAME'"; exit 1; }
+
+          ACTUAL_VERSION=$(jq -r '.version' "$MANIFEST")
+          [ "$ACTUAL_VERSION" = "$VERSION" ] || { echo "::error::$MANIFEST version is '$ACTUAL_VERSION', expected '$VERSION'"; exit 1; }
+
+          REPO_URL=$(jq -r '.repository.url // .repository // ""' "$MANIFEST")
+          case "$REPO_URL" in
+            *github.com/subsquid-labs/pipes-sdk*) ;;
+            *)
+              echo "::error::$MANIFEST has repository.url='$REPO_URL'. --provenance requires it to resolve to subsquid-labs/pipes-sdk."
+              exit 1
+              ;;
+          esac
+
+      # MANDATORY gate for @subsquid/pipes-cli. prepack
+      # (scripts/rewrite-workspace-deps.cjs) rewrites "@subsquid/pipes":
+      # "workspace:*" to a concrete version. If that ever silently no-ops,
+      # consumers get EUNSUPPORTEDPROTOCOL on install — that is exactly how
+      # 1.0.0-alpha.1 shipped broken. Pack in the same job and tree that is about
+      # to publish, and inspect what prepack actually emitted.
+      #
+      # NOTE the `if grep; then` form. The obvious spelling —
+      #     grep -n 'workspace:' pkg.json && echo FAIL && exit 1
+      # — evaluates to grep's exit status (1) when the file is CLEAN, so under the
+      # `set -e` GitHub applies to every run: block it fails the step on success.
+      # It fails either way. Don't "simplify" this back.
+      - name: Verify packed tarball (pipes-cli)
+        if: needs.resolve.outputs.package == 'pipes-cli'
+        shell: bash
+        env:
+          NPM_NAME: ${{ needs.resolve.outputs.npm_name }}
+        run: |
+          VERIFY_DIR="$RUNNER_TEMP/pack-verify"
+          rm -rf "$VERIFY_DIR"
+          mkdir -p "$VERIFY_DIR"
+          pnpm --filter "$NPM_NAME" pack --pack-destination "$VERIFY_DIR"
+          tar -xzf "$VERIFY_DIR"/*.tgz -C "$VERIFY_DIR"
+          PACKED="$VERIFY_DIR/package/package.json"
+
+          if grep -n 'workspace:' "$PACKED"; then
+            echo "::error::workspace: protocol leaked into the tarball — prepack did not rewrite it. Do NOT fall back to npm publish; it does not rewrite workspace: at all."
+            exit 1
+          fi
+          echo "No workspace: protocol in the tarball."
+
+          # prepack pins @subsquid/pipes to whatever packages/pipes/package.json
+          # says LOCALLY — not to whatever is on npm. Read the pin back out of the
+          # tarball (rather than re-deriving it) and prove it resolves, so the CLI
+          # cannot ship a dependency nobody can install.
+          CORE_VERSION=$(jq -r '.dependencies["@subsquid/pipes"]' "$PACKED")
+          echo "Tarball pins @subsquid/pipes@$CORE_VERSION"
+          if ! npm view "@subsquid/pipes@$CORE_VERSION" version >/dev/null 2>&1; then
+            echo "::error::@subsquid/pipes@$CORE_VERSION is not on npm. Release the core first (tag pipes-v$CORE_VERSION), then re-run."
+            exit 1
+          fi
+
+      # Auth is npm Trusted Publishing (OIDC) — no NPM_TOKEN. Each of the three
+      # packages needs a trusted publisher on npmjs.com pointing at
+      # subsquid-labs/pipes-sdk -> .github/workflows/release.yml.
+      #
+      # pnpm publish, NEVER npm publish: npm does not rewrite the workspace:
+      # protocol (pipes-cli). PUBLISH_DIR/DIST_TAG flow through env: and are
+      # assembled into argv with `set --`, so no derived value is interpolated
+      # into the script text or exposed to word-splitting.
+      - name: Publish
+        shell: bash
+        env:
+          PUBLISH_DIR: ${{ needs.resolve.outputs.publish_dir }}
+          DIST_TAG: ${{ needs.resolve.outputs.dist_tag }}
+          NPM_NAME: ${{ needs.resolve.outputs.npm_name }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: |
+          set -- publish "$PUBLISH_DIR" --access public --provenance --no-git-checks --tag "$DIST_TAG"
+          if [ -n "$DRY_RUN" ]; then
+            set -- "$@" --dry-run
+            echo "::notice::DRY RUN — not publishing $NPM_NAME@$VERSION"
+          fi
+          pnpm "$@"
+
+      - name: Verify it landed
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        env:
+          NPM_NAME: ${{ needs.resolve.outputs.npm_name }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          for i in 1 2 3 4 5; do
+            if npm view "$NPM_NAME@$VERSION" version >/dev/null 2>&1; then
+              echo "Published $NPM_NAME@$VERSION"
+              npm view "$NPM_NAME" dist-tags
+              exit 0
+            fi
+            echo "Not visible on the registry yet, retrying ($i/5)..."
+            sleep 5
+          done
+          echo "::error::$NPM_NAME@$VERSION never appeared on the registry."
+          exit 1
+
+  # ---------------------------------------------------------------------------
+  github-release:
+    needs: [resolve, publish]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create release
+    steps:
+      - uses: actions/checkout@v4
+
+      # generate_release_notes diffs against the previous tag in the repo — which
+      # now interleaves three prefixes, so the auto-notes will mix packages. They
+      # were already unreliable (with no previous tag GitHub dumps the entire
+      # history). The release skill mandates replacing them with curated,
+      # package-scoped highlights.
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.resolve.outputs.tag }}
+          name: '${{ needs.resolve.outputs.npm_name }} v${{ needs.resolve.outputs.version }}'
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ needs.resolve.outputs.prerelease }}
+          make_latest: ${{ needs.resolve.outputs.make_latest }}

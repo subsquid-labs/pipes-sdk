@@ -2,6 +2,12 @@
   "name": "@subsquid/pipes-ui",
   "version": "1.0.0-alpha.7",
   "type": "module",
+  "author": "Subsquid Team",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/subsquid-labs/pipes-sdk.git",
+    "directory": "packages/pipes-ui"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
