@@ -4,22 +4,22 @@
 > APIs may change without notice.
 > Use with caution in production environments.
 
-Core package of the **SQD Pipes** ecosystem — composable streams for blockchain data ingestion,
-decoding, and storage.
+Core package of the **SQD Pipes** ecosystem. Composable streams for building blockchain indexers:
+onchain data ingestion, decoding, and storage.
 
 ---
 
 ## Overview
 
-`@subsquid/pipes` is a TypeScript library for **efficient blockchain data processing**. A pipeline is
-built from three composable parts:
+`@subsquid/pipes` is a TypeScript library for building **blockchain indexers**. A pipeline is built from
+three composable parts:
 
 - **Streams** pull data from managed SQD Portal datasets for EVM, Solana, Hyperliquid, Bitcoin, and Tron.
 - **Decoders** turn raw blocks, logs, and instructions into strongly-typed objects.
-- **Targets** persist or forward the decoded data, managing offsets and chain forks for you.
+- **Targets** persist or forward the decoded data, managing offsets and chain reorgs.
 
-Storage targets ship for **ClickHouse**, **PostgreSQL** (via Drizzle), **Parquet**, and **BigQuery**.
-Observability comes built in: Prometheus metrics, Pino-compatible logging, and profiling utilities.
+Storage targets are available for **ClickHouse**, **PostgreSQL** (via Drizzle), **Parquet**, and **BigQuery**.
+Observability is built in: Prometheus metrics, Pino-compatible logging, and profiling utilities.
 
 ---
 
@@ -58,7 +58,7 @@ async function main() {
 void main()
 ```
 
-To persist instead of printing, replace the loop with `.pipeTo(target)` — see the
+To persist instead of printing, replace the loop with `.pipeTo(target)`. See the
 [ClickHouse](https://github.com/subsquid-labs/pipes-sdk/blob/main/docs/examples/evm/04.clickhouse.example.ts)
 and [Drizzle/PostgreSQL](https://github.com/subsquid-labs/pipes-sdk/blob/main/docs/examples/evm/08.drizzle.example.ts)
 examples.
@@ -67,8 +67,8 @@ examples.
 
 ## Documentation & examples
 
-- **Quickstart & guides** — https://docs.sqd.dev/en/sdk/pipes-sdk/evm/quickstart
-- **Examples** — [docs/examples](https://github.com/subsquid-labs/pipes-sdk/tree/main/docs/examples)
+- **Quickstart & guides:** https://docs.sqd.dev/en/sdk/pipes-sdk/evm/quickstart
+- **Examples:** [docs/examples](https://github.com/subsquid-labs/pipes-sdk/tree/main/docs/examples)
   (EVM, Solana, Bitcoin, Hyperliquid, Tron)
 
 Extend the system by implementing custom components against the `Transformer` / `Target` interfaces.
