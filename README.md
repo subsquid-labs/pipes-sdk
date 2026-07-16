@@ -6,52 +6,46 @@
 
 Documentation: https://docs.sqd.dev  ·  Website: https://sqd.dev
 
-SQD Pipes is a TypeScript-first toolkit for streaming blockchain data, transforming it in-flight, and delivering the results to your own systems. It glues together:
+SQD Pipes is a TypeScript toolkit for streaming blockchain data, decoding it in flight, and writing the
+results to your own storage. A pipeline is a composition of three parts:
 
-- **Sources** that tap into managed SQD Portal datasets for chains like Ethereum and Solana.
-- **Transforms/decoders** that turn raw blocks and logs into strongly-typed objects.
-- **Targets** that persist or forward processed data (ClickHouse today, with community hooks for more sinks).
-- **Observability** utilities such as profiling, structured logging, and Prometheus metrics.
+- **Streams** tap managed SQD Portal datasets for EVM, Solana, Hyperliquid, Bitcoin, and Tron.
+- **Decoders** turn raw blocks, logs, and instructions into strongly-typed objects.
+- **Targets** persist or forward the decoded data, managing offsets and chain forks for you.
 
-Every pipeline is described as a composition of these pieces via the `pipe()` helper.
-You can run the same code in CLIs, backend services, or long-running workers.
+Built-in profiling, structured logging, and Prometheus metrics come along for the ride, and the same
+pipeline runs in a CLI, a backend service, or a long-running worker.
 
-
----
-
-## 1. Install the SDK
-
-Add the Pipes package to any TypeScript/Node project.
+## Install
 
 ```bash
 pnpm add @subsquid/pipes
-# or
-npm install @subsquid/pipes
 ```
 
----
+Or scaffold a ready-to-run project with the CLI:
 
-## 2. Create your first pipeline
+```bash
+pnpm dlx @subsquid/pipes-cli init
+```
 
-The snippet below streams ERC-20 transfers from Ethereum Mainnet via the SQD Portal and prints them to the console.
+## Quick start
 
-Create `src/erc20-transfers.ts`:
+Stream ERC-20 transfers from Ethereum Mainnet and print them:
 
 ```ts
-import { commonAbis, evmDecoder, evmPortalStream } from '@subsquid/pipes/evm'
+import { commonAbis, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
 
 async function main() {
   const stream = evmPortalStream({
+    id: 'erc20-transfers',
     portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
-  }).pipe(
-    evmDecoder({
-      profiler: { name: 'erc20-transfers' },
+    outputs: evmEventDecoder({
       range: { from: '12,000,000' },
       events: {
         transfers: commonAbis.erc20.events.Transfer,
       },
     }),
-  )
+  })
 
   for await (const { data } of stream) {
     console.log(`parsed ${data.transfers.length} transfers`)
@@ -61,69 +55,55 @@ async function main() {
 void main()
 ```
 
-Run it with [`tsx`](https://github.com/privatenumber/tsx) (fast TypeScript executor):
+Run it with [`tsx`](https://github.com/privatenumber/tsx):
 
 ```bash
-pnpm dlx tsx src/erc20-transfers.ts
+pnpm dlx tsx erc20-transfers.ts
 ```
 
-You should see logs as transfers are decoded.
+## Persist to a target
 
----
+Replace the `for await` loop with `.pipeTo(target)`. Each target batches writes, tracks the cursor under
+the stream `id`, and rolls back cleanly on chain forks.
 
-## 3. Persist data (optional)
+| Target | Import | Example |
+| --- | --- | --- |
+| ClickHouse | `@subsquid/pipes/targets/clickhouse` | [04.clickhouse](docs/examples/evm/04.clickhouse.example.ts) |
+| PostgreSQL (Drizzle) | `@subsquid/pipes/targets/drizzle/node-postgres` | [08.drizzle](docs/examples/evm/08.drizzle.example.ts) |
+| Parquet | `@subsquid/pipes/targets/parquet` | [17.parquet](docs/examples/evm/17.parquet.example.ts) |
+| BigQuery | `@subsquid/pipes/targets/bigquery` | [16.bigquery](docs/examples/evm/16.bigquery.example.ts) |
 
-### ClickHouse target
+```ts
+import { createClient } from '@clickhouse/client'
+import { clickhouseTarget } from '@subsquid/pipes/targets/clickhouse'
 
-If you have ClickHouse and want automatic offset management, read the [ClickHouse example](https://github.com/subsquid-labs/pipes-sdk/blob/main/docs/examples/evm/04.clickhouse.example.ts).
-It uses the `createClickhouseTarget` from the core package to batch writes and handle forks gracefully.
+await evmPortalStream({
+  id: 'erc20-transfers',
+  portal: 'https://portal.sqd.dev/datasets/ethereum-mainnet',
+  outputs: evmEventDecoder({
+    range: { from: '12,000,000' },
+    events: { transfers: commonAbis.erc20.events.Transfer },
+  }),
+}).pipeTo(
+  clickhouseTarget({
+    client: createClient({ url: 'http://localhost:8123' }),
+    onRollback: async () => {},
+    onData: async ({ data }) => {
+      // insert data.transfers ...
+    },
+  }),
+)
+```
 
-#### Rollbacks and materialized views
+## Learn more
 
-On a blockchain fork the target removes rolled-back rows by inserting CollapsingMergeTree
-cancel rows (`sign = -1`) — the only delete mechanism in ClickHouse that propagates through
-materialized views. To get this behavior, a table must use a `CollapsingMergeTree`
-(or `VersionedCollapsingMergeTree`) engine with a `sign` column, and materialized views
-built on top of it should be written rollback-aware: aggregate with the sign, e.g.
-`sum(value * sign)` for sums and `sum(sign)` for counts, so cancel rows revert the
-aggregate automatically.
+- **Quickstart & guides** — https://docs.sqd.dev/en/sdk/pipes-sdk/evm/quickstart
+- **EVM examples** — [docs/examples/evm](docs/examples/evm)
+- **Solana examples** — [docs/examples/solana](docs/examples/solana)
+- Bitcoin, Hyperliquid, and Tron examples live alongside them under [docs/examples](docs/examples).
 
-Tables on any other engine still roll back — the target falls back to a lightweight
-`DELETE` and logs a warning — but materialized views built on such tables keep the
-rolled-back data, because ClickHouse fires MVs on `INSERT` only. Picking the mechanism
-requires read access to `system.tables` / `system.columns`; without it the target logs a
-warning and uses the legacy `FINAL`-based cancel-row rollback, which assumes a
-`CollapsingMergeTree` table with a `sign` column.
+Run any example from the repo root with `pnpm tsx <path/to/example.ts>`.
 
-Irreversible aggregates — `min`, `max`, `uniq`, `argMax` and similar — cannot "subtract" a
-value, so no write mechanism can roll them back. If you need such an MV, the only correct
-recovery after a fork is recomputing its affected tail (drop the tail partition and
-`INSERT ... SELECT` the range from the base table).
+## License
 
-Rollback reads are pruned by a small `minmax` skip index on `block_number` that
-`store.removeAllRows` creates automatically on first use; call
-`store.ensureRollbackIndex({ table })` in `onStart` to set it up eagerly.
-
-### PostgreSQL with Drizzle
-
-If you prefer PostgreSQL, check out the [Drizzle example](https://github.com/subsquid-labs/pipes-sdk/blob/main/docs/examples/evm/08.drizzle.example.ts),
-which demonstrates how to use Drizzle ORM to define your schema and persist decoded data.
-
----
-
-## 4. Explore more examples
-
-- [`docs/examples/evm`](https://github.com/subsquid-labs/pipes-sdk/tree/main/docs/examples/evm): combining sources, decoders, and targets for EVM chains.
-- [`docs/examples/solana`](https://github.com/subsquid-labs/pipes-sdk/tree/main/docs/examples/solana): Solana Portal pipelines, including token balance over-fetch and parallel processing demos.
-
-From the repository root you can run any example with `pnpm tsx <path/to/example.ts>`.
-
----
-
-## 5. Next steps
-
-1. Wire your own sinks by implementing `createTarget` (see `packages/subsquid-pipes/src/targets` for references).
-2. Add instrumentation with the built-in profiler and Prometheus metrics (`packages/subsquid-pipes/src/core`).
-3. Try the UI tooling in `@sqd-pipes/pipe-ui`.
-
-Need help or found a bug? Open an issue or discussion on the repository. Happy hacking!
+Apache-2.0 © SQD
