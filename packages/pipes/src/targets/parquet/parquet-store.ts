@@ -15,7 +15,8 @@ import {
   buildRowWrapper,
   toParquetSchemaShape,
 } from './schema.js'
-import { ParquetSegmentWriter, type PublishedSegment } from './writer.js'
+import { type PublishedSegment, type SegmentWriter } from './segment.js'
+import { ParquetSegmentWriter } from './writer.js'
 
 type Row = Record<string, unknown>
 
@@ -59,7 +60,7 @@ export class ParquetStore {
   readonly #buffers = new Map<string, FinalizationBuffer<Row>>()
   readonly #staged = new Map<string, Row[]>()
   // The current open segment per table — at most one. Reset (published/discarded) at checkpoints.
-  readonly #writers = new Map<string, ParquetSegmentWriter>()
+  readonly #writers = new Map<string, SegmentWriter>()
   readonly #rowGroupSize: number
   // Per-cell type checking is a hot-path cost, so it only runs outside production.
   readonly #validateValues = process.env.NODE_ENV !== 'production'
@@ -204,7 +205,7 @@ export class ParquetStore {
     this.#staged.clear()
   }
 
-  #getOrCreateWriter(table: string, config: TableConfig): ParquetSegmentWriter {
+  #getOrCreateWriter(table: string, config: TableConfig): SegmentWriter {
     let writer = this.#writers.get(table)
     if (!writer) {
       writer = new ParquetSegmentWriter({ dir: config.dir, schema: config.schema, rowGroupSize: this.#rowGroupSize })

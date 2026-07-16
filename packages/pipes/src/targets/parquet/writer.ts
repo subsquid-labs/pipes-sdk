@@ -1,30 +1,11 @@
 import type { WriteStream } from 'node:fs'
-import { rename, stat, unlink } from 'node:fs/promises'
-import path from 'node:path'
+import { stat, unlink } from 'node:fs/promises'
 
 import { ParquetSchema, ParquetWriter } from '@dsnp/parquetjs'
 
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
-import { fsyncDir, fsyncFile, openWriteStream, pathExists } from './fs-durable.js'
-
-/** Zero-pad block numbers in published filenames so they sort lexically (`0000000042`). */
-export const BLOCK_PAD = 12
-
-/** Prefix every in-progress temp file carries; recovery deletes anything matching `.tmp-*`. */
-export const TMP_PREFIX = '.tmp-'
-
-// Process-unique counter for temp file names. Recovery wipes all `.tmp-*` on startup, so a
-// reset-to-0 across restarts can never collide with a leftover temp file.
-let segmentSeq = 0
-
-/** Summary of a segment that was just published to its final path. */
-export type PublishedSegment = {
-  path: string
-  rows: number
-  bytes: number
-  minBlock: number
-  maxBlock: number
-}
+import { openWriteStream } from './fs-durable.js'
+import { type PublishedSegment, type SegmentWriter, finalizeSegmentFile, nextTmpPath } from './segment.js'
 
 export type ParquetSegmentWriterOptions = {
   /** The table's directory: `<baseDir>/<table>`. Created by the state layer before writes. */
@@ -47,7 +28,7 @@ export type ParquetSegmentWriterOptions = {
  *
  * A published file is immutable and contains only finalized rows, so it is never rewritten.
  */
-export class ParquetSegmentWriter {
+export class ParquetSegmentWriter implements SegmentWriter {
   readonly #dir: string
   readonly #schema: ParquetSchema
   readonly #rowGroupSize: number
@@ -67,7 +48,7 @@ export class ParquetSegmentWriter {
     this.#dir = options.dir
     this.#schema = options.schema
     this.#rowGroupSize = options.rowGroupSize
-    this.#tmpPath = path.join(options.dir, `${TMP_PREFIX}${(segmentSeq++).toString().padStart(6, '0')}.parquet`)
+    this.#tmpPath = nextTmpPath(options.dir)
   }
 
   /** Whether the underlying file has been opened (i.e. at least one row was appended). */
@@ -150,27 +131,13 @@ export class ParquetSegmentWriter {
     // already released; drop the reference so discard()/GC don't touch a finished stream.
     this.#stream = undefined
 
-    // fsync the temp file so the footer is durable before the rename makes it visible.
-    await fsyncFile(this.#tmpPath)
-
-    const finalPath = path.join(this.#dir, `${pad(this.#minBlock)}-${pad(this.#maxBlock)}.parquet`)
-    if (await pathExists(finalPath)) {
-      throw new ParquetTargetError(
-        PARQUET_ERROR_CODES.FILE_COLLISION,
-        `Refusing to overwrite existing Parquet file '${finalPath}'. A file for block range ` +
-          `${this.#minBlock}-${this.#maxBlock} already exists — this indicates overlapping segments ` +
-          `or a dirty output directory.`,
-      )
-    }
-
-    await rename(this.#tmpPath, finalPath)
-    await fsyncDir(this.#dir)
-
-    const bytes = await stat(finalPath)
-      .then((s) => s.size)
-      .catch(() => 0)
-
-    return { path: finalPath, rows: this.#rowCount, bytes, minBlock: this.#minBlock, maxBlock: this.#maxBlock }
+    return finalizeSegmentFile({
+      dir: this.#dir,
+      tmpPath: this.#tmpPath,
+      rows: this.#rowCount,
+      minBlock: this.#minBlock,
+      maxBlock: this.#maxBlock,
+    })
   }
 
   /**
@@ -200,8 +167,4 @@ export class ParquetSegmentWriter {
       // best-effort — the temp file may not exist yet (never opened) or already be gone
     }
   }
-}
-
-function pad(block: number): string {
-  return Math.trunc(block).toString().padStart(BLOCK_PAD, '0')
 }
