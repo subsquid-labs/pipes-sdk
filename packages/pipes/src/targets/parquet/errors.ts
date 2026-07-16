@@ -51,4 +51,6 @@ export const PARQUET_ERROR_CODES = {
   DUCKDB_COLUMN_COMPRESSION: 'E2316',
   /** duckdb engine selected but the optional peer dependency '@duckdb/node-api' is not installed. */
   DUCKDB_UNAVAILABLE: 'E2317',
+  /** `settings.engine` is not one of the supported engine names. */
+  ENGINE_INVALID: 'E2318',
 } as const

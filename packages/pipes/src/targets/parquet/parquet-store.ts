@@ -4,11 +4,14 @@ import { ParquetSchema } from '@dsnp/parquetjs'
 
 import { type BlockCursor, type Finalization, type FinalizationBuffer, finalizationBuffer } from '~/core/index.js'
 
+import type { ParquetDuckdbSettings } from './duckdb-engine.js'
+import { DuckdbSegmentWriter, SegmentSizeEstimator } from './duckdb-writer.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import {
   type Codec,
   type ParquetColumn,
   type ParquetColumns,
+  type ParquetEngine,
   type ParquetLeafType,
   type ParquetTable,
   blockColumnOf,
@@ -27,9 +30,11 @@ type TableConfig = {
   getBlockNumber: (row: Row) => number
   /** Declared column shape, kept for the dev-mode value check. */
   columns: ParquetColumns
-  schema: ParquetSchema
+  /** Pre-built library schema — parquetjs engine only. */
+  schema?: ParquetSchema
   dir: string
-  /** Rewrites plain-array LIST values into the library's row shape; unset for list-free tables. */
+  /** Rewrites plain-array LIST values into the library's row shape — parquetjs engine only;
+   * the duckdb appender takes plain arrays/objects, so wrapping must be skipped there. */
   wrapRow?: (row: Row) => Row
 }
 
@@ -62,12 +67,28 @@ export class ParquetStore {
   // The current open segment per table — at most one. Reset (published/discarded) at checkpoints.
   readonly #writers = new Map<string, SegmentWriter>()
   readonly #rowGroupSize: number
+  readonly #engine: ParquetEngine
+  readonly #codec: Codec
+  readonly #duckdb: ParquetDuckdbSettings | undefined
+  // Per-table bytes/row calibration shared across successive duckdb writers (rotation memory).
+  readonly #estimators = new Map<string, SegmentSizeEstimator>()
   // Per-cell type checking is a hot-path cost, so it only runs outside production.
   readonly #validateValues = process.env.NODE_ENV !== 'production'
 
-  constructor(options: { dir: string; tables: ParquetTable[]; rowGroupSize: number; defaultCodec: Codec }) {
+  constructor(options: {
+    dir: string
+    tables: ParquetTable[]
+    rowGroupSize: number
+    defaultCodec: Codec
+    engine?: ParquetEngine
+    duckdb?: ParquetDuckdbSettings
+  }) {
     this.#rowGroupSize = options.rowGroupSize
+    this.#engine = options.engine ?? 'parquetjs'
+    this.#codec = options.defaultCodec
+    this.#duckdb = options.duckdb
 
+    const parquetjs = this.#engine === 'parquetjs'
     for (const table of options.tables) {
       const blockColumn = blockColumnOf(table)
       const getBlockNumber = (row: Row): number => readBlockNumber(table.table, blockColumn, row)
@@ -75,11 +96,12 @@ export class ParquetStore {
         blockColumn,
         getBlockNumber,
         columns: table.schema,
-        schema: new ParquetSchema(toParquetSchemaShape(table, options.defaultCodec)),
+        schema: parquetjs ? new ParquetSchema(toParquetSchemaShape(table, options.defaultCodec)) : undefined,
         dir: path.join(options.dir, table.table),
-        wrapRow: buildRowWrapper(table.schema),
+        wrapRow: parquetjs ? buildRowWrapper(table.schema) : undefined,
       })
       this.#buffers.set(table.table, finalizationBuffer<Row>({ getBlockNumber }))
+      if (!parquetjs) this.#estimators.set(table.table, new SegmentSizeEstimator())
     }
   }
 
@@ -208,7 +230,17 @@ export class ParquetStore {
   #getOrCreateWriter(table: string, config: TableConfig): SegmentWriter {
     let writer = this.#writers.get(table)
     if (!writer) {
-      writer = new ParquetSegmentWriter({ dir: config.dir, schema: config.schema, rowGroupSize: this.#rowGroupSize })
+      writer =
+        this.#engine === 'duckdb'
+          ? new DuckdbSegmentWriter({
+              dir: config.dir,
+              columns: config.columns,
+              rowGroupSize: this.#rowGroupSize,
+              codec: this.#codec,
+              duckdb: this.#duckdb,
+              estimator: this.#estimators.get(table)!,
+            })
+          : new ParquetSegmentWriter({ dir: config.dir, schema: config.schema!, rowGroupSize: this.#rowGroupSize })
       this.#writers.set(table, writer)
     }
 

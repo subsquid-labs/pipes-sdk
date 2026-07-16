@@ -164,6 +164,41 @@ describe('parquetTarget', () => {
     })
   })
 
+  describe('engine settings', () => {
+    it('rejects an unknown engine at construction', () => {
+      expect(() =>
+        parquetTarget({
+          dir,
+          tables: [BLOCKS_TABLE],
+          settings: { engine: 'polars' as never },
+          onData: () => {},
+        }),
+      ).toThrowError(/Unknown parquet engine 'polars'/)
+    })
+
+    it('rejects per-column compression under the duckdb engine (one file-level codec only)', () => {
+      const table: ParquetTable = {
+        table: 'blocks',
+        schema: { blockNumber: { type: 'INT64' }, hash: { type: 'UTF8', compression: 'GZIP' } },
+      }
+
+      expect(() =>
+        parquetTarget({ dir, tables: [table], settings: { engine: 'duckdb' }, onData: () => {} }),
+      ).toThrowError(/per-column compression/)
+    })
+
+    it('accepts the duckdb engine with a uniform codec (construction only, no I/O)', () => {
+      expect(() =>
+        parquetTarget({
+          dir,
+          tables: [BLOCKS_TABLE],
+          settings: { engine: 'duckdb', compression: 'GZIP' },
+          onData: () => {},
+        }),
+      ).not.toThrow()
+    })
+  })
+
   describe('finalized-only', () => {
     it('does not write blocks above the finalized head', async () => {
       portal = await mockPortal([blocksResponse([1, 2, 3, 4, 5], 2)])

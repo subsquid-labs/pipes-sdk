@@ -8,6 +8,15 @@ import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 export type Codec = 'UNCOMPRESSED' | 'SNAPPY' | 'GZIP' | 'BROTLI'
 
 /**
+ * Segment writer engine. `'parquetjs'` (default) writes with `@dsnp/parquetjs` on the JS
+ * thread. `'duckdb'` stages rows in an in-memory DuckDB table and COPYs each segment to
+ * Parquet natively, moving encoding/compression/statistics onto DuckDB worker threads —
+ * roughly halving main-thread CPU on write-heavy pipes. Requires the optional peer
+ * dependency `@duckdb/node-api`.
+ */
+export type ParquetEngine = 'parquetjs' | 'duckdb'
+
+/**
  * Parquet leaf (primitive/logical) column types exposed by this target. This is our own union —
  * the public API carries **no compile-time dependency** on `@dsnp/parquetjs` types; the strings
  * are translated to the library's `ParquetSchema` internally (see {@link toParquetSchemaShape}).
