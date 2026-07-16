@@ -336,11 +336,17 @@ jobs:
           ACTUAL_VERSION=$(jq -r '.version' "$MANIFEST")
           [ "$ACTUAL_VERSION" = "$VERSION" ] || { echo "::error::$MANIFEST version is '$ACTUAL_VERSION', expected '$VERSION'"; exit 1; }
 
+          # The org was renamed: subsquid-labs/pipes-sdk now redirects to
+          # subsquid/pipes-sdk. Every manifest here still says subsquid-labs, and
+          # npm demonstrably accepts it — @subsquid/pipes@1.0.0-alpha.16 published
+          # with a provenance attestation through the redirect. Accept BOTH, so
+          # this gate doesn't reject whichever way the manifests are eventually
+          # settled.
           REPO_URL=$(jq -r '.repository.url // .repository // ""' "$MANIFEST")
           case "$REPO_URL" in
-            *github.com/subsquid-labs/pipes-sdk*) ;;
+            *github.com/subsquid-labs/pipes-sdk*|*github.com/subsquid/pipes-sdk*) ;;
             *)
-              echo "::error::$MANIFEST has repository.url='$REPO_URL'. --provenance requires it to resolve to subsquid-labs/pipes-sdk."
+              echo "::error::$MANIFEST has repository.url='$REPO_URL'. --provenance requires it to resolve to the pipes-sdk repo (subsquid/pipes-sdk, or subsquid-labs/pipes-sdk via redirect)."
               exit 1
               ;;
           esac
