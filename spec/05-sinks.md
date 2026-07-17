@@ -50,8 +50,7 @@ rows (INV-25). A consumer never observes a torn batch within the class's atomic 
 coverage window it accounts for (DEF-14): windows tile the processed range per table —
 no overlaps, no gaps within a covered range; a window absent from a table means "not
 processed", never "processed, empty". Sparse tables stretch windows; empty windows at
-stream end publish as explicit empty units. *(The coverage model is unimplemented on the
-reference mainline — files are named by row min/max and no empty units publish; GAP-17.)*
+stream end publish as explicit empty units.
 
 **RP-22 — Rows within window.** [MUST] Every row in a published unit is attributed to a
 block inside that unit's window.

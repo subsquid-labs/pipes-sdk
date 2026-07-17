@@ -1,8 +1,8 @@
 # 13 — Conformance & TDD (CT-n, GAP-n) — MUTABLE
 
-Last updated: 2026-07-19. Statuses reflect the actual TypeScript test inventory at
-commit `a739500` (this branch's mainline merge base; commits above it are docs-only),
-not aspiration.
+Last updated: 2026-07-22. Statuses reflect the actual TypeScript test inventory at
+commit `744ea82` (this branch's mainline merge base), plus the parquet
+coverage-naming suites landing with it, not aspiration.
 
 ## Harness architecture
 
@@ -133,13 +133,13 @@ known-suspect in the current implementation (see gap register).
 | WP-46 (rollback idempotence) | CT-2/3 | P | netting idempotence tested (one binding); others U |
 | WP-47 (depth bound) | CT-3 | P | retention pruning tested; deep-fork restart e2e U |
 | RP-1…RP-6 (write loop) | CT-1 | C | per-target state suites |
-| RP-21, RP-22, INV-4 (coverage) | CT-7 | U ⚠ | coverage model unimplemented on mainline; suites live in the unmerged coverage PR (GAP-17) |
+| RP-21, RP-22, INV-4 (coverage) | CT-7 | C | parquet coverage-naming suites: sparse stretch, trailing empty unit, disjoint-range gap, resume mid-gap |
 | RP-30…RP-32 (keying, migration) | CT-8 | P ⚠ | happy path C; concurrent migration U (GAP-7) |
 | RP-42 (delegated repair) | CT-2 | U ⚠ | hook optional today (GAP-3) |
 | RP-43 (contract guard) | CT-3 | P ⚠ | one binding only (GAP-9) |
 | CN-10 T atomicity | CT-2 | P ⚠ | live tx tests; kill-points U (GAP-14) |
 | CN-11 W protocol | CT-2 | P | unit/lifecycle C; integration gated off CI |
-| CN-12 K protocol | CT-2 | P ⚠ | crash-safety + recovery suites; straddle refusal absent (GAP-17) |
+| CN-12 K protocol | CT-2 | C | crash-safety + recovery suites; straddle refusal asserted (E2317) |
 | CN-13 A protocol | CT-2 | U ⚠ | crash window untested (GAP-3) |
 | CN-34 (fork commit point) | CT-2 | U ⚠ | crash-during-fork untested; class A persists nothing at fork (GAP-21) |
 | CN-45 (cross-impl, clock indep.) | CT-5 | U ⚠ | single implementation; clock ordering in two bindings (GAP-10); cache codec undiscriminated (GAP-27) |
@@ -182,7 +182,6 @@ P2 bounded/rare · P3 polish. "First test" = cheapest failing-test-first entry p
 | GAP-14 | Crash-recovery kill-point coverage exists only for class K; classes T/W/A have no kill-point tests | INV-40…INV-42 | P1 | Phase-0 ledger mode first (an ordinal script cannot answer the post-restart re-request), then the kill-point harness at the T transaction boundary |
 | GAP-15 | Indistinguishable-output collision (duplicate event signature) only logs in the evm module and is entirely undetected in solana; later outputs silently miss records | WP-24 | P2 | two outputs, same signature → startup diagnostic asserted fatal (pending OQ-6) |
 | GAP-16 | Observability payloads are consumed by the dashboard but have no golden fixtures; shapes drift silently (a version-drift accommodation already exists in the dashboard) | IB-40…IB-46 | P3 | golden scrape of /stats, /metrics, preview against a scripted run |
-| GAP-17 | The coverage-window model — coverage-based file naming, the `coverage` state map, straddle refusal, empty-unit publication, codes E2316/E2317 — is spec'd but unimplemented on mainline: files are named by row min/max, straddling files are deleted on recovery, empty tables produce no files | IB-22, RP-21, RP-22, INV-4, CN-12 | P1 | land the coverage PR, then sparse/trailing/gap/disjoint suites against it |
 | GAP-20 | The orphan-data guard is table-wide where it must be key-scoped: the write-ahead binding (E2212) probes the tracked table with no key filter while reading its sync row by key, so a co-resident pipe's legitimate first run into a populated shared table is refused — one pipe's startup made dependent on another's data, blocking a configuration INV-35/RP-41 support. The other bindings run no guard at all and restart from scratch over genuinely orphan data | CN-44, INV-35, REQ-3 | P1 | second pipe id, first run into a table another pipe populates → assert start, not refusal; then on declared-exclusive tables delete cursor state and assert coded refusal per binding |
 | GAP-21 | Append-lagged fork completion persists nothing (no rewound cursor row); a crash after resolveFork and before the next commit resumes from pre-fork state | CN-34 | P2 | kill between resolveFork and the next commit; assert recovered C = ancestor |
 | GAP-22 | A fork tears down and restarts the whole lifecycle (stop + start hooks, metrics server) per streaming segment — hooks fire per segment, not exactly once per run | WP-30, INV-17 | P2 | count start/stop hook invocations across one resolved fork; assert one each |
@@ -199,7 +198,7 @@ P2 bounded/rare · P3 polish. "First test" = cheapest failing-test-first entry p
 | GAP-33 | Profiling-surface defects: batch spans leak on empty batches and stream end (open fix PR #71); transformer-id dedup collides for 3+ same-id transformers (open fix PR #73) | OB-22 | P3 | span onStart count = onEnd count across empty batches; three same-id transformers get distinct ids |
 | GAP-34 | Observability-server hygiene: CORS accepts any origin containing "localhost" as a substring (and rejects 127.0.0.1); stop() clears the global metrics registry; /profiler hardcodes `enabled: true` | IB-40, IB-43 | P3 | origin `http://localhost.evil.com` → assert rejected |
 | GAP-36 | One-program-per-decoder (ADR-17) is enforced by proxy: `programId` is decoder-level, so nothing binds an instruction definition to its program, and the guards only reject collisions visible in the discriminator set. Two programs with disjoint tracked discriminators still pass and cross-decode | INV-24, REQ-2 | P2 | decoder over `[A, B]` with `{ aSwap: A.swap, bDeposit: B.deposit }`; feed B's on-chain `swap` → assert refusal or no emission under `aSwap`, not a decode |
-| GAP-35 | Parquet data files are named by block window with no pipe-id namespacing while the state sidecar is namespaced (`_sqd_parquet_state.<id>.json`): two pipes covering overlapping ranges in one directory collide on filename and the second fails E2309 — sharing a directory is refused by accident of naming rather than declared policy, and coverage-window naming (GAP-17) collides identically | IB-22, IB-27, INV-35 | P2 | two pipe ids, one directory, overlapping ranges → assert the declared outcome (namespaced files or a coded exclusivity refusal), not a publish collision |
+| GAP-35 | Parquet data files are named by block window with no pipe-id namespacing while the state sidecar is namespaced (`_sqd_parquet_state.<id>.json`): two pipes covering overlapping ranges in one directory collide on filename and the second fails E2309 — sharing a directory is refused by accident of naming rather than declared policy | IB-22, IB-27, INV-35 | P2 | two pipe ids, one directory, overlapping ranges → assert the declared outcome (namespaced files or a coded exclusivity refusal), not a publish collision |
 
 ## Build order
 
@@ -216,8 +215,7 @@ P2 bounded/rare · P3 polish. "First test" = cheapest failing-test-first entry p
   class (K — cheapest, file-based; the only crash imitation today is a pre-commit
   abort, one point of the CT-2 matrix). Exit: CT-1 green on the reference
   implementation for S1, ledger mode answering post-restart re-requests.
-- **Phase 1 — P1 gaps**: GAP-3 (needs ADR-15),
-  GAP-11 (range anchors), GAP-17 (land the coverage PR),
+- **Phase 1 — P1 gaps**: GAP-3 (needs ADR-15), GAP-11 (range anchors),
   GAP-14 kill-point harness for class T. Exit: register updated, fixes landed or
   accepted as documented deviations.
 - **Phase 2 — correctness core**: full CT-2 matrix all classes; CT-3 fork suite; CT-5

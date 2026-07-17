@@ -15,7 +15,7 @@ import { LogLevel, Logger, defaultLogger, formatWarning } from './logger.js'
 import { Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
 import { Profiler, Span, SpanHooks } from './profiling.js'
 import { ProgressEvent, StartEvent } from './progress-tracker.js'
-import { QueryBuilder, hashQuery } from './query-builder.js'
+import { QueryBuilder, type Range, hashQuery } from './query-builder.js'
 import { ReadOptions, Target, TargetState } from './target.js'
 import { QueryAwareTransformer, Transformer, TransformerArgs, TransformerOptions } from './transformer.js'
 import { BlockCursor, HookContext } from './types.js'
@@ -49,6 +49,15 @@ export type StreamInfo = {
     initial: number
     last: number
     current: BlockCursor
+    /**
+     * The configured query ranges, as resolved at startup and BEFORE the resume bound is applied
+     * — `initial` is just `ranges[0].from`, and `last` tracks the end of the final range.
+     *
+     * Kept unbounded on purpose: a target that names files by the range they cover must tell an
+     * un-queried gap between two ranges apart from a block that was queried and simply had no
+     * data. After a resume the bounded ranges no longer show the gap, so only this list can.
+     */
+    ranges: Range[]
     /**
      * List of block cursors representing unfinalized blocks in chronological order.
      * Used for handling blockchain forks by tracking alternative chain versions
@@ -200,6 +209,7 @@ export class PortalStream<Q extends QueryBuilder<any>, T = any> {
     })
 
     const initial = raw[0]?.range.from || 0
+    const ranges = raw.map((r) => r.range)
 
     this.#logger.debug(`${bounded.length} range(s) configured`)
 
@@ -271,6 +281,7 @@ export class PortalStream<Q extends QueryBuilder<any>, T = any> {
                 },
                 state: {
                   initial,
+                  ranges,
                   current: cursorFromHeader(lastBatchBlock as any),
                   last: lastBlockNumber,
                   rollbackChain: extractRollbackChain({

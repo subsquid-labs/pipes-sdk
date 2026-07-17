@@ -5,8 +5,8 @@ import path from 'node:path'
 import { ParquetReader, ParquetSchema, ParquetWriter } from '@dsnp/parquetjs'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { createTarget } from '~/core/index.js'
-import { evmPortalStream } from '~/evm/index.js'
+import { type PortalRange, createTarget } from '~/core/index.js'
+import { evmPortalStream, evmQuery } from '~/evm/index.js'
 import { type MockPortal, type MockResponse, blockDecoder, mockPortal, testLogger } from '~/testing/index.js'
 
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
@@ -44,6 +44,19 @@ const insertBlocks = ({
     'blocks',
     data.map((b) => ({ blockNumber: b.number, hash: b.hash, timestamp: b.timestamp })),
   )
+}
+
+/**
+ * A decoder over two disjoint ranges — `blockDecoder` only takes one. The blocks between them are
+ * never queried, which is what the coverage naming has to notice.
+ */
+function twoRangeDecoder(a: PortalRange, b: PortalRange) {
+  return evmQuery()
+    .addRange(a)
+    .addRange(b)
+    .addFields({ block: { number: true, hash: true, timestamp: true } })
+    .build()
+    .pipe((d) => d.flatMap((block) => block.header))
 }
 
 /** Builds a 200 response carrying the given block numbers, optionally with a finalized head. */
@@ -193,14 +206,15 @@ describe('parquetTarget', () => {
   })
 
   describe('read-back correctness', () => {
-    it('writes exactly the finalized rows with correct types and <min>-<max> filename', async () => {
+    it('writes exactly the finalized rows with correct types and a <from>-<to> coverage filename', async () => {
       portal = await mockPortal([blocksResponse([1, 2, 3], 3)])
 
       await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 3 }) }).pipeTo(
         parquetTarget({ dir, tables: [BLOCKS_TABLE], onData: insertBlocks }),
       )
 
-      expect(await listDataFiles(dir, 'blocks')).toEqual(['000000000001-000000000003.parquet'])
+      // The stream starts at block 0, so the window covered is 0–3 even though no row sits at 0.
+      expect(await listDataFiles(dir, 'blocks')).toEqual(['000000000000-000000000003.parquet'])
       expect(await readBlocks(dir)).toEqual([
         { blockNumber: 1, hash: '0x1', timestamp: 1000 },
         { blockNumber: 2, hash: '0x2', timestamp: 2000 },
@@ -215,7 +229,7 @@ describe('parquetTarget', () => {
         parquetTarget({ dir, tables: [BLOCKS_TABLE], onData: insertBlocks }),
       )
 
-      const reader = await ParquetReader.openFile(path.join(dir, 'blocks', '000000000001-000000000001.parquet'))
+      const reader = await ParquetReader.openFile(path.join(dir, 'blocks', '000000000000-000000000001.parquet'))
       const raw = (await reader.getCursor().next()) as Record<string, unknown>
       await reader.close()
       expect(typeof raw['blockNumber']).toBe('bigint')
@@ -329,8 +343,10 @@ describe('parquetTarget', () => {
         }),
       )
 
+      // Every block from the stream's start (0) through the last checkpoint is claimed exactly
+      // once, with no gap between one file's `to` and the next file's `from`.
       expect(await listDataFiles(dir, 'blocks')).toEqual([
-        '000000000001-000000000001.parquet',
+        '000000000000-000000000001.parquet',
         '000000000002-000000000002.parquet',
         '000000000003-000000000003.parquet',
       ])
@@ -471,7 +487,7 @@ describe('parquetTarget', () => {
         { blockNumber: 7, hash: '0x7a', timestamp: 7000 },
       ])
       // The block-1 file was published before the reorg and must survive it untouched.
-      expect(await listDataFiles(dir, 'blocks')).toContain('000000000001-000000000001.parquet')
+      expect(await listDataFiles(dir, 'blocks')).toContain('000000000000-000000000001.parquet')
     })
 
     it('drops forked rows in every table buffer, not just the first (multi-table)', async () => {
@@ -539,8 +555,446 @@ describe('parquetTarget', () => {
     })
   })
 
+  describe('coverage naming', () => {
+    it("stretches a sparse table's next file back over windows that produced no rows", async () => {
+      // `sparse` has rows only in blocks 1 and 6, and each response is its own batch + checkpoint
+      // (maxBytes:1), so blocks 2–5 are windows it was present for but produced nothing in.
+      const sparseTable: ParquetTable = { table: 'sparse', schema: { blockNumber: { type: 'INT64' } } }
+      portal = await mockPortal([
+        blocksResponse([1], 1),
+        blocksResponse([2, 3], 3),
+        blocksResponse([4, 5], 5),
+        blocksResponse([6], 6),
+      ])
+
+      await evmPortalStream({
+        id: 'test',
+        portal: { url: portal.url, maxBytes: 1 },
+        outputs: blockDecoder({ from: 0, to: 6 }),
+      }).pipeTo(
+        parquetTarget({
+          dir,
+          tables: [BLOCKS_TABLE, sparseTable],
+          settings: { rollover: { maxBytes: 1 }, rowGroupSize: 1 },
+          onData: ({ store, data }) => {
+            insertBlocks({ store, data })
+            const rows = data.filter((b) => b.number === 1 || b.number === 6)
+            if (rows.length > 0) {
+              store.insert(
+                'sparse',
+                rows.map((b) => ({ blockNumber: b.number })),
+              )
+            }
+          },
+        }),
+      )
+
+      // Contiguous: 0–1 then 2–6. The empty windows are named by the file that comes after them,
+      // so "no file covers block 4" never happens just because block 4 had no rows.
+      expect(await listDataFiles(dir, 'sparse')).toEqual([
+        '000000000000-000000000001.parquet',
+        '000000000002-000000000006.parquet',
+      ])
+      // ...and no empty file was written for the windows sparse sat out.
+      expect((await readRows(dir, 'sparse', (raw) => Number(raw['blockNumber']))).sort((a, b) => a - b)).toEqual([1, 6])
+      // The dense table checkpoints on the same windows and stays contiguous too.
+      expect(await listDataFiles(dir, 'blocks')).toEqual([
+        '000000000000-000000000001.parquet',
+        '000000000002-000000000003.parquet',
+        '000000000004-000000000005.parquet',
+        '000000000006-000000000006.parquet',
+      ])
+    })
+
+    it('resumes coverage where the previous run left off, across a restart', async () => {
+      // Run 1: blocks 1–3, sparse writes only at block 1.
+      const sparseTable: ParquetTable = { table: 'sparse', schema: { blockNumber: { type: 'INT64' } } }
+      const tables = [BLOCKS_TABLE, sparseTable]
+      const onData = ({
+        store,
+        data,
+      }: {
+        store: ParquetStore
+        data: { number: number; hash: string; timestamp: number }[]
+      }) => {
+        insertBlocks({ store, data })
+        const rows = data.filter((b) => b.number === 1 || b.number === 5)
+        if (rows.length > 0) {
+          store.insert(
+            'sparse',
+            rows.map((b) => ({ blockNumber: b.number })),
+          )
+        }
+      }
+
+      portal = await mockPortal([blocksResponse([1], 1), blocksResponse([2, 3], 3)])
+      await evmPortalStream({
+        id: 'test',
+        portal: { url: portal.url, maxBytes: 1 },
+        outputs: blockDecoder({ from: 0, to: 3 }),
+      }).pipeTo(parquetTarget({ dir, tables, settings: { rollover: { maxBytes: 1 } }, onData }))
+      await portal.close()
+
+      // sparse published 0–1, sat out 2–3, then closed that tail at stream end — so run 1 leaves
+      // no unclaimed blocks behind and the next run starts cleanly at 4.
+      expect(await listDataFiles(dir, 'sparse')).toEqual([
+        '000000000000-000000000001.parquet',
+        '000000000002-000000000003.parquet',
+      ])
+      const persisted = JSON.parse(await readFile(path.join(dir, '_sqd_parquet_state.test.json'), 'utf8'))
+      expect(persisted.coverage).toEqual({ blocks: 4, sparse: 4 })
+
+      // Run 2 resumes at block 4 and sparse finally writes again at block 5.
+      portal = await mockPortal([blocksResponse([4, 5], 5)])
+      await evmPortalStream({
+        id: 'test',
+        portal: { url: portal.url, maxBytes: 1 },
+        outputs: blockDecoder({ from: 0, to: 5 }),
+      }).pipeTo(parquetTarget({ dir, tables, settings: { rollover: { maxBytes: 1 } }, onData }))
+
+      // Both tables cover 0–5 end to end, with no gap and no overlap across the restart boundary.
+      expect(await listDataFiles(dir, 'sparse')).toEqual([
+        '000000000000-000000000001.parquet',
+        '000000000002-000000000003.parquet',
+        '000000000004-000000000005.parquet',
+      ])
+      expect(await listDataFiles(dir, 'blocks')).toEqual([
+        '000000000000-000000000001.parquet',
+        '000000000002-000000000003.parquet',
+        '000000000004-000000000005.parquet',
+      ])
+      // The 2–3 file is sparse's tail marker: it claims the window without inventing rows.
+      expect((await readRows(dir, 'sparse', (raw) => Number(raw['blockNumber']))).sort((a, b) => a - b)).toEqual([1, 5])
+    })
+
+    it('leaves the gap between two disjoint ranges unclaimed', async () => {
+      // Blocks 2-4 are never queried, so no file may name them: "absent" has to keep meaning
+      // "not indexed". Stretching the second file back to block 2 would claim the pipe covered
+      // blocks it never asked the portal for.
+      portal = await mockPortal([blocksResponse([0, 1], 1), blocksResponse([5, 6], 6)])
+
+      await evmPortalStream({
+        id: 'test',
+        portal: { url: portal.url, maxBytes: 1 },
+        outputs: twoRangeDecoder({ from: 0, to: 1 }, { from: 5, to: 6 }),
+      }).pipeTo(
+        parquetTarget({ dir, tables: [BLOCKS_TABLE], settings: { rollover: { maxBytes: 1 } }, onData: insertBlocks }),
+      )
+
+      expect(await listDataFiles(dir, 'blocks')).toEqual([
+        '000000000000-000000000001.parquet',
+        '000000000005-000000000006.parquet',
+      ])
+    })
+
+    it('resumes a disjoint-range backfill interrupted between the ranges', async () => {
+      // The exact durable state a run leaves after finishing range [0,1] and crossing toward [5,6]:
+      // cursor at block 1, coverage at 5 (the next queried block past the 2-4 gap). The store
+      // unit tests prove a real run produces this pair; here we drive the resume path off it.
+      await mkdir(path.join(dir, 'blocks'), { recursive: true })
+      await writeFile(
+        path.join(dir, '_sqd_parquet_state.test.json'),
+        JSON.stringify({ id: 'test', cursor: { number: 1, hash: '0x1' }, coverage: { blocks: 5 } }),
+      )
+      await seedParquetFile(path.join(dir, 'blocks', '000000000000-000000000001.parquet'), [
+        { blockNumber: 1, hash: '0x1', timestamp: 1000 },
+      ])
+
+      // Resume must accept coverage 5 at cursor 1 (the gap justifies it) instead of rejecting the
+      // state, then finish the second range — leaving both windows tiled end to end.
+      portal = await mockPortal([blocksResponse([5, 6], 6)])
+      await evmPortalStream({
+        id: 'test',
+        portal: { url: portal.url, maxBytes: 1 },
+        outputs: twoRangeDecoder({ from: 0, to: 1 }, { from: 5, to: 6 }),
+      }).pipeTo(
+        parquetTarget({ dir, tables: [BLOCKS_TABLE], settings: { rollover: { maxBytes: 1 } }, onData: insertBlocks }),
+      )
+
+      expect(await listDataFiles(dir, 'blocks')).toEqual([
+        '000000000000-000000000001.parquet',
+        '000000000005-000000000006.parquet',
+      ])
+    })
+
+    it('resumes a run that crashed between publishing a stretched file and committing', async () => {
+      // The durable state left by a crash inside a checkpoint: cursor 5 committed, and the
+      // interrupted checkpoint at cursor 6 already renamed `sparse`'s stretched 2-6 file into
+      // place. `sparse` sat out the cursor-5 checkpoint, so its coverage start (2) is below the
+      // cursor and the remnant straddles it — the ordinary case, not a corrupt state file.
+      const sparseTable: ParquetTable = { table: 'sparse', schema: BLOCKS_TABLE.schema }
+      for (const table of ['blocks', 'sparse']) {
+        await mkdir(path.join(dir, table), { recursive: true })
+      }
+      await writeFile(
+        path.join(dir, '_sqd_parquet_state.test.json'),
+        JSON.stringify({ id: 'test', cursor: { number: 5, hash: '0x5' }, coverage: { blocks: 6, sparse: 2 } }),
+      )
+      await seedParquetFile(path.join(dir, 'blocks', '000000000000-000000000005.parquet'), [
+        { blockNumber: 5, hash: '0x5', timestamp: 5000 },
+      ])
+      await seedParquetFile(path.join(dir, 'sparse', '000000000000-000000000001.parquet'), [
+        { blockNumber: 1, hash: '0x1', timestamp: 1000 },
+      ])
+      await seedParquetFile(path.join(dir, 'sparse', '000000000002-000000000006.parquet'), [
+        { blockNumber: 6, hash: '0x6', timestamp: 6000 },
+      ])
+
+      portal = await mockPortal([blocksResponse([6, 7], 7)])
+      await evmPortalStream({
+        id: 'test',
+        portal: { url: portal.url, maxBytes: 1 },
+        outputs: blockDecoder({ from: 0, to: 7 }),
+      }).pipeTo(
+        parquetTarget({
+          dir,
+          tables: [BLOCKS_TABLE, sparseTable],
+          settings: { rollover: { maxBytes: 1 } },
+          onData: ({ store, data }) => {
+            insertBlocks({ store, data })
+            const rows = data.filter((b) => b.number === 7)
+            if (rows.length > 0) {
+              store.insert(
+                'sparse',
+                rows.map((b) => ({ blockNumber: b.number, hash: b.hash, timestamp: b.timestamp })),
+              )
+            }
+          },
+        }),
+      )
+
+      // The remnant was re-derived from the re-fetched blocks, and both tables tile 0-7 end to end.
+      expect(await listDataFiles(dir, 'blocks')).toEqual([
+        '000000000000-000000000005.parquet',
+        '000000000006-000000000007.parquet',
+      ])
+      expect(await listDataFiles(dir, 'sparse')).toEqual([
+        '000000000000-000000000001.parquet',
+        '000000000002-000000000007.parquet',
+      ])
+      expect((await readRows(dir, 'sparse', (raw) => Number(raw['blockNumber']))).sort((a, b) => a - b)).toEqual([1, 7])
+    })
+
+    it('does not fail a row keyed below the window that emitted it', async () => {
+      // An OHLC-style aggregate keyed at its window's FIRST block but emitted once the window
+      // closes. The row lands in a later file than its own block number — legitimate, because the
+      // filename states which blocks were processed, not where the rows point.
+      portal = await mockPortal([blocksResponse([1], 1), blocksResponse([2, 3], 3)])
+
+      await evmPortalStream({
+        id: 'test',
+        portal: { url: portal.url, maxBytes: 1 },
+        outputs: blockDecoder({ from: 0, to: 3 }),
+      }).pipeTo(
+        parquetTarget({
+          dir,
+          tables: [BLOCKS_TABLE],
+          settings: { rollover: { intervalBlocks: 1 } },
+          onData: ({ store, data }) => {
+            store.insert(
+              'blocks',
+              data.map((b) => ({
+                blockNumber: b.number === 2 ? 1 : b.number,
+                hash: b.hash,
+                timestamp: b.timestamp,
+              })),
+            )
+          },
+        }),
+      )
+
+      // The back-keyed row is in the 2–3 file; nothing threw and no row was dropped.
+      expect((await readBlocks(dir)).map((r) => r.blockNumber).sort((a, b) => a - b)).toEqual([1, 1, 3])
+      expect(await listDataFiles(dir, 'blocks')).toEqual([
+        '000000000000-000000000001.parquet',
+        '000000000002-000000000003.parquet',
+      ])
+    })
+
+    it('starts coverage at the stream start, not block 0, for a backfill from a non-zero block', async () => {
+      portal = await mockPortal([blocksResponse([100, 101], 101)])
+
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 100, to: 101 }) }).pipeTo(
+        parquetTarget({ dir, tables: [BLOCKS_TABLE], onData: insertBlocks }),
+      )
+
+      // Naming this 0-101 would claim 100 blocks the pipe never looked at.
+      expect(await listDataFiles(dir, 'blocks')).toEqual(['000000000100-000000000101.parquet'])
+    })
+
+    it('does not reach back past the cursor when resuming state that predates coverage tracking', async () => {
+      // Legacy state: a cursor, no `coverage` field. Blocks 0–2 belong to whatever the old run
+      // wrote under row-based names, so the first new file must start at 3 — not at the stream's
+      // configured start of 0, which would re-claim them.
+      await writeFile(
+        path.join(dir, '_sqd_parquet_state.test.json'),
+        JSON.stringify({ cursor: { number: 2, hash: '0x2' } }),
+      )
+      portal = await mockPortal([blocksResponse([3, 4], 4)])
+
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 4 }) }).pipeTo(
+        parquetTarget({ dir, tables: [BLOCKS_TABLE], onData: insertBlocks }),
+      )
+
+      expect(await listDataFiles(dir, 'blocks')).toEqual(['000000000003-000000000004.parquet'])
+    })
+
+    it('closes a tail owed by the persisted state even when the resume yields no batches', async () => {
+      // The state a run leaves when it crashes between its final regular checkpoint and the
+      // stream-end checkpoint: cursor already at the end of the range, `blocks` still owing 2-3.
+      // The resumed run gets zero batches (the backfill is complete), so no batch ever arrives to
+      // seed coverage — the tail must close from the persisted map alone, or it stays unclaimed
+      // on every subsequent run.
+      await mkdir(path.join(dir, 'blocks'), { recursive: true })
+      await writeFile(
+        path.join(dir, '_sqd_parquet_state.test.json'),
+        JSON.stringify({ id: 'test', cursor: { number: 3, hash: '0x3' }, coverage: { blocks: 2 } }),
+      )
+      await seedParquetFile(path.join(dir, 'blocks', '000000000000-000000000001.parquet'), [
+        { blockNumber: 1, hash: '0x1', timestamp: 1000 },
+      ])
+
+      portal = await mockPortal([])
+      await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 3 }) }).pipeTo(
+        parquetTarget({ dir, tables: [BLOCKS_TABLE], onData: insertBlocks }),
+      )
+
+      expect(await listDataFiles(dir, 'blocks')).toEqual([
+        '000000000000-000000000001.parquet',
+        '000000000002-000000000003.parquet',
+      ])
+      // The tail file claims the window without inventing rows.
+      expect((await readBlocks(dir)).map((r) => r.blockNumber)).toEqual([1])
+      const persisted = JSON.parse(await readFile(path.join(dir, '_sqd_parquet_state.test.json'), 'utf8'))
+      expect(persisted.coverage).toEqual({ blocks: 4 })
+    })
+
+    it('holds rows for an unnameable window across no-op rotations until the boundary moves', async () => {
+      // The finalized head sticks at 1 while later batches release back-keyed rows into a writer
+      // whose window cannot be named yet (coverage 2 > boundary 1). Size-rotation keeps firing;
+      // those checkpoints publish nothing and skip the durable-state rewrite, and the held rows
+      // must survive to the file that finally names their window.
+      portal = await mockPortal([blocksResponse([1], 1), blocksResponse([2], 1), blocksResponse([3, 4], 4)])
+
+      await evmPortalStream({
+        id: 'test',
+        portal: { url: portal.url, maxBytes: 1 },
+        outputs: blockDecoder({ from: 0, to: 4 }),
+      }).pipeTo(
+        parquetTarget({
+          dir,
+          tables: [BLOCKS_TABLE],
+          settings: { rollover: { maxBytes: 1 }, rowGroupSize: 1 },
+          onData: ({ store, data }) => {
+            // Every row keyed at block 1 (an aggregate re-stamped to an already-final block), so
+            // rows keep releasing while the boundary cursor stays pinned at 1.
+            store.insert(
+              'blocks',
+              data.map((b) => ({ blockNumber: 1, hash: b.hash, timestamp: b.timestamp })),
+            )
+          },
+        }),
+      )
+
+      expect(await listDataFiles(dir, 'blocks')).toEqual([
+        '000000000000-000000000001.parquet',
+        '000000000002-000000000004.parquet',
+      ])
+      expect((await readBlocks(dir)).map((r) => r.blockNumber)).toEqual([1, 1, 1, 1])
+    })
+  })
+
+  describe('coverage naming across gaps (store-level)', () => {
+    const newStore = async () => {
+      await mkdir(path.join(dir, 'blocks'), { recursive: true })
+
+      return new ParquetStore({ dir, tables: [BLOCKS_TABLE], rowGroupSize: 100, defaultCodec: 'SNAPPY' })
+    }
+
+    it('clamps a resume fallback that lands in a gap up to the next queried block', async () => {
+      // Legacy resume (no persisted coverage) at the end of range [0,1]: fallbackStart is cursor+1=2,
+      // which sits in the never-queried gap 2-4. The next file must start at 5, not 2 — a `2-6` name
+      // would claim blocks 2-4 the pipe never fetched.
+      const store = await newStore()
+      store.seedCoverage(undefined, 2, [
+        { from: 0, to: 1 },
+        { from: 5, to: 6 },
+      ])
+
+      const published = await store.publishAll(6, { closeTails: true })
+      expect(published.map((p) => `${p.from}-${p.to}`)).toEqual(['5-6'])
+    })
+
+    it('does not fold a skipped empty middle range into the next file', async () => {
+      // Ranges [0,1], [5,6] (produces no batch, so it is skipped), [10,11]. After [0,1] closes,
+      // coverage advances to 5; entering [10,11] must lift it to 10 so the next file is `10-11`, not
+      // `5-11` — the latter would claim the never-queried gap 7-9.
+      const store = await newStore()
+      store.seedCoverage(undefined, 0, [
+        { from: 0, to: 1 },
+        { from: 5, to: 6 },
+        { from: 10, to: 11 },
+      ])
+
+      await store.publishAll(1, { closeTails: true })
+      store.advanceCoverageInto(10)
+      const published = await store.publishAll(11, { closeTails: true })
+      expect(published.map((p) => `${p.from}-${p.to}`)).toEqual(['10-11'])
+    })
+
+    it('leaves a table owing a window within the current range untouched', async () => {
+      // advanceCoverageInto must only lift a coverage start that lags BELOW the range it is entering;
+      // a table mid-range (owing a sat-out window) keeps its earlier start so it still stretches.
+      const store = await newStore()
+      store.seedCoverage(undefined, 0, [{ from: 0, to: 10 }])
+
+      store.advanceCoverageInto(0)
+      const published = await store.publishAll(4, { closeTails: true })
+      expect(published.map((p) => `${p.from}-${p.to}`)).toEqual(['0-4'])
+    })
+
+    it('accepts a persisted coverage start that a query gap justifies', async () => {
+      // Ranges [0,1] and [5,6], resume at cursor+1 = 2 (in the gap). The furthest a file could start
+      // is nextQueriedBlock(2) = 5, so a persisted 5 is exactly consistent — not ahead.
+      const store = await newStore()
+      store.seedCoverage({ blocks: 5 }, 2, [
+        { from: 0, to: 1 },
+        { from: 5, to: 6 },
+      ])
+
+      const published = await store.publishAll(6, { closeTails: true })
+      expect(published.map((p) => `${p.from}-${p.to}`)).toEqual(['5-6'])
+    })
+
+    it('clamps a persisted coverage start ahead of what the cursor allows, and reports it', async () => {
+      // Single range 0-100, resume at cursor+1 = 4. A persisted start of 50 cannot be consistent
+      // with that cursor (no gap justifies it). Honouring it would leave blocks 4-49 named by no
+      // file at all, so it is clamped back to 4 — and the caller is told, since the usual cause is
+      // an edit to the configured ranges.
+      const store = await newStore()
+
+      const clamped = store.seedCoverage({ blocks: 50 }, 4, [{ from: 0, to: 100 }])
+
+      expect(clamped).toEqual([{ table: 'blocks', persisted: 50, seeded: 4 }])
+      const published = await store.publishAll(60, { closeTails: true })
+      expect(published.map((p) => `${p.from}-${p.to}`)).toEqual(['4-60'])
+    })
+
+    it('re-covers the blocks a removed gap exposed when the query ranges change', async () => {
+      // Run 1 queried [0,1] + [5,6] and stopped at cursor 1 with coverage 5. Run 2 widens that to a
+      // single [0,10]: blocks 2-4 are now fetched, so the next file must claim them rather than
+      // honour a start that referred to a gap which no longer exists.
+      const store = await newStore()
+
+      store.seedCoverage({ blocks: 5 }, 2, [{ from: 0, to: 10 }])
+
+      const published = await store.publishAll(10, { closeTails: true })
+      expect(published.map((p) => `${p.from}-${p.to}`)).toEqual(['2-10'])
+    })
+  })
+
   describe('empty table', () => {
-    it('produces no file for a declared table that receives no rows', async () => {
+    it('claims its window with a zero-row file when a declared table receives no rows', async () => {
       const emptyTable: ParquetTable = { table: 'empty', schema: { blockNumber: { type: 'INT64' } } }
       portal = await mockPortal([blocksResponse([1, 2, 3], 3)])
 
@@ -549,8 +1003,35 @@ describe('parquetTarget', () => {
       )
 
       expect((await readBlocks(dir)).map((r) => r.blockNumber)).toEqual([1, 2, 3])
-      // The empty table's directory exists but holds no parquet file.
-      expect(await listDataFiles(dir, 'empty')).toEqual([])
+      // Blocks 0-3 WERE indexed, they just held nothing for this table — so one file says exactly
+      // that. Publishing nothing would be indistinguishable from never having indexed the range.
+      expect(await listDataFiles(dir, 'empty')).toEqual(['000000000000-000000000003.parquet'])
+
+      const reader = await ParquetReader.openFile(path.join(dir, 'empty', '000000000000-000000000003.parquet'))
+      expect(Number(reader.getRowCount())).toBe(0)
+      await reader.close()
+    })
+
+    it('claims one window per run, not one per checkpoint', async () => {
+      // Four checkpoints, but `empty` sits out all of them: the stretch means it owes a single
+      // file at stream end rather than a degenerate one per window.
+      const emptyTable: ParquetTable = { table: 'empty', schema: { blockNumber: { type: 'INT64' } } }
+      portal = await mockPortal([blocksResponse([1], 1), blocksResponse([2], 2), blocksResponse([3], 3)])
+
+      await evmPortalStream({
+        id: 'test',
+        portal: { url: portal.url, maxBytes: 1 },
+        outputs: blockDecoder({ from: 0, to: 3 }),
+      }).pipeTo(
+        parquetTarget({
+          dir,
+          tables: [BLOCKS_TABLE, emptyTable],
+          settings: { rollover: { maxBytes: 1 }, rowGroupSize: 1 },
+          onData: insertBlocks,
+        }),
+      )
+
+      expect(await listDataFiles(dir, 'empty')).toEqual(['000000000000-000000000003.parquet'])
     })
   })
 
@@ -609,9 +1090,9 @@ describe('parquetTarget', () => {
         { blockNumber: 3, logIndex: 0, address: '0xa3' },
         { blockNumber: 3, logIndex: 1, address: '0xb3' },
       ])
-      // Each table published its own single file covering blocks 1–3.
-      expect(await listDataFiles(dir, 'blocks')).toEqual(['000000000001-000000000003.parquet'])
-      expect(await listDataFiles(dir, 'logs')).toEqual(['000000000001-000000000003.parquet'])
+      // Each table published its own single file covering the same window, blocks 0–3.
+      expect(await listDataFiles(dir, 'blocks')).toEqual(['000000000000-000000000003.parquet'])
+      expect(await listDataFiles(dir, 'logs')).toEqual(['000000000000-000000000003.parquet'])
     })
   })
 
@@ -689,7 +1170,7 @@ describe('parquetTarget', () => {
   })
 
   describe('ParquetSegmentWriter', () => {
-    it('lazy-opens, tracks range/rowCount, and publishes <min>-<max>', async () => {
+    it('lazy-opens, tracks rowCount, and names the file for the coverage range it is given', async () => {
       const segDir = path.join(dir, 'seg')
       await mkdir(segDir, { recursive: true })
       const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
@@ -698,18 +1179,63 @@ describe('parquetTarget', () => {
       expect(writer.isOpen).toBe(false)
       expect(await writer.size()).toBe(0)
 
-      await writer.appendRow({ blockNumber: 5 }, 5)
-      await writer.appendRow({ blockNumber: 8 }, 8)
+      await writer.appendRow({ blockNumber: 5 })
+      await writer.appendRow({ blockNumber: 8 })
       expect(writer.isOpen).toBe(true)
       expect(writer.rowCount).toBe(2)
-      expect(writer.minBlock).toBe(5)
-      expect(writer.maxBlock).toBe(8)
       expect(await writer.size()).toBeGreaterThan(0)
 
-      const published = await writer.publish()
-      expect(published.path.endsWith('000000000005-000000000008.parquet')).toBe(true)
+      // Rows span 5–8, but the window covered is 2–10: the name follows the window.
+      const published = await writer.publish({ from: 2, to: 10 })
+      expect(published.path.endsWith('000000000002-000000000010.parquet')).toBe(true)
       expect(published.rows).toBe(2)
       expect(published.bytes).toBeGreaterThan(0)
+    })
+
+    it('accepts rows keyed outside the window, since the name states coverage not content', async () => {
+      const segDir = path.join(dir, 'seg')
+      await mkdir(segDir, { recursive: true })
+      const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
+
+      const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
+      // An aggregate stamped with its window's first block, emitted while covering a later window.
+      await writer.appendRow({ blockNumber: 1 })
+
+      const published = await writer.publish({ from: 6, to: 10 })
+      expect(published.path.endsWith('000000000006-000000000010.parquet')).toBe(true)
+      expect(published.rows).toBe(1)
+    })
+
+    it('publishes a zero-row segment so a table can claim a window it produced nothing in', async () => {
+      const segDir = path.join(dir, 'seg')
+      await mkdir(segDir, { recursive: true })
+      const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
+
+      const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
+      expect(writer.isOpen).toBe(false)
+
+      const published = await writer.publish({ from: 2, to: 4 })
+      expect(published.path.endsWith('000000000002-000000000004.parquet')).toBe(true)
+      expect(published.rows).toBe(0)
+
+      // A real, readable Parquet file — schema and footer present, just no rows.
+      const reader = await ParquetReader.openFile(published.path)
+      expect(Number(reader.getRowCount())).toBe(0)
+      expect(reader.getSchema().fieldList.length).toBe(1)
+      await reader.close()
+    })
+
+    it('refuses an inverted coverage range', async () => {
+      const segDir = path.join(dir, 'seg')
+      await mkdir(segDir, { recursive: true })
+      const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
+
+      const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
+      await writer.appendRow({ blockNumber: 5 })
+
+      await expect(writer.publish({ from: 10, to: 4 })).rejects.toThrowError(/inverted coverage range/)
+      await writer.discard()
+      expect((await readdir(segDir)).filter((f) => f.startsWith('.tmp-'))).toEqual([])
     })
 
     it('refuses to overwrite an existing file (collision)', async () => {
@@ -718,12 +1244,12 @@ describe('parquetTarget', () => {
       const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
 
       const first = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
-      await first.appendRow({ blockNumber: 1 }, 1)
-      await first.publish()
+      await first.appendRow({ blockNumber: 1 })
+      await first.publish({ from: 0, to: 1 })
 
       const second = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
-      await second.appendRow({ blockNumber: 1 }, 1)
-      await expect(second.publish()).rejects.toThrowError(/Refusing to overwrite/)
+      await second.appendRow({ blockNumber: 1 })
+      await expect(second.publish({ from: 0, to: 1 })).rejects.toThrowError(/Refusing to overwrite/)
       await second.discard()
     })
 
@@ -733,7 +1259,7 @@ describe('parquetTarget', () => {
       const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
 
       const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
-      await writer.appendRow({ blockNumber: 1 }, 1)
+      await writer.appendRow({ blockNumber: 1 })
       await writer.discard()
 
       expect((await readdir(segDir)).filter((f) => f.startsWith('.tmp-'))).toEqual([])
@@ -746,7 +1272,7 @@ describe('parquetTarget', () => {
       const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
 
       const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
-      await writer.appendRow({ blockNumber: 1 }, 1)
+      await writer.appendRow({ blockNumber: 1 })
       await writer.discard()
       await writer.discard()
 
@@ -800,6 +1326,121 @@ describe('parquetTarget', () => {
         cursor: { number: 7, hash: '0x7' },
         finalized: { number: 7, hash: '0x7f' },
       })
+    })
+
+    it('refuses a data file that straddles the cursor without destroying it first', async () => {
+      // A restored older state file, or a hand-rewound cursor: the committed cursor is block 1, but
+      // a data file covers 0-3 — it straddles the cursor, so it holds committed data (blocks <= 1) a
+      // resume from block 2 would never re-fetch. Deleting it would lose that data.
+      await writeFile(
+        path.join(dir, '_sqd_parquet_state.json'),
+        JSON.stringify({ cursor: { number: 1, hash: '0x1' }, coverage: { blocks: 4 } }),
+      )
+      const blocksDir = path.join(dir, 'blocks')
+      await mkdir(blocksDir, { recursive: true })
+      await seedParquetFile(path.join(blocksDir, '000000000000-000000000003.parquet'), [
+        { blockNumber: 3, hash: '0x3', timestamp: 0 },
+      ])
+      const state = new ParquetState({ dir, tables: ['blocks'], logger: testLogger() })
+
+      await expect(state.getCursor()).rejects.toThrowError(/straddles the committed cursor/)
+      // The point of refusing first: the file is still there to be recovered from by hand.
+      expect(await listDataFiles(dir, 'blocks')).toEqual(['000000000000-000000000003.parquet'])
+    })
+
+    it("deletes a sparse table's stretched remnant, which straddles the cursor by construction", async () => {
+      // The ordinary crash window, not a corrupt state file: the checkpoint at cursor 6 published
+      // `sparse`'s stretched 2-6 file and died before saveCursor, so the state still says cursor 5.
+      // `sparse` sat out the cursor-5 checkpoint, which is exactly why its coverage start (2) is
+      // below the cursor and its next file straddles it. Refusing here would make an ordinary crash
+      // unrecoverable; the file holds only rows from blocks above the cursor, which a resume
+      // re-fetches and regenerates.
+      await writeFile(
+        path.join(dir, '_sqd_parquet_state.json'),
+        JSON.stringify({ cursor: { number: 5, hash: '0x5' }, coverage: { blocks: 6, sparse: 2 } }),
+      )
+      for (const table of ['blocks', 'sparse']) {
+        await mkdir(path.join(dir, table), { recursive: true })
+      }
+      await seedParquetFile(path.join(dir, 'sparse', '000000000002-000000000006.parquet'), [
+        { blockNumber: 6, hash: '0x6', timestamp: 0 },
+      ])
+      await seedParquetFile(path.join(dir, 'blocks', '000000000000-000000000005.parquet'), [
+        { blockNumber: 5, hash: '0x5', timestamp: 0 },
+      ])
+      const state = new ParquetState({ dir, tables: ['blocks', 'sparse'], logger: testLogger() })
+
+      expect(await state.getCursor()).toEqual({ latest: { number: 5, hash: '0x5' }, finalized: null })
+      expect(await listDataFiles(dir, 'sparse')).toEqual([])
+      // The committed file, which ends exactly at the cursor, is untouched.
+      expect(await listDataFiles(dir, 'blocks')).toEqual(['000000000000-000000000005.parquet'])
+    })
+
+    it('still refuses a straddling file that the persisted coverage does not explain', async () => {
+      // Same straddle shape as the remnant above, but the coverage map says `sparse` was next due
+      // to publish from block 4 — so the 2-6 file was written by a different run, and its blocks
+      // 2-3 are committed data no resume would re-fetch.
+      await writeFile(
+        path.join(dir, '_sqd_parquet_state.json'),
+        JSON.stringify({ cursor: { number: 5, hash: '0x5' }, coverage: { sparse: 4 } }),
+      )
+      await mkdir(path.join(dir, 'sparse'), { recursive: true })
+      await seedParquetFile(path.join(dir, 'sparse', '000000000002-000000000006.parquet'), [
+        { blockNumber: 6, hash: '0x6', timestamp: 0 },
+      ])
+      const state = new ParquetState({ dir, tables: ['sparse'], logger: testLogger() })
+
+      await expect(state.getCursor()).rejects.toThrowError(/straddles the committed cursor/)
+      expect(await listDataFiles(dir, 'sparse')).toEqual(['000000000002-000000000006.parquet'])
+    })
+
+    it('accepts coverage ahead of the cursor when a query gap justifies it (no straddling file)', async () => {
+      // Regression: a disjoint-range backfill stopped at a range boundary persists cursor=1 with
+      // coverage=5 (the next queried block after the 2-4 gap between ranges [0,1] and [5,6]). The
+      // [0,1] file ends exactly at the cursor, so nothing straddles it — resume must accept this.
+      await writeFile(
+        path.join(dir, '_sqd_parquet_state.json'),
+        JSON.stringify({ cursor: { number: 1, hash: '0x1' }, coverage: { blocks: 5 } }),
+      )
+      const blocksDir = path.join(dir, 'blocks')
+      await mkdir(blocksDir, { recursive: true })
+      await seedParquetFile(path.join(blocksDir, '000000000000-000000000001.parquet'), [
+        { blockNumber: 1, hash: '0x1', timestamp: 0 },
+      ])
+      const state = new ParquetState({ dir, tables: ['blocks'], logger: testLogger() })
+
+      expect(await state.getCursor()).toEqual({ latest: { number: 1, hash: '0x1' }, finalized: null })
+      expect(state.coverage).toEqual({ blocks: 5 })
+      // The committed file is untouched.
+      expect(await listDataFiles(dir, 'blocks')).toEqual(['000000000000-000000000001.parquet'])
+    })
+
+    it('accepts coverage exactly one block past the cursor (the normal case)', async () => {
+      await writeFile(
+        path.join(dir, '_sqd_parquet_state.json'),
+        JSON.stringify({ cursor: { number: 3, hash: '0x3' }, coverage: { blocks: 4 } }),
+      )
+      const state = new ParquetState({ dir, tables: ['blocks'], logger: testLogger() })
+
+      expect(await state.getCursor()).toEqual({ latest: { number: 3, hash: '0x3' }, finalized: null })
+      expect(state.coverage).toEqual({ blocks: 4 })
+    })
+
+    it('points a legacy (no-coverage) straddle at the one-file remedy', async () => {
+      // Pre-upgrade state: a cursor, no coverage map. The old version's crash remnant can itself
+      // straddle the cursor (a back-keyed row puts a row-min/max name's `from` at or below it),
+      // and with nothing to explain the straddle the refusal fires on the first post-upgrade
+      // start. The message must offer the single-file remedy for that case, not only the
+      // delete-the-table one.
+      await writeFile(path.join(dir, '_sqd_parquet_state.json'), JSON.stringify({ cursor: { number: 2, hash: '0x2' } }))
+      await mkdir(path.join(dir, 'blocks'), { recursive: true })
+      await seedParquetFile(path.join(dir, 'blocks', '000000000002-000000000004.parquet'), [
+        { blockNumber: 2, hash: '0x2', timestamp: 0 },
+      ])
+      const state = new ParquetState({ dir, tables: ['blocks'], logger: testLogger() })
+
+      await expect(state.getCursor()).rejects.toThrowError(/deleting just this file and restarting is enough/)
+      expect(await listDataFiles(dir, 'blocks')).toEqual(['000000000002-000000000004.parquet'])
     })
 
     it('throws (does not silently leave overlap) when an over-cursor file cannot be deleted', async () => {
