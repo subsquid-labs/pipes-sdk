@@ -41,3 +41,4 @@ local/
 .agents
 
 scaffolds/
+packages/pipes/scripts/bench-pipeline/.fixtures/
