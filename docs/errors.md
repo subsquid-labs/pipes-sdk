@@ -435,3 +435,42 @@ non-object column declaration, or nesting too deep (possibly cyclic).
 
 **Fix** — a `STRUCT` needs at least one field and a `LIST` needs an `element`; correct the
 declaration.
+
+### E2316 · Invalid segment coverage range
+
+Files are named `<from>-<to>.parquet` for the block window they cover, and a segment was about to be
+named for a range that could not be formed — inverted (`from` above `to`), or with no coverage start
+recorded for the table. This is an internal invariant; it should not be reachable from user code.
+
+**Fix** — not user-serviceable. Please report it with the surrounding logs.
+
+### E2317 · State file disagrees with the data files
+
+The data files were written by a run that committed further than the state file records — typically a
+restored older state file, or a cursor rewound by hand. A published `<from>-<to>.parquet` file
+straddles the committed cursor (`from <= cursor < to`) *and* does not start where the persisted
+coverage says that table was next due to publish from. Such a file holds committed data (blocks at or
+below the cursor) that a resume would never re-fetch, so deleting it as an incomplete-checkpoint
+remnant would lose data. The refusal happens **before** anything is deleted or published, so the data
+files are intact.
+
+A straddling file whose `from` *does* match the table's persisted coverage start is not this error:
+that is the file an interrupted checkpoint was publishing, and a sparse table's stretched file
+straddles the cursor as a matter of course. It is deleted and re-derived like any other remnant.
+
+**Fix** — restore the state file that matches the data files, or delete both the state file and the
+affected table directories to re-index that range from scratch.
+
+**Upgrading from a version that kept no coverage record**: if the previous version's last run
+crashed, its checkpoint remnant can itself straddle the cursor (a row keyed below the cursor puts a
+row-min/max name's `from` at or below it), and with no coverage to explain the straddle this error
+fires on the first post-upgrade start. That remnant is an ordinary incomplete-checkpoint leftover:
+deleting just that file and restarting is enough — recovery re-fetches and regenerates it. To avoid
+the manual step entirely, restart the pipe once on the old version (letting its own recovery run)
+before upgrading.
+
+A related condition is *not* fatal: if the persisted coverage for a table starts ahead of the
+furthest block a file could consistently cover from for the resume cursor, it is clamped back to
+that block and logged as a warning. The usual cause is an edit to the configured query ranges
+(a gap the recorded start referred to no longer exists), and clamping keeps the blocks after the
+cursor claimed by a file.

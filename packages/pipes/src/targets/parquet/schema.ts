@@ -139,11 +139,11 @@ const LIBRARY_TYPE: Record<ParquetLeafType, LibraryLeafType> = {
 const SUPPORTED_TYPES = new Set<string>(Object.keys(LIBRARY_TYPE))
 
 // The block column's value is compared directly against the portal's finalized block NUMBER
-// (`Number(row[col]) <= finalized.number`) and used for `<min>-<max>` file naming and the
-// `maxBlock > cursor` recovery check, so it must hold the block number itself. TIMESTAMP (and
-// its TIMESTAMP_MILLIS alias) is int64-backed but carries epoch-ms, and DATE is int32-backed
-// but carries days-since-epoch — comparing either against a block number silently never (or
-// always) finalizes, so both are excluded, as is everything non-numeric.
+// (`Number(row[col]) <= finalized.number`) to decide when a row may leave the finalization buffer,
+// so it must hold the block number itself. TIMESTAMP (and its TIMESTAMP_MILLIS alias) is
+// int64-backed but carries epoch-ms, and DATE is int32-backed but carries days-since-epoch —
+// comparing either against a block number silently never (or always) finalizes, so both are
+// excluded, as is everything non-numeric.
 const INTEGER_BLOCK_TYPES = new Set<ParquetColumnType>(['INT64', 'INT32'])
 
 /** The block-number column name for a table, applying the default. */

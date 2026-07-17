@@ -47,4 +47,8 @@ export const PARQUET_ERROR_CODES = {
   RECOVERY_DELETE_FAILED: 'E2314',
   /** A nested column declaration is malformed (empty STRUCT fields, LIST without element, over-deep nesting). */
   NESTED_SCHEMA_INVALID: 'E2315',
+  /** A segment's coverage range could not be formed or is inverted (internal invariant). */
+  COVERAGE_RANGE_INVALID: 'E2316',
+  /** The persisted coverage map disagrees with the cursor stored beside it. */
+  STATE_COVERAGE_INVALID: 'E2317',
 } as const

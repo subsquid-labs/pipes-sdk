@@ -1,6 +1,6 @@
 # ADR-6 — Immutable file sinks: finalized-only content, coverage-window naming
 
-Status: Accepted (historical) — coverage naming/persistence not yet on mainline (GAP-17)
+Status: Accepted — implemented for the parquet binding
 
 ## Context
 
@@ -24,3 +24,9 @@ reduces to dropping hold-back rows (CN-32). Costs: rows lag finality (deferred
 visibility, INV-25), no-finality datasets lose reorg safety (FM-13), and recovery
 depends on the author-purity obligation (RS-10, INV-43). Shapes DEF-14, DEF-15,
 CN-12, IB-22.
+
+Landed for parquet in PR #123 (issue #122): coverage map persisted beside the cursor,
+straddle refusal E2317, invalid-range refusal E2316, empty units at stream end. Existing
+datasets keep their row-min/max names — the scheme is not retroactive, and recovery
+parses both. Files stay un-namespaced by pipe id, so two pipes sharing a directory still
+collide (GAP-35).

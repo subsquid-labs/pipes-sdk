@@ -25,10 +25,11 @@ hold-back buffer, DEF-15). At a checkpoint (DEF-17): open units are published
 atomically (write-temp → sync → rename), **then** the cursor/state record is persisted
 atomically. Crash window: units published above the persisted cursor — recovery deletes
 every unit whose window end exceeds the cursor plus all temporary files, then re-fetches;
-requires replay purity (RS-10). A unit *straddling* the cursor is an integrity fault:
-refuse before deleting anything *(refusal unimplemented on the mainline — a straddling
-unit is currently deleted like any over-cursor unit; GAP-17)*. Delivery: effectively
-exactly-once.
+requires replay purity (RS-10). A unit *straddling* the cursor is an integrity fault —
+refuse before deleting anything — **unless** it starts where the recorded coverage says
+that table was next due to publish from, which identifies it as the interrupted
+checkpoint's own unit (a sparse table's stretched unit straddles by construction) and so
+as a remnant to delete. Delivery: effectively exactly-once.
 
 **CN-13 — Class A (append-lagged).** Data is appended by author code first; the cursor
 record is appended **after**, non-atomically. Crash window: data committed above the

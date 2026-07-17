@@ -17,13 +17,19 @@ export const TMP_PREFIX = '.tmp-'
 // reset-to-0 across restarts can never collide with a leftover temp file.
 let segmentSeq = 0
 
+/**
+ * Block range a published file **covers** — the window the pipe processed, not the rows' own
+ * min/max. The two are independent: the window's edge blocks may carry no data, and a row may be
+ * keyed outside the window that emitted it. That is the point — the filename states coverage, not
+ * content.
+ */
+export type SegmentRange = { from: number; to: number }
+
 /** Summary of a segment that was just published to its final path. */
 export type PublishedSegment = {
   path: string
   rows: number
   bytes: number
-  minBlock: number
-  maxBlock: number
 }
 
 export type ParquetSegmentWriterOptions = {
@@ -43,7 +49,11 @@ export type ParquetSegmentWriterOptions = {
  * tracks the block range and row count it has seen, exposes the growing temp file size for
  * byte-based rotation, and publishes atomically:
  *
- *   `close()` (footer) → fsync file → atomic `rename` temp → `<dir>/<min>-<max>.parquet` → fsync dir
+ *   `close()` (footer) → fsync file → atomic `rename` temp → `<dir>/<from>-<to>.parquet` → fsync dir
+ *
+ * The published name comes from the {@link SegmentRange} the caller passes to `publish()` — the
+ * window the pipe processed. The writer never inspects the rows' own block numbers; it has no way
+ * to know which blocks it was *responsible* for, only which ones happened to produce rows.
  *
  * A published file is immutable and contains only finalized rows, so it is never rewritten.
  */
@@ -59,8 +69,6 @@ export class ParquetSegmentWriter {
   // stream's close() if a footer write throws, which would otherwise leak the descriptor.
   #stream: WriteStream | undefined
   #rowCount = 0
-  #minBlock: number | undefined
-  #maxBlock: number | undefined
   #closed = false
 
   constructor(options: ParquetSegmentWriterOptions) {
@@ -79,38 +87,33 @@ export class ParquetSegmentWriter {
     return this.#rowCount
   }
 
-  get minBlock(): number | undefined {
-    return this.#minBlock
-  }
-
-  get maxBlock(): number | undefined {
-    return this.#maxBlock
-  }
-
   /**
-   * Appends one row, lazy-opening the temp file on first use. `blockNumber` is tracked
-   * separately (not re-read from the row) so range naming stays correct regardless of the
-   * declared block column's encoding.
+   * Appends one row, lazy-opening the temp file on first use.
+   *
+   * The writer tracks no block range of its own: the filename comes from the coverage window the
+   * caller passes to {@link publish}, and per-block min/max is already written into each row group's
+   * statistics by the Parquet footer (what DuckDB/Spark/Athena prune on).
    */
-  async appendRow(row: Record<string, unknown>, blockNumber: number): Promise<void> {
-    if (!this.#writer) {
-      const stream = await openWriteStream(this.#tmpPath)
-      try {
-        this.#writer = await ParquetWriter.openStream(this.#schema, stream, { rowGroupSize: this.#rowGroupSize })
-        this.#stream = stream
-      } catch (error) {
-        // openStream writes the header immediately; if that throws, the stream we just opened would
-        // leak — force it shut before propagating.
-        stream.destroy()
-        throw error
-      }
-    }
-
-    await this.#writer.appendRow(row)
+  async appendRow(row: Record<string, unknown>): Promise<void> {
+    await this.#ensureOpen()
+    await this.#writer!.appendRow(row)
 
     this.#rowCount++
-    if (this.#minBlock === undefined || blockNumber < this.#minBlock) this.#minBlock = blockNumber
-    if (this.#maxBlock === undefined || blockNumber > this.#maxBlock) this.#maxBlock = blockNumber
+  }
+
+  async #ensureOpen(): Promise<void> {
+    if (this.#writer) return
+
+    const stream = await openWriteStream(this.#tmpPath)
+    try {
+      this.#writer = await ParquetWriter.openStream(this.#schema, stream, { rowGroupSize: this.#rowGroupSize })
+      this.#stream = stream
+    } catch (error) {
+      // openStream writes the header immediately; if that throws, the stream we just opened would
+      // leak — force it shut before propagating.
+      stream.destroy()
+      throw error
+    }
   }
 
   /**
@@ -129,22 +132,29 @@ export class ParquetSegmentWriter {
 
   /**
    * Finalizes the segment: writes the Parquet footer, fsyncs the file, atomically renames the
-   * temp file to `<dir>/<min>-<max>.parquet`, then fsyncs the directory so the rename is durable.
-   * Returns the published file's path, row count, byte size and block range.
+   * temp file to `<dir>/<from>-<to>.parquet`, then fsyncs the directory so the rename is durable.
+   * Returns the published file's path, row count and byte size.
    *
-   * Refuses to overwrite an existing target file — a collision means two segments claimed the
-   * same block range, which would silently drop data.
+   * `range` is the window the caller assigns; the file is named for it so consumers read coverage
+   * off the filename. Publishing with **no rows** is legitimate and how a table claims a window it
+   * was present for but produced nothing in — the file carries the schema and an empty row set.
+   *
+   * Refuses to overwrite an existing target file — a collision means two segments claimed the same
+   * window, which would silently drop data.
    */
-  async publish(): Promise<PublishedSegment> {
-    if (!this.#writer || this.#minBlock === undefined || this.#maxBlock === undefined) {
+  async publish(range: SegmentRange): Promise<PublishedSegment> {
+    if (range.from > range.to) {
       throw new ParquetTargetError(
-        PARQUET_ERROR_CODES.FILE_COLLISION,
-        `Internal: publish() called on an empty segment in '${this.#dir}'. Only segments with ` +
-          `at least one row may be published.`,
+        PARQUET_ERROR_CODES.COVERAGE_RANGE_INVALID,
+        `Internal: refusing to publish segment in '${this.#dir}' with an inverted coverage range ` +
+          `${range.from}-${range.to}.`,
       )
     }
 
-    await this.#writer.close()
+    // Opens the file if no row ever arrived, so a zero-row window still produces a real segment.
+    await this.#ensureOpen()
+
+    await this.#writer!.close()
     this.#closed = true
     // close() ended the stream (via the library's envelopeWriter.close → stream.end), so its fd is
     // already released; drop the reference so discard()/GC don't touch a finished stream.
@@ -153,12 +163,12 @@ export class ParquetSegmentWriter {
     // fsync the temp file so the footer is durable before the rename makes it visible.
     await fsyncFile(this.#tmpPath)
 
-    const finalPath = path.join(this.#dir, `${pad(this.#minBlock)}-${pad(this.#maxBlock)}.parquet`)
+    const finalPath = path.join(this.#dir, `${pad(range.from)}-${pad(range.to)}.parquet`)
     if (await pathExists(finalPath)) {
       throw new ParquetTargetError(
         PARQUET_ERROR_CODES.FILE_COLLISION,
-        `Refusing to overwrite existing Parquet file '${finalPath}'. A file for block range ` +
-          `${this.#minBlock}-${this.#maxBlock} already exists — this indicates overlapping segments ` +
+        `Refusing to overwrite existing Parquet file '${finalPath}'. A file covering block range ` +
+          `${range.from}-${range.to} already exists — this indicates overlapping segments ` +
           `or a dirty output directory.`,
       )
     }
@@ -170,7 +180,7 @@ export class ParquetSegmentWriter {
       .then((s) => s.size)
       .catch(() => 0)
 
-    return { path: finalPath, rows: this.#rowCount, bytes, minBlock: this.#minBlock, maxBlock: this.#maxBlock }
+    return { path: finalPath, rows: this.#rowCount, bytes }
   }
 
   /**

@@ -10,7 +10,7 @@ import { TMP_PREFIX } from './writer.js'
 /** Base name of the durable state file living at the root of the output dir. */
 const STATE_BASENAME = '_sqd_parquet_state'
 
-/** Published data files are named `<min>-<max>.parquet`; nothing else in a table dir is ours. */
+/** Published data files are named `<from>-<to>.parquet`; nothing else in a table dir is ours. */
 const DATA_FILE_RE = /^(\d+)-(\d+)\.parquet$/
 
 type PersistedState = {
@@ -24,6 +24,13 @@ type PersistedState = {
    * field existed (treated as "no persisted finalized head").
    */
   finalized?: BlockCursor
+  /**
+   * Per-table first block the next published file will cover. Tracked per table (not derived from
+   * `cursor`) because a table with no rows in a window publishes no file while the cursor moves on
+   * regardless — only this record remembers how far back that table's next file must reach. Absent
+   * in state written before coverage naming existed.
+   */
+  coverage?: Record<string, number>
 }
 
 export type ParquetStateOptions = {
@@ -59,6 +66,8 @@ export class ParquetState {
   readonly #statePath: string
   readonly #logger: Logger
 
+  #coverage: Record<string, number> | undefined
+
   constructor(options: ParquetStateOptions) {
     this.#baseDir = options.dir
     this.#tables = options.tables
@@ -71,12 +80,22 @@ export class ParquetState {
   }
 
   /**
+   * Per-table coverage starts read from the state file, or `undefined` when the state predates
+   * coverage naming (or there is no state at all). Populated by {@link getCursor}.
+   */
+  get coverage(): Record<string, number> | undefined {
+    return this.#coverage
+  }
+
+  /**
    * Prepares the output directory and returns the cursor to resume from (or `undefined` to start
    * from the stream beginning).
    *
    * Always: `mkdir -p` the base dir + every table dir, and delete every `.tmp-*` file. When a
-   * committed cursor exists, additionally delete every published data file whose `maxBlock`
-   * exceeds it (incomplete-checkpoint remnants).
+   * committed cursor exists, additionally delete every published data file whose coverage end
+   * exceeds it (incomplete-checkpoint remnants) — refusing up front if one straddles the cursor
+   * without being explained by the persisted coverage, which would mean the state file and the
+   * data files came from different runs (`E2317`).
    */
   async getCursor(): Promise<TargetState | undefined> {
     await mkdir(this.#baseDir, { recursive: true })
@@ -91,6 +110,8 @@ export class ParquetState {
       return undefined
     }
 
+    this.#coverage = state.coverage
+
     await this.#deleteFilesAboveCursor(state.cursor.number)
 
     // Hand the persisted finalized head back as resume state so the source can re-seed its
@@ -101,15 +122,18 @@ export class ParquetState {
   /**
    * Atomically persists the checkpoint cursor: write a temp file, fsync it, rename over the
    * state file, then fsync the directory so the rename is durable. Called only after every open
-   * writer for the checkpoint has been published.
+   * writer for the checkpoint has been published, so `coverage` describes the files on disk.
    */
-  async saveCursor(cursor: BlockCursor, finalized?: BlockCursor): Promise<void> {
+  async saveCursor(cursor: BlockCursor, finalized?: BlockCursor, coverage?: Record<string, number>): Promise<void> {
     const payload: PersistedState = { cursor }
     if (this.#id) {
       payload.id = this.#id
     }
     if (finalized) {
       payload.finalized = finalized
+    }
+    if (coverage) {
+      payload.coverage = coverage
     }
 
     const tmpPath = path.join(this.#baseDir, `${TMP_PREFIX}state-${path.basename(this.#statePath)}`)
@@ -157,15 +181,39 @@ export class ParquetState {
   }
 
   /**
-   * Deletes every published `<min>-<max>.parquet` whose `max` exceeds the committed cursor.
+   * Deletes every published `<from>-<to>.parquet` whose `to` exceeds the committed cursor.
    *
    * A surviving over-cursor file is a correctness hazard, not a cosmetic leftover: `read(cursor)`
    * re-fetches the same blocks and either collides with it (fatal) or, if rotation lands on a
    * different range, overlaps it (silent duplicate rows). So a failed `unlink` here is fatal —
    * we surface it with remediation guidance rather than swallowing it and counting it as removed.
+   *
+   * Reading the range off the filename is sound for both naming schemes: a coverage-named file
+   * ends at the checkpoint cursor that published it, and a legacy min/max-named file ends at its
+   * last row, which is itself never above that cursor. Either way `to > cursor` means "published
+   * after the last commit".
+   *
+   * An over-cursor file that also *starts* at or below the cursor (`from <= cursor < to`)
+   * straddles the commit point, so on the face of it it holds committed data (blocks `<= cursor`)
+   * that a resume from `cursor + 1` will never re-fetch. Two very different things produce that
+   * shape, and the persisted coverage tells them apart:
+   *
+   * - `from` equals the table's persisted coverage start — this is the file that table was about
+   *   to publish when the checkpoint was interrupted. A sparse table's coverage start legitimately
+   *   sits at or below the cursor (it kept the start while it sat out earlier checkpoints), so its
+   *   *stretched* remnant straddles by construction. Its rows can only have come from processing
+   *   blocks above the cursor, so a resume regenerates them: delete it like any other remnant.
+   * - `from` is anything else — the files were written by a run that committed further than the
+   *   cursor now records (a restored older state file, or a cursor rewound by hand). Deleting it
+   *   would destroy committed data, so we refuse up front (scanning every table before deleting
+   *   anything) and leave the operator a decision.
+   *
+   * With no persisted coverage (state predating coverage naming) nothing explains a straddle: a
+   * row-min/max name's `from` is its first row, so committed rows really are inside. Refuse.
    */
   async #deleteFilesAboveCursor(cursorNumber: number): Promise<void> {
-    let removed = 0
+    const overCursor: { path: string; from: number; to: number; table: string }[] = []
+
     for (const table of this.#tables) {
       const dir = path.join(this.#baseDir, table)
       const entries = await readdir(dir).catch(() => [] as string[])
@@ -173,29 +221,55 @@ export class ParquetState {
         const match = DATA_FILE_RE.exec(name)
         if (!match) continue
 
-        const maxBlock = Number.parseInt(match[2], 10)
-        if (maxBlock <= cursorNumber) continue
+        const from = Number.parseInt(match[1], 10)
+        const to = Number.parseInt(match[2], 10)
+        if (to <= cursorNumber) continue
 
-        const filePath = path.join(dir, name)
-        try {
-          await unlink(filePath)
-        } catch (error) {
+        if (from <= cursorNumber && from !== this.#coverage?.[table]) {
+          // With no coverage recorded at all, the straddle can also be a pre-upgrade crash remnant
+          // (a back-keyed row puts a legacy min/max name's `from` at or below the cursor) — a
+          // shape the old recovery deleted and re-derived. We can't tell it apart from real state
+          // divergence, but the remedy for it is one file, not the whole table.
+          const legacyHint =
+            this.#coverage === undefined
+              ? ` If this is the first start after upgrading from a version that kept no coverage ` +
+                `record and the previous run crashed, the file is an ordinary checkpoint remnant — ` +
+                `deleting just this file and restarting is enough.`
+              : ''
+
           throw new ParquetTargetError(
-            PARQUET_ERROR_CODES.RECOVERY_DELETE_FAILED,
-            `Crash recovery could not delete the over-cursor Parquet file '${filePath}' ` +
-              `(its blocks exceed the committed cursor ${formatBlock(cursorNumber)}): ` +
-              `${error instanceof Error ? error.message : String(error)}. Leaving it would duplicate or ` +
-              `overlap re-fetched data — remove it manually and restart.`,
+            PARQUET_ERROR_CODES.STATE_COVERAGE_INVALID,
+            `Parquet file '${path.join(dir, name)}' covers block range ${from}-${to}, which straddles ` +
+              `the committed cursor ${formatBlock(cursorNumber)} and does not start where table ` +
+              `'${table}' was next due to publish from (${this.#coverage?.[table] ?? 'no coverage recorded'}): ` +
+              `the data files were written by a run that committed further than the state file now ` +
+              `records (a restored older state file, or a cursor rewound by hand). Refusing to delete ` +
+              `it, since that would destroy committed data. Either restore the state file that matches ` +
+              `the data files, or delete both the state file and '${table}/' to re-index.${legacyHint}`,
           )
         }
 
-        removed++
+        overCursor.push({ path: path.join(dir, name), from, to, table })
       }
     }
 
-    if (removed > 0) {
+    for (const file of overCursor) {
+      try {
+        await unlink(file.path)
+      } catch (error) {
+        throw new ParquetTargetError(
+          PARQUET_ERROR_CODES.RECOVERY_DELETE_FAILED,
+          `Crash recovery could not delete the over-cursor Parquet file '${file.path}' ` +
+            `(its blocks exceed the committed cursor ${formatBlock(cursorNumber)}): ` +
+            `${error instanceof Error ? error.message : String(error)}. Leaving it would duplicate or ` +
+            `overlap re-fetched data — remove it manually and restart.`,
+        )
+      }
+    }
+
+    if (overCursor.length > 0) {
       this.#logger.warn(
-        `Crash recovery: removed ${removed} Parquet file(s) above the committed cursor ` +
+        `Crash recovery: removed ${overCursor.length} Parquet file(s) above the committed cursor ` +
           `(block ${formatBlock(cursorNumber)}) before resuming.`,
       )
     }
