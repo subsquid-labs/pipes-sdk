@@ -113,12 +113,11 @@ function selectIndexers(
 ): RecorderIndexer[] {
   if (requestedId === undefined) return Object.values(registry)
 
-  const selected = registry[requestedId]
-  if (!selected) {
+  if (!Object.hasOwn(registry, requestedId)) {
     throw new Error(`unknown indexer '${requestedId}'; known: ${Object.keys(registry).join(', ')}`)
   }
 
-  return [selected]
+  return [registry[requestedId]]
 }
 
 export async function recordFixtures(

@@ -156,6 +156,22 @@ describe('fixture recorder', () => {
     for (const indexer of Object.values(registry)) expect(indexer.createStream).not.toHaveBeenCalled()
   })
 
+  it.each([
+    'constructor',
+    'toString',
+    '__proto__',
+  ])("rejects prototype-chain indexer id '%s' before filesystem or network activity", async (requestedId) => {
+    const { createStream, indexer } = makeIndexer('alpha')
+    const { dependencies, ensureFixtureDirectory, cacheSize } = makeDependencies({ alpha: indexer })
+
+    await expect(recordFixtures(['--indexer', requestedId], dependencies)).rejects.toThrow(
+      `unknown indexer '${requestedId}'; known: alpha`,
+    )
+    expect(ensureFixtureDirectory).not.toHaveBeenCalled()
+    expect(cacheSize).not.toHaveBeenCalled()
+    expect(createStream).not.toHaveBeenCalled()
+  })
+
   it('rejects every invalid effective range before filesystem or network activity', async () => {
     const { createStream, indexer } = makeIndexer('alpha')
     const { dependencies, ensureFixtureDirectory, cacheSize } = makeDependencies({ alpha: indexer })
