@@ -257,7 +257,10 @@ export function aggregate(records: RunRecord[]): Map<string, Map<string, EngineS
 function ratio(numerator: number, denominator: number): string {
   if (denominator === 0) return '—'
 
-  return `${(numerator / denominator).toFixed(2)}×`
+  const quotient = numerator / denominator
+  if (!Number.isFinite(quotient)) return '—'
+
+  return `${quotient.toFixed(2)}×`
 }
 
 export function renderMarkdown(summary: Map<string, Map<string, EngineSummary>>): string {

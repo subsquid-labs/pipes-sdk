@@ -78,6 +78,18 @@ describe('aggregate', () => {
     })
   })
 
+  it('averages the two middle values for an even run count', () => {
+    const summary = aggregate([
+      record({ rep: 1, wallMs: 1_000 }),
+      record({ rep: 2, wallMs: 3_000 }),
+      record({ engine: 'duckdb', rep: 1, wallMs: 500 }),
+      record({ engine: 'duckdb', rep: 2, wallMs: 700 }),
+    ])
+
+    expect(summary.get('btc-outputs')?.get('parquetjs')?.wallMs).toBe(2_000)
+    expect(summary.get('btc-outputs')?.get('duckdb')?.wallMs).toBe(600)
+  })
+
   it('renders indexers and engines deterministically with ratio rows', () => {
     const markdown = renderMarkdown(
       aggregate([
@@ -116,6 +128,15 @@ describe('aggregate', () => {
 
     expect(markdown).not.toMatch(/(?:Infinity|NaN)×/)
     expect(markdown.split('\n').at(-1)).toContain('| — | — | — | — |')
+  })
+
+  it('renders a safe placeholder when finite inputs produce a non-finite ratio', () => {
+    const markdown = renderMarkdown(
+      aggregate([record({ wallMs: Number.MAX_SAFE_INTEGER }), record({ engine: 'duckdb', wallMs: Number.MIN_VALUE })]),
+    )
+
+    expect(markdown).not.toContain('Infinity×')
+    expect(markdown.split('\n').at(-1)).toContain('| — |')
   })
 
   it.each([
