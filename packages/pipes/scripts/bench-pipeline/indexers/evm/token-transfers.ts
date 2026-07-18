@@ -4,6 +4,7 @@ import * as p from '@subsquid/evm-codec'
 import { type EventResponse, evmEventDecoder, evmPortalStream } from '../../../../src/evm/index.js'
 import type { ParquetTable } from '../../../../src/targets/parquet/index.js'
 import { openCache } from '../../cache.js'
+import { benchLogger } from '../../logger.js'
 import type { BenchIndexer, Row, StreamOptions } from '../../types.js'
 import { ethereum } from './chains.js'
 import { dec, sigEvent } from './shared.js'
@@ -232,7 +233,7 @@ function createStream(opts: StreamOptions = {}) {
   return evmPortalStream({
     id: 'bench-ethereum-token-transfers',
     portal: opts.portal ?? ethereum.portalUrl,
-    logger: 'warn',
+    logger: benchLogger('bench-ethereum-token-transfers'),
     cache: openCache(opts.cachePath),
     // Topic-count checks skip non-matching layouts that share topic0; retain gfs's no-op error observer.
     outputs: evmEventDecoder({ range, events, onError: () => undefined }),

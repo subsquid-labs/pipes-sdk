@@ -1,6 +1,7 @@
 import { type EvmPortalData, evmPortalStream, evmQuery } from '../../../../src/evm/index.js'
 import type { ParquetTable } from '../../../../src/targets/parquet/index.js'
 import { openCache } from '../../cache.js'
+import { benchLogger } from '../../logger.js'
 import type { BenchIndexer, BenchRange, Row, StreamOptions } from '../../types.js'
 import { type EvmChain, ethereum, polygon } from './chains.js'
 import { type EventRegistry, ethereumRegistry, polygonRegistry } from './registry.js'
@@ -142,7 +143,7 @@ function createIndexer(chain: EvmChain, registry: EventRegistry, range: BenchRan
       return evmPortalStream({
         id: `bench-${id}`,
         portal: opts.portal ?? chain.portalUrl,
-        logger: 'warn',
+        logger: benchLogger(`bench-${id}`),
         cache: openCache(opts.cachePath),
         outputs: query,
       }).pipe((blocks) => mapEventDecoder(blocks, registry))
