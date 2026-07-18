@@ -1,3 +1,4 @@
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -8,6 +9,7 @@ import {
   type DelayMonitor,
   type RunOneDependencies,
   type RunOneTargetOptions,
+  inspectParquetOutput,
   isDirectInvocation,
   parseRunOneArgs,
   runOne,
@@ -245,6 +247,16 @@ describe('parseRunOneArgs', () => {
 })
 
 describe('single-cell runner', () => {
+  it('rejects when the real output inspector cannot enumerate the table directory', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'run-one-inspection-'))
+
+    try {
+      await expect(inspectParquetOutput(directory, 'missing')).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
   it('forwards default range/cache/settings and emits the exact one-line metric shape and units', async () => {
     const harness = makeHarness()
 
@@ -296,6 +308,12 @@ describe('single-cell runner', () => {
     expect(harness.intervalUnref).toHaveBeenCalledTimes(1)
     expect(harness.disableDelayMonitor).toHaveBeenCalledTimes(1)
     expect(harness.intervalClear).toHaveBeenCalledTimes(1)
+    expect(harness.disableDelayMonitor.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.inspectOutput.mock.invocationCallOrder[0] ?? 0,
+    )
+    expect(harness.intervalClear.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.inspectOutput.mock.invocationCallOrder[0] ?? 0,
+    )
     expect(harness.removeOutput).toHaveBeenCalledWith('/tmp/bench-alpha-duckdb-test')
   })
 
@@ -381,6 +399,50 @@ describe('single-cell runner', () => {
     expect(harness.disableDelayMonitor).toHaveBeenCalledTimes(1)
     expect(harness.intervalClear).toHaveBeenCalledTimes(1)
     expect(harness.removeOutput).toHaveBeenCalledWith('/tmp/bench-alpha-duckdb-test')
+    expect(harness.output).toEqual([])
+  })
+
+  it('clears the timer and removes temporary output when disabling the delay monitor fails', async () => {
+    const harness = makeHarness()
+    harness.disableDelayMonitor.mockImplementationOnce(() => {
+      throw new Error('delay disable failed')
+    })
+
+    await expect(runOne(['--indexer', 'alpha', '--engine', 'duckdb'], harness.dependencies)).rejects.toThrow(
+      'delay disable failed',
+    )
+    expect(harness.intervalClear).toHaveBeenCalledTimes(1)
+    expect(harness.inspectOutput).not.toHaveBeenCalled()
+    expect(harness.removeOutput).toHaveBeenCalledWith('/tmp/bench-alpha-duckdb-test')
+    expect(harness.output).toEqual([])
+  })
+
+  it('removes temporary output when clearing the RSS timer fails', async () => {
+    const harness = makeHarness()
+    harness.intervalClear.mockImplementationOnce(() => {
+      throw new Error('timer clear failed')
+    })
+
+    await expect(runOne(['--indexer', 'alpha', '--engine', 'duckdb'], harness.dependencies)).rejects.toThrow(
+      'timer clear failed',
+    )
+    expect(harness.disableDelayMonitor).toHaveBeenCalledTimes(1)
+    expect(harness.inspectOutput).not.toHaveBeenCalled()
+    expect(harness.removeOutput).toHaveBeenCalledWith('/tmp/bench-alpha-duckdb-test')
+    expect(harness.output).toEqual([])
+  })
+
+  it('never removes keep-out when monitoring cleanup fails', async () => {
+    const harness = makeHarness()
+    harness.intervalClear.mockImplementationOnce(() => {
+      throw new Error('timer clear failed')
+    })
+
+    await expect(
+      runOne(['--indexer', 'alpha', '--engine', 'duckdb', '--keep-out', '/results/kept'], harness.dependencies),
+    ).rejects.toThrow('timer clear failed')
+    expect(harness.removeOutput).not.toHaveBeenCalled()
+    expect(harness.inspectOutput).not.toHaveBeenCalled()
     expect(harness.output).toEqual([])
   })
 

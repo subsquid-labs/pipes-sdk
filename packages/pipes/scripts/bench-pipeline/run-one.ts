@@ -95,6 +95,18 @@ export type RunOneDependencies = {
   writeOutput(message: string): void
 }
 
+export async function inspectParquetOutput(
+  directory: string,
+  table: string,
+): Promise<{ files: number; bytes: number }> {
+  const tableDirectory = path.join(directory, table)
+  const files = (await readdir(tableDirectory)).filter((file) => file.endsWith('.parquet'))
+  let bytes = 0
+  for (const file of files) bytes += (await stat(path.join(tableDirectory, file))).size
+
+  return { files: files.length, bytes }
+}
+
 const defaultDependencies: RunOneDependencies = {
   indexers,
   createTarget(options) {
@@ -104,16 +116,7 @@ const defaultDependencies: RunOneDependencies = {
   async removeOutput(directory) {
     await rm(directory, { recursive: true, force: true })
   },
-  async inspectOutput(directory, table) {
-    const tableDirectory = path.join(directory, table)
-    const files = (await readdir(tableDirectory).catch(() => [] as string[])).filter((file) =>
-      file.endsWith('.parquet'),
-    )
-    let bytes = 0
-    for (const file of files) bytes += (await stat(path.join(tableDirectory, file))).size
-
-    return { files: files.length, bytes }
-  },
+  inspectOutput: inspectParquetOutput,
   createDelayMonitor() {
     return monitorEventLoopDelay({ resolution: 10 })
   },
@@ -245,8 +248,6 @@ export async function runOne(
     options.keepOut ??
     (await dependencies.createTempDirectory(path.join(tmpdir(), `bench-${indexer.id}-${options.engine}-`)))
 
-  let delayMonitor: DelayMonitor | undefined
-  let rssTimer: RssTimer | undefined
   const result = await (async (): Promise<RunOneResult> => {
     try {
       let rows = 0
@@ -267,27 +268,48 @@ export async function runOne(
         },
       })
 
-      let peakRss = dependencies.rssBytes()
-      const sampleRss = () => {
-        peakRss = Math.max(peakRss, dependencies.rssBytes())
-      }
-      rssTimer = dependencies.scheduleInterval(sampleRss, RSS_SAMPLE_INTERVAL_MS)
-      rssTimer.unref()
-      delayMonitor = dependencies.createDelayMonitor()
-      delayMonitor.enable()
+      const pipeline = await (async () => {
+        let delayMonitor: DelayMonitor | undefined
+        let rssTimer: RssTimer | undefined
 
-      const cpuStart = dependencies.cpuUsage()
-      const eventLoopStart = dependencies.eventLoopUtilization()
-      const wallStart = dependencies.now()
+        try {
+          let peakRss = dependencies.rssBytes()
+          const sampleRss = () => {
+            peakRss = Math.max(peakRss, dependencies.rssBytes())
+          }
+          rssTimer = dependencies.scheduleInterval(sampleRss, RSS_SAMPLE_INTERVAL_MS)
+          rssTimer.unref()
+          delayMonitor = dependencies.createDelayMonitor()
+          delayMonitor.enable()
 
-      await indexer.createStream({ cachePath, range }).pipeTo(target)
+          const cpuStart = dependencies.cpuUsage()
+          const eventLoopStart = dependencies.eventLoopUtilization()
+          const wallStart = dependencies.now()
 
-      const wallMs = dependencies.now() - wallStart
-      const eventLoop = dependencies.eventLoopUtilization(eventLoopStart)
-      const cpu = dependencies.cpuUsage(cpuStart)
-      sampleRss()
-      const maxStallMs = delayMonitor.max / 1e6
-      const p99StallMs = delayMonitor.percentile(99) / 1e6
+          await indexer.createStream({ cachePath, range }).pipeTo(target)
+
+          const wallMs = dependencies.now() - wallStart
+          const eventLoop = dependencies.eventLoopUtilization(eventLoopStart)
+          const cpu = dependencies.cpuUsage(cpuStart)
+          sampleRss()
+
+          return {
+            wallMs,
+            eventLoop,
+            cpu,
+            maxStallMs: delayMonitor.max / 1e6,
+            p99StallMs: delayMonitor.percentile(99) / 1e6,
+            peakRss,
+          }
+        } finally {
+          try {
+            delayMonitor?.disable()
+          } finally {
+            rssTimer?.clear()
+          }
+        }
+      })()
+
       const output = await dependencies.inspectOutput(outputDirectory, indexer.table.table)
 
       return {
@@ -297,27 +319,19 @@ export async function runOne(
         range,
         rows,
         batches,
-        wallMs: Math.round(wallMs),
-        rowsPerSec: wallMs > 0 ? Math.round(rows / (wallMs / 1_000)) : 0,
-        mainThreadMs: Math.round(eventLoop.active),
-        cpuMs: Math.round((cpu.user + cpu.system) / 1_000),
-        maxStallMs: Math.round(maxStallMs),
-        p99StallMs: Math.round(p99StallMs),
-        peakRssMB: Math.round(peakRss / MEBIBYTE),
+        wallMs: Math.round(pipeline.wallMs),
+        rowsPerSec: pipeline.wallMs > 0 ? Math.round(rows / (pipeline.wallMs / 1_000)) : 0,
+        mainThreadMs: Math.round(pipeline.eventLoop.active),
+        cpuMs: Math.round((pipeline.cpu.user + pipeline.cpu.system) / 1_000),
+        maxStallMs: Math.round(pipeline.maxStallMs),
+        p99StallMs: Math.round(pipeline.p99StallMs),
+        peakRssMB: Math.round(pipeline.peakRss / MEBIBYTE),
         files: output.files,
         fileMB: Math.round((output.bytes / MEBIBYTE) * 10) / 10,
         node: dependencies.nodeVersion,
       }
     } finally {
-      try {
-        try {
-          delayMonitor?.disable()
-        } finally {
-          rssTimer?.clear()
-        }
-      } finally {
-        if (isTemporaryOutput) await dependencies.removeOutput(outputDirectory)
-      }
+      if (isTemporaryOutput) await dependencies.removeOutput(outputDirectory)
     }
   })()
 
