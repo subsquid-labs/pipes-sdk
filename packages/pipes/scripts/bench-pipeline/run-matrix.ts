@@ -194,7 +194,17 @@ export function parseChildResult(stdout: string, cell: MatrixCell): RunRecord {
 }
 
 function childArguments(runOnePath: string, cell: MatrixCell): string[] {
-  const args = ['tsx', runOnePath, '--indexer', cell.indexer, '--engine', cell.engine, '--rep', String(cell.rep)]
+  const args = [
+    '--import',
+    'tsx',
+    runOnePath,
+    '--indexer',
+    cell.indexer,
+    '--engine',
+    cell.engine,
+    '--rep',
+    String(cell.rep),
+  ]
   if (cell.range !== undefined) {
     args.push('--from', String(cell.range.from), '--to', String(cell.range.to))
   }
@@ -230,7 +240,7 @@ export async function runMatrix(
 
         let spawned: SpawnResult
         try {
-          spawned = dependencies.spawn('pnpm', childArguments(dependencies.runOnePath, cell))
+          spawned = dependencies.spawn(process.execPath, childArguments(dependencies.runOnePath, cell))
         } catch (error) {
           failures += 1
           dependencies.log(`FAILED: ${indexer} × ${engine} rep ${rep} (spawn: ${errorMessage(error)})`)

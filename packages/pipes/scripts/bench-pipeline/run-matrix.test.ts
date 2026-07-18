@@ -74,6 +74,7 @@ function harness(spawnResults: Array<SpawnResult | Error> = []): Harness {
 
 function childArgs(cell: MatrixCell): string[] {
   return [
+    '--import',
     'tsx',
     '/bench/run-one.ts',
     '--indexer',
@@ -279,7 +280,7 @@ describe('matrix runner', () => {
     expect(testHarness.ensureResultsDirectory).toHaveBeenCalledWith('/tmp/results.jsonl')
     expect(testHarness.spawn).toHaveBeenCalledTimes(8)
     expect(testHarness.spawn.mock.calls.map(([command, args]) => [command, args])).toEqual(
-      cells.map((cell) => ['pnpm', childArgs(cell)]),
+      cells.map((cell) => [process.execPath, childArgs(cell)]),
     )
     expect(testHarness.appendResult.mock.calls).toEqual(
       cells.map((cell) => ['/tmp/results.jsonl', `${JSON.stringify(record(cell))}\n`]),
