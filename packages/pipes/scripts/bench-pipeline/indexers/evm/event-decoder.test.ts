@@ -60,12 +60,36 @@ describe('evm event-decoder', () => {
     expect(row['removed']).toBe(false)
   })
 
-  it('emits empty signature and null args for unmatched logs', () => {
+  it('retains registered-address protocol metadata for an unmatched log', () => {
     const [row] = mapEventDecoder(
       [
         {
           header: HEADER,
           logs: [{ ...TRANSFER_LOG, topics: ['0x1111111111111111111111111111111111111111111111111111111111111111'] }],
+          transactions: [TX],
+        },
+      ],
+      ethereumRegistry,
+    )
+
+    expect(row['event_signature']).toBe('')
+    expect(row['args']).toBeNull()
+    expect(row['named_args']).toBeNull()
+    expect(row['protocol']).toBe('USDC')
+  })
+
+  it('emits empty protocol metadata for an unmatched log at an unregistered address', () => {
+    const [row] = mapEventDecoder(
+      [
+        {
+          header: HEADER,
+          logs: [
+            {
+              ...TRANSFER_LOG,
+              address: '0xUnregistered',
+              topics: ['0x1111111111111111111111111111111111111111111111111111111111111111'],
+            },
+          ],
           transactions: [TX],
         },
       ],

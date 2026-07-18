@@ -88,7 +88,7 @@ export function mapEventDecoder(blocks: EventDecoderBlock[], registry: EventRegi
       const address = (log.address ?? '').toLowerCase()
       const topics = log.topics ?? []
       const decoded = registry.decodeEvent(address, topics, log.data ?? '0x')
-      const protocol = decoded ? (registry.lookupProtocol(address) ?? decoded.protocol ?? '') : ''
+      const protocol = registry.lookupProtocol(address) ?? decoded?.protocol ?? ''
       const transaction = transactionByIndex.get(log.transactionIndex)
 
       rows.push({
