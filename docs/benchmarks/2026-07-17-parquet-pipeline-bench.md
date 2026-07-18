@@ -1,13 +1,14 @@
 # Full-pipeline Parquet benchmark: DuckDB vs @dsnp/parquetjs
 
-**Date:** 2026-07-17–18 · **Branch:** `worktree-parquet-duckdb-engine` · **Benchmark source:** `c478d4d` plus the Task 17 launcher-only fix described below
+**Measured runtime code:** reviewed base through `c478d4d`, stderr logger commit `858b6c2`, and the matrix launcher patch later committed in `1e669d5`; `dd7c424` is documentation-only and is not measured runtime code
+**Date:** 2026-07-17–18 · **Branch:** `worktree-parquet-duckdb-engine`
 **Versions:** `@subsquid/pipes 1.0.0-alpha.16`, `@duckdb/node-api 1.5.4-r.1`, `@dsnp/parquetjs 1.8.7`, Node v22.23.1, pnpm 10.17.0
 **Machine:** MacBook Pro (Mac14,9), Apple M2 Pro (10 cores: 6 performance + 4 efficiency), 16 GB, macOS 26.1 (Darwin 25.1.0), arm64
 **Harness:** `packages/pipes/scripts/bench-pipeline/` · 96 clean timed cells, 0 failures
 
 ## Verdict
 
-- DuckDB was more than 5% faster end to end on 11 of 16 pipelines and essentially tied (within 1%) on `btc-blocks` and `polygon-blocks`. The largest gains were `ethereum-transactions` at **1.92× wall / 2.26× main-thread**, `ethereum-receipts` at **1.79× / 2.19×**, and `polygon-receipts` at **1.60× / 2.01×**.
+- DuckDB was more than 5% faster end to end on 11 of 16 pipelines and essentially tied at about 1% (within 1.5%) on `btc-blocks` and `polygon-blocks`. The largest gains were `ethereum-transactions` at **1.92× wall / 2.26× main-thread**, `ethereum-receipts` at **1.79× / 2.19×**, and `polygon-receipts` at **1.60× / 2.01×**.
 - The BTC result is mixed and smaller than the isolated-writer result: `btc-inputs` gained **1.12× wall / 1.14× main-thread** and `btc-outputs` gained **1.08× / 1.10×**, while nested `btc-transactions` regressed to **0.94× / 0.96×** and `btc-blocks` was flat.
 - Nested shape is a warning, not a universal verdict. DuckDB's clearest loss was the STRUCT-heavy `ethereum-traces` pipeline at **0.62× wall / 0.61× main-thread** (8.8 s vs 5.5 s wall), while the dual-representation STRUCTs in `polygon-transactions` still gained **1.26× / 1.39×**.
 - DuckDB used more peak RSS on 11 of 16 pipelines. The largest relative increases were `polygon-event-decoder` (1,216 vs 671 MiB, +81%) and `polygon-logs` (987 vs 561 MiB, +76%); conversely it used less RSS for the two large nested transaction pipelines (`btc-transactions`, 1,421 vs 1,799 MiB; `polygon-transactions`, 966 vs 1,358 MiB). DuckDB produced a smaller file on 15 pipelines and tied `btc-blocks` at the table's 0.1 MiB resolution.
@@ -49,7 +50,7 @@ The initial recorder process printed `0.0 MiB` for the two smallest block-only c
 ### Intentional divergences from gfs
 
 1. Mappers emit final parquet-ready values directly (decimal strings for NUMERIC and milliseconds for TIMESTAMP), rather than gfs's two-stage map-then-encode path.
-2. The event-decoder registry is a representative subset of roughly 19 canonical signatures and roughly 15 protocols per chain, not the 219-registration gfs file.
+2. The event-decoder registry is a representative subset of exactly 19 canonical signatures, 15 Ethereum address registrations, and 10 Polygon address registrations, not the 219-registration gfs file.
 3. `decodeScript` approximates gfs address extraction with `bitcoinjs-lib` payment builders, preserving the same library and per-script attempt class rather than reproducing every gfs classifier detail.
 4. The benchmark has no BigQuery, GCS, or validation stages; it measures the Parquet backfill path only.
 
@@ -57,7 +58,7 @@ The initial recorder process printed `0.0 MiB` for the two smallest block-only c
 
 The first parity attempt exposed a harness-launch defect: `run-matrix.ts` spawned a bare `pnpm`, but the required Node 22/Corepack environment did not provide a standalone child-process shim. A test-first launcher-only fix changed children to the current Node executable with `--import tsx`; the focused test moved from one expected failure to 41/41 passing. The subsequent clean parity matrix contained exactly 32 validated records.
 
-An initial timed attempt was discarded in full after its line-count gate found 115 records: the file contained a second interleaved prefix through cell 19. No records were trimmed or selected. After confirming that no benchmark process remained, the entire results file was deleted and all 96 cells were rerun through one continuously polled process session. Only that clean rerun is reported below.
+An initial timed attempt was discarded in full after its line-count gate found 115 records: a separate concurrent external Claude benchmark process had appended an interleaved duplicate prefix through cell 19 to the same results file. No records were trimmed or selected. After confirming that no benchmark process remained, the entire results file was deleted and all 96 cells were rerun with one matrix process through one continuously polled execution session. Only that clean rerun is reported below.
 
 ## Results
 
