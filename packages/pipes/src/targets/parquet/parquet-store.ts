@@ -2,16 +2,12 @@ import path from 'node:path'
 
 import { type BlockCursor, type Finalization, type FinalizationBuffer, finalizationBuffer } from '~/core/index.js'
 
-import type { ParquetDuckdbSettings } from './duckdb-engine.js'
-import { duckdbEngine } from './duckdb-writer.js'
-import type { ParquetTableWriter } from './engine.js'
+import type { ParquetEngine, ParquetTableWriter } from './engine.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
-import { parquetjsEngine } from './parquetjs-writer.js'
 import {
   type Codec,
   type ParquetColumn,
   type ParquetColumns,
-  type ParquetEngine,
   type ParquetLeafType,
   type ParquetTable,
   blockColumnOf,
@@ -60,7 +56,6 @@ export class ParquetStore {
   readonly #staged = new Map<string, Row[]>()
   // The current open segment per table — at most one. Reset (published/discarded) at checkpoints.
   readonly #writers = new Map<string, SegmentWriter>()
-  readonly #engine: ParquetEngine
   // Per-cell type checking is a hot-path cost, so it only runs outside production.
   readonly #validateValues = process.env.NODE_ENV !== 'production'
 
@@ -69,12 +64,8 @@ export class ParquetStore {
     tables: ParquetTable[]
     rowGroupSize: number
     defaultCodec: Codec
-    engine?: ParquetEngine
-    duckdb?: ParquetDuckdbSettings
+    engine: ParquetEngine
   }) {
-    this.#engine = options.engine ?? 'parquetjs'
-
-    const engine = this.#engine === 'duckdb' ? duckdbEngine(options.duckdb) : parquetjsEngine()
     for (const table of options.tables) {
       const blockColumn = blockColumnOf(table)
       const getBlockNumber = (row: Row): number => readBlockNumber(table.table, blockColumn, row)
@@ -84,7 +75,11 @@ export class ParquetStore {
         getBlockNumber,
         columns: table.schema,
         dir,
-        tableWriter: engine.table(table, { dir, rowGroupSize: options.rowGroupSize, codec: options.defaultCodec }),
+        tableWriter: options.engine.table(table, {
+          dir,
+          rowGroupSize: options.rowGroupSize,
+          codec: options.defaultCodec,
+        }),
       })
       this.#buffers.set(table.table, finalizationBuffer<Row>({ getBlockNumber }))
     }

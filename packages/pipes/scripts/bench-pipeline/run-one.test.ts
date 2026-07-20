@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 
 import { describe, expect, it, vi } from 'vitest'
 
+import type { DuckdbEngine } from '../../src/targets/parquet/index.js'
 import {
   type DelayMonitor,
   type RunOneDependencies,
@@ -271,12 +272,12 @@ describe('single-cell runner', () => {
     expect(targetOptions).toBeDefined()
     expect(targetOptions?.dir).toBe('/tmp/bench-alpha-duckdb-test')
     expect(targetOptions?.tables).toEqual([harness.table])
-    expect(targetOptions?.settings).toEqual({
-      rollover: { maxBytes: 128 * MEBIBYTE },
-      compression: 'SNAPPY',
-      engine: 'duckdb',
-      duckdb: { threads: 2 },
-    })
+    const settings = targetOptions?.settings
+    expect(settings?.rollover).toEqual({ maxBytes: 128 * MEBIBYTE })
+    expect(settings?.compression).toBe('SNAPPY')
+    const engine = settings?.engine as DuckdbEngine
+    expect(engine.name).toBe('duckdb')
+    expect(engine.settings).toEqual({ threads: 2, memoryLimit: '2GB' })
     expect(harness.insert).toHaveBeenNthCalledWith(1, 'rows', [{ block_number: 10 }, { block_number: 11 }])
     expect(harness.insert).toHaveBeenNthCalledWith(2, 'rows', [])
     expect(harness.insert).toHaveBeenNthCalledWith(3, 'rows', [{ block_number: 12 }])
@@ -348,7 +349,8 @@ describe('single-cell runner', () => {
       range: { from: 0, to: 0 },
     })
     expect(harness.createTarget.mock.calls[0]?.[0].dir).toBe('/results/kept')
-    expect(harness.createTarget.mock.calls[0]?.[0].settings.duckdb).toEqual({ threads: 6 })
+    const engine = harness.createTarget.mock.calls[0]?.[0].settings.engine as DuckdbEngine
+    expect(engine.settings).toEqual({ threads: 6, memoryLimit: '2GB' })
     expect(harness.removeOutput).not.toHaveBeenCalled()
     const result = JSON.parse(harness.output[0] ?? '{}') as Record<string, unknown>
     expect(result['rep']).toBe(7)
@@ -360,7 +362,7 @@ describe('single-cell runner', () => {
 
     await runOne(['--indexer', 'alpha', '--engine', 'parquetjs'], harness.dependencies)
 
-    expect(harness.createTarget.mock.calls[0]?.[0].settings.duckdb).toBeUndefined()
+    expect(harness.createTarget.mock.calls[0]?.[0].settings.engine).toBe('parquetjs')
   })
 
   it.each([

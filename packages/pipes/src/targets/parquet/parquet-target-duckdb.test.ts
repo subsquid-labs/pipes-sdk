@@ -10,8 +10,10 @@ import { type MockPortal, type MockResponse, blockDecoder, mockPortal } from '~/
 
 import { acquireDuckdbInstance } from './duckdb-engine.js'
 import { escapeSqlString } from './duckdb-schema.js'
+import { duckdbEngine } from './duckdb-writer.js'
+import type { ParquetSettings } from './parquet-target.js'
 import { parquetTarget } from './parquet-target.js'
-import type { ParquetEngine, ParquetTable } from './schema.js'
+import type { ParquetTable } from './schema.js'
 
 const BLOCKS_TABLE: ParquetTable = {
   table: 'blocks',
@@ -72,7 +74,11 @@ async function listDataFiles(dir: string, table: string): Promise<string[]> {
 }
 
 /** Runs one pipe over the given responses into `dir/sink` with the requested engine. */
-async function runSinkPipe(dir: string, engine: ParquetEngine, portal: MockPortal): Promise<void> {
+async function runSinkPipe(
+  dir: string,
+  engine: NonNullable<ParquetSettings['engine']>,
+  portal: MockPortal,
+): Promise<void> {
   await evmPortalStream({ id: 'test', portal: portal.url, outputs: blockDecoder({ from: 0, to: 2 }) }).pipeTo(
     parquetTarget({
       dir,
@@ -242,6 +248,18 @@ describe('parquetTarget engine: duckdb', () => {
     } finally {
       connection.disconnectSync()
     }
+  })
+
+  it('accepts a duckdbEngine() instance and produces the same files as the string form', async () => {
+    portal = await mockPortal([blocksResponse([1, 2, 3], 3)])
+    portalB = await mockPortal([blocksResponse([1, 2, 3], 3)])
+    const stringDir = path.join(dir, 'string')
+    const instanceDir = path.join(dir, 'instance')
+
+    await runSinkPipe(stringDir, 'duckdb', portal)
+    await runSinkPipe(instanceDir, duckdbEngine(), portalB)
+
+    expect(await listDataFiles(instanceDir, 'sink')).toEqual(await listDataFiles(stringDir, 'sink'))
   })
 
   it('discards open temp files, leaks no staging table and never advances the cursor when a batch throws', async () => {

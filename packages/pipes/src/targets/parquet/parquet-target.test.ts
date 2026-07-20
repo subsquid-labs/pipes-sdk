@@ -173,7 +173,7 @@ describe('parquetTarget', () => {
           settings: { engine: 'polars' as never },
           onData: () => {},
         }),
-      ).toThrowError(/Unknown parquet engine 'polars'/)
+      ).toThrowError(/settings\.engine must be 'parquetjs' \(default\), 'duckdb', or a ParquetEngine/)
     })
 
     it('rejects per-column compression under the duckdb engine (one file-level codec only)', () => {

@@ -1,3 +1,6 @@
+import { duckdbEngine } from './duckdb-writer.js'
+import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
+import { parquetjsEngine } from './parquetjs-writer.js'
 import type { Codec, ParquetTable } from './schema.js'
 import type { SegmentWriter } from './segment.js'
 
@@ -46,4 +49,31 @@ export interface ParquetEngine {
    * declarations this engine cannot honor) and return the table's segment-writer factory.
    */
   table(table: ParquetTable, context: ParquetTableContext): ParquetTableWriter
+}
+
+/** Names of the engines shipped with the SDK, accepted as `settings.engine` shorthand. */
+export type ParquetEngineName = 'parquetjs' | 'duckdb'
+
+/**
+ * Resolves `settings.engine` to a {@link ParquetEngine}: `undefined` → the default parquetjs
+ * engine, a built-in name → that engine with default settings, an instance → itself. Rejects
+ * anything else at construction with `ENGINE_INVALID`.
+ */
+export function resolveEngine(engine: ParquetEngine | ParquetEngineName | undefined): ParquetEngine {
+  if (engine === undefined || engine === 'parquetjs') return parquetjsEngine()
+  if (engine === 'duckdb') return duckdbEngine()
+  if (
+    typeof engine === 'object' &&
+    engine !== null &&
+    typeof engine.table === 'function' &&
+    typeof engine.name === 'string'
+  ) {
+    return engine
+  }
+
+  throw new ParquetTargetError(
+    PARQUET_ERROR_CODES.ENGINE_INVALID,
+    `parquetTarget: settings.engine must be 'parquetjs' (default), 'duckdb', or a ParquetEngine ` +
+      `implementation ({ name, table() }), got ${typeof engine === 'string' ? `'${engine}'` : typeof engine}.`,
+  )
 }

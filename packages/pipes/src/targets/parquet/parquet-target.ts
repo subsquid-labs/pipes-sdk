@@ -12,11 +12,10 @@ import {
   humanBytes,
 } from '~/core/index.js'
 
-import type { ParquetDuckdbSettings } from './duckdb-engine.js'
-import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
+import { type ParquetEngine, type ParquetEngineName, resolveEngine } from './engine.js'
 import { ParquetState } from './parquet-state.js'
 import { ParquetStore } from './parquet-store.js'
-import { type Codec, type ParquetEngine, type ParquetTable, validateTables } from './schema.js'
+import { type Codec, type ParquetTable, validateTables } from './schema.js'
 
 /** Default rollover byte size — 128 MiB is a good Parquet file size for data-lake query engines. */
 const DEFAULT_MAX_BYTES = 128 * 1024 * 1024
@@ -42,16 +41,16 @@ export type ParquetSettings = {
   /** Default per-column compression. Default `'SNAPPY'`. */
   compression?: Codec
   /**
-   * Segment writer engine — see {@link ParquetEngine}. Default `'parquetjs'`. The `'duckdb'`
-   * engine produces value-identical files with slightly different footer metadata (every
-   * field is written OPTIONAL, integer columns gain INT_64/INT_32 annotations, and timestamps
+   * Segment writer engine. `'parquetjs'` (default) and `'duckdb'` select the built-in engines
+   * with default settings; pass an engine instance — `parquetjsEngine()`, `duckdbEngine({...})`,
+   * or any own {@link ParquetEngine} implementation — to tune or extend. The `'duckdb'` engine
+   * produces value-identical files with slightly different footer metadata (every field is
+   * written OPTIONAL, integer columns gain INT_64/INT_32 annotations, and timestamps
    * additionally carry a modern `isAdjustedToUTC=false` logical type next to the same legacy
-   * TIMESTAMP_MILLIS annotation). Byte-based rotation becomes an estimate calibrated from
+   * TIMESTAMP_MILLIS annotation). Its byte-based rotation is an estimate calibrated from
    * previously published segments; row/interval rollovers stay exact.
    */
-  engine?: ParquetEngine
-  /** DuckDB engine tuning; ignored under the default engine. */
-  duckdb?: ParquetDuckdbSettings
+  engine?: ParquetEngine | ParquetEngineName
   /**
    * Namespace for the state file, so multiple pipes can share one `dir`. Defaults to the
    * pipe's source `id`; set explicitly only to pin the state file independent of the source id.
@@ -120,13 +119,9 @@ export function parquetTarget<T>(options: {
 
   validateTables(tables)
 
-  const engine = settings.engine ?? 'parquetjs'
-  if (engine !== 'parquetjs' && engine !== 'duckdb') {
-    throw new ParquetTargetError(
-      PARQUET_ERROR_CODES.ENGINE_INVALID,
-      `parquetTarget: Unknown parquet engine '${engine}'. Supported engines: 'parquetjs' (default), 'duckdb'.`,
-    )
-  }
+  // Resolving the engine (and, inside the store constructor, its per-table capability checks)
+  // runs at construction, so config mistakes surface at startup, not deep in the first batch.
+  const engine = resolveEngine(settings.engine)
 
   const rowGroupSize = settings.rowGroupSize ?? DEFAULT_ROW_GROUP_SIZE
   const defaultCodec = settings.compression ?? DEFAULT_CODEC
@@ -134,7 +129,7 @@ export function parquetTarget<T>(options: {
   const maxBytes = settings.rollover?.maxBytes ?? DEFAULT_MAX_BYTES
   const { maxRows, intervalMs, intervalBlocks } = settings.rollover ?? {}
 
-  const store = new ParquetStore({ dir, tables, rowGroupSize, defaultCodec, engine, duckdb: settings.duckdb })
+  const store = new ParquetStore({ dir, tables, rowGroupSize, defaultCodec, engine })
 
   return createTarget<T>({
     write: async ({ read, logger, id }) => {
