@@ -42,11 +42,6 @@ type Notification = {
 }
 
 class SolanaRpcLatencyWatcher extends RpcLatencyWatcher {
-  constructor(rpcUrl: string | string[]) {
-    super(rpcUrl)
-    this.attach()
-  }
-
   watch(url: string) {
     const listener = new WebSocketListener(url)
 

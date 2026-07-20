@@ -28,6 +28,7 @@ describe('BitcoinRpcLatencyWatcher', () => {
     })
 
     watcher = new BitcoinRpcLatencyWatcher([mock.url], 25)
+    watcher.start()
 
     await vi.waitFor(
       () => {
@@ -70,6 +71,7 @@ describe('BitcoinRpcLatencyWatcher', () => {
     })
 
     watcher = new BitcoinRpcLatencyWatcher([mock.url], 25)
+    watcher.start()
 
     await vi.waitFor(
       () => {
@@ -91,6 +93,7 @@ describe('BitcoinRpcLatencyWatcher', () => {
     const authedUrl = mock.url.replace('http://', `http://${credentials}@`)
 
     watcher = new BitcoinRpcLatencyWatcher([authedUrl], 25)
+    watcher.start()
 
     await vi.waitFor(
       () => {
@@ -132,6 +135,7 @@ describe('BitcoinRpcLatencyWatcher', () => {
     // Short interval + short timeout ⇒ the loop must abort the in-flight
     // request after `requestTimeoutMs` and start a new tick after `intervalMs`.
     watcher = new BitcoinRpcLatencyWatcher([mock.url], 100, 30)
+    watcher.start()
 
     await vi.waitFor(
       () => {
