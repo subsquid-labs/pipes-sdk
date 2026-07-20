@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'v
 
 import { PortalRange, QueryAwareTransformer } from '~/core/index.js'
 import { encodeEvent, mockBlock, mockEvmPortalStream, resetMockBlockCounter } from '~/testing/evm/index.js'
-import { MockPortal, MockResponse, mockPortal, readAll, testLogger } from '~/testing/index.js'
+import { MockPortal, MockResponse, mockMetricsServer, mockPortal, readAll, testLogger } from '~/testing/index.js'
 
 import { commonAbis } from './abi/common.js'
 import {
@@ -1260,5 +1260,272 @@ describe('evmEventDecoder multi-output isolation', () => {
     expect(decoderB).toHaveLength(1)
     expect(decoderB[0].contract).toBe(CONTRACT_B)
     expect(decoderB[0].event.value).toBe(200n)
+  })
+})
+
+describe('evmEventDecoder decode errors', () => {
+  const CONTRACT = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
+  const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+  const FROM = '0x0000000000000000000000007a250d5630b4cf539739df2c5dacb4c659f2488d'
+  const TO = '0x000000000000000000000000c82e11e709deb68f3631fc165ebd8b4e3fc3d18f'
+
+  let portal: MockPortal
+
+  beforeEach(async () => {
+    // A decodable Transfer followed by one that passes topic routing but has empty
+    // data — `value` (uint256) cannot be read, so `decode` throws.
+    portal = await mockPortal([
+      {
+        statusCode: 200,
+        data: [
+          {
+            header: { number: 1, hash: '0x1', timestamp: 2000 },
+            logs: [
+              {
+                address: CONTRACT,
+                topics: [TRANSFER_TOPIC, FROM, TO],
+                logIndex: 0,
+                transactionIndex: 0,
+                transactionHash: '0xdeadbeef',
+                data: '0x000000000000000000000000000000000000000000000000013737bc62530000',
+              },
+              {
+                address: CONTRACT,
+                topics: [TRANSFER_TOPIC, FROM, TO],
+                logIndex: 1,
+                transactionIndex: 1,
+                transactionHash: '0xdeadbeef',
+                data: '0x',
+              },
+            ],
+          },
+        ],
+      },
+    ])
+  })
+
+  afterEach(async () => {
+    await portal?.close()
+  })
+
+  function stream(metrics: ReturnType<typeof mockMetricsServer>, onError?: (ctx: any, error: any) => unknown) {
+    return evmPortalStream({
+      id: 'test',
+      portal: portal.url,
+      logger: false,
+      metrics: metrics.server,
+      outputs: evmEventDecoder({
+        range: { from: 0, to: 1 },
+        events: { transfers: commonAbis.erc20.events.Transfer },
+        onError,
+      }).pipe((e) => e.transfers),
+    })
+  }
+
+  it('is fatal by default — no hook re-throws the decode error', async () => {
+    const metrics = mockMetricsServer()
+
+    await expect(readAll(stream(metrics))).rejects.toThrow(/decod/i)
+    expect(metrics.counter('sqd_decode_errors_skipped_total')).toBeUndefined()
+  })
+
+  it('a returning hook suppresses the record and counts the skip', async () => {
+    const metrics = mockMetricsServer()
+    const seen: any[] = []
+
+    const res = await readAll(stream(metrics, (_ctx, error) => seen.push(error)))
+
+    expect(res).toHaveLength(1)
+    expect(res[0].event.value).toBe(87600000000000000n)
+    expect(seen).toHaveLength(1)
+
+    const skipped = metrics.counter('sqd_decode_errors_skipped_total')
+    expect(skipped.total).toBe(1)
+    expect(skipped.calls[0].labels).toEqual({ id: 'test' })
+  })
+
+  it('a re-throwing hook stays fatal and records no skip', async () => {
+    const metrics = mockMetricsServer()
+
+    await expect(
+      readAll(
+        stream(metrics, (_ctx, error) => {
+          throw error
+        }),
+      ),
+    ).rejects.toThrow(/decod/i)
+    expect(metrics.counter('sqd_decode_errors_skipped_total')).toBeUndefined()
+  })
+})
+
+describe('evmEventDecoder factory decode errors', () => {
+  const UNISWAP_FACTORY = '0x1f98431c8ad98523631ae4a59f267346ea31f984'
+  const POOL = '0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8'
+  const WETH = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'
+  const USDC = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+  const SENDER = '0xdef1cafe0000000000000000000000000000dead'
+  const RECIPIENT = '0xbeef0000000000000000000000000000deadbeef'
+
+  const POOL_CREATED_ABI = [
+    {
+      type: 'event' as const,
+      name: 'PoolCreated',
+      inputs: [
+        { name: 'token0', type: 'address', indexed: true },
+        { name: 'token1', type: 'address', indexed: true },
+        { name: 'fee', type: 'uint24', indexed: true },
+        { name: 'tickSpacing', type: 'int24', indexed: false },
+        { name: 'pool', type: 'address', indexed: false },
+      ],
+    },
+  ] as const
+
+  const SWAP_ABI = [
+    {
+      type: 'event' as const,
+      name: 'Swap',
+      inputs: [
+        { name: 'sender', type: 'address', indexed: true },
+        { name: 'recipient', type: 'address', indexed: true },
+        { name: 'amount0', type: 'int256', indexed: false },
+        { name: 'amount1', type: 'int256', indexed: false },
+        { name: 'sqrtPriceX96', type: 'uint160', indexed: false },
+        { name: 'liquidity', type: 'uint128', indexed: false },
+        { name: 'tick', type: 'int24', indexed: false },
+      ],
+    },
+  ] as const
+
+  const factoryPoolCreated = event(
+    '0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118',
+    'PoolCreated(address,address,uint24,int24,address)',
+    {
+      token0: indexed(p.address),
+      token1: indexed(p.address),
+      fee: indexed(p.uint24),
+      tickSpacing: p.int24,
+      pool: p.address,
+    },
+  )
+
+  const poolSwap = event(
+    '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67',
+    'Swap(address,address,int256,int256,uint160,uint128,int24)',
+    {
+      sender: indexed(p.address),
+      recipient: indexed(p.address),
+      amount0: p.int256,
+      amount1: p.int256,
+      sqrtPriceX96: p.uint160,
+      liquidity: p.uint128,
+      tick: p.int24,
+    },
+  )
+
+  function encodePoolCreated(pool: string) {
+    return encodeEvent({
+      abi: POOL_CREATED_ABI,
+      eventName: 'PoolCreated',
+      address: UNISWAP_FACTORY,
+      args: { token0: WETH, token1: USDC, fee: 3000, tickSpacing: 10, pool: pool as `0x${string}` },
+    })
+  }
+
+  function encodeSwap(address: string) {
+    return encodeEvent({
+      abi: SWAP_ABI,
+      eventName: 'Swap',
+      address: address as `0x${string}`,
+      args: {
+        sender: SENDER,
+        recipient: RECIPIENT,
+        amount0: 1n,
+        amount1: 2n,
+        sqrtPriceX96: 3n,
+        liquidity: 4n,
+        tick: 5,
+      },
+    })
+  }
+
+  let portal: MockPortal
+
+  beforeEach(async () => {
+    resetMockBlockCounter()
+
+    // A decodable PoolCreated (registers the child pool) followed by one that keeps the
+    // PoolCreated topics — so `isFactoryEvent` routes it — but carries empty data, so the
+    // factory `decode` throws. A sibling Swap from the registered pool must still survive.
+    portal = await mockEvmPortalStream({
+      blocks: [
+        mockBlock({
+          number: 1,
+          transactions: [
+            { logs: [encodePoolCreated(POOL), { ...encodePoolCreated(POOL), data: '0x' }, encodeSwap(POOL)] },
+          ],
+        }),
+      ],
+    })
+  })
+
+  afterEach(async () => {
+    await portal?.close()
+  })
+
+  function stream(metrics: ReturnType<typeof mockMetricsServer>, onError?: (ctx: any, error: any) => unknown) {
+    const poolFactory = contractFactory({
+      address: UNISWAP_FACTORY,
+      event: factoryPoolCreated,
+      childAddressField: 'pool',
+      database: contractFactorySqliteStore({ path: ':memory:' }),
+    })
+
+    return evmPortalStream({
+      id: 'test',
+      portal: portal.url,
+      logger: false,
+      metrics: metrics.server,
+      outputs: evmEventDecoder({
+        range: { from: 0, to: 1 },
+        contracts: poolFactory,
+        events: { swaps: poolSwap },
+        onError,
+      }).pipe((e) => e.swaps),
+    })
+  }
+
+  it('is fatal by default — a malformed factory event re-throws', async () => {
+    const metrics = mockMetricsServer()
+
+    await expect(readAll(stream(metrics))).rejects.toThrow(/decod/i)
+    expect(metrics.counter('sqd_decode_errors_skipped_total')).toBeUndefined()
+  })
+
+  it('a returning hook suppresses the factory event and keeps decoding siblings', async () => {
+    const metrics = mockMetricsServer()
+    const seen: any[] = []
+
+    const res = await readAll(stream(metrics, (_ctx, error) => seen.push(error)))
+
+    expect(res).toHaveLength(1)
+    expect(res[0].contract).toBe(POOL)
+    expect(seen).toHaveLength(1)
+
+    const skipped = metrics.counter('sqd_decode_errors_skipped_total')
+    expect(skipped.total).toBe(1)
+    expect(skipped.calls[0].labels).toEqual({ id: 'test' })
+  })
+
+  it('a re-throwing hook stays fatal and records no skip', async () => {
+    const metrics = mockMetricsServer()
+
+    await expect(
+      readAll(
+        stream(metrics, (_ctx, error) => {
+          throw error
+        }),
+      ),
+    ).rejects.toThrow(/decod/i)
+    expect(metrics.counter('sqd_decode_errors_skipped_total')).toBeUndefined()
   })
 })

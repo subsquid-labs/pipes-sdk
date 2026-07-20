@@ -1,4 +1,11 @@
-import { BatchContext, PortalRange, ProfilerOptions, parsePortalRange } from '~/core/index.js'
+import {
+  DecodeErrorHook,
+  PortalRange,
+  ProfilerOptions,
+  defaultDecodeError,
+  parsePortalRange,
+  recordSuppressedDecode,
+} from '~/core/index.js'
 import { arrayify } from '~/internal/array.js'
 import { FieldSelection, Instruction, TokenBalance, Transaction } from '~/portal-client/query/solana.js'
 
@@ -69,22 +76,18 @@ export type EventResponse<T extends Instructions> = {
   [K in keyof T]: AbiDecodeInstruction<T[K]>[]
 }
 
-const defaultError = (ctx: BatchContext, error: any) => {
-  throw error
-}
-
 type DecodedEventPipeArgs<T extends Instructions> = {
   range: PortalRange
   programId: string | string[]
   instructions: InstructionsArgs<T>
   profiler?: ProfilerOptions
-  onError?: (ctx: BatchContext, error: any) => unknown | Promise<unknown>
+  onError?: DecodeErrorHook
 }
 
 export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEventPipeArgs<T>) {
   const range = parsePortalRange(opts.range)
   const programId = arrayify(opts.programId)
-  const onError = opts.onError || defaultError
+  const onError = opts.onError || defaultDecodeError
 
   const query = solanaQuery().addFields(decodedEventFields)
 
@@ -226,6 +229,7 @@ export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEv
               result[eventName as keyof T].push(res as any)
             } catch (error) {
               await onError(ctx, error)
+              recordSuppressedDecode(ctx)
             }
           }
         }

@@ -109,11 +109,12 @@ collections read as empty collections, unselected fields are absent (INV-23).
 normalization, discriminator match) and drop portal over-returns silently; a record
 matching no declared output is not an error.
 
-**WP-23 — Decode-error policy.** [MUST] Each network module declares one of: *fatal*
-(decode failure halts the pipe; hook observes only) or *skip-with-hook* (hook may
-suppress; suppressed records are skipped and counted). The declared policy is part of
-the module's conformance surface. *(Current modules disagree with each other, and
-neither counts suppressed records — GAP-1; unification is OQ-1/ADR-12.)*
+**WP-23 — Decode-error policy.** [MUST] One uniform rule across every network module
+(ADR-12): a decode failure is *fatal by default* (it halts the pipe). A user-supplied
+`onError` hook that returns without throwing *suppresses* the offending record; the hook
+re-throwing keeps the failure fatal. Suppressed records are skipped and counted in
+`sqd_decode_errors_skipped_total`, labelled by pipe id (INV-31). The hook shape and these
+semantics are part of the shared conformance surface.
 
 **WP-24 — Attribution uniqueness.** [MUST] Within one module, each input record maps to
 at most one output key. Declaring two outputs with an indistinguishable signature is

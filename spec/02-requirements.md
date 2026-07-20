@@ -142,7 +142,6 @@ Deliberately left open — conformance tests MUST NOT pin these:
 
 | # | Question | Owner |
 |---|---|---|
-| OQ-1 | Should decode-error hooks be observe-only or suppression hooks? Two current behaviors conflict (GAP-1, ADR-12 proposed). | SDK team |
 | OQ-2 | Defined behavior for a fork reaching below the finalized floor (currently a coded fatal; is halt the intent?) — GAP-6. | SDK team |
 | OQ-3 | Are append-lagged sinks (CN-13) allowed to keep the repair hook optional, or does REQ-3 force it mandatory? (GAP-3, ADR-15 proposed). | SDK team |
 | OQ-4 | SLO targets for SLI-1…SLI-7 are unratified (⚠ in 15-parameters). | SDK team |
