@@ -261,11 +261,13 @@ function createPortalStream<Q extends Query>(
 
   let { fromBlock = 0, toBlock, parentBlockHash } = query
 
+  // Outside the loop: a response carrying no blocks hands its counters to no batch, so they must
+  // survive into the next iteration.
+  let requests: Record<number, number> = {}
+
   const ingest = async () => {
     while (!buffer.signal.aborted) {
       if (toBlock != null && fromBlock > toBlock) break
-
-      let requests: Record<number, number> = {}
 
       const res = await requestStream(
         {
@@ -291,6 +293,7 @@ function createPortalStream<Q extends Query>(
           meta: { bytes: 0, requestedFromBlock: fromBlock, lastBlockReceivedAt: new Date(), requests },
           head: res.head,
         })
+        requests = {}
         buffer.flush()
         if (headPollInterval > 0) {
           await wait(headPollInterval, buffer.signal)
@@ -330,29 +333,37 @@ function createPortalStream<Q extends Query>(
 
           const finalizedHead = res.head.finalized?.number
 
-          // Split blocks into finalized and unfinalized
-          const [finalizedBlocks, unfinalizedBlocks] = finalizedHead
-            ? partition(blocks, ({ block }) => block.header?.number <= finalizedHead)
-            : [blocks, []]
+          // `!= null`: a head of 0 is real, and reading it as absent files every hot block as finalized.
+          const [finalizedBlocks, unfinalizedBlocks] =
+            finalizedHead != null
+              ? partition(blocks, ({ block }) => block.header?.number <= finalizedHead)
+              : [blocks, []]
+
+          // Carried by the first batch out, so one response counts as one request.
+          let pendingRequests = requests
 
           if (perBlockUnfinalized) {
-            // Targets that key a rollback snapshot by the batch's last block (Postgres) need every
-            // rollback-able block in its own batch, and a finalized block must never share one with
-            // an unfinalized block — otherwise a fork to the finalized head rolls back finalized
-            // writes. Finalized blocks still travel as one bulk: they can never roll back.
-            await buffer.put(
-              {
-                blocks: finalizedBlocks.map((b) => b.block),
-                head: res.head,
-                meta: {
-                  bytes: finalizedBlocks.reduce((a, b) => a + b.bytes, 0),
-                  requestedFromBlock,
-                  lastBlockReceivedAt,
-                  requests,
+            // Postgres tags undo rows with the batch's last block, so every rollback-able block
+            // needs its own batch, never shared with a finalized one.
+            if (finalizedBlocks.length > 0) {
+              await buffer.put(
+                {
+                  blocks: finalizedBlocks.map((b) => b.block),
+                  head: res.head,
+                  meta: {
+                    bytes: finalizedBlocks.reduce((a, b) => a + b.bytes, 0),
+                    requestedFromBlock,
+                    lastBlockReceivedAt,
+                    requests: pendingRequests,
+                  },
                 },
-              },
-              unfinalizedBlocks.length > 0,
-            )
+                unfinalizedBlocks.length > 0,
+              )
+              pendingRequests = {}
+            } else if (unfinalizedBlocks.length > 0) {
+              // Or blocks pending from earlier all-finalized responses inherit this batch's number.
+              await buffer.cut()
+            }
 
             for (let { block, bytes } of unfinalizedBlocks) {
               await buffer.put(
@@ -363,13 +374,12 @@ function createPortalStream<Q extends Query>(
                     bytes,
                     requestedFromBlock,
                     lastBlockReceivedAt,
-                    // We flush requests here to avoid double-counting
-                    // as we already sent them
-                    requests: finalizedBlocks.length > 0 ? {} : requests,
+                    requests: pendingRequests,
                   },
                 },
                 true,
               )
+              pendingRequests = {}
             }
           } else {
             // One batch per response. Targets that resolve a rollback from a block number carried on
@@ -384,14 +394,15 @@ function createPortalStream<Q extends Query>(
                   bytes: blocks.reduce((a, b) => a + b.bytes, 0),
                   requestedFromBlock,
                   lastBlockReceivedAt,
-                  requests,
+                  requests: pendingRequests,
                 },
               },
               unfinalizedBlocks.length > 0,
             )
+            pendingRequests = {}
           }
 
-          requests = {}
+          requests = pendingRequests
         }
       } catch (err) {
         if (buffer.signal.aborted) break

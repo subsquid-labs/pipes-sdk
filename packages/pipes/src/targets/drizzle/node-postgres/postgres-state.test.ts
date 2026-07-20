@@ -106,6 +106,19 @@ describe('PostgresState — resume state & cursor persistence', () => {
     expect(insertParams).toContain(JSON.stringify(block(120)))
     expect(insertParams).toContain(JSON.stringify([block(121), block(122)]))
   })
+
+  // Falling back to the current block sweeps away the cursor rows a deep fork needs.
+  it('prunes nothing when the finalized head is block 0', async () => {
+    const client = { query: async () => ({ rows: [] }) }
+    const state = new PostgresState(client as any, { unfinalizedBlocksRetention: 1000 })
+
+    const tx = { execute: async () => ({ rowCount: 0 }) }
+
+    // The first save is one of the two that run the retention sweep.
+    const { safeBlockNumber } = await state.saveCursor(tx as any, ctxFor(block(5000), block(0), []))
+
+    expect(safeBlockNumber).toBe(0)
+  })
 })
 
 describe('PostgresState — fork', () => {

@@ -232,67 +232,76 @@ export class PortalStream<Q extends QueryBuilder<any>, T = any> {
 
       let batchSpan = Span.root('batch', this.#options.profiler).addLabels('core')
       let readSpan = batchSpan.start('fetch data').addLabels('core')
-      for await (const batch of source) {
-        readSpan.end()
+      try {
+        for await (const batch of source) {
+          readSpan.end()
 
-        const blocks = batch.blocks
+          const blocks = batch.blocks
 
-        if (blocks.length > 0) {
-          // Clamp the portal's finalized head through the monotonic watermark before it
-          // reaches any consumer, so a regressed or transiently-missing finalized head can
-          // never un-finalize already-committed data. The rollback chain is derived from the
-          // CLAMPED head so the two stay consistent (clamp can only raise finalized).
-          const finalized = this.#watermark.clamp(batch.head.finalized)
+          if (blocks.length > 0) {
+            // Clamp the portal's finalized head through the monotonic watermark before it
+            // reaches any consumer, so a regressed or transiently-missing finalized head can
+            // never un-finalize already-committed data. The rollback chain is derived from the
+            // CLAMPED head so the two stay consistent (clamp can only raise finalized).
+            const finalized = this.#watermark.clamp(batch.head.finalized)
 
-          // TODO WTF with any?
-          const lastBatchBlock = last(blocks as { header: { number: number } }[])
+            // TODO WTF with any?
+            const lastBatchBlock = last(blocks as { header: { number: number } }[])
 
-          const lastBlockNumber = Math.max(
-            Math.min(last(bounded)?.range?.to || batch.head.latest?.number || finalized?.number || Infinity),
-            lastBatchBlock.header?.number || -Infinity,
-          )
+            const lastBlockNumber = Math.max(
+              Math.min(last(bounded)?.range?.to || batch.head.latest?.number || finalized?.number || Infinity),
+              lastBatchBlock.header?.number || -Infinity,
+            )
 
-          const ctx: BatchContext = {
-            id: this.#id,
-            profiler: batchSpan,
-            metrics: this.#metricServer.metrics,
-            logger: this.#logger,
-            stream: {
-              dataset: datasetMetadata,
-              head: {
-                finalized,
-                latest: batch.head.latest,
+            const ctx: BatchContext = {
+              id: this.#id,
+              profiler: batchSpan,
+              metrics: this.#metricServer.metrics,
+              logger: this.#logger,
+              stream: {
+                dataset: datasetMetadata,
+                head: {
+                  finalized,
+                  latest: batch.head.latest,
+                },
+                query: {
+                  url: this.#portal.getUrl(),
+                  hash: await hashQuery(query),
+                  raw: query,
+                },
+                state: {
+                  initial,
+                  current: cursorFromHeader(lastBatchBlock as any),
+                  last: lastBlockNumber,
+                  rollbackChain: extractRollbackChain({
+                    blocks: batch.blocks,
+                    head: finalized,
+                  }),
+                },
               },
-              query: {
-                url: this.#portal.getUrl(),
-                hash: await hashQuery(query),
-                raw: query,
+              batch: {
+                blocksCount: batch.blocks.length,
+                bytesSize: batch.meta.bytes,
+                requests: batch.meta.requests,
+                lastBlockReceivedAt: batch.meta.lastBlockReceivedAt,
               },
-              state: {
-                initial,
-                current: cursorFromHeader(lastBatchBlock as any),
-                last: lastBlockNumber,
-                rollbackChain: extractRollbackChain({
-                  blocks: batch.blocks,
-                  head: finalized,
-                }),
-              },
-            },
-            batch: {
-              blocksCount: batch.blocks.length,
-              bytesSize: batch.meta.bytes,
-              requests: batch.meta.requests,
-              lastBlockReceivedAt: batch.meta.lastBlockReceivedAt,
-            },
+            }
+
+            const data = await this.applyTransformers(ctx, batch.blocks as T)
+
+            yield { data, ctx }
+          } else {
+            // Never yielded, so batchEnd won't run.
+            batchSpan.end()
           }
 
-          const data = await this.applyTransformers(ctx, batch.blocks as T)
-
-          yield { data, ctx }
+          batchSpan = Span.root('batch', this.#options.profiler).addLabels('core')
+          readSpan = batchSpan.start('fetch data').addLabels('core')
         }
-
-        batchSpan = Span.root('batch', this.#options.profiler).addLabels('core')
-        readSpan = batchSpan.start('fetch data').addLabels('core')
+      } finally {
+        // The last pair is always armed for a batch that never arrives.
+        readSpan.end()
+        batchSpan.end()
       }
     }
 
@@ -331,14 +340,17 @@ export class PortalStream<Q extends QueryBuilder<any>, T = any> {
   private async applyTransformers(ctx: BatchContext, data: T) {
     const span = ctx.profiler.start('apply transformers').addLabels('core')
 
-    for (const transformer of this.#transformers) {
-      data = await transformer.run(data, {
-        ...ctx,
-        profiler: span,
-        logger: this.#logger,
-      })
+    try {
+      for (const transformer of this.#transformers) {
+        data = await transformer.run(data, {
+          ...ctx,
+          profiler: span,
+          logger: this.#logger,
+        })
+      }
+    } finally {
+      span.end()
     }
-    span.end()
 
     return data
   }
