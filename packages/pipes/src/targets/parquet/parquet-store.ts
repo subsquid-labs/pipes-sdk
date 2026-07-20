@@ -1,13 +1,12 @@
 import path from 'node:path'
 
-import { ParquetSchema } from '@dsnp/parquetjs'
-
 import { type BlockCursor, type Finalization, type FinalizationBuffer, finalizationBuffer } from '~/core/index.js'
 
 import type { ParquetDuckdbSettings } from './duckdb-engine.js'
 import { DuckdbSegmentWriter, SegmentSizeEstimator } from './duckdb-writer.js'
+import type { ParquetTableWriter } from './engine.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
-import { buildRowWrapper, toParquetSchemaShape } from './parquetjs-schema.js'
+import { parquetjsEngine } from './parquetjs-writer.js'
 import {
   type Codec,
   type ParquetColumn,
@@ -18,7 +17,6 @@ import {
   blockColumnOf,
 } from './schema.js'
 import { type PublishedSegment, type SegmentWriter } from './segment.js'
-import { ParquetSegmentWriter } from './writer.js'
 
 type Row = Record<string, unknown>
 
@@ -29,12 +27,9 @@ type TableConfig = {
   getBlockNumber: (row: Row) => number
   /** Declared column shape, kept for the dev-mode value check. */
   columns: ParquetColumns
-  /** Pre-built library schema — parquetjs engine only. */
-  schema?: ParquetSchema
   dir: string
-  /** Rewrites plain-array LIST values into the library's row shape — parquetjs engine only;
-   * the duckdb appender takes plain arrays/objects, so wrapping must be skipped there. */
-  wrapRow?: (row: Row) => Row
+  /** Creates this table's segment writers; engine-specific state lives behind it. */
+  tableWriter?: ParquetTableWriter
 }
 
 /** Rotation thresholds checked at each batch boundary. */
@@ -88,16 +83,17 @@ export class ParquetStore {
     this.#duckdb = options.duckdb
 
     const parquetjs = this.#engine === 'parquetjs'
+    const engine = parquetjs ? parquetjsEngine() : undefined
     for (const table of options.tables) {
       const blockColumn = blockColumnOf(table)
       const getBlockNumber = (row: Row): number => readBlockNumber(table.table, blockColumn, row)
+      const dir = path.join(options.dir, table.table)
       this.#configs.set(table.table, {
         blockColumn,
         getBlockNumber,
         columns: table.schema,
-        schema: parquetjs ? new ParquetSchema(toParquetSchemaShape(table, options.defaultCodec)) : undefined,
-        dir: path.join(options.dir, table.table),
-        wrapRow: parquetjs ? buildRowWrapper(table.schema) : undefined,
+        dir,
+        tableWriter: engine?.table(table, { dir, rowGroupSize: options.rowGroupSize, codec: options.defaultCodec }),
       })
       this.#buffers.set(table.table, finalizationBuffer<Row>({ getBlockNumber }))
       if (!parquetjs) this.#estimators.set(table.table, new SegmentSizeEstimator())
@@ -148,7 +144,7 @@ export class ParquetStore {
       if (released.length > 0) {
         const writer = this.#getOrCreateWriter(table, config)
         for (const row of released) {
-          await writer.appendRow(config.wrapRow ? config.wrapRow(row) : row, config.getBlockNumber(row))
+          await writer.appendRow(row, config.getBlockNumber(row))
         }
         stats.push({ table, rows: released.length })
       }
@@ -229,17 +225,16 @@ export class ParquetStore {
   #getOrCreateWriter(table: string, config: TableConfig): SegmentWriter {
     let writer = this.#writers.get(table)
     if (!writer) {
-      writer =
-        this.#engine === 'duckdb'
-          ? new DuckdbSegmentWriter({
-              dir: config.dir,
-              columns: config.columns,
-              rowGroupSize: this.#rowGroupSize,
-              codec: this.#codec,
-              duckdb: this.#duckdb,
-              estimator: this.#estimators.get(table)!,
-            })
-          : new ParquetSegmentWriter({ dir: config.dir, schema: config.schema!, rowGroupSize: this.#rowGroupSize })
+      writer = config.tableWriter
+        ? config.tableWriter.createSegment()
+        : new DuckdbSegmentWriter({
+            dir: config.dir,
+            columns: config.columns,
+            rowGroupSize: this.#rowGroupSize,
+            codec: this.#codec,
+            duckdb: this.#duckdb,
+            estimator: this.#estimators.get(table)!,
+          })
       this.#writers.set(table, writer)
     }
 

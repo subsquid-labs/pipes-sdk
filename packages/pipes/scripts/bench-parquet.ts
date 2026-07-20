@@ -9,9 +9,9 @@ import { ParquetSchema } from '@dsnp/parquetjs'
 
 import { DuckdbSegmentWriter, SegmentSizeEstimator } from '../src/targets/parquet/duckdb-writer.js'
 import { buildRowWrapper, toParquetSchemaShape } from '../src/targets/parquet/parquetjs-schema.js'
+import { ParquetSegmentWriter } from '../src/targets/parquet/parquetjs-writer.js'
 import { type ParquetTable } from '../src/targets/parquet/schema.js'
 import type { PublishedSegment } from '../src/targets/parquet/segment.js'
-import { ParquetSegmentWriter } from '../src/targets/parquet/writer.js'
 
 const ROWS = Number(process.argv[2] ?? 200_000)
 
@@ -70,7 +70,11 @@ try {
 
   const wrap = buildRowWrapper(TABLE.schema)
   const schema = new ParquetSchema(toParquetSchemaShape(TABLE, 'SNAPPY'))
-  const parquetjs = new ParquetSegmentWriter({ dir: dirA, schema, rowGroupSize: 100_000 })
+  const parquetjs = new ParquetSegmentWriter({
+    dir: dirA,
+    schema: () => Promise.resolve(schema),
+    rowGroupSize: 100_000,
+  })
   await bench('parquetjs', {
     appendRow: (row, block) => parquetjs.appendRow(wrap ? wrap(row) : row, block),
     publish: () => parquetjs.publish(),

@@ -31,9 +31,9 @@ import { ParquetSchema } from '@dsnp/parquetjs'
 import { acquireDuckdbInstance, loadDuckdbApi } from '../src/targets/parquet/duckdb-engine.js'
 import { DuckdbSegmentWriter, SegmentSizeEstimator } from '../src/targets/parquet/duckdb-writer.js'
 import { buildRowWrapper, toParquetSchemaShape } from '../src/targets/parquet/parquetjs-schema.js'
+import { ParquetSegmentWriter } from '../src/targets/parquet/parquetjs-writer.js'
 import { type Codec, type ParquetColumns, type ParquetTable } from '../src/targets/parquet/schema.js'
 import type { SegmentWriter } from '../src/targets/parquet/segment.js'
-import { ParquetSegmentWriter } from '../src/targets/parquet/writer.js'
 
 type Row = Record<string, unknown>
 
@@ -198,7 +198,8 @@ if (ENGINE === 'duckdb') {
     })
 } else {
   const schema = new ParquetSchema(toParquetSchemaShape(spec.table, CODEC))
-  makeWriter = () => new ParquetSegmentWriter({ dir, schema, rowGroupSize: ROW_GROUP_SIZE })
+  makeWriter = () =>
+    new ParquetSegmentWriter({ dir, schema: () => Promise.resolve(schema), rowGroupSize: ROW_GROUP_SIZE })
 }
 const setupMs = performance.now() - setupStart
 

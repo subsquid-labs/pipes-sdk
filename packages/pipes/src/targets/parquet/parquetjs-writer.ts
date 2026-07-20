@@ -1,28 +1,67 @@
 import type { WriteStream } from 'node:fs'
 import { stat, unlink } from 'node:fs/promises'
 
-import { ParquetSchema, ParquetWriter } from '@dsnp/parquetjs'
+import type { ParquetSchema, ParquetWriter } from '@dsnp/parquetjs'
 
+import type { ParquetEngine } from './engine.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { openWriteStream } from './fs-durable.js'
+import { loadParquetjs } from './parquetjs-engine.js'
+import { buildRowWrapper, toParquetSchemaShape } from './parquetjs-schema.js'
 import { type PublishedSegment, type SegmentWriter, finalizeSegmentFile, nextTmpPath } from './segment.js'
 
-export type ParquetSegmentWriterOptions = {
+type Row = Record<string, unknown>
+
+/**
+ * The default engine: writes segments with `@dsnp/parquetjs` on the JS thread. Requires the
+ * optional peer dependency `@dsnp/parquetjs`, loaded lazily on the first segment open.
+ *
+ * Per-table state compiled once and shared by every segment of that table: the library
+ * schema (lazily, so merely constructing the engine never touches the optional dependency)
+ * and the LIST row wrapper.
+ */
+export function parquetjsEngine(): ParquetEngine {
+  return {
+    name: 'parquetjs',
+    table(table, context) {
+      const shape = toParquetSchemaShape(table, context.codec)
+      const wrapRow = buildRowWrapper(table.schema)
+      let schema: Promise<ParquetSchema> | undefined
+      const getSchema = () => (schema ??= loadParquetjs().then((api) => new api.ParquetSchema(shape)))
+
+      return {
+        createSegment: () =>
+          new ParquetSegmentWriter({
+            dir: context.dir,
+            schema: getSchema,
+            rowGroupSize: context.rowGroupSize,
+            wrapRow,
+          }),
+      }
+    },
+  }
+}
+
+export type ParquetjsSegmentWriterOptions = {
   /** The table's directory: `<baseDir>/<table>`. Created by the state layer before writes. */
   dir: string
-  /** Pre-built library schema for this table. */
-  schema: ParquetSchema
+  /** Returns the (per-table cached) compiled library schema; first awaited on segment open. */
+  schema: () => Promise<ParquetSchema>
   /** Rows per row group — the "split size" that bounds the writer's in-memory buffer. */
   rowGroupSize: number
+  /** Rewrites plain-array LIST cells into the library's `{ list: [{ element }] }` row shape.
+   * `undefined` for LIST-free tables (zero-copy path). */
+  wrapRow?: (row: Row) => Row
 }
 
 /**
  * Wraps a single open `ParquetWriter` writing **one** output file (a "segment") for one table.
  *
- * The underlying file is **lazy-opened on the first `appendRow`**, so a table that receives no
- * rows in a checkpoint window never creates a degenerate empty `.parquet` file. The writer
- * tracks the block range and row count it has seen, exposes the growing temp file size for
- * byte-based rotation, and publishes atomically:
+ * The underlying file is **lazy-opened on the first `appendRow`** — which is also where the
+ * optional `@dsnp/parquetjs` dependency is first loaded — so a table that receives no rows in
+ * a checkpoint window never creates a degenerate empty `.parquet` file. The writer tracks the
+ * block range and row count it has seen, exposes the growing temp file size for byte-based
+ * rotation, and publishes atomically:
  *
  *   `close()` (footer) → fsync file → atomic `rename` temp → `<dir>/<min>-<max>.parquet` → fsync dir
  *
@@ -30,8 +69,9 @@ export type ParquetSegmentWriterOptions = {
  */
 export class ParquetSegmentWriter implements SegmentWriter {
   readonly #dir: string
-  readonly #schema: ParquetSchema
+  readonly #getSchema: () => Promise<ParquetSchema>
   readonly #rowGroupSize: number
+  readonly #wrapRow: ((row: Row) => Row) | undefined
   readonly #tmpPath: string
 
   #writer: ParquetWriter | undefined
@@ -44,10 +84,11 @@ export class ParquetSegmentWriter implements SegmentWriter {
   #maxBlock: number | undefined
   #closed = false
 
-  constructor(options: ParquetSegmentWriterOptions) {
+  constructor(options: ParquetjsSegmentWriterOptions) {
     this.#dir = options.dir
-    this.#schema = options.schema
+    this.#getSchema = options.schema
     this.#rowGroupSize = options.rowGroupSize
+    this.#wrapRow = options.wrapRow
     this.#tmpPath = nextTmpPath(options.dir)
   }
 
@@ -73,21 +114,24 @@ export class ParquetSegmentWriter implements SegmentWriter {
    * separately (not re-read from the row) so range naming stays correct regardless of the
    * declared block column's encoding.
    */
-  async appendRow(row: Record<string, unknown>, blockNumber: number): Promise<void> {
+  async appendRow(row: Row, blockNumber: number): Promise<void> {
     if (!this.#writer) {
+      // Load the library and compile the schema BEFORE opening the stream, so a missing
+      // optional dependency never leaks a file descriptor or an empty temp file.
+      const [api, schema] = await Promise.all([loadParquetjs(), this.#getSchema()])
       const stream = await openWriteStream(this.#tmpPath)
       try {
-        this.#writer = await ParquetWriter.openStream(this.#schema, stream, { rowGroupSize: this.#rowGroupSize })
+        this.#writer = await api.ParquetWriter.openStream(schema, stream, { rowGroupSize: this.#rowGroupSize })
         this.#stream = stream
       } catch (error) {
-        // openStream writes the header immediately; if that throws, the stream we just opened would
-        // leak — force it shut before propagating.
+        // openStream writes the header immediately; if that throws, the stream we just opened
+        // would leak — force it shut before propagating.
         stream.destroy()
         throw error
       }
     }
 
-    await this.#writer.appendRow(row)
+    await this.#writer.appendRow(this.#wrapRow ? this.#wrapRow(row) : row)
 
     this.#rowCount++
     if (this.#minBlock === undefined || blockNumber < this.#minBlock) this.#minBlock = blockNumber
