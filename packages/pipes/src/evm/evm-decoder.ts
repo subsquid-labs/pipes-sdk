@@ -2,12 +2,14 @@ import type { AbiEvent, EventParams } from '@subsquid/evm-abi'
 import { Codec, Sink } from '@subsquid/evm-codec'
 
 import {
-  BatchContext,
+  DecodeErrorHook,
   PortalRange,
   ProfilerOptions,
   Transformer,
+  defaultDecodeError,
   formatWarning,
   parsePortalRange,
+  recordSuppressedDecode,
 } from '~/core/index.js'
 import { arrayify, findDuplicates } from '~/internal/array.js'
 import { Log, LogRequest } from '~/portal-client/query/evm.js'
@@ -131,7 +133,7 @@ export type DecodedEventPipeArgs<T extends Events, C extends Contracts> = {
   contracts?: C
   events: EventsMap<T>
   profiler?: ProfilerOptions
-  onError?: (ctx: BatchContext, error: any) => unknown | Promise<unknown>
+  onError?: DecodeErrorHook
 }
 
 const decodedEventFields = {
@@ -295,7 +297,7 @@ function getDuplicateEvents<T extends Events>(events: T, duplicates: string[]) {
  *   - An {@link AbiEvent} instance to capture all instances of that event
  *   - An {@link EventWithArgs} object with `event` and `params` to filter by indexed parameters
  * @param args.profiler - Optional {@link ProfilerOptions} configuration for performance monitoring
- * @param args.onError - Optional error handler callback that receives {@link BatchContext} and error
+ * @param args.onError - Optional {@link DecodeErrorHook}; returning without throwing suppresses the record (counted in `sqd_decode_errors_skipped_total`)
  * @returns A {@link Transformer} that processes EVM portal data and returns {@link EventResponse} with decoded events
  *
  * @example
@@ -324,9 +326,10 @@ export function evmEventDecoder<T extends Events, C extends Contracts>({
   contracts,
   events,
   profiler,
-  onError,
+  onError: onErrorHook,
 }: DecodedEventPipeArgs<T, C>) {
   const decodedRange = parsePortalRange(range)
+  const onError = onErrorHook || defaultDecodeError
   const normalizedEvents = getNormalizedEvents(events)
   const { eventsWithParams, eventsWithoutParams } = splitEvents(normalizedEvents)
   const eventTopic0 = eventsWithoutParams.map((event) => event.event.topic)
@@ -386,7 +389,12 @@ export function evmEventDecoder<T extends Events, C extends Contracts>({
             if (!block.logs) continue
             for (const log of block.logs) {
               if (Factory.isFactory(contracts) && contracts.isFactoryEvent(log)) {
-                contracts.decode(log, block.header.number)
+                try {
+                  await contracts.decode(log, block.header.number)
+                } catch (error) {
+                  await onError(ctx, error)
+                  recordSuppressedDecode(ctx)
+                }
               }
             }
           }
@@ -446,11 +454,8 @@ export function evmEventDecoder<T extends Events, C extends Contracts>({
                   timestamp: new Date(block.header.timestamp * 1000),
                 })
               } catch (error) {
-                if (onError) {
-                  await onError(ctx, error)
-                }
-
-                throw error
+                await onError(ctx, error)
+                recordSuppressedDecode(ctx)
               }
               break
             }

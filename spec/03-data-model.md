@@ -113,7 +113,7 @@ consumers is per durability class (CN-20…CN-24).
 | Durability class | `T` transactional · `W` write-ahead · `K` checkpointed-immutable · `A` append-lagged · `∅` ephemeral | per sink family, CN-10…CN-14; ADR-5 |
 | Finality mode | finalizing dataset · no-finality dataset | per dataset, DEF-3 |
 | Visibility | immediate (T/W/A) · deferred-to-finality (K/∅) | per class, CN-20…CN-24 |
-| Decode-error policy | fatal · skip-with-hook (divergent today — GAP-1) | per network module, WP-23 |
+| Decode-error policy | fatal-by-default, hook may skip-with-count (uniform, ADR-12) | all network modules, WP-23 |
 | Stream mode | full (unfinalized included) · finalized-only | per pipe, IB-2 |
 | Cache | off · local finalized-batch cache | per pipe, RS-20 |
 

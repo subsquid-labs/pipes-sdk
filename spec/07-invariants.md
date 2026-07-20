@@ -155,8 +155,12 @@ lies is a conformance failure (12 §harness rule).
 **INV-31 — Error soundness.** [response]
 Every terminal failure surfaces exactly one coded error from the closed taxonomy
 (IB-50); no partial batch is delivered alongside a terminal error; retried transients
-are not surfaced as errors (they are signals, OB-13).
-*Check:* CT-4 fault corpus: every injected fault maps to its FM-required code/signal.
+are not surfaced as errors (they are signals, OB-13). A decode record suppressed by an
+`onError` hook (WP-23) is not a terminal failure: it is skipped, counted in
+`sqd_decode_errors_skipped_total`, and never delivered — a suppression that goes
+uncounted is a conformance failure.
+*Check:* CT-4 fault corpus: every injected fault maps to its FM-required code/signal;
+suppress-hook fixture asserts skip + counter, not a delivered record or an error.
 
 **INV-32 — Progress heartbeat.** [state]
 The observability surface always distinguishes: progressing / idle-at-head /

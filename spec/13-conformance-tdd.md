@@ -123,7 +123,7 @@ known-suspect in the current implementation (see gap register).
 | WP-14 (transport retry) | CT-4 | P | counts tested; reconnect-mid-stream, 529 unmerged |
 | WP-16, FM-11 (malformed input) | CT-9 | U ⚠ | partial-line FIXME open (GAP-5); validation errors uncoded (GAP-25) |
 | WP-20…WP-22 (compose, validate, filter) | CT-1/5 | C | decoder + portal-source suites |
-| WP-23 (decode-error policy) | CT-5 | P ⚠ | behaviors diverge across modules (GAP-1) |
+| WP-23 (decode-error policy) | CT-5 | C | unified via `core/decode-error.ts` (ADR-12); fatal-default + suppress-and-count asserted on both modules |
 | WP-24 (attribution uniqueness) | CT-5 | P ⚠ | collision only logged in evm, undetected in solana (GAP-15, OQ-6) |
 | WP-25 (query union) | CT-1 | C | merge/heap tests + multi-output isolation |
 | WP-30…WP-32 (lifecycle) | CT-1 | P ⚠ | stop-once + partial-start tested; fork path re-fires start/stop per segment (GAP-22) |
@@ -168,7 +168,6 @@ P2 bounded/rare · P3 polish. "First test" = cheapest failing-test-first entry p
 
 | GAP | Statement | Violated | Pri | First test |
 |---|---|---|---|---|
-| GAP-1 | Decode-error hook semantics diverge between network modules: evm re-throws unconditionally (hook observe-only), solana lets a non-throwing hook suppress the record — and neither counts suppressed records | WP-23, INV-31 | P1 | same throwing-decode fixture against both modules; assert one declared policy + a skip counter (blocked on OQ-1/ADR-12) |
 | GAP-2 | Discriminator-width selection picks a single width per decoder; mixing widths silently omits the others from the portal query — records never fetched; wire-supported d0 is entirely unreachable through the decoder | INV-24, REQ-2, IB-8 | P1 | decoder with 1-byte + 8-byte discriminator instructions; assert both streams arrive |
 | GAP-3 | Class-A repair hook is optional; without it recovery and fork cleanup are silent no-ops while the cursor advances (silent divergence) | RP-42, CN-13, REQ-3 | P1 | crash between data append and cursor append, restart without hook; assert refusal or repair, not divergence (ADR-15) |
 | GAP-4 | Blank-pipe-id guard throws an uncoded error; the documented code exists but is dead | REQ-13, WP-3 | P3 | blank id + sink → assert the coded configuration error |
@@ -217,7 +216,7 @@ P2 bounded/rare · P3 polish. "First test" = cheapest failing-test-first entry p
   class (K — cheapest, file-based; the only crash imitation today is a pre-commit
   abort, one point of the CT-2 matrix). Exit: CT-1 green on the reference
   implementation for S1, ledger mode answering post-restart re-requests.
-- **Phase 1 — P1 gaps**: GAP-1 (needs ADR-12 decision), GAP-2, GAP-3 (needs ADR-15),
+- **Phase 1 — P1 gaps**: GAP-2, GAP-3 (needs ADR-15),
   GAP-11 (range anchors), GAP-17 (land the coverage PR),
   GAP-14 kill-point harness for class T. Exit: register updated, fixes landed or
   accepted as documented deviations.

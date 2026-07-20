@@ -1,4 +1,5 @@
 export * from './cursor-key.js'
+export * from './decode-error.js'
 export * from './errors.js'
 export * from './finalization-buffer.js'
 // Only `normalizeFinalized` is consumed across module boundaries (the target state classes). The
