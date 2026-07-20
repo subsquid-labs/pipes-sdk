@@ -648,6 +648,101 @@ describe('Drizzle target', () => {
     })
   })
 
+  // A fork that rewinds below the first change to a row must restore the row to its value at the
+  // fork boundary. That value lives only in the *before-image* of the earliest rolled-back change —
+  // an after-image undo log has no record of it and restores the wrong (post-change) value instead.
+  describe('class-T undo restores the pre-fork value', () => {
+    const balances = pgTable('balances', {
+      account: integer().primaryKey(),
+      balance: integer().notNull(),
+    })
+
+    beforeEach(async () => {
+      await execute(`
+        DROP SCHEMA IF EXISTS "public" CASCADE;
+        CREATE SCHEMA IF NOT EXISTS "public";
+        CREATE TABLE balances (
+          account integer PRIMARY KEY,
+          balance integer NOT NULL
+        );
+      `)
+    })
+
+    it('restores the value at the fork boundary, not the earliest rolled-back after-image', async () => {
+      // Seed the balance early, leave it untouched through block 3, then move it in blocks 4 and 5.
+      // The reorg rewinds to block 3 — below both changes and above the seed — so the balance must
+      // come back to its seeded value, which no snapshot above the fork carries as an after-image.
+      portal = await mockPortal([
+        ...[1, 2, 3, 4, 5].map(
+          (block): MockResponse => ({
+            statusCode: 200,
+            data: [{ header: { number: block, hash: `0x${block}`, timestamp: block * 1000 } }],
+            head: { finalized: { number: 1, hash: '0x1' } },
+          }),
+        ),
+        {
+          // Reorg forks block 4 onward; the safe ancestor is block 3, below both balance changes.
+          statusCode: 409,
+          data: {
+            previousBlocks: [
+              { number: 3, hash: '0x3' },
+              { number: 4, hash: '0x4a' },
+            ],
+          },
+        },
+        {
+          statusCode: 200,
+          data: [
+            { header: { number: 4, hash: '0x4a', timestamp: 4000 } },
+            { header: { number: 5, hash: '0x5a', timestamp: 5000 } },
+            { header: { number: 6, hash: '0x6a', timestamp: 6000 } },
+          ],
+          head: { finalized: { number: 1, hash: '0x1' } },
+        },
+      ])
+
+      let rollbackCount = 0
+      let rolledBackBalance: number | undefined
+
+      await evmPortalStream({
+        id: 'test',
+        portal: portal.url,
+        outputs: blockDecoder({ from: 0, to: 6 }),
+      }).pipeTo(
+        drizzleTarget({
+          db,
+          tables: [balances],
+          onData: async ({ tx, data }) => {
+            for (const b of data) {
+              if (b.number === 1) {
+                await tx.insert(balances).values({ account: 1, balance: 10 })
+              } else if (b.number === 4) {
+                await tx.update(balances).set({ balance: 20 }).where(eq(balances.account, 1))
+              } else if (b.number === 5) {
+                await tx.update(balances).set({ balance: 30 }).where(eq(balances.account, 1))
+              }
+            }
+          },
+          onAfterRollback: async ({ tx, cursor }) => {
+            rollbackCount++
+
+            // Captured at the rollback point, before any reprocessing overwrites it again.
+            const [row] = await tx.select().from(balances).where(eq(balances.account, 1))
+            rolledBackBalance = row?.balance
+
+            expect(cursor.number).toEqual(3)
+          },
+        }),
+      )
+
+      expect(rollbackCount).toEqual(1)
+
+      // The fork rewinds to block 3, where the balance was still its seeded value. Correct undo
+      // restores 10 (block 4's before-image); the after-image bug restores block 4's new value, 20.
+      expect(rolledBackBalance).toEqual(10)
+    })
+  })
+
   describe('forks on tables with foreign keys', () => {
     const parentTable = pgTable('parent', {
       id: integer().primaryKey(),
