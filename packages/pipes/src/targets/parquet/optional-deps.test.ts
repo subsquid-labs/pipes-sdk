@@ -4,99 +4,64 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-/** The optional peer dep the flat core dir must not statically value-import (Task 5 reshapes this guard). */
-const OPTIONAL_DEPS = ['@duckdb/node-api']
-
 type Violation = { line: number; statement: string }
 
 /**
- * Scans TypeScript source text for static value-imports of `OPTIONAL_DEPS`. Allowed: `import
- * type {...} from 'X'`, `import { type A, type B } from 'X'` (every named binding type-
- * qualified), and dynamic `import('X')` calls — the two engines' sanctioned lazy load points.
- * Everything else that reaches an optional dep via `import ... from 'X'`, `export ... from 'X'`,
- * or a bare `import 'X'` is a violation: it would crash `import '@subsquid/pipes/targets/parquet'`
- * for consumers who never installed the optional peer.
+ * Scans core (non-`duckdb/`) TypeScript source text for any knowledge of the duckdb entry:
+ * a reference to `@duckdb/node-api` (any import/export form — type-only included) or an
+ * import from `./duckdb/`. The dependency direction is strictly one-way — `duckdb/` imports
+ * core, never the reverse — which is what keeps `@subsquid/pipes/targets/parquet` importable
+ * without the optional `@duckdb/node-api` peer installed.
  *
- * A pure function over source text (not file paths), so the detector itself can be unit-tested
- * against a synthetic string below instead of only ever running against the real tree.
+ * A pure function over source text (not file paths), so the detector itself can be
+ * unit-tested against synthetic strings below instead of only ever running against the
+ * real tree.
  */
-function findOptionalDepViolations(source: string): Violation[] {
-  // Comments can't hide a real import, nor can a documented example fake one: block comments are
-  // blanked out (newlines kept, so later line numbers stay accurate) and line comments dropped.
+function findDuckdbReferences(source: string): Violation[] {
+  // Comments can't hide a real reference, nor can a documented example fake one: block
+  // comments are blanked out (newlines kept, so later line numbers stay accurate) and line
+  // comments dropped.
   const withoutBlocks = source.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ''))
   const lines = withoutBlocks.replace(/\/\/.*/g, '').split('\n')
   const violations: Violation[] = []
 
   for (let i = 0; i < lines.length; i++) {
-    // Only column-0 `import`/re-export `export` declarations qualify. This naturally excludes
-    // the lazy loaders' `import(...)` calls (indented inside function bodies) and non-re-export
-    // `export`s (`export function`, `export const`, `export type X = ...`, ...).
-    if (!/^import\b/.test(lines[i]) && !/^export\s+(type\s+)?[{*]/.test(lines[i])) continue
+    const line = lines[i]
+    const referencesDuckdb = line.includes('@duckdb/node-api') || /['"]\.\/duckdb\//.test(line)
 
-    // A named-import list can wrap across lines; keep absorbing lines until braces balance.
-    let statement = lines[i]
-    let depth = braceDelta(statement)
-    for (let j = i + 1; depth > 0 && j < lines.length; j++) {
-      statement += `\n${lines[j]}`
-      depth += braceDelta(lines[j])
-    }
-
-    for (const dep of OPTIONAL_DEPS) {
-      const referencesDep = statement.includes(`'${dep}'`) || statement.includes(`"${dep}"`)
-
-      if (referencesDep && !isTypeOnlyImport(statement)) {
-        violations.push({ line: i + 1, statement: statement.trim() })
-      }
-    }
+    if (referencesDuckdb) violations.push({ line: i + 1, statement: line.trim() })
   }
 
   return violations
 }
 
-function braceDelta(line: string): number {
-  return (line.match(/\{/g)?.length ?? 0) - (line.match(/\}/g)?.length ?? 0)
-}
-
-/** True for `import type {...} from 'X'` or `import { type A, type B, ... } from 'X'`. */
-function isTypeOnlyImport(statement: string): boolean {
-  if (!/^import\b/.test(statement)) return false // `export ... from 'X'` is always a violation
-
-  const clause = statement.replace(/^import\s*/, '')
-  if (/^type\b/.test(clause)) return true
-
-  const named = clause.match(/^\{([\s\S]*)\}\s*from/)
-  if (!named) return false // default / namespace / bare import — always a value import
-
-  const bindings = named[1]
-    .split(',')
-    .map((binding) => binding.trim())
-    .filter(Boolean)
-
-  return bindings.length > 0 && bindings.every((binding) => /^type\s+/.test(binding))
-}
-
-describe('optional dependency isolation', () => {
-  it('has zero static value-imports of the optional peer deps in the target sources', () => {
+describe('core isolation from the duckdb entry', () => {
+  it('no non-test core source references @duckdb/node-api or imports from ./duckdb/', () => {
     const dir = fileURLToPath(new URL('.', import.meta.url))
-    const files = readdirSync(dir).filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+    const files = readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts'))
+      .map((entry) => entry.name)
 
     const failures = files.flatMap((file) =>
-      findOptionalDepViolations(readFileSync(path.join(dir, file), 'utf8')).map(
-        (v) => `${file}:${v.line}: ${v.statement}`,
-      ),
+      findDuckdbReferences(readFileSync(path.join(dir, file), 'utf8')).map((v) => `${file}:${v.line}: ${v.statement}`),
     )
 
     expect(
       failures,
-      `@duckdb/node-api is an optional peer dep of the parquet target — ` +
-        `reference either only via 'import type' or the module's lazy loader ` +
-        `(duckdb/duckdb-engine.ts), never a static value import:\n${failures.join('\n')}`,
+      `the core parquet entry must not know duckdb at all — even type-only. Duckdb code ` +
+        `lives behind src/targets/parquet/duckdb/ and imports core, never the reverse:\n${failures.join('\n')}`,
     ).toEqual([])
   })
 
-  it('sanity: the scan detects a violation in a synthetic bad source', () => {
-    const bad = "import { DuckDBInstance } from '@duckdb/node-api'\n"
-
-    expect(findOptionalDepViolations(bad)).toEqual([{ line: 1, statement: bad.trim() }])
+  it('sanity: the detector flags synthetic violations, including type-only imports', () => {
+    expect(findDuckdbReferences("import type { DuckDBInstance } from '@duckdb/node-api'\n")).toEqual([
+      { line: 1, statement: "import type { DuckDBInstance } from '@duckdb/node-api'" },
+    ])
+    expect(findDuckdbReferences("export { duckdbEngine } from './duckdb/index.js'\n")).toEqual([
+      { line: 1, statement: "export { duckdbEngine } from './duckdb/index.js'" },
+    ])
+    expect(
+      findDuckdbReferences("import { parquetTarget } from './parquet-target.js'\n// see @duckdb/node-api docs\n"),
+    ).toEqual([])
   })
 })
