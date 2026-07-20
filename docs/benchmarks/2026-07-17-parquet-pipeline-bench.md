@@ -4,7 +4,7 @@
 **Date:** 2026-07-17–18 · **Branch:** `worktree-parquet-duckdb-engine`
 **Versions:** `@subsquid/pipes 1.0.0-alpha.16`, `@duckdb/node-api 1.5.4-r.1`, `@dsnp/parquetjs 1.8.7`, Node v22.23.1, pnpm 10.17.0
 **Machine:** MacBook Pro (Mac14,9), Apple M2 Pro (10 cores: 6 performance + 4 efficiency), 16 GB, macOS 26.1 (Darwin 25.1.0), arm64
-**Harness:** `packages/pipes/scripts/bench-pipeline/` · 96 clean timed cells, 0 failures
+**Harness:** `docs/benchmarks/parquet-engines/bench-pipeline/` · 96 clean timed cells, 0 failures
 
 ## Verdict
 
@@ -121,11 +121,11 @@ The isolated-writer benchmark found much larger DuckDB gains on flat and string-
 
 ## Reproduce
 
-Start with an absent `scripts/bench-pipeline/.fixtures/results.jsonl`, because the matrix appends durable results.
+Start with an absent `docs/benchmarks/parquet-engines/bench-pipeline/.fixtures/results.jsonl`, because the matrix appends durable results.
 
 ```bash
 cd packages/pipes
-mise exec node@22.23.1 -- corepack pnpm tsx scripts/bench-pipeline/record.ts
-mise exec node@22.23.1 -- corepack pnpm tsx scripts/bench-pipeline/run-matrix.ts --reps 3
-mise exec node@22.23.1 -- corepack pnpm tsx scripts/bench-pipeline/aggregate.ts
+mise exec node@22.23.1 -- corepack pnpm tsx ../../docs/benchmarks/parquet-engines/bench-pipeline/record.ts
+mise exec node@22.23.1 -- corepack pnpm tsx ../../docs/benchmarks/parquet-engines/bench-pipeline/run-matrix.ts --reps 3
+mise exec node@22.23.1 -- corepack pnpm tsx ../../docs/benchmarks/parquet-engines/bench-pipeline/aggregate.ts
 ```

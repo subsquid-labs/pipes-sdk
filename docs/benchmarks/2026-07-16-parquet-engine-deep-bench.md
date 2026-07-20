@@ -3,7 +3,7 @@
 **Date:** 2026-07-16 · **Branch:** `worktree-parquet-duckdb-engine` @ `cce25b6`
 **Versions:** `@duckdb/node-api 1.5.4-r.1`, `@dsnp/parquetjs 1.8.7`, Node v23.9.0
 **Machine:** Apple M2 Pro, 10 cores, 16 GB, macOS/arm64 — *directional for the Linux x86 prod hosts, not authoritative*
-**Harness:** `packages/pipes/scripts/bench-parquet-deep.ts` (fresh process per configuration; 240 samples, 0 errors)
+**Harness:** `docs/benchmarks/parquet-engines/bench-parquet-deep.ts` (fresh process per configuration; 240 samples, 0 errors)
 
 ---
 
@@ -148,10 +148,10 @@ Fixed costs are negligible in production: ~110 ms one-time instance setup per pr
 ```bash
 cd packages/pipes
 # single cell:
-pnpm tsx scripts/bench-parquet-deep.ts --engine duckdb --schema btc_outputs \
+pnpm tsx ../../docs/benchmarks/parquet-engines/bench-parquet-deep.ts --engine duckdb --schema btc_outputs \
   --rows 100000 --codec SNAPPY --threads 2 --segments 4 --rep 1
 # GC-decomposition mode:
-BENCH_GC=1 NODE_OPTIONS=--expose-gc pnpm tsx scripts/bench-parquet-deep.ts ...
+BENCH_GC=1 NODE_OPTIONS=--expose-gc pnpm tsx ../../docs/benchmarks/parquet-engines/bench-parquet-deep.ts ...
 ```
 
 Full matrix driver + aggregator + probe preserved in the session scratchpad (`deep-bench/run.sh`, `aggregate.mjs`, `probe-publish.mts`); raw data: `results.jsonl` (240 samples).
