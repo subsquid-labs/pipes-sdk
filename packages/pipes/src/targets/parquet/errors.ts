@@ -53,4 +53,6 @@ export const PARQUET_ERROR_CODES = {
   DUCKDB_UNAVAILABLE: 'E2317',
   /** `settings.engine` is not one of the supported engine names. */
   ENGINE_INVALID: 'E2318',
+  /** parquetjs engine selected but the optional peer dependency '@dsnp/parquetjs' is not installed. */
+  PARQUETJS_UNAVAILABLE: 'E2319',
 } as const
