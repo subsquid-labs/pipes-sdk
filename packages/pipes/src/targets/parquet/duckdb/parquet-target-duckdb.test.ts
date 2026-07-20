@@ -10,11 +10,10 @@ import { type MockPortal, type MockResponse, blockDecoder, mockPortal } from '~/
 
 import type { ParquetSettings } from '../parquet-target.js'
 import { parquetTarget } from '../parquet-target.js'
-import { parquetjsEngine } from '../parquetjs-writer.js'
+import { parquetjsEngine } from '../parquetjs/parquetjs-engine.js'
 import type { ParquetTable } from '../schema.js'
-import { acquireDuckdbInstance } from './duckdb-engine.js'
+import { acquireDuckdbInstance, duckdbEngine } from './duckdb-engine.js'
 import { escapeSqlString } from './duckdb-schema.js'
-import { duckdbEngine } from './duckdb-writer.js'
 
 const BLOCKS_TABLE: ParquetTable = {
   table: 'blocks',

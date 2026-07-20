@@ -1,5 +1,5 @@
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
-import { parquetjsEngine } from './parquetjs-writer.js'
+import { parquetjsEngine } from './parquetjs/parquetjs-engine.js'
 import type { Codec, ParquetTable } from './schema.js'
 import type { SegmentWriter } from './segment.js'
 

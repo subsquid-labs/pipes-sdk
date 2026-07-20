@@ -2,23 +2,11 @@ import { unlink } from 'node:fs/promises'
 
 import type { DuckDBAppender, DuckDBConnection } from '@duckdb/node-api'
 
-import type { ParquetEngine } from '../engine.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from '../errors.js'
 import type { Codec, ParquetColumns } from '../schema.js'
 import { type PublishedSegment, type SegmentWriter, finalizeSegmentFile, nextTmpPath } from '../segment.js'
-import {
-  DEFAULT_DUCKDB_MEMORY_LIMIT,
-  DEFAULT_DUCKDB_THREADS,
-  type ParquetDuckdbSettings,
-  acquireDuckdbInstance,
-} from './duckdb-engine.js'
-import {
-  buildCreateTableSql,
-  buildRowAppender,
-  escapeSqlString,
-  quoteIdent,
-  validateDuckdbTableCompression,
-} from './duckdb-schema.js'
+import { type ParquetDuckdbSettings, acquireDuckdbInstance } from './duckdb-engine.js'
+import { buildCreateTableSql, buildRowAppender, escapeSqlString, quoteIdent } from './duckdb-schema.js'
 
 type Row = Record<string, unknown>
 
@@ -49,46 +37,6 @@ export class SegmentSizeEstimator {
 // Process-unique staging table names — writers share one DuckDB instance and must never collide.
 let tableSeq = 0
 
-/** The duckdb engine handle: a {@link ParquetEngine} whose resolved settings are inspectable. */
-export type DuckdbEngine = ParquetEngine & { readonly settings: Required<ParquetDuckdbSettings> }
-
-/**
- * DuckDB-backed engine: stages rows in an in-memory DuckDB table and COPYs each segment to
- * Parquet natively, moving encoding/compression/statistics onto DuckDB worker threads.
- * Requires the `@duckdb/node-api` peer — install it and import this engine from
- * `@subsquid/pipes/targets/parquet/duckdb`. Identical settings share one process-wide
- * DuckDB instance.
- */
-export function duckdbEngine(settings?: ParquetDuckdbSettings): DuckdbEngine {
-  const resolved = {
-    threads: settings?.threads ?? DEFAULT_DUCKDB_THREADS,
-    memoryLimit: settings?.memoryLimit ?? DEFAULT_DUCKDB_MEMORY_LIMIT,
-  }
-
-  return {
-    name: 'duckdb',
-    settings: resolved,
-    table(table, context) {
-      validateDuckdbTableCompression(table, context.codec)
-
-      // Bytes/row calibration survives across this table's successive segments (rotation memory).
-      const estimator = new SegmentSizeEstimator()
-
-      return {
-        createSegment: () =>
-          new DuckdbSegmentWriter({
-            dir: context.dir,
-            columns: table.schema,
-            rowGroupSize: context.rowGroupSize,
-            codec: context.codec,
-            duckdb: resolved,
-            estimator,
-          }),
-      }
-    },
-  }
-}
-
 export type DuckdbSegmentWriterOptions = {
   /** The table's directory: `<baseDir>/<table>`. Created by the state layer before writes. */
   dir: string
@@ -108,8 +56,10 @@ export type DuckdbSegmentWriterOptions = {
  * DuckDB-backed {@link SegmentWriter}: appends rows into an in-memory staging table
  * (`CREATE TABLE seg_<n>` on the shared instance, lazily on the first row) and publishes via
  * `COPY seg_<n> TO '<tmpPath>' (FORMAT PARQUET, ...)` followed by the same fsync →
- * collision-check → rename tail as the parquetjs engine. Encoding, compression and statistics
- * run on DuckDB's worker threads — the JS thread only pays appender calls.
+ * collision-check → rename tail as the parquetjs engine. Appends only pay cheap native
+ * appender calls; the COPY encodes natively but largely on the calling JS thread for common
+ * codecs (SNAPPY/GZIP) — a per-publish stall proportional to segment size — while expensive
+ * codecs (BROTLI) parallelize onto DuckDB's worker threads.
  *
  * Crash semantics are preserved: an interrupted COPY leaves only a `.tmp-*` file, which
  * startup recovery already deletes. The staging table is dropped on publish AND discard (and
@@ -185,7 +135,7 @@ export class DuckdbSegmentWriter implements SegmentWriter {
   async publish(): Promise<PublishedSegment> {
     if (!this.#connection || !this.#appender || this.#minBlock === undefined || this.#maxBlock === undefined) {
       throw new ParquetTargetError(
-        PARQUET_ERROR_CODES.FILE_COLLISION,
+        PARQUET_ERROR_CODES.SEGMENT_EMPTY,
         `Internal: publish() called on an empty segment in '${this.#dir}'. Only segments with ` +
           `at least one row may be published.`,
       )
@@ -208,7 +158,7 @@ export class DuckdbSegmentWriter implements SegmentWriter {
       await this.#dropStagingTable(connection)
       this.#closed = true
       this.#connection = undefined
-      connection.disconnectSync()
+      this.#disconnect(connection)
     }
 
     const published = await finalizeSegmentFile({
@@ -239,7 +189,7 @@ export class DuckdbSegmentWriter implements SegmentWriter {
       }
       if (this.#connection) {
         await this.#dropStagingTable(this.#connection)
-        this.#connection.disconnectSync()
+        this.#disconnect(this.#connection)
       }
     }
     this.#appender = undefined
@@ -266,7 +216,7 @@ export class DuckdbSegmentWriter implements SegmentWriter {
     } catch (error) {
       // A half-open writer must not leak its table into the shared instance.
       await this.#dropStagingTable(connection)
-      connection.disconnectSync()
+      this.#disconnect(connection)
       throw error
     }
   }
@@ -276,6 +226,15 @@ export class DuckdbSegmentWriter implements SegmentWriter {
       await connection.run(`DROP TABLE IF EXISTS ${quoteIdent(this.#tableName)}`)
     } catch {
       // best-effort — an unreachable instance means the process is going down anyway
+    }
+  }
+
+  #disconnect(connection: DuckDBConnection): void {
+    try {
+      connection.disconnectSync()
+    } catch {
+      // best-effort — a throw here would mask the real COPY/cleanup outcome, and a leaked
+      // connection on the shared instance matters less than corrupting the error path
     }
   }
 }

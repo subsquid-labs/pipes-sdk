@@ -9,7 +9,7 @@ type Violation = { line: number; statement: string }
 /**
  * Scans core (non-`duckdb/`) TypeScript source text for any knowledge of the duckdb entry:
  * a reference to `@duckdb/node-api` (any import/export form — type-only included) or an
- * import from `./duckdb/`. The dependency direction is strictly one-way — `duckdb/` imports
+ * import from `./duckdb/` / `../duckdb/`. The dependency direction is strictly one-way — `duckdb/` imports
  * core, never the reverse — which is what keeps `@subsquid/pipes/targets/parquet` importable
  * without the optional `@duckdb/node-api` peer installed.
  *
@@ -27,7 +27,7 @@ function findDuckdbReferences(source: string): Violation[] {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    const referencesDuckdb = line.includes('@duckdb/node-api') || /['"]\.\/duckdb\//.test(line)
+    const referencesDuckdb = line.includes('@duckdb/node-api') || /['"]\.\.?\/duckdb\//.test(line)
 
     if (referencesDuckdb) violations.push({ line: i + 1, statement: line.trim() })
   }
@@ -38,13 +38,18 @@ function findDuckdbReferences(source: string): Violation[] {
 describe('core isolation from the duckdb entry', () => {
   it('no non-test core source references @duckdb/node-api or imports from ./duckdb/', () => {
     const dir = fileURLToPath(new URL('.', import.meta.url))
-    const files = readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts'))
-      .map((entry) => entry.name)
+    // Core is the top-level entry plus the parquetjs/ engine folder — everything except duckdb/.
+    const files = ['.', 'parquetjs'].flatMap((sub) =>
+      readdirSync(path.join(dir, sub), { withFileTypes: true })
+        .filter((entry) => entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts'))
+        .map((entry) => path.join(sub, entry.name)),
+    )
 
-    // The scan must never rot into an always-pass: engine.ts is a permanent core file, and the
-    // deliberately non-recursive readdir would silently skip files moved into a future subdirectory.
+    // The scan must never rot into an always-pass: engine.ts and the parquetjs engine are
+    // permanent core files, and the deliberately shallow per-directory readdir would silently
+    // skip files moved into a future subdirectory.
     expect(files).toContain('engine.ts')
+    expect(files).toContain(path.join('parquetjs', 'parquetjs-engine.ts'))
 
     const failures = files.flatMap((file) =>
       findDuckdbReferences(readFileSync(path.join(dir, file), 'utf8')).map((v) => `${file}:${v.line}: ${v.statement}`),
@@ -63,6 +68,9 @@ describe('core isolation from the duckdb entry', () => {
     ])
     expect(findDuckdbReferences("export { duckdbEngine } from './duckdb/index.js'\n")).toEqual([
       { line: 1, statement: "export { duckdbEngine } from './duckdb/index.js'" },
+    ])
+    expect(findDuckdbReferences("import { duckdbEngine } from '../duckdb/duckdb-engine.js'\n")).toEqual([
+      { line: 1, statement: "import { duckdbEngine } from '../duckdb/duckdb-engine.js'" },
     ])
     expect(
       findDuckdbReferences("import { parquetTarget } from './parquet-target.js'\n// see @duckdb/node-api docs\n"),

@@ -3,41 +3,11 @@ import { stat, unlink } from 'node:fs/promises'
 
 import { ParquetSchema, ParquetWriter } from '@dsnp/parquetjs'
 
-import type { ParquetEngine } from './engine.js'
-import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
-import { openWriteStream } from './fs-durable.js'
-import { buildRowWrapper, toParquetSchemaShape } from './parquetjs-schema.js'
-import { type PublishedSegment, type SegmentWriter, finalizeSegmentFile, nextTmpPath } from './segment.js'
+import { PARQUET_ERROR_CODES, ParquetTargetError } from '../errors.js'
+import { openWriteStream } from '../fs-durable.js'
+import { type PublishedSegment, type SegmentWriter, finalizeSegmentFile, nextTmpPath } from '../segment.js'
 
 type Row = Record<string, unknown>
-
-/**
- * The default engine: writes segments with `@dsnp/parquetjs` on the JS thread. Requires the
- * `@dsnp/parquetjs` peer — the core `@subsquid/pipes/targets/parquet` entry imports it
- * statically, so a missing install fails at import time.
- *
- * Per-table state compiled once and shared by every segment of that table: the library
- * schema and the LIST row wrapper.
- */
-export function parquetjsEngine(): ParquetEngine {
-  return {
-    name: 'parquetjs',
-    table(table, context) {
-      const schema = new ParquetSchema(toParquetSchemaShape(table, context.codec))
-      const wrapRow = buildRowWrapper(table.schema)
-
-      return {
-        createSegment: () =>
-          new ParquetSegmentWriter({
-            dir: context.dir,
-            schema,
-            rowGroupSize: context.rowGroupSize,
-            wrapRow,
-          }),
-      }
-    },
-  }
-}
 
 export type ParquetjsSegmentWriterOptions = {
   /** The table's directory: `<baseDir>/<table>`. Created by the state layer before writes. */
@@ -156,7 +126,7 @@ export class ParquetSegmentWriter implements SegmentWriter {
   async publish(): Promise<PublishedSegment> {
     if (!this.#writer || this.#minBlock === undefined || this.#maxBlock === undefined) {
       throw new ParquetTargetError(
-        PARQUET_ERROR_CODES.FILE_COLLISION,
+        PARQUET_ERROR_CODES.SEGMENT_EMPTY,
         `Internal: publish() called on an empty segment in '${this.#dir}'. Only segments with ` +
           `at least one row may be published.`,
       )

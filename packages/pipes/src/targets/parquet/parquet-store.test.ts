@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { ParquetStore } from './parquet-store.js'
-import { parquetjsEngine } from './parquetjs-writer.js'
+import { parquetjsEngine } from './parquetjs/parquetjs-engine.js'
 import type { ParquetTable } from './schema.js'
 
 const BLOCKS_TABLE: ParquetTable = {

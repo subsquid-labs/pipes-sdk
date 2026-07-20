@@ -1,5 +1,11 @@
 import { DuckDBInstance } from '@duckdb/node-api'
 
+import type { ParquetEngine } from '../engine.js'
+import { validateDuckdbTableCompression } from './duckdb-schema.js'
+// Deferred cycle with duckdb-writer.js (it imports `acquireDuckdbInstance` back): both sides
+// only touch the other's bindings inside function bodies, never at module evaluation.
+import { DuckdbSegmentWriter, SegmentSizeEstimator } from './duckdb-writer.js'
+
 /** Tuning for the shared DuckDB instance; identical settings share one instance per process. */
 export type ParquetDuckdbSettings = {
   /** DuckDB worker threads. Default 2 — the writer is a background encoder, not a query engine. */
@@ -34,4 +40,47 @@ export function acquireDuckdbInstance(settings?: ParquetDuckdbSettings): Promise
   }
 
   return instance
+}
+
+/** The duckdb engine handle: a {@link ParquetEngine} whose resolved settings are inspectable. */
+export type DuckdbEngine = ParquetEngine & { readonly settings: Required<ParquetDuckdbSettings> }
+
+/**
+ * DuckDB-backed engine: stages rows in an in-memory DuckDB table and COPYs each segment to
+ * Parquet natively. The win over parquetjs is native encoding efficiency (~2× less write-path
+ * CPU on typical flat schemas) — for common codecs (SNAPPY/GZIP) the COPY still runs mostly on
+ * the calling JS thread; only expensive codecs (BROTLI) measurably parallelize onto DuckDB's
+ * worker threads. See `docs/benchmarks/2026-07-16-parquet-engine-deep-bench.md`.
+ * Requires the `@duckdb/node-api` peer — install it and import this engine from
+ * `@subsquid/pipes/targets/parquet/duckdb`. Identical settings share one process-wide
+ * DuckDB instance.
+ */
+export function duckdbEngine(settings?: ParquetDuckdbSettings): DuckdbEngine {
+  const resolved = {
+    threads: settings?.threads ?? DEFAULT_DUCKDB_THREADS,
+    memoryLimit: settings?.memoryLimit ?? DEFAULT_DUCKDB_MEMORY_LIMIT,
+  }
+
+  return {
+    name: 'duckdb',
+    settings: resolved,
+    table(table, context) {
+      validateDuckdbTableCompression(table, context.codec)
+
+      // Bytes/row calibration survives across this table's successive segments (rotation memory).
+      const estimator = new SegmentSizeEstimator()
+
+      return {
+        createSegment: () =>
+          new DuckdbSegmentWriter({
+            dir: context.dir,
+            columns: table.schema,
+            rowGroupSize: context.rowGroupSize,
+            codec: context.codec,
+            duckdb: resolved,
+            estimator,
+          }),
+      }
+    },
+  }
 }

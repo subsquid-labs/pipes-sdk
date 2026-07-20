@@ -5,8 +5,8 @@ import path from 'node:path'
 import { ParquetReader } from '@dsnp/parquetjs'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { parquetjsEngine } from './parquetjs-writer.js'
-import type { ParquetTable } from './schema.js'
+import type { ParquetTable } from '../schema.js'
+import { parquetjsEngine } from './parquetjs-engine.js'
 
 const TRANSFERS: ParquetTable = {
   table: 'transfers',

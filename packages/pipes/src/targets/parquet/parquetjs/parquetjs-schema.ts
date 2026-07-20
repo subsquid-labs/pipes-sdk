@@ -1,4 +1,4 @@
-import type { Codec, ParquetColumn, ParquetColumns, ParquetLeafType, ParquetTable } from './schema.js'
+import type { Codec, ParquetColumn, ParquetColumns, ParquetLeafType, ParquetTable } from '../schema.js'
 
 /**
  * Leaf type strings as `@dsnp/parquetjs` expects them: the public union minus `'TIMESTAMP'`,

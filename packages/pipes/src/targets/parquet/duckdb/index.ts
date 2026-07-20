@@ -1,2 +1,1 @@
-export type { ParquetDuckdbSettings } from './duckdb-engine.js'
-export { type DuckdbEngine, duckdbEngine } from './duckdb-writer.js'
+export { type DuckdbEngine, type ParquetDuckdbSettings, duckdbEngine } from './duckdb-engine.js'

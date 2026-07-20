@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import type { ParquetTable } from '../schema.js'
 import { buildRowWrapper, toParquetSchemaShape } from './parquetjs-schema.js'
-import type { ParquetTable } from './schema.js'
 
 const BLOCKS_TABLE: ParquetTable = {
   table: 'blocks',

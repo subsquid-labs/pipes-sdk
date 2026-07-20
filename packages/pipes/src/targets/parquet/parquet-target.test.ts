@@ -9,12 +9,12 @@ import { createTarget } from '~/core/index.js'
 import { evmPortalStream } from '~/evm/index.js'
 import { type MockPortal, type MockResponse, blockDecoder, mockPortal, testLogger } from '~/testing/index.js'
 
-import { duckdbEngine } from './duckdb/duckdb-writer.js'
+import { duckdbEngine } from './duckdb/duckdb-engine.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { ParquetState } from './parquet-state.js'
 import { ParquetStore } from './parquet-store.js'
 import { parquetTarget } from './parquet-target.js'
-import { ParquetSegmentWriter } from './parquetjs-writer.js'
+import { ParquetSegmentWriter } from './parquetjs/parquetjs-writer.js'
 import type { ParquetTable } from './schema.js'
 
 // ---------------------------------------------------------------------------------------------
