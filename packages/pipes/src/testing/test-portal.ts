@@ -2,6 +2,14 @@ import { IncomingMessage, Server, ServerResponse, createServer } from 'http'
 
 import { Portal } from '~/core/query-builder.js'
 
+import {
+  type BlockRef,
+  type PortalBlockPayload,
+  type PortalHead,
+  getServerAddress,
+  writeWireResponse,
+} from './portal-wire.js'
+
 type ValidateRequest = (res: any) => unknown
 
 export type MockResponse =
@@ -11,32 +19,14 @@ export type MockResponse =
     }
   | {
       statusCode: 200
-      data: {
-        header: {
-          number: number
-          hash: string
-          timestamp?: number
-        }
-        logs?: any[]
-        instructions?: any[]
-        transactions?: any[]
-        inputs?: any[]
-        outputs?: any[]
-        internalTransactions?: any[]
-      }[]
-      head?: {
-        finalized?: { number: number; hash: string }
-        latest?: { number: number }
-      }
+      data: PortalBlockPayload[]
+      head?: PortalHead
       validateRequest?: ValidateRequest
     }
   | {
       statusCode: 409
       data: {
-        previousBlocks: {
-          number: number
-          hash: string
-        }[]
+        previousBlocks: BlockRef[]
       }
       validateRequest?: ValidateRequest
     }
@@ -109,37 +99,7 @@ export async function mockPortal(
       req.on('end', () => {
         mockResp.validateRequest?.(body ? JSON.parse(body) : undefined)
 
-        switch (mockResp.statusCode) {
-          case 200:
-            const headers: Record<string, string | number> = {
-              'Content-Type': 'application/jsonl',
-            }
-            // `!= null`: block 0 is a valid head; dropping the header would hide finality entirely.
-            if (mockResp.head?.finalized?.number != null) {
-              headers['X-Sqd-Finalized-Head-Number'] = mockResp.head.finalized.number
-            }
-            if (mockResp.head?.finalized?.hash != null) {
-              headers['X-Sqd-Finalized-Head-Hash'] = mockResp.head.finalized.hash
-            }
-            if (mockResp.head?.latest?.number != null) {
-              headers['X-Sqd-Head-Number'] = mockResp.head.latest.number
-            }
-
-            res.writeHead(mockResp.statusCode, headers)
-            // Send each mock data item as a JSON line
-            mockResp.data.forEach((data) => {
-              res.write(JSON.stringify(data) + '\n')
-            })
-            break
-
-          case 409:
-            res.writeHead(mockResp.statusCode, { 'Content-Type': 'application/json' })
-            res.write(JSON.stringify(mockResp.data))
-            break
-          default:
-            res.writeHead(mockResp.statusCode)
-            break
-        }
+        writeWireResponse(res, mockResp)
 
         requestCount++
 
@@ -172,14 +132,6 @@ export async function mockPortal(
   }
 
   return portal
-}
-
-function getServerAddress(server: Server): string {
-  const address = server.address()
-  if (!address || typeof address === 'string') {
-    throw new Error('Invalid server address')
-  }
-  return `http://127.0.0.1:${address.port}`
 }
 
 /** @internal */
