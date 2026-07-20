@@ -96,20 +96,19 @@ export class Transformer<In, Out> {
    */
   async run(data: In, ctx: BatchContext): Promise<Out> {
     const span = ctx.profiler.start(this.options.profiler)
-    let res = await this.options.transform(data, { ...ctx, profiler: span })
-    span.data = res
 
-    if (this.children.length === 0) {
-      span.end()
+    try {
+      let res = await this.options.transform(data, { ...ctx, profiler: span })
+      span.data = res
+
+      for (const child of this.children) {
+        res = await child.run(res, { ...ctx, profiler: span })
+      }
+
       return res
+    } finally {
+      span.end()
     }
-
-    for (const child of this.children) {
-      res = await child.run(res, { ...ctx, profiler: span })
-    }
-
-    span.end()
-    return res
   }
 
   /**

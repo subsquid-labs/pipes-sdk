@@ -91,6 +91,13 @@ export interface PortalBlockStreamOptions {
   maxWaitTimeMs?: number
   headPollIntervalMs?: number
   finalized?: boolean
+  /**
+   * Give every unfinalized block its own batch, and never mix finalized blocks into an unfinalized
+   * block's batch. Only targets that key a rollback snapshot by the batch's last block (the Postgres
+   * target) need this; for everyone else it just costs extra round-trips, so it is off by default
+   * and a response is delivered as a single batch.
+   */
+  perBlockUnfinalized?: boolean
 }
 
 /**
@@ -174,6 +181,7 @@ export class PortalClient {
     const settings = {
       request: options?.request ?? {},
       finalized: options?.finalized ?? this.#options.finalized,
+      perBlockUnfinalized: options?.perBlockUnfinalized ?? false,
       maxBytes: options?.maxBytes ?? this.#options.maxBytes,
       maxIdleTime: options?.maxIdleTimeMs ?? this.#options.maxIdleTime,
       maxWaitTime: options?.maxWaitTimeMs ?? this.#options.maxWaitTime,
@@ -233,6 +241,7 @@ function createPortalStream<Q extends Query>(
   options: {
     request: PortalRequestOptions
     finalized: boolean
+    perBlockUnfinalized: boolean
     maxBytes: number
     maxIdleTime: number
     maxWaitTime: number
@@ -247,16 +256,18 @@ function createPortalStream<Q extends Query>(
     stream?: AsyncIterable<string[]> | null | undefined
   }>,
 ): PortalBlockStream<GetBlock<Q>> {
-  const { headPollInterval, request, ...bufferOptions } = options
+  const { headPollInterval, request, perBlockUnfinalized, ...bufferOptions } = options
   const buffer = new StreamBuffer<GetBlock<Q>>(bufferOptions)
 
   let { fromBlock = 0, toBlock, parentBlockHash } = query
 
+  // Outside the loop: a response carrying no blocks hands its counters to no batch, so they must
+  // survive into the next iteration.
+  let requests: Record<number, number> = {}
+
   const ingest = async () => {
     while (!buffer.signal.aborted) {
       if (toBlock != null && fromBlock > toBlock) break
-
-      let requests: Record<number, number> = {}
 
       const res = await requestStream(
         {
@@ -282,6 +293,7 @@ function createPortalStream<Q extends Query>(
           meta: { bytes: 0, requestedFromBlock: fromBlock, lastBlockReceivedAt: new Date(), requests },
           head: res.head,
         })
+        requests = {}
         buffer.flush()
         if (headPollInterval > 0) {
           await wait(headPollInterval, buffer.signal)
@@ -321,42 +333,76 @@ function createPortalStream<Q extends Query>(
 
           const finalizedHead = res.head.finalized?.number
 
-          // Split blocks into finalized and unfinalized
-          const [finalizedBlocks, unfinalizedBlocks] = finalizedHead
-            ? partition(blocks, ({ block }) => block.header?.number <= finalizedHead)
-            : [blocks, []]
+          // `!= null`: a head of 0 is real, and reading it as absent files every hot block as finalized.
+          const [finalizedBlocks, unfinalizedBlocks] =
+            finalizedHead != null
+              ? partition(blocks, ({ block }) => block.header?.number <= finalizedHead)
+              : [blocks, []]
 
-          // Push finalized blocks as a batch
-          await buffer.put({
-            blocks: finalizedBlocks.map((b) => b.block),
-            head: res.head,
-            meta: {
-              bytes: finalizedBlocks.reduce((a, b) => a + b.bytes, 0),
-              requestedFromBlock,
-              lastBlockReceivedAt,
-              requests,
-            },
-          })
+          // Carried by the first batch out, so one response counts as one request.
+          let pendingRequests = requests
 
-          for (let { block, bytes } of unfinalizedBlocks) {
+          if (perBlockUnfinalized) {
+            // Postgres tags undo rows with the batch's last block, so every rollback-able block
+            // needs its own batch, never shared with a finalized one.
+            if (finalizedBlocks.length > 0) {
+              await buffer.put(
+                {
+                  blocks: finalizedBlocks.map((b) => b.block),
+                  head: res.head,
+                  meta: {
+                    bytes: finalizedBlocks.reduce((a, b) => a + b.bytes, 0),
+                    requestedFromBlock,
+                    lastBlockReceivedAt,
+                    requests: pendingRequests,
+                  },
+                },
+                unfinalizedBlocks.length > 0,
+              )
+              pendingRequests = {}
+            } else if (unfinalizedBlocks.length > 0) {
+              // Or blocks pending from earlier all-finalized responses inherit this batch's number.
+              await buffer.cut()
+            }
+
+            for (let { block, bytes } of unfinalizedBlocks) {
+              await buffer.put(
+                {
+                  blocks: [block],
+                  head: res.head,
+                  meta: {
+                    bytes,
+                    requestedFromBlock,
+                    lastBlockReceivedAt,
+                    requests: pendingRequests,
+                  },
+                },
+                true,
+              )
+              pendingRequests = {}
+            }
+          } else {
+            // One batch per response. Targets that resolve a rollback from a block number carried on
+            // the rows themselves (ClickHouse) don't need per-block batches, and splitting them only
+            // costs round-trips. Flush once when the response carries unfinalized blocks, so head
+            // latency stays the same as the per-block path.
             await buffer.put(
               {
-                blocks: [block],
+                blocks: blocks.map((b) => b.block),
                 head: res.head,
                 meta: {
-                  bytes,
+                  bytes: blocks.reduce((a, b) => a + b.bytes, 0),
                   requestedFromBlock,
                   lastBlockReceivedAt,
-                  // We flush requests here to avoid double-counting
-                  // as we already sent them
-                  requests: finalizedBlocks.length > 0 ? {} : requests,
+                  requests: pendingRequests,
                 },
               },
-              true,
+              unfinalizedBlocks.length > 0,
             )
+            pendingRequests = {}
           }
 
-          requests = {}
+          requests = pendingRequests
         }
       } catch (err) {
         if (buffer.signal.aborted) break

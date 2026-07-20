@@ -109,7 +109,9 @@ export function drizzleTarget<T>({
       }
       logger.debug(`PG triggers configured`)
 
-      for await (const { data, ctx } of read(cursor)) {
+      // Undo snapshots are tagged with the batch's last block, so a block's writes are only
+      // rollback-safe when that block has the batch to itself and no finalized block shares it.
+      for await (const { data, ctx } of read(cursor, { perBlockUnfinalized: true })) {
         const target = ctx.profiler.start({ name: 'postgres', labels: 'db' })
 
         try {
@@ -117,11 +119,10 @@ export function drizzleTarget<T>({
             () =>
               db.transaction(async (tx) => {
                 await state.acquireLock(tx)
+                // `!= null`: a finalized head of 0 would otherwise skip the undo log entirely.
+                const finalizedHead = ctx.stream.head.finalized?.number
                 const snapshotEnabled =
-                  ctx.stream.head.finalized?.number &&
-                  ctx.stream.state.current.number >= ctx.stream.head.finalized.number
-                    ? 'true'
-                    : 'false'
+                  finalizedHead != null && ctx.stream.state.current.number >= finalizedHead ? 'true' : 'false'
 
                 /*
                  * Enable snapshotting for this transaction

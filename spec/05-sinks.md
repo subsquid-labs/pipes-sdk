@@ -1,0 +1,109 @@
+# 05 — The sink contract (RP-n)
+
+What ANY sink, in any language, must do to plug into a pipe. Bands: 1–19 write loop,
+20–29 output contract, 30–39 cursor keying & migration, 40–49 fork & recovery hooks.
+
+## Operations table
+
+| Operation | Direction | Purpose |
+|---|---|---|
+| `recover` | pipe → sink | return persisted DEF-8 state (or ⊥ on cold start) |
+| `commit` | pipe → sink | persist one batch's data + cursor + floor + rollback chain |
+| `resolveFork` | pipe → sink | roll back above canonical ancestor; return ancestor (optional capability, WP-45) |
+| repair hooks | sink → author | recovery/rollback delegation where the class requires it (RP-42) |
+
+## Write loop
+
+**RP-1 — Bind before read.** [MUST] The sink binds its cursor key (DEF-9) from the
+pipe id before any state read; all subsequent reads, writes, cleanup, and fork queries
+use the bound key.
+
+**RP-2 — Recover-repair-read order.** [MUST] The sink's write loop is: bind → recover
+state → repair partial writes (CN-40…CN-44) → request the stream from the recovered
+state → per batch: deliver data to author code, then persist cursor per its class's
+commit protocol (CN-10…CN-14).
+
+**RP-3 — State handshake fidelity.** [MUST] The state returned by `recover` is exactly
+the last committed ⟨C, F, RC⟩ — never a partially-written one (per-class guarantees in
+06). `finalized` is explicitly `null` when absent, never omitted (DEF-8).
+
+**RP-4 — Persist floor verbatim.** [MUST] The sink persists the floor and rollback
+chain exactly as delivered by the pipe — no sink-local clamping, recomputation, or
+filtering. Monotonicity is the pipe's job (ADR-3).
+
+**RP-5 — Author-code boundary.** [MUST] Author callbacks receive each batch exactly
+once per successful commit path. If the callback throws, the batch MUST NOT be
+acknowledged: the commit protocol aborts so recovery re-delivers (per class).
+
+**RP-6 — Retention cleanup.** [MUST] Sinks bound the growth of their own bookkeeping
+(cursor rows, undo records) by the class retention parameter, scoped to their own
+cursor key, without ever deleting the newest committed state.
+
+## Output contract (what downstream consumers may rely on)
+
+**RP-20 — Visibility class.** [MUST] Immediate-visibility sinks (classes T/W/A) expose
+committed rows as soon as the batch commits; deferred sinks (K/∅) expose only finalized
+rows (INV-25). A consumer never observes a torn batch within the class's atomic unit
+(CN-20…CN-24).
+
+**RP-21 — Coverage honesty (file sinks).** [MUST] Every published unit is named for the
+coverage window it accounts for (DEF-14): windows tile the processed range per table —
+no overlaps, no gaps within a covered range; a window absent from a table means "not
+processed", never "processed, empty". Sparse tables stretch windows; empty windows at
+stream end publish as explicit empty units. *(The coverage model is unimplemented on the
+reference mainline — files are named by row min/max and no empty units publish; GAP-17.)*
+
+**RP-22 — Rows within window.** [MUST] Every row in a published unit is attributed to a
+block inside that unit's window.
+
+**RP-23 — Progress monotonicity.** [MUST] The persisted cursor is non-decreasing except
+via T-FORK or recovery repair, and every commit advances it by ≥ 1 block.
+
+## Cursor keying & legacy migration
+
+**RP-30 — Key precedence.** [MUST] Explicit sink-level key > pipe id > legacy constant
+key. An explicit key disables both adoption and migration.
+
+**RP-31 — One-time legacy migration.** [MUST — migrating bindings only] Bindings that
+declare migration (the transactional and append-lagged DB bindings, IB-21/IB-20)
+migrate legacy-keyed state to the new key exactly once, observably (warning log), and
+never again. Write-ahead and file bindings do not migrate — they start fresh or, where
+tracked tables are declared exclusive (IB-27), refuse via the orphan-data guard (ADR-2,
+RP-32, CN-44).
+
+**RP-32 — Migration safety.** [MUST] Migration is race-safe: under concurrent first
+runs, at most one pipe adopts the legacy state; others start fresh. *(One binding
+migrates without a lock and can double-adopt — GAP-7.)* Where silent adoption could
+cause re-processing or data mixing, the sink MUST refuse with a coded error instead of
+guessing (e.g. orphan-data guard, CN-44).
+
+## Fork & recovery hooks
+
+**RP-40 — resolveFork obligations.** [MUST] Given the canonical chain: find the
+ancestor per WP-42 using **own-key** rollback records only; remove all sink data above
+it (class mechanism, CN-30…CN-34); persist the rewound cursor state; return the
+ancestor. Return ⊥ only for the finality dead-end (WP-44).
+
+**RP-41 — Fork scoping.** [MUST] Fork resolution and its deletions are scoped to the
+sink's own cursor key and its declared tracked tables; co-resident pipes and untracked
+tables are untouched (INV-35).
+
+**RP-42 — Delegated repair.** [MUST] Where the class delegates data repair to author
+code (class A recovery/rollback hooks), the sink invokes the hook with reason
+(`recovery` | `fork`) and the safe cursor before advancing past it. Intent: a class-A
+sink without a repair hook cannot meet REQ-3 — the hook is normatively required
+*(currently optional in one binding: silent divergence, GAP-3; ratification ADR-15/OQ-3)*.
+
+**RP-43 — Portal-contract guard.** [MUST] If the canonical chain's maximum block is
+below the persisted cursor, the sink MUST refuse (coded portal-contract violation)
+rather than leave orphan rows above the new chain. *(Enforced by one binding today;
+intent is all — GAP-9.)*
+
+## Error taxonomy (sink-visible)
+
+Closed, banded, coded (ADR-4); concrete codes in IB-50…IB-52. Classes: configuration
+(bad schema/engine/options — fatal at startup), capability (unsupported engine feature
+— fatal), integrity (orphan data, state/file mismatch — fatal before any deletion),
+operational (lock contention — fatal to this instance), transient (storage
+unavailability — retried per FM-20…FM-27). No sink error may surface as an uncoded
+crash.

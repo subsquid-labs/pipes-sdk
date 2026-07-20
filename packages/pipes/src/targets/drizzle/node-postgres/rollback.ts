@@ -70,27 +70,26 @@ DECLARE
   snapshot_enabled BOOLEAN := COALESCE(NULLIF(current_setting('sqd.snapshot_enabled', true), '')::boolean, false);
   block_num BIGINT := COALESCE(NULLIF(current_setting('sqd.snapshot_block_number', true), '')::BIGINT, -1);
 BEGIN
-   IF TG_OP = 'UPDATE' OR TG_OP = 'INSERT' THEN
-     IF snapshot_enabled = true THEN
+   IF snapshot_enabled = true THEN
+     IF TG_OP = 'INSERT' THEN
+        -- No prior value exists; record the key under 'INSERT' so undo drops the row.
         INSERT INTO "${to}" (${colNames}, "___sqd__block_number", "___sqd__operation")
-        VALUES (${newCols}, block_num, TG_OP)
-        ON CONFLICT (${primaryKey}) DO UPDATE SET
-        "___sqd__operation" = TG_OP, ${Object.keys(columns)
-          .map((c) => `"${c}" = EXCLUDED."${c}"`)
-          .join(', ')};
-     END IF;
-     RETURN NEW;
-   ELSIF  TG_OP = 'DELETE' THEN
-      IF snapshot_enabled = true THEN
+        VALUES (${newCols}, block_num, 'INSERT')
+        ON CONFLICT (${primaryKey}) DO NOTHING;
+     ELSE
+        -- UPDATE/DELETE: keep the before-image (OLD) so undo restores the pre-change row.
+        -- DO NOTHING preserves the earliest before-image when a row changes twice in one block.
         INSERT INTO "${to}" (${colNames}, "___sqd__block_number", "___sqd__operation")
         VALUES (${oldCols}, block_num, TG_OP)
-        ON CONFLICT (${primaryKey}) DO UPDATE SET
-        "___sqd__operation" = TG_OP, ${Object.keys(columns)
-          .map((c) => `"${c}" = EXCLUDED."${c}"`)
-          .join(', ')};
-      END IF;
-      RETURN OLD;
+        ON CONFLICT (${primaryKey}) DO NOTHING;
+     END IF;
    END IF;
+
+   IF TG_OP = 'DELETE' THEN
+     RETURN OLD;
+   END IF;
+
+   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 

@@ -55,6 +55,7 @@ export class Span implements Profiler {
 
   readonly hidden: boolean
   readonly #hooks: SpanHooks | null
+  #ended = false
 
   /**
    * Creates a root Profiler span.
@@ -137,9 +138,14 @@ export class Span implements Profiler {
   /**
    Marks the end of the span and calculates the elapsed time.
 
+   Idempotent — a second `onEnd()` would re-close a span the backend already closed.
+
    Returns the current span instance for chaining.
    */
   end() {
+    if (this.#ended) return this
+    this.#ended = true
+
     this.elapsed = performance.now() - this.started
     if (!this.hidden) {
       this.#hooks?.onEnd()

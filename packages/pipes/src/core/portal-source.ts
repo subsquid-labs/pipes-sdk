@@ -16,7 +16,7 @@ import { Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
 import { Profiler, Span, SpanHooks } from './profiling.js'
 import { ProgressEvent, StartEvent } from './progress-tracker.js'
 import { QueryBuilder, hashQuery } from './query-builder.js'
-import { Target, TargetState } from './target.js'
+import { ReadOptions, Target, TargetState } from './target.js'
 import { QueryAwareTransformer, Transformer, TransformerArgs, TransformerOptions } from './transformer.js'
 import { BlockCursor, HookContext } from './types.js'
 
@@ -35,6 +35,7 @@ export interface PortalCache {
     portal: PortalClient
     query: Q
     logger: Logger
+    perBlockUnfinalized?: boolean
   }): PortalBlockStream<GetBlock<Q>>
 }
 
@@ -181,7 +182,7 @@ export class PortalStream<Q extends QueryBuilder<any>, T = any> {
     this.#metricServer.registerPipe(this.#id)
   }
 
-  private async *read(state?: TargetState): AsyncIterable<PortalBatch<T>> {
+  private async *read(state?: TargetState, options?: ReadOptions): AsyncIterable<PortalBatch<T>> {
     // Seed the monotonic finalized watermark from the target's persisted finalized
     // head so it survives an unclean restart mid-fork. Seeding only from the
     // dedicated `finalized` field (never from `latest`) keeps no-finality datasets
@@ -225,72 +226,82 @@ export class PortalStream<Q extends QueryBuilder<any>, T = any> {
             portal: this.#portal,
             logger: this.#logger,
             query,
+            perBlockUnfinalized: options?.perBlockUnfinalized ?? false,
           })
-        : this.#portal.getStream(query)
+        : this.#portal.getStream(query, { perBlockUnfinalized: options?.perBlockUnfinalized ?? false })
 
       let batchSpan = Span.root('batch', this.#options.profiler).addLabels('core')
       let readSpan = batchSpan.start('fetch data').addLabels('core')
-      for await (const batch of source) {
-        readSpan.end()
+      try {
+        for await (const batch of source) {
+          readSpan.end()
 
-        const blocks = batch.blocks
+          const blocks = batch.blocks
 
-        if (blocks.length > 0) {
-          // Clamp the portal's finalized head through the monotonic watermark before it
-          // reaches any consumer, so a regressed or transiently-missing finalized head can
-          // never un-finalize already-committed data. The rollback chain is derived from the
-          // CLAMPED head so the two stay consistent (clamp can only raise finalized).
-          const finalized = this.#watermark.clamp(batch.head.finalized)
+          if (blocks.length > 0) {
+            // Clamp the portal's finalized head through the monotonic watermark before it
+            // reaches any consumer, so a regressed or transiently-missing finalized head can
+            // never un-finalize already-committed data. The rollback chain is derived from the
+            // CLAMPED head so the two stay consistent (clamp can only raise finalized).
+            const finalized = this.#watermark.clamp(batch.head.finalized)
 
-          // TODO WTF with any?
-          const lastBatchBlock = last(blocks as { header: { number: number } }[])
+            // TODO WTF with any?
+            const lastBatchBlock = last(blocks as { header: { number: number } }[])
 
-          const lastBlockNumber = Math.max(
-            Math.min(last(bounded)?.range?.to || batch.head.latest?.number || finalized?.number || Infinity),
-            lastBatchBlock.header?.number || -Infinity,
-          )
+            const lastBlockNumber = Math.max(
+              Math.min(last(bounded)?.range?.to || batch.head.latest?.number || finalized?.number || Infinity),
+              lastBatchBlock.header?.number || -Infinity,
+            )
 
-          const ctx: BatchContext = {
-            id: this.#id,
-            profiler: batchSpan,
-            metrics: this.#metricServer.metrics,
-            logger: this.#logger,
-            stream: {
-              dataset: datasetMetadata,
-              head: {
-                finalized,
-                latest: batch.head.latest,
+            const ctx: BatchContext = {
+              id: this.#id,
+              profiler: batchSpan,
+              metrics: this.#metricServer.metrics,
+              logger: this.#logger,
+              stream: {
+                dataset: datasetMetadata,
+                head: {
+                  finalized,
+                  latest: batch.head.latest,
+                },
+                query: {
+                  url: this.#portal.getUrl(),
+                  hash: await hashQuery(query),
+                  raw: query,
+                },
+                state: {
+                  initial,
+                  current: cursorFromHeader(lastBatchBlock as any),
+                  last: lastBlockNumber,
+                  rollbackChain: extractRollbackChain({
+                    blocks: batch.blocks,
+                    head: finalized,
+                  }),
+                },
               },
-              query: {
-                url: this.#portal.getUrl(),
-                hash: await hashQuery(query),
-                raw: query,
+              batch: {
+                blocksCount: batch.blocks.length,
+                bytesSize: batch.meta.bytes,
+                requests: batch.meta.requests,
+                lastBlockReceivedAt: batch.meta.lastBlockReceivedAt,
               },
-              state: {
-                initial,
-                current: cursorFromHeader(lastBatchBlock as any),
-                last: lastBlockNumber,
-                rollbackChain: extractRollbackChain({
-                  blocks: batch.blocks,
-                  head: finalized,
-                }),
-              },
-            },
-            batch: {
-              blocksCount: batch.blocks.length,
-              bytesSize: batch.meta.bytes,
-              requests: batch.meta.requests,
-              lastBlockReceivedAt: batch.meta.lastBlockReceivedAt,
-            },
+            }
+
+            const data = await this.applyTransformers(ctx, batch.blocks as T)
+
+            yield { data, ctx }
+          } else {
+            // Never yielded, so batchEnd won't run.
+            batchSpan.end()
           }
 
-          const data = await this.applyTransformers(ctx, batch.blocks as T)
-
-          yield { data, ctx }
+          batchSpan = Span.root('batch', this.#options.profiler).addLabels('core')
+          readSpan = batchSpan.start('fetch data').addLabels('core')
         }
-
-        batchSpan = Span.root('batch', this.#options.profiler).addLabels('core')
-        readSpan = batchSpan.start('fetch data').addLabels('core')
+      } finally {
+        // The last pair is always armed for a batch that never arrives.
+        readSpan.end()
+        batchSpan.end()
       }
     }
 
@@ -329,14 +340,17 @@ export class PortalStream<Q extends QueryBuilder<any>, T = any> {
   private async applyTransformers(ctx: BatchContext, data: T) {
     const span = ctx.profiler.start('apply transformers').addLabels('core')
 
-    for (const transformer of this.#transformers) {
-      data = await transformer.run(data, {
-        ...ctx,
-        profiler: span,
-        logger: this.#logger,
-      })
+    try {
+      for (const transformer of this.#transformers) {
+        data = await transformer.run(data, {
+          ...ctx,
+          profiler: span,
+          logger: this.#logger,
+        })
+      }
+    } finally {
+      span.end()
     }
-    span.end()
 
     return data
   }
@@ -427,12 +441,12 @@ export class PortalStream<Q extends QueryBuilder<any>, T = any> {
     return target.write({
       id: this.#id,
       logger: this.#logger,
-      read: async function* (state?: TargetState) {
+      read: async function* (state?: TargetState, options?: ReadOptions) {
         await self.configure()
 
         while (true) {
           try {
-            for await (const batch of self.read(state)) {
+            for await (const batch of self.read(state, options)) {
               yield batch as PortalBatch<T>
               self.batchEnd(batch.ctx)
             }

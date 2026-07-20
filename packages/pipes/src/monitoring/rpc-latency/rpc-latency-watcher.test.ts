@@ -5,12 +5,17 @@ import type { BatchContext } from '~/core/portal-source.js'
 import { type RpcLatencyListener, RpcLatencyWatcher, rpcLatencyWatcher } from './rpc-latency-watcher.js'
 
 class StubWatcher extends RpcLatencyWatcher {
-  watch(): RpcLatencyListener {
-    return { stop: () => {} }
-  }
-  /** Skip subscribing — tests populate `nodes` directly via addBlock. */
-  preregister(url: string): void {
-    this.nodes.set(url, new Map())
+  watched: string[] = []
+  stopped = 0
+
+  watch(url: string): RpcLatencyListener {
+    this.watched.push(url)
+
+    return {
+      stop: () => {
+        this.stopped++
+      },
+    }
   }
 }
 
@@ -40,8 +45,7 @@ describe('rpcLatencyWatcher transformer', () => {
     // silently break (number, hash) matching, leaving the probe pairing observations across
     // chain forks. This pins the wire-up.
     const watcher = new StubWatcher(['ws://rpc-1', 'ws://rpc-2'])
-    watcher.preregister('ws://rpc-1')
-    watcher.preregister('ws://rpc-2')
+    watcher.start()
 
     const blockTimestamp = new Date('2026-05-09T00:00:00Z')
     const rpc1ReceivedAt = new Date('2026-05-09T00:00:01Z')
@@ -79,7 +83,7 @@ describe('rpcLatencyWatcher transformer', () => {
     // consumers degrade to number-only matching — this test pins that the pipeline doesn't
     // accidentally fabricate a value (e.g. empty string) on the way through.
     const watcher = new StubWatcher(['ws://rpc'])
-    watcher.preregister('ws://rpc')
+    watcher.start()
 
     watcher.addBlock('ws://rpc', {
       number: 42,
@@ -98,12 +102,84 @@ describe('rpcLatencyWatcher transformer', () => {
 
   it('returns null when no RPC has seen the block (lookup empty)', async () => {
     const watcher = new StubWatcher(['ws://rpc'])
-    watcher.preregister('ws://rpc')
+    watcher.start()
     // No addBlock calls — lookup returns [].
 
     const transformer = rpcLatencyWatcher({ watcher })
     const result = await transformer.run([{ header: { number: 999, timestamp: 0 } }], makeBatchContext(new Date()))
 
     expect(result).toBeNull()
+  })
+})
+
+describe('RpcLatencyWatcher lifecycle', () => {
+  it('re-subscribes after stop(), so a stream restart does not blind it permanently', () => {
+    // stop() used to be a one-way latch: after the first restart the sockets stayed
+    // shut and lookup() returned [] forever, freezing the gauges on their last value.
+    const watcher = new StubWatcher(['ws://rpc-1', 'ws://rpc-2'])
+
+    watcher.start()
+    expect(watcher.watched).toEqual(['ws://rpc-1', 'ws://rpc-2'])
+
+    watcher.stop()
+    expect(watcher.stopped).toBe(2)
+
+    watcher.start()
+    expect(watcher.watched).toEqual(['ws://rpc-1', 'ws://rpc-2', 'ws://rpc-1', 'ws://rpc-2'])
+  })
+
+  it('retains observed heads across a restart', () => {
+    // Dropping the buffer would stall matching until each RPC re-observed a head.
+    const watcher = new StubWatcher(['ws://rpc'])
+    watcher.start()
+    watcher.addBlock('ws://rpc', { number: 7, timestamp: new Date(), receivedAt: new Date() })
+
+    watcher.stop()
+    watcher.start()
+
+    expect(watcher.lookup(7)).toHaveLength(1)
+  })
+
+  it('ignores a repeated start()', () => {
+    const watcher = new StubWatcher(['ws://rpc'])
+
+    watcher.start()
+    watcher.start()
+
+    expect(watcher.watched).toEqual(['ws://rpc'])
+  })
+
+  it('ignores a repeated stop() instead of stopping listeners twice', () => {
+    const watcher = new StubWatcher(['ws://rpc'])
+    watcher.start()
+
+    watcher.stop()
+    watcher.stop()
+
+    expect(watcher.stopped).toBe(1)
+  })
+
+  it('subscribes from the transformer start hook', async () => {
+    const watcher = new StubWatcher(['ws://rpc'])
+    const transformer = rpcLatencyWatcher({ watcher })
+
+    await transformer.start({} as never)
+
+    expect(watcher.watched).toEqual(['ws://rpc'])
+  })
+
+  it('evicts the oldest heads once a node exceeds the retention cap', () => {
+    // Nothing pruned `nodes`, so entries accumulated for the process's lifetime.
+    const watcher = new StubWatcher(['ws://rpc'])
+    watcher.start()
+
+    for (let i = 1; i <= 600; i++) {
+      watcher.addBlock('ws://rpc', { number: i, timestamp: new Date(), receivedAt: new Date() })
+    }
+
+    expect(watcher.nodes.get('ws://rpc')?.size).toBe(512)
+    expect(watcher.lookup(88)).toEqual([])
+    expect(watcher.lookup(89)).toHaveLength(1)
+    expect(watcher.lookup(600)).toHaveLength(1)
   })
 })

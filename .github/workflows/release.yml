@@ -16,18 +16,10 @@ name: Release
 on:
   push:
     tags:
-      # 'pipes-v*' is deliberately ABSENT. release-subsquid-pipes.yml still owns
-      # the core package until its trusted publisher on npmjs.com is repointed at
-      # release.yml. Listing it here too would double-publish.
-      #
-      # THE FLIP — one commit, once npm config is updated:
-      #   1. add "- 'pipes-v*'" below
-      #   2. git rm .github/workflows/release-subsquid-pipes.yml
-      #
       # These globs are ANCHORED: GitHub matches the pattern against the whole ref
       # name, so 'pipes-cli-v*'/'pipes-ui-v*' cannot collide with 'pipes-v*'
-      # ("pipes-cli-v1.0.0" does not start with "pipes-v"). Overlap with the shim
-      # is impossible, not merely unlikely.
+      # ("pipes-cli-v1.0.0" does not start with "pipes-v").
+      - 'pipes-v*'
       - 'pipes-cli-v*'
       - 'pipes-ui-v*'
   workflow_dispatch:
@@ -336,17 +328,16 @@ jobs:
           ACTUAL_VERSION=$(jq -r '.version' "$MANIFEST")
           [ "$ACTUAL_VERSION" = "$VERSION" ] || { echo "::error::$MANIFEST version is '$ACTUAL_VERSION', expected '$VERSION'"; exit 1; }
 
-          # The org was renamed: subsquid-labs/pipes-sdk now redirects to
-          # subsquid/pipes-sdk. Every manifest here still says subsquid-labs, and
-          # npm demonstrably accepts it — @subsquid/pipes@1.0.0-alpha.16 published
-          # with a provenance attestation through the redirect. Accept BOTH, so
-          # this gate doesn't reject whichever way the manifests are eventually
-          # settled.
+          # Must be the CANONICAL org. npm compares this string against the repo
+          # in the provenance bundle, which is built from the OIDC claim and so
+          # always says subsquid/pipes-sdk. The old subsquid-labs name redirects
+          # for humans but fails that comparison with E422 — accepting it here
+          # only defers the error to the publish step.
           REPO_URL=$(jq -r '.repository.url // .repository // ""' "$MANIFEST")
           case "$REPO_URL" in
-            *github.com/subsquid-labs/pipes-sdk*|*github.com/subsquid/pipes-sdk*) ;;
+            *github.com/subsquid/pipes-sdk*) ;;
             *)
-              echo "::error::$MANIFEST has repository.url='$REPO_URL'. --provenance requires it to resolve to the pipes-sdk repo (subsquid/pipes-sdk, or subsquid-labs/pipes-sdk via redirect)."
+              echo "::error::$MANIFEST has repository.url='$REPO_URL', expected github.com/subsquid/pipes-sdk — provenance validation compares it against the OIDC repo claim."
               exit 1
               ;;
           esac

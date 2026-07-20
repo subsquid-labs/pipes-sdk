@@ -74,24 +74,10 @@ describe('Clickhouse state', () => {
       expect(data).toMatchInlineSnapshot(`
         [
           {
-            "current": "{"number":3,"hash":"0x3","timestamp":3000}",
-            "finalized": "{"hash":"0x2","number":2}",
-            "id": "test",
-            "rollback_chain": "[{"number":3,"hash":"0x3","timestamp":3000}]",
-            "sign": 1,
-          },
-          {
-            "current": "{"number":4,"hash":"0x4","timestamp":4000}",
-            "finalized": "{"hash":"0x2","number":2}",
-            "id": "test",
-            "rollback_chain": "[{"number":4,"hash":"0x4","timestamp":4000}]",
-            "sign": 1,
-          },
-          {
             "current": "{"number":5,"hash":"0x5","timestamp":5000}",
             "finalized": "{"hash":"0x2","number":2}",
             "id": "test",
-            "rollback_chain": "[{"number":5,"hash":"0x5","timestamp":5000}]",
+            "rollback_chain": "[{"number":3,"hash":"0x3","timestamp":3000},{"number":4,"hash":"0x4","timestamp":4000},{"number":5,"hash":"0x5","timestamp":5000}]",
             "sign": 1,
           },
         ]
@@ -899,31 +885,10 @@ describe('Clickhouse state', () => {
       expect(data).toMatchInlineSnapshot(`
         [
           {
-            "current": "{"number":2,"hash":"0x2","timestamp":2000}",
-            "finalized": "{"hash":"0x1","number":1}",
-            "id": "test",
-            "rollback_chain": "[{"number":2,"hash":"0x2","timestamp":2000}]",
-            "sign": 1,
-          },
-          {
-            "current": "{"number":3,"hash":"0x3","timestamp":3000}",
-            "finalized": "{"hash":"0x1","number":1}",
-            "id": "test",
-            "rollback_chain": "[{"number":3,"hash":"0x3","timestamp":3000}]",
-            "sign": 1,
-          },
-          {
-            "current": "{"number":4,"hash":"0x4","timestamp":4000}",
-            "finalized": "{"hash":"0x1","number":1}",
-            "id": "test",
-            "rollback_chain": "[{"number":4,"hash":"0x4","timestamp":4000}]",
-            "sign": 1,
-          },
-          {
             "current": "{"number":5,"hash":"0x5","timestamp":5000}",
             "finalized": "{"hash":"0x1","number":1}",
             "id": "test",
-            "rollback_chain": "[{"number":5,"hash":"0x5","timestamp":5000}]",
+            "rollback_chain": "[{"number":2,"hash":"0x2","timestamp":2000},{"number":3,"hash":"0x3","timestamp":3000},{"number":4,"hash":"0x4","timestamp":4000},{"number":5,"hash":"0x5","timestamp":5000}]",
             "sign": 1,
           },
           {
@@ -934,24 +899,10 @@ describe('Clickhouse state', () => {
             "sign": 1,
           },
           {
-            "current": "{"number":5,"hash":"0x5a","timestamp":5000}",
-            "finalized": "{"hash":"0x4a","number":4}",
-            "id": "test",
-            "rollback_chain": "[{"number":5,"hash":"0x5a","timestamp":5000}]",
-            "sign": 1,
-          },
-          {
-            "current": "{"number":6,"hash":"0x6a","timestamp":6000}",
-            "finalized": "{"hash":"0x4a","number":4}",
-            "id": "test",
-            "rollback_chain": "[{"number":6,"hash":"0x6a","timestamp":6000}]",
-            "sign": 1,
-          },
-          {
             "current": "{"number":7,"hash":"0x7a","timestamp":7000}",
             "finalized": "{"hash":"0x4a","number":4}",
             "id": "test",
-            "rollback_chain": "[{"number":7,"hash":"0x7a","timestamp":7000}]",
+            "rollback_chain": "[{"number":5,"hash":"0x5a","timestamp":5000},{"number":6,"hash":"0x6a","timestamp":6000},{"number":7,"hash":"0x7a","timestamp":7000}]",
             "sign": 1,
           },
         ]

@@ -114,13 +114,14 @@ export async function mockPortal(
             const headers: Record<string, string | number> = {
               'Content-Type': 'application/jsonl',
             }
-            if (mockResp.head?.finalized?.number) {
+            // `!= null`: block 0 is a valid head; dropping the header would hide finality entirely.
+            if (mockResp.head?.finalized?.number != null) {
               headers['X-Sqd-Finalized-Head-Number'] = mockResp.head.finalized.number
             }
-            if (mockResp.head?.finalized?.hash) {
+            if (mockResp.head?.finalized?.hash != null) {
               headers['X-Sqd-Finalized-Head-Hash'] = mockResp.head.finalized.hash
             }
-            if (mockResp.head?.latest?.number) {
+            if (mockResp.head?.latest?.number != null) {
               headers['X-Sqd-Head-Number'] = mockResp.head.latest.number
             }
 

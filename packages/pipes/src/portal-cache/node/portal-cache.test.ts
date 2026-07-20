@@ -379,107 +379,11 @@ describe('Portal cache', () => {
                 "number": 3,
                 "timestamp": 3000,
               },
-            ],
-            "meta": {
-              "head": {
-                "finalized": {
-                  "hash": "0x2",
-                  "number": 2,
-                },
-                "latest": undefined,
-              },
-              "meta": {
-                "bytesSize": 159,
-              },
-              "query": {
-                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
-                "raw": {
-                  "fields": {
-                    "block": {
-                      "hash": true,
-                      "number": true,
-                      "timestamp": true,
-                    },
-                  },
-                  "fromBlock": 0,
-                  "parentBlockHash": undefined,
-                  "toBlock": 5,
-                  "type": "evm",
-                },
-              },
-              "state": {
-                "current": {
-                  "hash": "0x3",
-                  "number": 3,
-                  "timestamp": 3000,
-                },
-                "initial": 0,
-                "last": 5,
-                "rollbackChain": [
-                  {
-                    "hash": "0x3",
-                    "number": 3,
-                    "timestamp": 3000,
-                  },
-                ],
-              },
-            },
-          },
-          {
-            "data": [
               {
                 "hash": "0x4",
                 "number": 4,
                 "timestamp": 4000,
               },
-            ],
-            "meta": {
-              "head": {
-                "finalized": {
-                  "hash": "0x2",
-                  "number": 2,
-                },
-                "latest": undefined,
-              },
-              "meta": {
-                "bytesSize": 53,
-              },
-              "query": {
-                "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
-                "raw": {
-                  "fields": {
-                    "block": {
-                      "hash": true,
-                      "number": true,
-                      "timestamp": true,
-                    },
-                  },
-                  "fromBlock": 0,
-                  "parentBlockHash": undefined,
-                  "toBlock": 5,
-                  "type": "evm",
-                },
-              },
-              "state": {
-                "current": {
-                  "hash": "0x4",
-                  "number": 4,
-                  "timestamp": 4000,
-                },
-                "initial": 0,
-                "last": 5,
-                "rollbackChain": [
-                  {
-                    "hash": "0x4",
-                    "number": 4,
-                    "timestamp": 4000,
-                  },
-                ],
-              },
-            },
-          },
-          {
-            "data": [
               {
                 "hash": "0x5",
                 "number": 5,
@@ -495,7 +399,7 @@ describe('Portal cache', () => {
                 "latest": undefined,
               },
               "meta": {
-                "bytesSize": 53,
+                "bytesSize": 265,
               },
               "query": {
                 "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",
@@ -522,6 +426,16 @@ describe('Portal cache', () => {
                 "initial": 0,
                 "last": 5,
                 "rollbackChain": [
+                  {
+                    "hash": "0x3",
+                    "number": 3,
+                    "timestamp": 3000,
+                  },
+                  {
+                    "hash": "0x4",
+                    "number": 4,
+                    "timestamp": 4000,
+                  },
                   {
                     "hash": "0x5",
                     "number": 5,
@@ -557,7 +471,7 @@ describe('Portal cache', () => {
                 "latest": undefined,
               },
               "meta": {
-                "bytesSize": 159,
+                "bytesSize": 265,
               },
               "query": {
                 "hash": "1137b8a50718df4ec48060ae5cef9c8e929b619a23846c34a2535b3548b589c5",

@@ -20,13 +20,6 @@ Publishing runs on **npm Trusted Publishing** (OIDC + provenance, no `NPM_TOKEN`
 The tagged commit is the source of truth: CI refuses to publish unless
 `package.json` already carries the version in the tag.
 
-> **Read this before touching `@subsquid/pipes`.** Core is mid-migration. Its
-> trusted publisher on npmjs.com still points at the old
-> `release-subsquid-pipes.yml` shim, so **core releases still run through the
-> shim**, and `release.yml` deliberately does not listen on `pipes-v*`. Both
-> files trigger on tag push; they cannot collide because the prefixes are
-> anchored and disjoint. See [Finishing the migration](#finishing-the-migration).
-
 ## Preconditions
 
 - `git status` clean on `main`, up to date with `origin/main`. The workflow builds
@@ -73,7 +66,6 @@ gh run watch --repo subsquid-labs/pipes-sdk --exit-status
 Or tail the latest run for a specific workflow:
 
 ```sh
-# pipes-cli / pipes-ui → release.yml ; pipes → release-subsquid-pipes.yml (for now)
 RUN_ID=$(gh run list --repo subsquid-labs/pipes-sdk --workflow=release.yml --limit 1 --json databaseId --jq '.[0].databaseId')
 gh run watch "$RUN_ID" --repo subsquid-labs/pipes-sdk --exit-status
 ```
@@ -167,28 +159,20 @@ configures a trusted publisher on npmjs.com:
   `subsquid-labs/pipes-sdk` still works as a redirect (and is what every
   `repository` field and `gh --repo` invocation in this repo still says), but
   OIDC claims carry the canonical name, so trusted publishing must match it.
-- Workflow filename: `release.yml` (core is still `release-subsquid-pipes.yml`
-  until the migration is finished)
+- Workflow filename: `release.yml` — for all three packages
 
 The workflow requests `id-token: write` and publishes with `--provenance`, so
 releases carry a verifiable provenance attestation. If the config is missing, the
 publish step fails with a 404/401 — that's the signal, not a transient error.
 
-**This binds to the exact filename.** Renaming or moving a release workflow breaks
-publishing until the npm config is updated to match. That constraint is the only
-reason the shim still exists.
+**This binds to the exact filename.** Renaming or moving `release.yml` breaks
+publishing for every package until the npm config is updated to match.
 
-## Finishing the migration
-
-Once `@subsquid/pipes`' trusted publisher is repointed from
-`release-subsquid-pipes.yml` to `release.yml`, retire the shim in one commit:
-
-1. Add `- 'pipes-v*'` to the `tags:` trigger in `release.yml`
-2. `git rm .github/workflows/release-subsquid-pipes.yml`
-3. Delete the core carve-outs from this file
-
-Do **not** add `pipes-v*` to `release.yml` before the npm config flips — core
-would publish from a workflow npm doesn't trust, and 404.
+A mismatch between the OIDC claim and the trusted publisher record surfaces as a
+`404 Not Found - PUT` on an otherwise green run: the tarball builds, provenance
+signs, and only the final PUT is rejected. Read it as "no trusted publisher
+matches this token", and check all three fields — org, repo, workflow filename —
+before touching anything else.
 
 ## Failure modes
 
