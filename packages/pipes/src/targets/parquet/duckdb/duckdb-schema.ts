@@ -1,16 +1,20 @@
-import type {
-  DuckDBAppender,
-  DuckDBListType,
-  DuckDBListValue,
-  DuckDBStructType,
-  DuckDBStructValue,
-  DuckDBType,
-  DuckDBValue,
+import {
+  type DuckDBAppender,
+  type DuckDBListType,
+  type DuckDBListValue,
+  type DuckDBStructType,
+  type DuckDBStructValue,
+  type DuckDBType,
+  type DuckDBValue,
+  blobValue,
+  dateValue,
+  listValue,
+  structValue,
+  timestampMillisValue,
 } from '@duckdb/node-api'
 
 import { PARQUET_ERROR_CODES, ParquetTargetError } from '../errors.js'
 import type { Codec, ParquetColumn, ParquetColumns, ParquetLeafType, ParquetTable } from '../schema.js'
-import type { DuckdbApi } from './duckdb-engine.js'
 
 /**
  * SDK leaf type → DuckDB DDL type. Spike-verified against DuckDB 1.5.4: `TIMESTAMP_MS` COPYs
@@ -119,15 +123,12 @@ const MS_PER_DAY = 86_400_000
  * rows carry PLAIN arrays/objects — never the parquetjs `{ list: [{ element }] }` wrapping.
  * `null`/`undefined` anywhere appends SQL NULL.
  */
-export function buildRowAppender(
-  api: DuckdbApi,
-  columns: ParquetColumns,
-): (appender: DuckDBAppender) => (row: Row) => void {
+export function buildRowAppender(columns: ParquetColumns): (appender: DuckDBAppender) => (row: Row) => void {
   const declarations = Object.entries(columns)
 
   return (appender) => {
     const cells = declarations.map(([name, column], index) => {
-      const append = buildCellAppender(api, column, appender.columnType(index))
+      const append = buildCellAppender(column, appender.columnType(index))
 
       return (row: Row) => {
         const value = row[name]
@@ -145,20 +146,19 @@ export function buildRowAppender(
 
 /** Appender call for one non-null top-level cell of the given declared column type. */
 function buildCellAppender(
-  api: DuckdbApi,
   column: ParquetColumn,
   type: DuckDBType,
 ): (appender: DuckDBAppender, value: unknown) => void {
   switch (column.type) {
     case 'LIST': {
-      const encode = buildValueEncoder(api, column)
+      const encode = buildValueEncoder(column)
       const listType = type as DuckDBListType
 
       return (appender, value) => appender.appendList(encode(value) as DuckDBListValue, listType)
     }
 
     case 'STRUCT': {
-      const encode = buildValueEncoder(api, column)
+      const encode = buildValueEncoder(column)
       const structType = type as DuckDBStructType
 
       return (appender, value) => appender.appendStruct(encode(value) as DuckDBStructValue, structType)
@@ -183,10 +183,10 @@ function buildCellAppender(
       return (appender, value) => appender.appendDouble(value as number)
 
     case 'TIMESTAMP':
-      return (appender, value) => appender.appendTimestampMilliseconds(api.timestampMillisValue(toEpochMillis(value)))
+      return (appender, value) => appender.appendTimestampMilliseconds(timestampMillisValue(toEpochMillis(value)))
 
     case 'DATE':
-      return (appender, value) => appender.appendDate(api.dateValue(toEpochDays(value)))
+      return (appender, value) => appender.appendDate(dateValue(toEpochDays(value)))
 
     case 'JSON':
       return (appender, value) => appender.appendVarchar(JSON.stringify(value))
@@ -194,18 +194,16 @@ function buildCellAppender(
 }
 
 /** Encodes one non-null value into a `DuckDBValue` for a NESTED position (inside LIST/STRUCT). */
-function buildValueEncoder(api: DuckdbApi, column: ParquetColumn): (value: unknown) => DuckDBValue {
+function buildValueEncoder(column: ParquetColumn): (value: unknown) => DuckDBValue {
   switch (column.type) {
     case 'LIST': {
-      const element = buildValueEncoder(api, column.element)
+      const element = buildValueEncoder(column.element)
 
-      return (value) => api.listValue((value as unknown[]).map((item) => (item == null ? null : element(item))))
+      return (value) => listValue((value as unknown[]).map((item) => (item == null ? null : element(item))))
     }
 
     case 'STRUCT': {
-      const fields = Object.entries(column.fields).map(
-        ([name, child]) => [name, buildValueEncoder(api, child)] as const,
-      )
+      const fields = Object.entries(column.fields).map(([name, child]) => [name, buildValueEncoder(child)] as const)
 
       return (value) => {
         const entries: Record<string, DuckDBValue> = {}
@@ -214,7 +212,7 @@ function buildValueEncoder(api: DuckdbApi, column: ParquetColumn): (value: unkno
           entries[name] = item == null ? null : encode(item)
         }
 
-        return api.structValue(entries)
+        return structValue(entries)
       }
     }
 
@@ -232,13 +230,13 @@ function buildValueEncoder(api: DuckdbApi, column: ParquetColumn): (value: unkno
       return (value) => value as boolean
 
     case 'BYTE_ARRAY':
-      return (value) => api.blobValue(value as Uint8Array)
+      return (value) => blobValue(value as Uint8Array)
 
     case 'TIMESTAMP':
-      return (value) => api.timestampMillisValue(toEpochMillis(value))
+      return (value) => timestampMillisValue(toEpochMillis(value))
 
     case 'DATE':
-      return (value) => api.dateValue(toEpochDays(value))
+      return (value) => dateValue(toEpochDays(value))
 
     case 'JSON':
       return (value) => JSON.stringify(value)

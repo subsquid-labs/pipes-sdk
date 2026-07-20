@@ -28,7 +28,7 @@ import { performance } from 'node:perf_hooks'
 
 import { ParquetSchema } from '@dsnp/parquetjs'
 
-import { acquireDuckdbInstance, loadDuckdbApi } from '../src/targets/parquet/duckdb/duckdb-engine.js'
+import { acquireDuckdbInstance } from '../src/targets/parquet/duckdb/duckdb-engine.js'
 import { DuckdbSegmentWriter, SegmentSizeEstimator } from '../src/targets/parquet/duckdb/duckdb-writer.js'
 import { buildRowWrapper, toParquetSchemaShape } from '../src/targets/parquet/parquetjs-schema.js'
 import { ParquetSegmentWriter } from '../src/targets/parquet/parquetjs-writer.js'
@@ -178,13 +178,12 @@ for (let i = 0; i < POOL_SIZE; i++) pool.push(spec.makeRow(i))
 
 const dir = await mkdtemp(path.join(tmpdir(), 'sqd-bench-deep-'))
 
-// Setup that production amortizes once per process/table: engine module + instance for
-// duckdb, ParquetSchema + row wrapper for parquetjs. Excluded from segment timings.
+// Setup that production amortizes once per process/table: the shared instance for duckdb,
+// ParquetSchema + row wrapper for parquetjs. Excluded from segment timings.
 const setupStart = performance.now()
 const wrap = ENGINE === 'parquetjs' ? buildRowWrapper(spec.table.schema) : undefined
 let makeWriter: () => SegmentWriter
 if (ENGINE === 'duckdb') {
-  await loadDuckdbApi()
   await acquireDuckdbInstance({ threads: THREADS, memoryLimit: '2GB' })
   const estimator = new SegmentSizeEstimator()
   makeWriter = () =>

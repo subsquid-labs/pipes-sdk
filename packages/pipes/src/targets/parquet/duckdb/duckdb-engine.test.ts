@@ -1,16 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { acquireDuckdbInstance, loadDuckdbApi } from './duckdb-engine.js'
+import { acquireDuckdbInstance } from './duckdb-engine.js'
 
 describe('duckdb-engine', () => {
-  it('loads the optional dependency once and caches the module', async () => {
-    const first = await loadDuckdbApi()
-    const second = await loadDuckdbApi()
-
-    expect(first).toBe(second)
-    expect(typeof first.DuckDBInstance.create).toBe('function')
-  })
-
   it('shares one instance per (threads, memoryLimit) config and applies the config', async () => {
     const a = await acquireDuckdbInstance({ threads: 2, memoryLimit: '2GB' })
     const b = await acquireDuckdbInstance({ threads: 2, memoryLimit: '2GB' })

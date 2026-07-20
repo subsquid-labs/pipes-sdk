@@ -49,8 +49,6 @@ export const PARQUET_ERROR_CODES = {
   NESTED_SCHEMA_INVALID: 'E2315',
   /** duckdb engine: a column declares a per-column codec that differs from the file-level codec. */
   DUCKDB_COLUMN_COMPRESSION: 'E2316',
-  /** duckdb engine selected but the optional peer dependency '@duckdb/node-api' is not installed. */
-  DUCKDB_UNAVAILABLE: 'E2317',
   /** `settings.engine` is not a ParquetEngine implementation. */
   ENGINE_INVALID: 'E2318',
   /** parquetjs engine selected but the optional peer dependency '@dsnp/parquetjs' is not installed. */

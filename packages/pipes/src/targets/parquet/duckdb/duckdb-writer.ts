@@ -11,7 +11,6 @@ import {
   DEFAULT_DUCKDB_THREADS,
   type ParquetDuckdbSettings,
   acquireDuckdbInstance,
-  loadDuckdbApi,
 } from './duckdb-engine.js'
 import {
   buildCreateTableSql,
@@ -56,8 +55,9 @@ export type DuckdbEngine = ParquetEngine & { readonly settings: Required<Parquet
 /**
  * DuckDB-backed engine: stages rows in an in-memory DuckDB table and COPYs each segment to
  * Parquet natively, moving encoding/compression/statistics onto DuckDB worker threads.
- * Requires the optional peer dependency `@duckdb/node-api`, loaded lazily on the first
- * segment open. Identical settings share one process-wide DuckDB instance.
+ * Requires the `@duckdb/node-api` peer — install it and import this engine from
+ * `@subsquid/pipes/targets/parquet/duckdb`. Identical settings share one process-wide
+ * DuckDB instance.
  */
 export function duckdbEngine(settings?: ParquetDuckdbSettings): DuckdbEngine {
   const resolved = {
@@ -254,14 +254,13 @@ export class DuckdbSegmentWriter implements SegmentWriter {
   }
 
   async #open(): Promise<void> {
-    const api = await loadDuckdbApi()
     const instance = await acquireDuckdbInstance(this.#duckdb)
     const connection = await instance.connect()
 
     try {
       await connection.run(buildCreateTableSql(this.#tableName, this.#columns))
       const appender = await connection.createAppender(this.#tableName)
-      this.#writeRow = buildRowAppender(api, this.#columns)(appender)
+      this.#writeRow = buildRowAppender(this.#columns)(appender)
       this.#appender = appender
       this.#connection = connection
     } catch (error) {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { PARQUET_ERROR_CODES, ParquetTargetError } from '../errors.js'
 import type { ParquetColumns, ParquetTable } from '../schema.js'
-import { acquireDuckdbInstance, loadDuckdbApi } from './duckdb-engine.js'
+import { acquireDuckdbInstance } from './duckdb-engine.js'
 import {
   buildCreateTableSql,
   buildRowAppender,
@@ -91,7 +91,6 @@ describe('duckdb-schema', () => {
 
 describe('buildRowAppender', () => {
   it('appends every leaf/nested shape and round-trips values through a DuckDB table', async () => {
-    const api = await loadDuckdbApi()
     const instance = await acquireDuckdbInstance()
     const connection = await instance.connect()
 
@@ -114,7 +113,7 @@ describe('buildRowAppender', () => {
     try {
       await connection.run(buildCreateTableSql('appender_rt', columns))
       const appender = await connection.createAppender('appender_rt')
-      const writeRow = buildRowAppender(api, columns)(appender)
+      const writeRow = buildRowAppender(columns)(appender)
 
       writeRow({
         blockNumber: 1n,
