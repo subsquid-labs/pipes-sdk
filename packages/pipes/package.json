@@ -29,7 +29,7 @@
   "author": "Subsquid Team",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/subsquid-labs/pipes-sdk.git",
+    "url": "git+https://github.com/subsquid/pipes-sdk.git",
     "directory": "packages/pipes"
   },
   "files": [
