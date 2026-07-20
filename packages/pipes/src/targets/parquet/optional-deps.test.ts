@@ -42,6 +42,10 @@ describe('core isolation from the duckdb entry', () => {
       .filter((entry) => entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts'))
       .map((entry) => entry.name)
 
+    // The scan must never rot into an always-pass: engine.ts is a permanent core file, and the
+    // deliberately non-recursive readdir would silently skip files moved into a future subdirectory.
+    expect(files).toContain('engine.ts')
+
     const failures = files.flatMap((file) =>
       findDuckdbReferences(readFileSync(path.join(dir, file), 'utf8')).map((v) => `${file}:${v.line}: ${v.statement}`),
     )
