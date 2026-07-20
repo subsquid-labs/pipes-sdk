@@ -1,6 +1,6 @@
 import type { DuckDBInstance } from '@duckdb/node-api'
 
-import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
+import { PARQUET_ERROR_CODES, ParquetTargetError } from '../errors.js'
 
 /**
  * The dynamically-imported module namespace. Everything duckdb-flavored in this target keeps

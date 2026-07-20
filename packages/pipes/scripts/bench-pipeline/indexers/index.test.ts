@@ -5,7 +5,8 @@ import path from 'node:path'
 import { ParquetReader } from '@dsnp/parquetjs'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { duckdbEngine, parquetTarget, parquetjsEngine } from '../../../src/targets/parquet/index.js'
+import { duckdbEngine } from '../../../src/targets/parquet/duckdb/index.js'
+import { parquetTarget, parquetjsEngine } from '../../../src/targets/parquet/index.js'
 import { type MockPortal, type MockResponse, mockPortal } from '../../../src/testing/index.js'
 import { indexers } from './index.js'
 

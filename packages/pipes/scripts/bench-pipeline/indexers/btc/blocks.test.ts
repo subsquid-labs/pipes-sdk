@@ -4,7 +4,8 @@ import path from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { duckdbEngine, parquetTarget } from '../../../../src/targets/parquet/index.js'
+import { duckdbEngine } from '../../../../src/targets/parquet/duckdb/index.js'
+import { parquetTarget } from '../../../../src/targets/parquet/index.js'
 import { btcBlocks, mapBlocks } from './blocks.js'
 
 const HEADER = {

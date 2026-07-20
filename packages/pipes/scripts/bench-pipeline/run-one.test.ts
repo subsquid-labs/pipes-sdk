@@ -5,7 +5,8 @@ import { pathToFileURL } from 'node:url'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import type { DuckdbEngine, ParquetEngine } from '../../src/targets/parquet/index.js'
+import type { DuckdbEngine } from '../../src/targets/parquet/duckdb/index.js'
+import type { ParquetEngine } from '../../src/targets/parquet/index.js'
 import {
   type DelayMonitor,
   type RunOneDependencies,

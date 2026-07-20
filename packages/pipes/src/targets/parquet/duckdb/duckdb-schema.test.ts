@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { PARQUET_ERROR_CODES, ParquetTargetError } from '../errors.js'
+import type { ParquetColumns, ParquetTable } from '../schema.js'
 import { acquireDuckdbInstance, loadDuckdbApi } from './duckdb-engine.js'
 import {
   buildCreateTableSql,
@@ -8,8 +10,6 @@ import {
   escapeSqlString,
   validateDuckdbTableCompression,
 } from './duckdb-schema.js'
-import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
-import type { ParquetColumns, ParquetTable } from './schema.js'
 
 describe('duckdb-schema', () => {
   describe('columnDdlType', () => {

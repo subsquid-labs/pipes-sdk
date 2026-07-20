@@ -8,9 +8,9 @@ import type {
   DuckDBValue,
 } from '@duckdb/node-api'
 
+import { PARQUET_ERROR_CODES, ParquetTargetError } from '../errors.js'
+import type { Codec, ParquetColumn, ParquetColumns, ParquetLeafType, ParquetTable } from '../schema.js'
 import type { DuckdbApi } from './duckdb-engine.js'
-import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
-import type { Codec, ParquetColumn, ParquetColumns, ParquetLeafType, ParquetTable } from './schema.js'
 
 /**
  * SDK leaf type → DuckDB DDL type. Spike-verified against DuckDB 1.5.4: `TIMESTAMP_MS` COPYs

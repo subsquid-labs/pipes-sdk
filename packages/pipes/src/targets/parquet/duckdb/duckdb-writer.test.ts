@@ -5,9 +5,9 @@ import path from 'node:path'
 import { ParquetReader } from '@dsnp/parquetjs'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import type { ParquetColumns, ParquetTable } from '../schema.js'
 import { acquireDuckdbInstance } from './duckdb-engine.js'
 import { DuckdbSegmentWriter, SegmentSizeEstimator, duckdbEngine } from './duckdb-writer.js'
-import type { ParquetColumns, ParquetTable } from './schema.js'
 
 const COLUMNS: ParquetColumns = { blockNumber: { type: 'INT64' } }
 

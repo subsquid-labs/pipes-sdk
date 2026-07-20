@@ -181,6 +181,11 @@
       "import": "./dist/targets/parquet/index.js",
       "require": "./dist/targets/parquet/index.cjs"
     },
+    "./targets/parquet/duckdb": {
+      "types": "./dist/targets/parquet/duckdb/index.d.ts",
+      "import": "./dist/targets/parquet/duckdb/index.js",
+      "require": "./dist/targets/parquet/duckdb/index.cjs"
+    },
     "./targets/clickhouse": {
       "types": "./dist/targets/clickhouse/index.d.ts",
       "import": "./dist/targets/clickhouse/index.js",

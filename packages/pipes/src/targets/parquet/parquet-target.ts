@@ -42,13 +42,14 @@ export type ParquetSettings = {
   compression?: Codec
   /**
    * Segment writer engine. Omitted → the default `parquetjsEngine()`. Pass an engine
-   * instance — `parquetjsEngine()`, `duckdbEngine({...})`, or any own {@link ParquetEngine}
-   * implementation — to switch or tune engines. The duckdb engine produces value-identical
-   * files with slightly different footer metadata (every field is written OPTIONAL, integer
-   * columns gain INT_64/INT_32 annotations, and timestamps additionally carry a modern
-   * `isAdjustedToUTC=false` logical type next to the same legacy TIMESTAMP_MILLIS
-   * annotation). Its byte-based rotation is an estimate calibrated from previously published
-   * segments; row/interval rollovers stay exact.
+   * instance — `parquetjsEngine()`, `duckdbEngine({...})` (requires the `@duckdb/node-api`
+   * peer, imported from `@subsquid/pipes/targets/parquet/duckdb`), or any own
+   * {@link ParquetEngine} implementation — to switch or tune engines. The duckdb engine
+   * produces value-identical files with slightly different footer metadata (every field is
+   * written OPTIONAL, integer columns gain INT_64/INT_32 annotations, and timestamps
+   * additionally carry a modern `isAdjustedToUTC=false` logical type next to the same legacy
+   * TIMESTAMP_MILLIS annotation). Its byte-based rotation is an estimate calibrated from
+   * previously published segments; row/interval rollovers stay exact.
    */
   engine?: ParquetEngine
   /**

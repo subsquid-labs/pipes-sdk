@@ -10,11 +10,11 @@ import { monitorEventLoopDelay, performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 
 import type { Target } from '../../src/core/index.js'
+import { duckdbEngine } from '../../src/targets/parquet/duckdb/index.js'
 import {
   type ParquetSettings,
   type ParquetStore,
   type ParquetTable,
-  duckdbEngine,
   parquetTarget,
   parquetjsEngine,
 } from '../../src/targets/parquet/index.js'

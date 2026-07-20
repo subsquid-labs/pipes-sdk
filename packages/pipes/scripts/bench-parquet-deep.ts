@@ -28,8 +28,8 @@ import { performance } from 'node:perf_hooks'
 
 import { ParquetSchema } from '@dsnp/parquetjs'
 
-import { acquireDuckdbInstance, loadDuckdbApi } from '../src/targets/parquet/duckdb-engine.js'
-import { DuckdbSegmentWriter, SegmentSizeEstimator } from '../src/targets/parquet/duckdb-writer.js'
+import { acquireDuckdbInstance, loadDuckdbApi } from '../src/targets/parquet/duckdb/duckdb-engine.js'
+import { DuckdbSegmentWriter, SegmentSizeEstimator } from '../src/targets/parquet/duckdb/duckdb-writer.js'
 import { buildRowWrapper, toParquetSchemaShape } from '../src/targets/parquet/parquetjs-schema.js'
 import { ParquetSegmentWriter } from '../src/targets/parquet/parquetjs-writer.js'
 import { type Codec, type ParquetColumns, type ParquetTable } from '../src/targets/parquet/schema.js'

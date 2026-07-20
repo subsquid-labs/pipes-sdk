@@ -2,6 +2,10 @@ import { unlink } from 'node:fs/promises'
 
 import type { DuckDBAppender, DuckDBConnection } from '@duckdb/node-api'
 
+import type { ParquetEngine } from '../engine.js'
+import { PARQUET_ERROR_CODES, ParquetTargetError } from '../errors.js'
+import type { Codec, ParquetColumns } from '../schema.js'
+import { type PublishedSegment, type SegmentWriter, finalizeSegmentFile, nextTmpPath } from '../segment.js'
 import {
   DEFAULT_DUCKDB_MEMORY_LIMIT,
   DEFAULT_DUCKDB_THREADS,
@@ -16,10 +20,6 @@ import {
   quoteIdent,
   validateDuckdbTableCompression,
 } from './duckdb-schema.js'
-import type { ParquetEngine } from './engine.js'
-import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
-import type { Codec, ParquetColumns } from './schema.js'
-import { type PublishedSegment, type SegmentWriter, finalizeSegmentFile, nextTmpPath } from './segment.js'
 
 type Row = Record<string, unknown>
 

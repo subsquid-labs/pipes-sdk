@@ -8,13 +8,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { evmPortalStream } from '~/evm/index.js'
 import { type MockPortal, type MockResponse, blockDecoder, mockPortal } from '~/testing/index.js'
 
+import type { ParquetSettings } from '../parquet-target.js'
+import { parquetTarget } from '../parquet-target.js'
+import { parquetjsEngine } from '../parquetjs-writer.js'
+import type { ParquetTable } from '../schema.js'
 import { acquireDuckdbInstance } from './duckdb-engine.js'
 import { escapeSqlString } from './duckdb-schema.js'
 import { duckdbEngine } from './duckdb-writer.js'
-import type { ParquetSettings } from './parquet-target.js'
-import { parquetTarget } from './parquet-target.js'
-import { parquetjsEngine } from './parquetjs-writer.js'
-import type { ParquetTable } from './schema.js'
 
 const BLOCKS_TABLE: ParquetTable = {
   table: 'blocks',
