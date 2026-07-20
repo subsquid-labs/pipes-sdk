@@ -41,56 +41,41 @@ export class DrizzleTracker {
   async fork(tx: Transaction, cursor: BlockCursor) {
     for (const table of this.#knownTables.keys()) {
       const snapshots = `${getDrizzleTableName(table)}__snapshots`
+      const primaryCols: PgColumn[] = (table as any)[SQD_PRIMARY_COLS]
+      const pkList = primaryCols.map((col) => `"${col.name}"`).join(', ')
 
+      // The earliest snapshot per row above the fork point holds that row's before-image at the
+      // fork boundary, so replaying it rewinds the row to its state at the cursor block — even when
+      // the prior value came from a finalized block that was never snapshotted. A row first seen
+      // above the fork ('INSERT') had no prior value and is dropped.
       const res = await tx.execute<
         {
           ___sqd__block_number: number
           ___sqd__operation: 'INSERT' | 'UPDATE' | 'DELETE'
         } & Record<string, unknown>
       >(
-        `SELECT *
+        `SELECT DISTINCT ON (${pkList}) *
          FROM "${snapshots}"
-         WHERE "___sqd__block_number" >= ${cursor.number}
-         ORDER BY "___sqd__block_number" DESC`,
+         WHERE "___sqd__block_number" > ${cursor.number}
+         ORDER BY ${pkList}, "___sqd__block_number" ASC`,
       )
 
       for (const row of res.rows) {
         const { ___sqd__block_number, ___sqd__operation, ...snapshot } = row
-        const primaryCols: PgColumn[] = (table as any)[SQD_PRIMARY_COLS]
 
         const filter = and(...primaryCols.map((col) => eq(col, snapshot[col.name])))
-        const rowCancelled = Number(___sqd__block_number) !== cursor.number
-        switch (___sqd__operation) {
-          case 'INSERT':
-            if (rowCancelled) {
-              await tx.delete(table).where(filter)
-            } else {
-              await tx.insert(table).values(snapshot).onConflictDoUpdate({
-                target: primaryCols,
-                set: snapshot,
-              })
-            }
-            break
-          case 'UPDATE':
-            await tx.insert(table).values(snapshot).onConflictDoUpdate({
-              target: primaryCols,
-              set: snapshot,
-            })
-            break
-          case 'DELETE':
-            if (rowCancelled) {
-              await tx.insert(table).values(snapshot).onConflictDoUpdate({
-                target: primaryCols,
-                set: snapshot,
-              })
-            } else {
-              await tx.delete(table).where(filter)
-            }
-            break
+
+        if (___sqd__operation === 'INSERT') {
+          await tx.delete(table).where(filter)
+        } else {
+          await tx.insert(table).values(snapshot).onConflictDoUpdate({
+            target: primaryCols,
+            set: snapshot,
+          })
         }
       }
 
-      // Clean up any remaining snapshots beyond the fork point
+      // Drop the consumed snapshots; those at or below the cursor stay for a later deeper rollback.
       await tx.execute(`DELETE FROM "${snapshots}" WHERE "___sqd__block_number" > ${cursor.number}`)
     }
   }
