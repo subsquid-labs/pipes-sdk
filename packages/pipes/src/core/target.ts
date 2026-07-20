@@ -18,6 +18,18 @@ export type TargetState = {
   finalized: BlockCursor | null
 }
 
+export type ReadOptions = {
+  /**
+   * Deliver one unfinalized block per batch, and never mix finalized blocks into an unfinalized
+   * block's batch. Ask for this only if the target attributes a rollback to the batch's last block
+   * (the Postgres target keys its undo snapshots that way) — otherwise a fork to the finalized head
+   * would roll back a finalized block that merely shared a batch with the forked one. Targets that
+   * carry the block number on the rows themselves (ClickHouse) should leave it off: the default,
+   * one batch per response, is cheaper.
+   */
+  perBlockUnfinalized?: boolean
+}
+
 export type Target<In> = {
   write: (writer: {
     /**
@@ -28,7 +40,7 @@ export type Target<In> = {
      * supplies it.
      */
     id?: string
-    read: (state?: TargetState) => AsyncIterableIterator<PortalBatch<In>>
+    read: (state?: TargetState, options?: ReadOptions) => AsyncIterableIterator<PortalBatch<In>>
     logger: Logger
   }) => Promise<void>
   /**

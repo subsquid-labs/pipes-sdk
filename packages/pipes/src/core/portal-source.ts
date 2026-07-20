@@ -16,7 +16,7 @@ import { Metrics, MetricsServer, noopMetricsServer } from './metrics-server.js'
 import { Profiler, Span, SpanHooks } from './profiling.js'
 import { ProgressEvent, StartEvent } from './progress-tracker.js'
 import { QueryBuilder, hashQuery } from './query-builder.js'
-import { Target, TargetState } from './target.js'
+import { ReadOptions, Target, TargetState } from './target.js'
 import { QueryAwareTransformer, Transformer, TransformerArgs, TransformerOptions } from './transformer.js'
 import { BlockCursor, HookContext } from './types.js'
 
@@ -35,6 +35,7 @@ export interface PortalCache {
     portal: PortalClient
     query: Q
     logger: Logger
+    perBlockUnfinalized?: boolean
   }): PortalBlockStream<GetBlock<Q>>
 }
 
@@ -181,7 +182,7 @@ export class PortalStream<Q extends QueryBuilder<any>, T = any> {
     this.#metricServer.registerPipe(this.#id)
   }
 
-  private async *read(state?: TargetState): AsyncIterable<PortalBatch<T>> {
+  private async *read(state?: TargetState, options?: ReadOptions): AsyncIterable<PortalBatch<T>> {
     // Seed the monotonic finalized watermark from the target's persisted finalized
     // head so it survives an unclean restart mid-fork. Seeding only from the
     // dedicated `finalized` field (never from `latest`) keeps no-finality datasets
@@ -225,8 +226,9 @@ export class PortalStream<Q extends QueryBuilder<any>, T = any> {
             portal: this.#portal,
             logger: this.#logger,
             query,
+            perBlockUnfinalized: options?.perBlockUnfinalized ?? false,
           })
-        : this.#portal.getStream(query)
+        : this.#portal.getStream(query, { perBlockUnfinalized: options?.perBlockUnfinalized ?? false })
 
       let batchSpan = Span.root('batch', this.#options.profiler).addLabels('core')
       let readSpan = batchSpan.start('fetch data').addLabels('core')
@@ -427,12 +429,12 @@ export class PortalStream<Q extends QueryBuilder<any>, T = any> {
     return target.write({
       id: this.#id,
       logger: this.#logger,
-      read: async function* (state?: TargetState) {
+      read: async function* (state?: TargetState, options?: ReadOptions) {
         await self.configure()
 
         while (true) {
           try {
-            for await (const batch of self.read(state)) {
+            for await (const batch of self.read(state, options)) {
               yield batch as PortalBatch<T>
               self.batchEnd(batch.ctx)
             }

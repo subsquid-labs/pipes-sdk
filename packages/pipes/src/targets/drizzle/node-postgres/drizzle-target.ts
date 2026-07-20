@@ -109,7 +109,9 @@ export function drizzleTarget<T>({
       }
       logger.debug(`PG triggers configured`)
 
-      for await (const { data, ctx } of read(cursor)) {
+      // Undo snapshots are tagged with the batch's last block, so a block's writes are only
+      // rollback-safe when that block has the batch to itself and no finalized block shares it.
+      for await (const { data, ctx } of read(cursor, { perBlockUnfinalized: true })) {
         const target = ctx.profiler.start({ name: 'postgres', labels: 'db' })
 
         try {
