@@ -838,6 +838,82 @@ describe('Drizzle target', () => {
     })
   })
 
+  // Read by truthiness a head of 0 looks like no finality, so the undo log is never written.
+  describe('class-T undo with a finalized head of block 0', () => {
+    const balances = pgTable('balances', {
+      account: integer().primaryKey(),
+      balance: integer().notNull(),
+    })
+
+    beforeEach(async () => {
+      await execute(`
+        DROP SCHEMA IF EXISTS "public" CASCADE;
+        CREATE SCHEMA IF NOT EXISTS "public";
+        CREATE TABLE balances (
+          account integer PRIMARY KEY,
+          balance integer NOT NULL
+        );
+      `)
+    })
+
+    it('rolls back a fork when only the genesis block is finalized', async () => {
+      portal = await mockPortal([
+        ...[1, 2].map(
+          (block): MockResponse => ({
+            statusCode: 200,
+            data: [{ header: { number: block, hash: `0x${block}`, timestamp: block * 1000 } }],
+            head: { finalized: { number: 0, hash: '0x0' } },
+          }),
+        ),
+        {
+          // Forks block 2; the safe ancestor is block 1, itself unfinalized.
+          statusCode: 409,
+          data: {
+            previousBlocks: [
+              { number: 1, hash: '0x1' },
+              { number: 2, hash: '0x2a' },
+            ],
+          },
+        },
+        {
+          statusCode: 200,
+          data: [
+            { header: { number: 2, hash: '0x2a', timestamp: 2000 } },
+            { header: { number: 3, hash: '0x3a', timestamp: 3000 } },
+          ],
+          head: { finalized: { number: 0, hash: '0x0' } },
+        },
+      ])
+
+      let rolledBack: number[] | undefined
+
+      await evmPortalStream({
+        id: 'test',
+        portal: portal.url,
+        outputs: blockDecoder({ from: 0, to: 3 }),
+      }).pipeTo(
+        drizzleTarget({
+          db,
+          tables: [balances],
+          onData: async ({ tx, data }) => {
+            for (const b of data) {
+              await tx.insert(balances).values({ account: b.number, balance: b.number }).onConflictDoNothing()
+            }
+          },
+          onAfterRollback: async ({ tx, cursor }) => {
+            expect(cursor.number).toEqual(1)
+
+            const rows = await tx.select().from(balances)
+            rolledBack = rows.map((r) => r.account).sort()
+          },
+        }),
+      )
+
+      // Block 2 was undone; block 1 predates the fork and stays.
+      expect(rolledBack).toEqual([1])
+    })
+  })
+
   describe('forks on tables with foreign keys', () => {
     const parentTable = pgTable('parent', {
       id: integer().primaryKey(),

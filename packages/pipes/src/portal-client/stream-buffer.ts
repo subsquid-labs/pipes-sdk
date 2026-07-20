@@ -134,6 +134,19 @@ export class StreamBuffer<B> {
     this._ready()
   }
 
+  /**
+   * Deliver whatever is pending as its own batch. Unlike `flush()` this waits until the consumer
+   * has taken it, so a following `put` cannot merge into the same batch.
+   */
+  async cut(): Promise<void> {
+    if (this.buffer == null) return
+    // Terminal states never resolve a fresh consumedSignal; _cleanup() already released this one.
+    if (this.state === 'closed' || this.state === 'failed') return
+
+    this._ready()
+    await this.consumedSignal.promise()
+  }
+
   close() {
     if (this.state === 'closed' || this.state === 'failed') return
     this.state = 'closed'

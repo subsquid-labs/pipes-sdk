@@ -1,9 +1,50 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
+import { SpanHooks } from '~/core/profiling.js'
 import { Target, createTarget } from '~/core/target.js'
 import { TransformerArgs, createTransformer } from '~/core/transformer.js'
 import { evmPortalStream } from '~/evm/index.js'
 import { MockPortal, blockDecoder, finalizedMockPortal, mockPortal, readAll } from '~/testing/index.js'
+
+/**
+ * Tallies span starts and ends per name. A single global total hides the interesting cases — a
+ * double-end on one span cancels out a leak on another.
+ */
+function spanCounter() {
+  const started: Record<string, number> = {}
+  const ended: Record<string, number> = {}
+
+  const track = (name: string): SpanHooks => ({
+    onStart: (child) => {
+      started[child] = (started[child] ?? 0) + 1
+
+      return track(child)
+    },
+    onEnd: () => {
+      ended[name] = (ended[name] ?? 0) + 1
+    },
+  })
+
+  return {
+    hooks: track('<root>'),
+    started,
+    ended,
+    unbalanced: () =>
+      [...new Set([...Object.keys(started), ...Object.keys(ended)])]
+        .filter((name) => (started[name] ?? 0) !== (ended[name] ?? 0))
+        .map((name) => `${name}: ${started[name] ?? 0} started, ${ended[name] ?? 0} ended`),
+  }
+}
+
+function threeBlockPortal() {
+  return mockPortal(
+    [1, 2, 3].map((number) => ({
+      statusCode: 200,
+      data: [{ header: { number, hash: `0x${number}`, timestamp: number * 1000 } }],
+      head: { finalized: { number: 0, hash: '0x0' } },
+    })),
+  )
+}
 
 describe('Portal abstract stream', () => {
   let portal: MockPortal
@@ -554,6 +595,140 @@ describe('stop lifecycle', () => {
     await expect(readAll(stream)).rejects.toThrow('start failed')
 
     expect(stopSpy).toHaveBeenCalledTimes(1)
+  })
+
+  // The read loop arms a batch/fetch span pair up front, so the last one is always for a batch
+  // that never arrives. It leaks a pair per stream, and read() restarts on every retry.
+  it('ends the span pair armed for a batch that never arrives', async () => {
+    portal = await mockPortal([
+      { statusCode: 200, data: [], head: { finalized: { number: 0, hash: '0x0' } } },
+      {
+        statusCode: 200,
+        data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
+        head: { finalized: { number: 0, hash: '0x0' } },
+      },
+    ])
+
+    const spans = spanCounter()
+
+    await readAll(
+      evmPortalStream({
+        id: 'test',
+        portal: portal.url,
+        profiler: spans.hooks,
+        outputs: blockDecoder({ from: 0, to: 1 }),
+      }),
+    )
+
+    expect(spans.started['fetch data']).toBeGreaterThan(0)
+    expect(spans.unbalanced()).toEqual([])
+  })
+
+  // A 204 head poll puts a zero-block batch and flushes it, so the read loop sees a batch it
+  // never yields and nothing downstream closes its span.
+  it('ends the batch span for the empty batch a 204 head poll delivers', async () => {
+    portal = await mockPortal([
+      {
+        statusCode: 200,
+        data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
+        head: { finalized: { number: 0, hash: '0x0' } },
+      },
+      { statusCode: 204 },
+      {
+        statusCode: 200,
+        data: [{ header: { number: 2, hash: '0x2', timestamp: 2000 } }],
+        head: { finalized: { number: 0, hash: '0x0' } },
+      },
+    ])
+
+    const spans = spanCounter()
+
+    const blocks = await readAll(
+      evmPortalStream({
+        id: 'test',
+        portal: portal.url,
+        profiler: spans.hooks,
+        outputs: blockDecoder({ from: 0, to: 2 }),
+      }),
+    )
+
+    // Two yielded, one dropped from the 204, one armed for the batch that never arrives.
+    expect(blocks.length).toBe(2)
+    expect(spans.started['batch']).toBe(4)
+    expect(spans.unbalanced()).toEqual([])
+  })
+
+  // Unwinding through the yield leaves readSpan already ended at the top of the loop body, so the
+  // finally would end it a second time.
+  it('does not double-end the fetch span when the consumer breaks early', async () => {
+    portal = await threeBlockPortal()
+
+    const spans = spanCounter()
+
+    for await (const _ of evmPortalStream({
+      id: 'test',
+      portal: portal.url,
+      profiler: spans.hooks,
+      outputs: blockDecoder({ from: 0, to: 3 }),
+    })) {
+      break
+    }
+
+    expect(spans.started['fetch data']).toBeGreaterThan(0)
+    expect(spans.unbalanced()).toEqual([])
+  })
+
+  it('does not double-end the fetch span when the consumer throws', async () => {
+    portal = await threeBlockPortal()
+
+    const spans = spanCounter()
+
+    await expect(
+      (async () => {
+        for await (const _ of evmPortalStream({
+          id: 'test',
+          portal: portal.url,
+          profiler: spans.hooks,
+          outputs: blockDecoder({ from: 0, to: 3 }),
+        })) {
+          throw new Error('consumer boom')
+        }
+      })(),
+    ).rejects.toThrow('consumer boom')
+
+    expect(spans.unbalanced()).toEqual([])
+  })
+
+  // A throwing transformer skips its own span.end() and the enclosing 'apply transformers' one.
+  it('ends transformer spans when a transformer throws mid-stream', async () => {
+    portal = await threeBlockPortal()
+
+    const spans = spanCounter()
+
+    let seen = 0
+    const stream = evmPortalStream({
+      id: 'test',
+      portal: portal.url,
+      profiler: spans.hooks,
+      outputs: blockDecoder({ from: 0, to: 3 }),
+    }).pipe(
+      createTransformer({
+        profiler: { name: 'boom' },
+        transform: (data) => {
+          seen++
+          if (seen === 2) {
+            throw new Error('transformer boom')
+          }
+
+          return data
+        },
+      }),
+    )
+
+    await expect(readAll(stream)).rejects.toThrow('transformer boom')
+
+    expect(spans.started['boom']).toBe(2)
+    expect(spans.unbalanced()).toEqual([])
   })
 })
 

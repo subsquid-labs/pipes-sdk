@@ -119,11 +119,10 @@ export function drizzleTarget<T>({
             () =>
               db.transaction(async (tx) => {
                 await state.acquireLock(tx)
+                // `!= null`: a finalized head of 0 would otherwise skip the undo log entirely.
+                const finalizedHead = ctx.stream.head.finalized?.number
                 const snapshotEnabled =
-                  ctx.stream.head.finalized?.number &&
-                  ctx.stream.state.current.number >= ctx.stream.head.finalized.number
-                    ? 'true'
-                    : 'false'
+                  finalizedHead != null && ctx.stream.state.current.number >= finalizedHead ? 'true' : 'false'
 
                 /*
                  * Enable snapshotting for this transaction

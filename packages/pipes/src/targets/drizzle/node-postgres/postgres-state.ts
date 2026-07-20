@@ -187,7 +187,7 @@ export class PostgresState {
     if (this.#saves === 1 || this.#saves % 25 === 0) {
       // Clean up old unfinalized blocks beyond retention
       const safeBlockNumber = Math.max(
-        Math.min(current.number, finalizedBlock || Infinity) - this.options.unfinalizedBlocksRetention,
+        Math.min(current.number, finalizedBlock ?? Infinity) - this.options.unfinalizedBlocksRetention,
         0,
       )
 
