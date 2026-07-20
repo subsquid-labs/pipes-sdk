@@ -1,0 +1,31 @@
+name: Spec consistency
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'spec/**'
+      - '.github/workflows/spec.yml'
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'spec/**'
+      - '.github/workflows/spec.yml'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check spec cross-references
+        run: node spec/check-spec.mjs
