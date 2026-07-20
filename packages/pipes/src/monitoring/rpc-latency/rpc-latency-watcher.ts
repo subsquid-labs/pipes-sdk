@@ -6,6 +6,9 @@ import { arrayify, last } from '~/internal/array.js'
 // hot path. EVM (`eth_subscribe newHeads`) and Bitcoin (`getbestblockhash`) both populate it.
 type RpcHead = { number: number; hash?: string; timestamp: Date; receivedAt: Date }
 
+/** Lookups only move forward, so older heads are dead weight. */
+const MAX_HEADS_PER_NODE = 512
+
 export interface RpcLatencyListener {
   stop(): void
 }
@@ -13,40 +16,42 @@ export interface RpcLatencyListener {
 export abstract class RpcLatencyWatcher {
   nodes: Map<string, Map<number, RpcHead>> = new Map()
   watchers: RpcLatencyListener[] = []
+  #running = false
 
   constructor(protected rpcUrl: string | string[]) {
     this.rpcUrl = arrayify(rpcUrl)
   }
 
   /**
-   * Subscribes each configured URL via `watch()`. Subclasses **must** call this
-   * from their constructor *after* their own fields are initialized — otherwise
-   * `watch()` would observe undefined subclass state, since `super()` runs
-   * before subclass field initializers.
+   * Subscribes each URL via `watch()`. Idempotent and re-runnable after `stop()`:
+   * the stream stops and starts transformers around every restart, and a one-way
+   * stop would leave `lookup()` empty forever while the stream kept indexing.
+   *
+   * Driven by the transformer, not a subclass constructor, so `watch()` always
+   * sees initialized subclass fields.
    */
-  protected attach() {
-    for (const url of this.rpcUrl) {
-      this.nodes.set(url, new Map())
+  start() {
+    if (this.#running) return
+    this.#running = true
+
+    for (const url of arrayify(this.rpcUrl)) {
+      if (!this.nodes.has(url)) {
+        this.nodes.set(url, new Map())
+      }
+
       this.watchers.push(this.watch(url))
     }
   }
 
   stop() {
+    if (!this.#running) return
+    this.#running = false
+
     for (const listener of this.watchers) {
       listener.stop()
     }
-  }
 
-  cleanup(before: number) {
-    for (const [, blocks] of this.nodes) {
-      for (const [, block] of blocks) {
-        if (block.number > before) {
-          break
-        }
-
-        blocks.delete(block.number)
-      }
-    }
+    this.watchers = []
   }
 
   lookup(number: number) {
@@ -73,6 +78,15 @@ export abstract class RpcLatencyWatcher {
     if (!chain) throw new Error('RPC not found')
 
     chain.set(block.number, block)
+
+    // Insertion order is ascending, so the first key is the oldest. Evicting here
+    // rather than on portal batches holds the bound while the portal side is stalled.
+    while (chain.size > MAX_HEADS_PER_NODE) {
+      const oldest = chain.keys().next()
+      if (oldest.done) break
+
+      chain.delete(oldest.value)
+    }
   }
 
   abstract watch(url: string): RpcLatencyListener
@@ -101,6 +115,9 @@ export function rpcLatencyWatcher({ watcher }: { watcher: RpcLatencyWatcher }) {
     Latency | null
   >({
     profiler: { name: 'rpc latency' },
+    start() {
+      watcher.start()
+    },
     transform: (data, ctx): Latency | null => {
       const receivedAt = ctx.batch.lastBlockReceivedAt
 

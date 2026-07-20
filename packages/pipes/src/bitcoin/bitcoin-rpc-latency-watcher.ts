@@ -54,12 +54,11 @@ export class BitcoinRpcLatencyWatcher extends RpcLatencyWatcher {
   ) {
     const inputs = (Array.isArray(rpcUrl) ? rpcUrl : [rpcUrl]).map(parseEndpoint)
     super(inputs.map((e) => e.url))
-    // The base ctor stops short of calling `watch()` (we use the deferred
-    // `attach()` pattern), so these fields are initialized BEFORE any tick fires.
+    // Subscribing is deferred to `start()`, so these fields are initialized
+    // BEFORE any tick fires.
     this.#endpointsByUrl = new Map(inputs.map((e) => [e.url, e]))
     this.#intervalMs = intervalMs
     this.#requestTimeoutMs = requestTimeoutMs
-    this.attach()
   }
 
   watch(url: string) {
