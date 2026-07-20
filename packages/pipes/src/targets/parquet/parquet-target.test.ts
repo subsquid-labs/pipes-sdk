@@ -719,7 +719,7 @@ describe('parquetTarget', () => {
       await mkdir(segDir, { recursive: true })
       const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
 
-      const writer = new ParquetSegmentWriter({ dir: segDir, schema: () => Promise.resolve(schema), rowGroupSize: 1 })
+      const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
       expect(writer.isOpen).toBe(false)
       expect(await writer.size()).toBe(0)
 
@@ -742,11 +742,11 @@ describe('parquetTarget', () => {
       await mkdir(segDir, { recursive: true })
       const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
 
-      const first = new ParquetSegmentWriter({ dir: segDir, schema: () => Promise.resolve(schema), rowGroupSize: 1 })
+      const first = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
       await first.appendRow({ blockNumber: 1 }, 1)
       await first.publish()
 
-      const second = new ParquetSegmentWriter({ dir: segDir, schema: () => Promise.resolve(schema), rowGroupSize: 1 })
+      const second = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
       await second.appendRow({ blockNumber: 1 }, 1)
       await expect(second.publish()).rejects.toThrowError(/Refusing to overwrite/)
       await second.discard()
@@ -757,7 +757,7 @@ describe('parquetTarget', () => {
       await mkdir(segDir, { recursive: true })
       const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
 
-      const writer = new ParquetSegmentWriter({ dir: segDir, schema: () => Promise.resolve(schema), rowGroupSize: 1 })
+      const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
       await writer.appendRow({ blockNumber: 1 }, 1)
       await writer.discard()
 
@@ -770,7 +770,7 @@ describe('parquetTarget', () => {
       await mkdir(segDir, { recursive: true })
       const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
 
-      const writer = new ParquetSegmentWriter({ dir: segDir, schema: () => Promise.resolve(schema), rowGroupSize: 1 })
+      const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
       await writer.appendRow({ blockNumber: 1 }, 1)
       await writer.discard()
       await writer.discard()

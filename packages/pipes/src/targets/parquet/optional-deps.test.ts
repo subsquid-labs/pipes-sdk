@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-/** The two optional peer deps this target subpath must stay importable without. */
-const OPTIONAL_DEPS = ['@dsnp/parquetjs', '@duckdb/node-api']
+/** The optional peer dep the flat core dir must not statically value-import (Task 5 reshapes this guard). */
+const OPTIONAL_DEPS = ['@duckdb/node-api']
 
 type Violation = { line: number; statement: string }
 
@@ -88,14 +88,14 @@ describe('optional dependency isolation', () => {
 
     expect(
       failures,
-      `@dsnp/parquetjs and @duckdb/node-api are optional peer deps of the parquet target — ` +
+      `@duckdb/node-api is an optional peer dep of the parquet target — ` +
         `reference either only via 'import type' or the module's lazy loader ` +
-        `(parquetjs-engine.ts / duckdb-engine.ts), never a static value import:\n${failures.join('\n')}`,
+        `(duckdb/duckdb-engine.ts), never a static value import:\n${failures.join('\n')}`,
     ).toEqual([])
   })
 
   it('sanity: the scan detects a violation in a synthetic bad source', () => {
-    const bad = "import { ParquetSchema } from '@dsnp/parquetjs'\n"
+    const bad = "import { DuckDBInstance } from '@duckdb/node-api'\n"
 
     expect(findOptionalDepViolations(bad)).toEqual([{ line: 1, statement: bad.trim() }])
   })

@@ -197,8 +197,7 @@ if (ENGINE === 'duckdb') {
     })
 } else {
   const schema = new ParquetSchema(toParquetSchemaShape(spec.table, CODEC))
-  makeWriter = () =>
-    new ParquetSegmentWriter({ dir, schema: () => Promise.resolve(schema), rowGroupSize: ROW_GROUP_SIZE })
+  makeWriter = () => new ParquetSegmentWriter({ dir, schema, rowGroupSize: ROW_GROUP_SIZE })
 }
 const setupMs = performance.now() - setupStart
 

@@ -72,7 +72,7 @@ try {
   const schema = new ParquetSchema(toParquetSchemaShape(TABLE, 'SNAPPY'))
   const parquetjs = new ParquetSegmentWriter({
     dir: dirA,
-    schema: () => Promise.resolve(schema),
+    schema,
     rowGroupSize: 100_000,
   })
   await bench('parquetjs', {

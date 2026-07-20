@@ -51,6 +51,5 @@ export const PARQUET_ERROR_CODES = {
   DUCKDB_COLUMN_COMPRESSION: 'E2316',
   /** `settings.engine` is not a ParquetEngine implementation. */
   ENGINE_INVALID: 'E2318',
-  /** parquetjs engine selected but the optional peer dependency '@dsnp/parquetjs' is not installed. */
-  PARQUETJS_UNAVAILABLE: 'E2319',
+  // E2317 and E2319 retired: optional-dependency load errors — engines statically import their libraries.
 } as const
