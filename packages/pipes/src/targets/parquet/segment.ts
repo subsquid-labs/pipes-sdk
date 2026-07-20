@@ -29,9 +29,11 @@ export type PublishedSegment = {
 }
 
 /**
- * The exact surface `ParquetStore` drives a per-table segment writer through. Both engines
- * (`@dsnp/parquetjs` and DuckDB) implement it; everything above the writer — finalization
- * buffers, the durable cursor, `.tmp-*` recovery, collision refusal — is engine-agnostic.
+ * The exact surface `ParquetStore` drives a per-table segment writer through. Every engine
+ * implements it — the built-ins (`parquetjsEngine`, `duckdbEngine`) and any external
+ * `ParquetEngine`; everything above the writer — finalization buffers, the durable cursor,
+ * `.tmp-*` recovery, collision refusal — are engine-agnostic; external engines reuse
+ * `nextTmpPath` and `finalizeSegmentFile` so recovery and collision semantics stay uniform.
  */
 export interface SegmentWriter {
   /** Whether the segment has been opened (i.e. at least one row was appended). */
@@ -46,7 +48,7 @@ export interface SegmentWriter {
 }
 
 /**
- * Shared publish tail for both engines: fsync the finished temp file so its content is durable
+ * Shared publish tail for every engine: fsync the finished temp file so its content is durable
  * before the rename makes it visible, refuse to overwrite an existing `<min>-<max>.parquet`
  * (a collision means two segments claimed the same block range, which would silently drop
  * data), atomically rename into place, then fsync the directory so the rename is durable.

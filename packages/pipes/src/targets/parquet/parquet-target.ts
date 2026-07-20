@@ -75,9 +75,10 @@ type ParquetTargetMetrics = {
  * portal's finalized head. A reorg drops the in-memory buffer; published files are never touched.
  *
  * **Constant memory.** Finalized rows stream straight to a temp file and the file rotates by byte
- * size, so a multi-gigabyte finalized backfill never lands wholly in RAM (`@dsnp/parquetjs`
- * flushes row groups to disk incrementally — verified by the Step 0 spike). `rowGroupSize` bounds
- * the writer's in-memory buffer.
+ * size, so a multi-gigabyte finalized backfill never lands wholly in RAM (the default parquetjs
+ * engine flushes row groups to disk incrementally — verified by the Step 0 spike; the duckdb
+ * engine bounds staging via its memory limit). `rowGroupSize` bounds the writer's in-memory
+ * buffer.
  *
  * **Crash safety.** A writer holding ≥1 finalized row is always published at the very next
  * checkpoint, and the persisted cursor advances only at a checkpoint — so no finalized row is ever
