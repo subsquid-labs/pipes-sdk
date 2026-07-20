@@ -260,6 +260,9 @@
       "targets/parquet": [
         "./dist/targets/parquet/index.d.ts"
       ],
+      "targets/parquet/duckdb": [
+        "./dist/targets/parquet/duckdb/index.d.ts"
+      ],
       "targets/clickhouse": [
         "./dist/targets/clickhouse/index.d.ts"
       ],
