@@ -6,7 +6,7 @@ import {
   buildRowAppender,
   columnDdlType,
   escapeSqlString,
-  validateDuckdbColumnCompression,
+  validateDuckdbTableCompression,
 } from './duckdb-schema.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import type { ParquetColumns, ParquetTable } from './schema.js'
@@ -56,13 +56,13 @@ describe('duckdb-schema', () => {
     })
   })
 
-  describe('validateDuckdbColumnCompression', () => {
+  describe('validateDuckdbTableCompression', () => {
     const table = (schema: ParquetTable['schema']): ParquetTable => ({ table: 't', schema })
 
     it('accepts columns without a per-column codec, or matching the file codec', () => {
       expect(() =>
-        validateDuckdbColumnCompression(
-          [table({ blockNumber: { type: 'INT64' }, hash: { type: 'UTF8', compression: 'SNAPPY' } })],
+        validateDuckdbTableCompression(
+          table({ blockNumber: { type: 'INT64' }, hash: { type: 'UTF8', compression: 'SNAPPY' } }),
           'SNAPPY',
         ),
       ).not.toThrow()
@@ -71,16 +71,14 @@ describe('duckdb-schema', () => {
     it('rejects a per-column codec that differs from the file codec, naming the nested path', () => {
       expect.assertions(2)
       try {
-        validateDuckdbColumnCompression(
-          [
-            table({
-              blockNumber: { type: 'INT64' },
-              nested: {
-                type: 'LIST',
-                element: { type: 'STRUCT', fields: { x: { type: 'UTF8', compression: 'GZIP' } } },
-              },
-            }),
-          ],
+        validateDuckdbTableCompression(
+          table({
+            blockNumber: { type: 'INT64' },
+            nested: {
+              type: 'LIST',
+              element: { type: 'STRUCT', fields: { x: { type: 'UTF8', compression: 'GZIP' } } },
+            },
+          }),
           'SNAPPY',
         )
       } catch (e) {

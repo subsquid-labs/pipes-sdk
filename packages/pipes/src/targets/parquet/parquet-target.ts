@@ -13,7 +13,6 @@ import {
 } from '~/core/index.js'
 
 import type { ParquetDuckdbSettings } from './duckdb-engine.js'
-import { validateDuckdbColumnCompression } from './duckdb-schema.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { ParquetState } from './parquet-state.js'
 import { ParquetStore } from './parquet-store.js'
@@ -131,10 +130,6 @@ export function parquetTarget<T>(options: {
 
   const rowGroupSize = settings.rowGroupSize ?? DEFAULT_ROW_GROUP_SIZE
   const defaultCodec = settings.compression ?? DEFAULT_CODEC
-
-  if (engine === 'duckdb') {
-    validateDuckdbColumnCompression(tables, defaultCodec)
-  }
 
   const maxBytes = settings.rollover?.maxBytes ?? DEFAULT_MAX_BYTES
   const { maxRows, intervalMs, intervalBlocks } = settings.rollover ?? {}

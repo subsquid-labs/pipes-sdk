@@ -3,7 +3,7 @@ import path from 'node:path'
 import { type BlockCursor, type Finalization, type FinalizationBuffer, finalizationBuffer } from '~/core/index.js'
 
 import type { ParquetDuckdbSettings } from './duckdb-engine.js'
-import { DuckdbSegmentWriter, SegmentSizeEstimator } from './duckdb-writer.js'
+import { duckdbEngine } from './duckdb-writer.js'
 import type { ParquetTableWriter } from './engine.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { parquetjsEngine } from './parquetjs-writer.js'
@@ -29,7 +29,7 @@ type TableConfig = {
   columns: ParquetColumns
   dir: string
   /** Creates this table's segment writers; engine-specific state lives behind it. */
-  tableWriter?: ParquetTableWriter
+  tableWriter: ParquetTableWriter
 }
 
 /** Rotation thresholds checked at each batch boundary. */
@@ -60,12 +60,7 @@ export class ParquetStore {
   readonly #staged = new Map<string, Row[]>()
   // The current open segment per table — at most one. Reset (published/discarded) at checkpoints.
   readonly #writers = new Map<string, SegmentWriter>()
-  readonly #rowGroupSize: number
   readonly #engine: ParquetEngine
-  readonly #codec: Codec
-  readonly #duckdb: ParquetDuckdbSettings | undefined
-  // Per-table bytes/row calibration shared across successive duckdb writers (rotation memory).
-  readonly #estimators = new Map<string, SegmentSizeEstimator>()
   // Per-cell type checking is a hot-path cost, so it only runs outside production.
   readonly #validateValues = process.env.NODE_ENV !== 'production'
 
@@ -77,13 +72,9 @@ export class ParquetStore {
     engine?: ParquetEngine
     duckdb?: ParquetDuckdbSettings
   }) {
-    this.#rowGroupSize = options.rowGroupSize
     this.#engine = options.engine ?? 'parquetjs'
-    this.#codec = options.defaultCodec
-    this.#duckdb = options.duckdb
 
-    const parquetjs = this.#engine === 'parquetjs'
-    const engine = parquetjs ? parquetjsEngine() : undefined
+    const engine = this.#engine === 'duckdb' ? duckdbEngine(options.duckdb) : parquetjsEngine()
     for (const table of options.tables) {
       const blockColumn = blockColumnOf(table)
       const getBlockNumber = (row: Row): number => readBlockNumber(table.table, blockColumn, row)
@@ -93,10 +84,9 @@ export class ParquetStore {
         getBlockNumber,
         columns: table.schema,
         dir,
-        tableWriter: engine?.table(table, { dir, rowGroupSize: options.rowGroupSize, codec: options.defaultCodec }),
+        tableWriter: engine.table(table, { dir, rowGroupSize: options.rowGroupSize, codec: options.defaultCodec }),
       })
       this.#buffers.set(table.table, finalizationBuffer<Row>({ getBlockNumber }))
-      if (!parquetjs) this.#estimators.set(table.table, new SegmentSizeEstimator())
     }
   }
 
@@ -225,16 +215,7 @@ export class ParquetStore {
   #getOrCreateWriter(table: string, config: TableConfig): SegmentWriter {
     let writer = this.#writers.get(table)
     if (!writer) {
-      writer = config.tableWriter
-        ? config.tableWriter.createSegment()
-        : new DuckdbSegmentWriter({
-            dir: config.dir,
-            columns: config.columns,
-            rowGroupSize: this.#rowGroupSize,
-            codec: this.#codec,
-            duckdb: this.#duckdb,
-            estimator: this.#estimators.get(table)!,
-          })
+      writer = config.tableWriter.createSegment()
       this.#writers.set(table, writer)
     }
 

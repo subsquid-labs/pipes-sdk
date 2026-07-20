@@ -2,8 +2,21 @@ import { unlink } from 'node:fs/promises'
 
 import type { DuckDBAppender, DuckDBConnection } from '@duckdb/node-api'
 
-import { type ParquetDuckdbSettings, acquireDuckdbInstance, loadDuckdbApi } from './duckdb-engine.js'
-import { buildCreateTableSql, buildRowAppender, escapeSqlString, quoteIdent } from './duckdb-schema.js'
+import {
+  DEFAULT_DUCKDB_MEMORY_LIMIT,
+  DEFAULT_DUCKDB_THREADS,
+  type ParquetDuckdbSettings,
+  acquireDuckdbInstance,
+  loadDuckdbApi,
+} from './duckdb-engine.js'
+import {
+  buildCreateTableSql,
+  buildRowAppender,
+  escapeSqlString,
+  quoteIdent,
+  validateDuckdbTableCompression,
+} from './duckdb-schema.js'
+import type { ParquetEngine } from './engine.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import type { Codec, ParquetColumns } from './schema.js'
 import { type PublishedSegment, type SegmentWriter, finalizeSegmentFile, nextTmpPath } from './segment.js'
@@ -36,6 +49,45 @@ export class SegmentSizeEstimator {
 
 // Process-unique staging table names — writers share one DuckDB instance and must never collide.
 let tableSeq = 0
+
+/** The duckdb engine handle: a {@link ParquetEngine} whose resolved settings are inspectable. */
+export type DuckdbEngine = ParquetEngine & { readonly settings: Required<ParquetDuckdbSettings> }
+
+/**
+ * DuckDB-backed engine: stages rows in an in-memory DuckDB table and COPYs each segment to
+ * Parquet natively, moving encoding/compression/statistics onto DuckDB worker threads.
+ * Requires the optional peer dependency `@duckdb/node-api`, loaded lazily on the first
+ * segment open. Identical settings share one process-wide DuckDB instance.
+ */
+export function duckdbEngine(settings?: ParquetDuckdbSettings): DuckdbEngine {
+  const resolved = {
+    threads: settings?.threads ?? DEFAULT_DUCKDB_THREADS,
+    memoryLimit: settings?.memoryLimit ?? DEFAULT_DUCKDB_MEMORY_LIMIT,
+  }
+
+  return {
+    name: 'duckdb',
+    settings: resolved,
+    table(table, context) {
+      validateDuckdbTableCompression(table, context.codec)
+
+      // Bytes/row calibration survives across this table's successive segments (rotation memory).
+      const estimator = new SegmentSizeEstimator()
+
+      return {
+        createSegment: () =>
+          new DuckdbSegmentWriter({
+            dir: context.dir,
+            columns: table.schema,
+            rowGroupSize: context.rowGroupSize,
+            codec: context.codec,
+            duckdb: resolved,
+            estimator,
+          }),
+      }
+    },
+  }
+}
 
 export type DuckdbSegmentWriterOptions = {
   /** The table's directory: `<baseDir>/<table>`. Created by the state layer before writes. */

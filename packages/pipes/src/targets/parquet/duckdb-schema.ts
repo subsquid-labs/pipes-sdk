@@ -72,11 +72,9 @@ export function buildCreateTableSql(table: string, columns: ParquetColumns): str
  * differs from the file-level default cannot be honored — reject it loudly at construction
  * instead of silently writing a different codec than declared.
  */
-export function validateDuckdbColumnCompression(tables: ParquetTable[], defaultCodec: Codec): void {
-  for (const table of tables) {
-    for (const [name, column] of Object.entries(table.schema)) {
-      assertUniformCompression(table.table, name, column, defaultCodec)
-    }
+export function validateDuckdbTableCompression(table: ParquetTable, defaultCodec: Codec): void {
+  for (const [name, column] of Object.entries(table.schema)) {
+    assertUniformCompression(table.table, name, column, defaultCodec)
   }
 }
 

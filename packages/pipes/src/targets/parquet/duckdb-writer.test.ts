@@ -6,8 +6,8 @@ import { ParquetReader } from '@dsnp/parquetjs'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { acquireDuckdbInstance } from './duckdb-engine.js'
-import { DuckdbSegmentWriter, SegmentSizeEstimator } from './duckdb-writer.js'
-import type { ParquetColumns } from './schema.js'
+import { DuckdbSegmentWriter, SegmentSizeEstimator, duckdbEngine } from './duckdb-writer.js'
+import type { ParquetColumns, ParquetTable } from './schema.js'
 
 const COLUMNS: ParquetColumns = { blockNumber: { type: 'INT64' } }
 
@@ -120,5 +120,48 @@ describe('DuckdbSegmentWriter', () => {
     await second.appendRow({ blockNumber: 101 }, 101)
     expect(await second.size()).toBe(Math.ceil(published.bytes / published.rows))
     await second.discard()
+  })
+})
+
+describe('duckdbEngine', () => {
+  const BLOCKS: ParquetTable = {
+    table: 'blocks',
+    schema: { blockNumber: { type: 'INT64' }, hash: { type: 'UTF8' } },
+  }
+
+  it('exposes its name and resolved settings', () => {
+    expect(duckdbEngine().name).toBe('duckdb')
+    expect(duckdbEngine().settings).toEqual({ threads: 2, memoryLimit: '2GB' })
+    expect(duckdbEngine({ threads: 4 }).settings).toEqual({ threads: 4, memoryLimit: '2GB' })
+  })
+
+  it('rejects per-column compression differing from the file codec at table() time', () => {
+    const table: ParquetTable = {
+      table: 't',
+      schema: { blockNumber: { type: 'INT64' }, data: { type: 'UTF8', compression: 'GZIP' } },
+    }
+
+    expect(() => duckdbEngine().table(table, { dir: '/unused', rowGroupSize: 10, codec: 'SNAPPY' })).toThrow(
+      /per-column compression/,
+    )
+  })
+
+  it('carries bytes-per-row calibration across successive segments', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'sqd-duckdb-engine-test-'))
+    try {
+      const tableWriter = duckdbEngine().table(BLOCKS, { dir, rowGroupSize: 100, codec: 'SNAPPY' })
+
+      const first = tableWriter.createSegment()
+      for (let n = 1; n <= 50; n++) await first.appendRow({ blockNumber: n, hash: `0x${n}` }, n)
+      const published = await first.publish()
+
+      const second = tableWriter.createSegment()
+      await second.appendRow({ blockNumber: 100, hash: '0x100' }, 100)
+      // The estimate reflects the first segment's real bytes/row, not the 512-byte default.
+      expect(await second.size()).toBe(Math.ceil(published.bytes / published.rows))
+      await second.discard()
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })
