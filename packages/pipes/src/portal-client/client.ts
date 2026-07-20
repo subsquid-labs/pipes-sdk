@@ -91,6 +91,13 @@ export interface PortalBlockStreamOptions {
   maxWaitTimeMs?: number
   headPollIntervalMs?: number
   finalized?: boolean
+  /**
+   * Give every unfinalized block its own batch, and never mix finalized blocks into an unfinalized
+   * block's batch. Only targets that key a rollback snapshot by the batch's last block (the Postgres
+   * target) need this; for everyone else it just costs extra round-trips, so it is off by default
+   * and a response is delivered as a single batch.
+   */
+  perBlockUnfinalized?: boolean
 }
 
 /**
@@ -174,6 +181,7 @@ export class PortalClient {
     const settings = {
       request: options?.request ?? {},
       finalized: options?.finalized ?? this.#options.finalized,
+      perBlockUnfinalized: options?.perBlockUnfinalized ?? false,
       maxBytes: options?.maxBytes ?? this.#options.maxBytes,
       maxIdleTime: options?.maxIdleTimeMs ?? this.#options.maxIdleTime,
       maxWaitTime: options?.maxWaitTimeMs ?? this.#options.maxWaitTime,
@@ -233,6 +241,7 @@ function createPortalStream<Q extends Query>(
   options: {
     request: PortalRequestOptions
     finalized: boolean
+    perBlockUnfinalized: boolean
     maxBytes: number
     maxIdleTime: number
     maxWaitTime: number
@@ -247,7 +256,7 @@ function createPortalStream<Q extends Query>(
     stream?: AsyncIterable<string[]> | null | undefined
   }>,
 ): PortalBlockStream<GetBlock<Q>> {
-  const { headPollInterval, request, ...bufferOptions } = options
+  const { headPollInterval, request, perBlockUnfinalized, ...bufferOptions } = options
   const buffer = new StreamBuffer<GetBlock<Q>>(bufferOptions)
 
   let { fromBlock = 0, toBlock, parentBlockHash } = query
@@ -326,33 +335,59 @@ function createPortalStream<Q extends Query>(
             ? partition(blocks, ({ block }) => block.header?.number <= finalizedHead)
             : [blocks, []]
 
-          // Push finalized blocks as a batch
-          await buffer.put({
-            blocks: finalizedBlocks.map((b) => b.block),
-            head: res.head,
-            meta: {
-              bytes: finalizedBlocks.reduce((a, b) => a + b.bytes, 0),
-              requestedFromBlock,
-              lastBlockReceivedAt,
-              requests,
-            },
-          })
-
-          for (let { block, bytes } of unfinalizedBlocks) {
+          if (perBlockUnfinalized) {
+            // Targets that key a rollback snapshot by the batch's last block (Postgres) need every
+            // rollback-able block in its own batch, and a finalized block must never share one with
+            // an unfinalized block — otherwise a fork to the finalized head rolls back finalized
+            // writes. Finalized blocks still travel as one bulk: they can never roll back.
             await buffer.put(
               {
-                blocks: [block],
+                blocks: finalizedBlocks.map((b) => b.block),
                 head: res.head,
                 meta: {
-                  bytes,
+                  bytes: finalizedBlocks.reduce((a, b) => a + b.bytes, 0),
                   requestedFromBlock,
                   lastBlockReceivedAt,
-                  // We flush requests here to avoid double-counting
-                  // as we already sent them
-                  requests: finalizedBlocks.length > 0 ? {} : requests,
+                  requests,
                 },
               },
-              true,
+              unfinalizedBlocks.length > 0,
+            )
+
+            for (let { block, bytes } of unfinalizedBlocks) {
+              await buffer.put(
+                {
+                  blocks: [block],
+                  head: res.head,
+                  meta: {
+                    bytes,
+                    requestedFromBlock,
+                    lastBlockReceivedAt,
+                    // We flush requests here to avoid double-counting
+                    // as we already sent them
+                    requests: finalizedBlocks.length > 0 ? {} : requests,
+                  },
+                },
+                true,
+              )
+            }
+          } else {
+            // One batch per response. Targets that resolve a rollback from a block number carried on
+            // the rows themselves (ClickHouse) don't need per-block batches, and splitting them only
+            // costs round-trips. Flush once when the response carries unfinalized blocks, so head
+            // latency stays the same as the per-block path.
+            await buffer.put(
+              {
+                blocks: blocks.map((b) => b.block),
+                head: res.head,
+                meta: {
+                  bytes: blocks.reduce((a, b) => a + b.bytes, 0),
+                  requestedFromBlock,
+                  lastBlockReceivedAt,
+                  requests,
+                },
+              },
+              unfinalizedBlocks.length > 0,
             )
           }
 

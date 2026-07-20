@@ -124,6 +124,17 @@ describe('Drizzle target', () => {
       expect(rows).toMatchInlineSnapshot(`
         [
           {
+            "current_hash": "0x2",
+            "current_number": "2",
+            "current_timestamp": 1970-01-01T00:33:20.000Z,
+            "finalized": {
+              "hash": "0x2",
+              "number": 2,
+            },
+            "id": "test",
+            "rollback_chain": [],
+          },
+          {
             "current_hash": "0x3",
             "current_number": "3",
             "current_timestamp": 1970-01-01T00:50:00.000Z,
@@ -450,11 +461,12 @@ describe('Drizzle target', () => {
       `)
 
       // The fork drops the rolled-back sync rows above the safe cursor (block 3): the checkpoints
-      // for the dead blocks 4/5 are removed, while the unforked checkpoints (2, 3) and the
-      // reprocessed head (7) remain — so getCursor resumes from the last write (7) rather than a
-      // stale higher block.
+      // for the dead blocks 4/5 are removed, while the unforked checkpoints (finalized block 1, then
+      // 2 and 3) and the reprocessed head (7) remain — so getCursor resumes from the last write (7)
+      // rather than a stale higher block. Block 1 is finalized, so the portal delivers it in its own
+      // batch and it keeps its own checkpoint.
       const sync = await getAllFromSyncTable()
-      expect(sync.map((r) => Number(r['current_number']))).toEqual([2, 3, 7])
+      expect(sync.map((r) => Number(r['current_number']))).toEqual([1, 2, 3, 7])
     })
 
     it('should rollback updates', async () => {
@@ -740,6 +752,89 @@ describe('Drizzle target', () => {
       // The fork rewinds to block 3, where the balance was still its seeded value. Correct undo
       // restores 10 (block 4's before-image); the after-image bug restores block 4's new value, 20.
       expect(rolledBackBalance).toEqual(10)
+    })
+  })
+
+  // A finalized block can share a portal batch with the first unfinalized block above it. Its
+  // writes must still be attributed to its own (finalized) block in the rollback log, so a fork to
+  // the finalized head leaves them untouched — a finalized block must never be rolled back, and it
+  // is not re-fetched on resume.
+  describe('class-T fork keeps finalized data', () => {
+    const balances = pgTable('balances', {
+      account: integer().primaryKey(),
+      balance: integer().notNull(),
+    })
+
+    beforeEach(async () => {
+      await execute(`
+        DROP SCHEMA IF EXISTS "public" CASCADE;
+        CREATE SCHEMA IF NOT EXISTS "public";
+        CREATE TABLE balances (
+          account integer PRIMARY KEY,
+          balance integer NOT NULL
+        );
+      `)
+    })
+
+    it('does not roll back a finalized block that shared a batch with the forked block', async () => {
+      portal = await mockPortal([
+        // Block 1 is finalized, block 2 is not; the two land in the same portal batch.
+        {
+          statusCode: 200,
+          data: [{ header: { number: 1, hash: '0x1', timestamp: 1000 } }],
+          head: { finalized: { number: 1, hash: '0x1' } },
+        },
+        {
+          statusCode: 200,
+          data: [{ header: { number: 2, hash: '0x2', timestamp: 2000 } }],
+          head: { finalized: { number: 1, hash: '0x1' } },
+        },
+        {
+          // Reorg forks block 2; the safe ancestor is the finalized block 1.
+          statusCode: 409,
+          data: {
+            previousBlocks: [
+              { number: 1, hash: '0x1' },
+              { number: 2, hash: '0x2a' },
+            ],
+          },
+        },
+        {
+          statusCode: 200,
+          data: [
+            { header: { number: 2, hash: '0x2a', timestamp: 2000 } },
+            { header: { number: 3, hash: '0x3a', timestamp: 3000 } },
+          ],
+          head: { finalized: { number: 1, hash: '0x1' } },
+        },
+      ])
+
+      let forkCursor: number | undefined
+
+      await evmPortalStream({
+        id: 'test',
+        portal: portal.url,
+        outputs: blockDecoder({ from: 0, to: 3 }),
+      }).pipeTo(
+        drizzleTarget({
+          db,
+          tables: [balances],
+          onData: async ({ tx, data }) => {
+            for (const b of data) {
+              await tx.insert(balances).values({ account: b.number, balance: b.number }).onConflictDoNothing()
+            }
+          },
+          onAfterRollback: async ({ cursor }) => {
+            forkCursor = cursor.number
+          },
+        }),
+      )
+
+      // The reorg rewinds to the finalized block 1, whose write must survive the rollback.
+      expect(forkCursor).toEqual(1)
+
+      const [finalizedRow] = await db.select().from(balances).where(eq(balances.account, 1))
+      expect(finalizedRow?.balance).toEqual(1)
     })
   })
 
