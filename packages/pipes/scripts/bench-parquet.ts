@@ -8,7 +8,8 @@ import path from 'node:path'
 import { ParquetSchema } from '@dsnp/parquetjs'
 
 import { DuckdbSegmentWriter, SegmentSizeEstimator } from '../src/targets/parquet/duckdb-writer.js'
-import { type ParquetTable, buildRowWrapper, toParquetSchemaShape } from '../src/targets/parquet/schema.js'
+import { buildRowWrapper, toParquetSchemaShape } from '../src/targets/parquet/parquetjs-schema.js'
+import { type ParquetTable } from '../src/targets/parquet/schema.js'
 import type { PublishedSegment } from '../src/targets/parquet/segment.js'
 import { ParquetSegmentWriter } from '../src/targets/parquet/writer.js'
 

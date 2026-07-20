@@ -7,6 +7,7 @@ import { type BlockCursor, type Finalization, type FinalizationBuffer, finalizat
 import type { ParquetDuckdbSettings } from './duckdb-engine.js'
 import { DuckdbSegmentWriter, SegmentSizeEstimator } from './duckdb-writer.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
+import { buildRowWrapper, toParquetSchemaShape } from './parquetjs-schema.js'
 import {
   type Codec,
   type ParquetColumn,
@@ -15,8 +16,6 @@ import {
   type ParquetLeafType,
   type ParquetTable,
   blockColumnOf,
-  buildRowWrapper,
-  toParquetSchemaShape,
 } from './schema.js'
 import { type PublishedSegment, type SegmentWriter } from './segment.js'
 import { ParquetSegmentWriter } from './writer.js'

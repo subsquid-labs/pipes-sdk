@@ -30,13 +30,8 @@ import { ParquetSchema } from '@dsnp/parquetjs'
 
 import { acquireDuckdbInstance, loadDuckdbApi } from '../src/targets/parquet/duckdb-engine.js'
 import { DuckdbSegmentWriter, SegmentSizeEstimator } from '../src/targets/parquet/duckdb-writer.js'
-import {
-  type Codec,
-  type ParquetColumns,
-  type ParquetTable,
-  buildRowWrapper,
-  toParquetSchemaShape,
-} from '../src/targets/parquet/schema.js'
+import { buildRowWrapper, toParquetSchemaShape } from '../src/targets/parquet/parquetjs-schema.js'
+import { type Codec, type ParquetColumns, type ParquetTable } from '../src/targets/parquet/schema.js'
 import type { SegmentWriter } from '../src/targets/parquet/segment.js'
 import { ParquetSegmentWriter } from '../src/targets/parquet/writer.js'
 
