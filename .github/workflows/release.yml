@@ -16,18 +16,10 @@ name: Release
 on:
   push:
     tags:
-      # 'pipes-v*' is deliberately ABSENT. release-subsquid-pipes.yml still owns
-      # the core package until its trusted publisher on npmjs.com is repointed at
-      # release.yml. Listing it here too would double-publish.
-      #
-      # THE FLIP — one commit, once npm config is updated:
-      #   1. add "- 'pipes-v*'" below
-      #   2. git rm .github/workflows/release-subsquid-pipes.yml
-      #
       # These globs are ANCHORED: GitHub matches the pattern against the whole ref
       # name, so 'pipes-cli-v*'/'pipes-ui-v*' cannot collide with 'pipes-v*'
-      # ("pipes-cli-v1.0.0" does not start with "pipes-v"). Overlap with the shim
-      # is impossible, not merely unlikely.
+      # ("pipes-cli-v1.0.0" does not start with "pipes-v").
+      - 'pipes-v*'
       - 'pipes-cli-v*'
       - 'pipes-ui-v*'
   workflow_dispatch:
