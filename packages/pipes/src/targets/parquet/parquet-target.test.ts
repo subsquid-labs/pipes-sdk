@@ -9,6 +9,7 @@ import { createTarget } from '~/core/index.js'
 import { evmPortalStream } from '~/evm/index.js'
 import { type MockPortal, type MockResponse, blockDecoder, mockPortal, testLogger } from '~/testing/index.js'
 
+import { duckdbEngine } from './duckdb-writer.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { ParquetState } from './parquet-state.js'
 import { ParquetStore } from './parquet-store.js'
@@ -173,18 +174,7 @@ describe('parquetTarget', () => {
           settings: { engine: 'polars' as never },
           onData: () => {},
         }),
-      ).toThrowError(/settings\.engine must be 'parquetjs' \(default\), 'duckdb', or a ParquetEngine/)
-    })
-
-    it('rejects per-column compression under the duckdb engine (one file-level codec only)', () => {
-      const table: ParquetTable = {
-        table: 'blocks',
-        schema: { blockNumber: { type: 'INT64' }, hash: { type: 'UTF8', compression: 'GZIP' } },
-      }
-
-      expect(() =>
-        parquetTarget({ dir, tables: [table], settings: { engine: 'duckdb' }, onData: () => {} }),
-      ).toThrowError(/per-column compression/)
+      ).toThrowError(/settings\.engine must be a ParquetEngine implementation/)
     })
 
     it('accepts the duckdb engine with a uniform codec (construction only, no I/O)', () => {
@@ -192,7 +182,7 @@ describe('parquetTarget', () => {
         parquetTarget({
           dir,
           tables: [BLOCKS_TABLE],
-          settings: { engine: 'duckdb', compression: 'GZIP' },
+          settings: { engine: duckdbEngine(), compression: 'GZIP' },
           onData: () => {},
         }),
       ).not.toThrow()

@@ -12,7 +12,7 @@ import {
   humanBytes,
 } from '~/core/index.js'
 
-import { type ParquetEngine, type ParquetEngineName, resolveEngine } from './engine.js'
+import { type ParquetEngine, resolveEngine } from './engine.js'
 import { ParquetState } from './parquet-state.js'
 import { ParquetStore } from './parquet-store.js'
 import { type Codec, type ParquetTable, validateTables } from './schema.js'
@@ -41,16 +41,16 @@ export type ParquetSettings = {
   /** Default per-column compression. Default `'SNAPPY'`. */
   compression?: Codec
   /**
-   * Segment writer engine. `'parquetjs'` (default) and `'duckdb'` select the built-in engines
-   * with default settings; pass an engine instance — `parquetjsEngine()`, `duckdbEngine({...})`,
-   * or any own {@link ParquetEngine} implementation — to tune or extend. The `'duckdb'` engine
-   * produces value-identical files with slightly different footer metadata (every field is
-   * written OPTIONAL, integer columns gain INT_64/INT_32 annotations, and timestamps
-   * additionally carry a modern `isAdjustedToUTC=false` logical type next to the same legacy
-   * TIMESTAMP_MILLIS annotation). Its byte-based rotation is an estimate calibrated from
-   * previously published segments; row/interval rollovers stay exact.
+   * Segment writer engine. Omitted → the default `parquetjsEngine()`. Pass an engine
+   * instance — `parquetjsEngine()`, `duckdbEngine({...})`, or any own {@link ParquetEngine}
+   * implementation — to switch or tune engines. The duckdb engine produces value-identical
+   * files with slightly different footer metadata (every field is written OPTIONAL, integer
+   * columns gain INT_64/INT_32 annotations, and timestamps additionally carry a modern
+   * `isAdjustedToUTC=false` logical type next to the same legacy TIMESTAMP_MILLIS
+   * annotation). Its byte-based rotation is an estimate calibrated from previously published
+   * segments; row/interval rollovers stay exact.
    */
-  engine?: ParquetEngine | ParquetEngineName
+  engine?: ParquetEngine
   /**
    * Namespace for the state file, so multiple pipes can share one `dir`. Defaults to the
    * pipe's source `id`; set explicitly only to pin the state file independent of the source id.

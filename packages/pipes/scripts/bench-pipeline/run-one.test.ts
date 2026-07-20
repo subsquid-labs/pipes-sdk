@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import type { DuckdbEngine } from '../../src/targets/parquet/index.js'
+import type { DuckdbEngine, ParquetEngine } from '../../src/targets/parquet/index.js'
 import {
   type DelayMonitor,
   type RunOneDependencies,
@@ -362,7 +362,8 @@ describe('single-cell runner', () => {
 
     await runOne(['--indexer', 'alpha', '--engine', 'parquetjs'], harness.dependencies)
 
-    expect(harness.createTarget.mock.calls[0]?.[0].settings.engine).toBe('parquetjs')
+    const engine = harness.createTarget.mock.calls[0]?.[0].settings.engine as ParquetEngine
+    expect(engine.name).toBe('parquetjs')
   })
 
   it.each([

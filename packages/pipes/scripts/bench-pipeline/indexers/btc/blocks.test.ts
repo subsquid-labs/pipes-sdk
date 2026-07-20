@@ -4,7 +4,7 @@ import path from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { parquetTarget } from '../../../../src/targets/parquet/index.js'
+import { duckdbEngine, parquetTarget } from '../../../../src/targets/parquet/index.js'
 import { btcBlocks, mapBlocks } from './blocks.js'
 
 const HEADER = {
@@ -59,7 +59,7 @@ describe('btc-blocks', () => {
     try {
       expect(() => parquetTarget({ dir, tables: [btcBlocks.table], onData: () => {} })).not.toThrow()
       expect(() =>
-        parquetTarget({ dir, tables: [btcBlocks.table], settings: { engine: 'duckdb' }, onData: () => {} }),
+        parquetTarget({ dir, tables: [btcBlocks.table], settings: { engine: duckdbEngine() }, onData: () => {} }),
       ).not.toThrow()
       expect(btcBlocks.table.blockNumberColumn).toBe('number')
     } finally {

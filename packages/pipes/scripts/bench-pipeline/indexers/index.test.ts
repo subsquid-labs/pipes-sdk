@@ -5,7 +5,7 @@ import path from 'node:path'
 import { ParquetReader } from '@dsnp/parquetjs'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { parquetTarget } from '../../../src/targets/parquet/index.js'
+import { duckdbEngine, parquetTarget, parquetjsEngine } from '../../../src/targets/parquet/index.js'
 import { type MockPortal, type MockResponse, mockPortal } from '../../../src/testing/index.js'
 import { indexers } from './index.js'
 
@@ -65,7 +65,7 @@ describe('bench indexer registry', () => {
       for (const indexer of Object.values(indexers)) {
         expect(() => parquetTarget({ dir, tables: [indexer.table], onData: () => {} })).not.toThrow()
         expect(() =>
-          parquetTarget({ dir, tables: [indexer.table], settings: { engine: 'duckdb' }, onData: () => {} }),
+          parquetTarget({ dir, tables: [indexer.table], settings: { engine: duckdbEngine() }, onData: () => {} }),
         ).not.toThrow()
       }
     } finally {
@@ -113,11 +113,12 @@ describe('offline full pipeline (ethereum-logs, both engines)', () => {
     return { statusCode: 200, data: blocks, head: { finalized: { number: 3, hash: blockHash(3) } } }
   }
 
-  for (const engine of ['parquetjs', 'duckdb'] as const) {
-    it(`writes and reads all mapped rows through parquetTarget with engine ${engine}`, async () => {
-      dir = await mkdtemp(path.join(tmpdir(), `bench-e2e-${engine}-`))
+  for (const engineName of ['parquetjs', 'duckdb'] as const) {
+    it(`writes and reads all mapped rows through parquetTarget with engine ${engineName}`, async () => {
+      dir = await mkdtemp(path.join(tmpdir(), `bench-e2e-${engineName}-`))
       portal = await mockPortal([logsResponse()])
       const indexer = indexers['ethereum-logs']
+      const engine = engineName === 'duckdb' ? duckdbEngine() : parquetjsEngine()
 
       let callbackRows = 0
       await indexer.createStream({ portal: portal.url, range: { from: 1, to: 3 } }).pipeTo(

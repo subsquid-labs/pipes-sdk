@@ -16,6 +16,7 @@ import {
   type ParquetTable,
   duckdbEngine,
   parquetTarget,
+  parquetjsEngine,
 } from '../../src/targets/parquet/index.js'
 import { indexers } from './indexers/index.js'
 import type { BenchIndexer, BenchRange, Row } from './types.js'
@@ -259,7 +260,7 @@ export async function runOne(
         settings: {
           rollover: { maxBytes: MAX_FILE_BYTES },
           compression: 'SNAPPY',
-          engine: options.engine === 'duckdb' ? duckdbEngine({ threads: options.threads }) : 'parquetjs',
+          engine: options.engine === 'duckdb' ? duckdbEngine({ threads: options.threads }) : parquetjsEngine(),
         },
         onData: ({ store, data }) => {
           rows += data.length

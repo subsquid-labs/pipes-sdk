@@ -13,6 +13,7 @@ import { escapeSqlString } from './duckdb-schema.js'
 import { duckdbEngine } from './duckdb-writer.js'
 import type { ParquetSettings } from './parquet-target.js'
 import { parquetTarget } from './parquet-target.js'
+import { parquetjsEngine } from './parquetjs-writer.js'
 import type { ParquetTable } from './schema.js'
 
 const BLOCKS_TABLE: ParquetTable = {
@@ -111,6 +112,17 @@ describe('parquetTarget engine: duckdb', () => {
     await rm(dir, { recursive: true, force: true })
   })
 
+  it('rejects per-column compression at construction (one file-level codec only)', () => {
+    const table: ParquetTable = {
+      table: 'blocks',
+      schema: { blockNumber: { type: 'INT64' }, hash: { type: 'UTF8', compression: 'GZIP' } },
+    }
+
+    expect(() =>
+      parquetTarget({ dir, tables: [table], settings: { engine: duckdbEngine() }, onData: () => {} }),
+    ).toThrowError(/per-column compression/)
+  })
+
   it('writes exactly the finalized rows with <min>-<max> naming', async () => {
     portal = await mockPortal([blocksResponse([1, 2, 3, 4, 5], 3)])
 
@@ -118,7 +130,7 @@ describe('parquetTarget engine: duckdb', () => {
       parquetTarget({
         dir,
         tables: [BLOCKS_TABLE],
-        settings: { engine: 'duckdb' },
+        settings: { engine: duckdbEngine() },
         onData: ({ store, data }) => {
           store.insert(
             'blocks',
@@ -156,7 +168,7 @@ describe('parquetTarget engine: duckdb', () => {
       parquetTarget({
         dir,
         tables: [BLOCKS_TABLE],
-        settings: { engine: 'duckdb', rollover: { maxBytes: 1 }, rowGroupSize: 1 },
+        settings: { engine: duckdbEngine(), rollover: { maxBytes: 1 }, rowGroupSize: 1 },
         onData: ({ store, data }) => {
           store.insert(
             'blocks',
@@ -175,7 +187,7 @@ describe('parquetTarget engine: duckdb', () => {
 
   it('round-trips the kitchen sink with the same values and footer annotations as parquetjs', async () => {
     portal = await mockPortal([blocksResponse([1, 2], 2)])
-    await runSinkPipe(dir, 'duckdb', portal)
+    await runSinkPipe(dir, duckdbEngine(), portal)
 
     const [file] = await listDataFiles(dir, 'sink')
     const reader = await ParquetReader.openFile(path.join(dir, 'sink', file))
@@ -224,8 +236,8 @@ describe('parquetTarget engine: duckdb', () => {
     portal = await mockPortal([blocksResponse([1, 2], 2)])
     portalB = await mockPortal([blocksResponse([1, 2], 2)])
 
-    await runSinkPipe(dirA, 'parquetjs', portal)
-    await runSinkPipe(dirB, 'duckdb', portalB)
+    await runSinkPipe(dirA, parquetjsEngine(), portal)
+    await runSinkPipe(dirB, duckdbEngine(), portalB)
 
     // Same rows + same rotation decisions ⇒ same published file names.
     expect(await listDataFiles(dirB, 'sink')).toEqual(await listDataFiles(dirA, 'sink'))
@@ -250,18 +262,6 @@ describe('parquetTarget engine: duckdb', () => {
     }
   })
 
-  it('accepts a duckdbEngine() instance and produces the same files as the string form', async () => {
-    portal = await mockPortal([blocksResponse([1, 2, 3], 3)])
-    portalB = await mockPortal([blocksResponse([1, 2, 3], 3)])
-    const stringDir = path.join(dir, 'string')
-    const instanceDir = path.join(dir, 'instance')
-
-    await runSinkPipe(stringDir, 'duckdb', portal)
-    await runSinkPipe(instanceDir, duckdbEngine(), portalB)
-
-    expect(await listDataFiles(instanceDir, 'sink')).toEqual(await listDataFiles(stringDir, 'sink'))
-  })
-
   it('discards open temp files, leaks no staging table and never advances the cursor when a batch throws', async () => {
     portal = await mockPortal([blocksResponse([1], 1), blocksResponse([2], 2)])
 
@@ -275,7 +275,7 @@ describe('parquetTarget engine: duckdb', () => {
         parquetTarget({
           dir,
           tables: [BLOCKS_TABLE],
-          settings: { engine: 'duckdb' },
+          settings: { engine: duckdbEngine() },
           onData: ({ store, data }) => {
             store.insert(
               'blocks',
@@ -322,7 +322,7 @@ describe('parquetTarget engine: duckdb', () => {
       parquetTarget({
         dir,
         tables: [BLOCKS_TABLE],
-        settings: { engine: 'duckdb' },
+        settings: { engine: duckdbEngine() },
         onData: ({ store, data }) => {
           store.insert(
             'blocks',

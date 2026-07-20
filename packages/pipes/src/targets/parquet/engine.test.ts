@@ -8,9 +8,19 @@ describe('resolveEngine', () => {
     expect(resolveEngine(undefined).name).toBe('parquetjs')
   })
 
-  it('maps the built-in engine names', () => {
-    expect(resolveEngine('parquetjs').name).toBe('parquetjs')
-    expect(resolveEngine('duckdb').name).toBe('duckdb')
+  it('rejects the retired engine-name strings with ENGINE_INVALID', () => {
+    for (const name of ['parquetjs', 'duckdb']) {
+      let error: unknown
+      try {
+        resolveEngine(name as never)
+      } catch (caught) {
+        error = caught
+      }
+
+      expect(error).toBeInstanceOf(ParquetTargetError)
+      expect((error as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.ENGINE_INVALID)
+      expect((error as ParquetTargetError).message).toContain(`got '${name}'`)
+    }
   })
 
   it('passes a ParquetEngine implementation through untouched', () => {

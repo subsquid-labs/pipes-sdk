@@ -1,4 +1,3 @@
-import { duckdbEngine } from './duckdb-writer.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { parquetjsEngine } from './parquetjs-writer.js'
 import type { Codec, ParquetTable } from './schema.js'
@@ -35,8 +34,7 @@ export interface ParquetTableWriter {
  * - name segment temp files via `nextTmpPath` (startup recovery deletes `.tmp-*` files);
  * - publish through `finalizeSegmentFile` (fsync → collision check → atomic rename → dir
  *   fsync), the durability tail that checkpoints depend on;
- * - keep `table()` synchronous and cheap — defer library loading and other async setup to
- *   the first `appendRow`, exactly like both built-in engines do;
+ * - keep `table()` synchronous and cheap;
  * - accept rows in the plain-JS shape (`LIST` cells are plain arrays, `STRUCT` cells plain
  *   objects) — any library-specific row reshaping happens inside the engine.
  */
@@ -51,17 +49,12 @@ export interface ParquetEngine {
   table(table: ParquetTable, context: ParquetTableContext): ParquetTableWriter
 }
 
-/** Names of the engines shipped with the SDK, accepted as `settings.engine` shorthand. */
-export type ParquetEngineName = 'parquetjs' | 'duckdb'
-
 /**
  * Resolves `settings.engine` to a {@link ParquetEngine}: `undefined` → the default parquetjs
- * engine, a built-in name → that engine with default settings, an instance → itself. Rejects
- * anything else at construction with `ENGINE_INVALID`.
+ * engine, an instance → itself. Rejects anything else at construction with `ENGINE_INVALID`.
  */
-export function resolveEngine(engine: ParquetEngine | ParquetEngineName | undefined): ParquetEngine {
-  if (engine === undefined || engine === 'parquetjs') return parquetjsEngine()
-  if (engine === 'duckdb') return duckdbEngine()
+export function resolveEngine(engine: ParquetEngine | undefined): ParquetEngine {
+  if (engine === undefined) return parquetjsEngine()
   if (
     typeof engine === 'object' &&
     engine !== null &&
@@ -73,7 +66,7 @@ export function resolveEngine(engine: ParquetEngine | ParquetEngineName | undefi
 
   throw new ParquetTargetError(
     PARQUET_ERROR_CODES.ENGINE_INVALID,
-    `parquetTarget: settings.engine must be 'parquetjs' (default), 'duckdb', or a ParquetEngine ` +
-      `implementation ({ name, table() }), got ${typeof engine === 'string' ? `'${engine}'` : typeof engine}.`,
+    `parquetTarget: settings.engine must be a ParquetEngine implementation ({ name, table() }) ` +
+      `or omitted for the default parquetjs engine, got ${typeof engine === 'string' ? `'${engine}'` : typeof engine}.`,
   )
 }
