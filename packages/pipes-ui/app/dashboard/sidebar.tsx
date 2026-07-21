@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react'
 
+import { CircularProgress } from '~/components/ui/circular-progress'
 import { displayEstimatedTime } from '~/dashboard/formatters'
 import {
   type ApiStats,
@@ -16,38 +17,7 @@ import {
 } from '~/hooks/use-metrics'
 import { useServerIndex } from '~/hooks/use-server-context'
 import { type Server, useServers } from '~/hooks/use-servers'
-
-function CircularProgress({ percent }: { percent: number }) {
-  const r = 6
-  const circumference = 2 * Math.PI * r
-  const offset = circumference - (percent / 100) * circumference
-
-  return (
-    <svg width="26" height="26" viewBox="0 0 16 16" className="shrink-0 block">
-      <defs>
-        <linearGradient id="progress-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#433485" />
-          <stop offset="50%" stopColor="#b53cdd" />
-          <stop offset="100%" stopColor="#d0a9e2" />
-        </linearGradient>
-      </defs>
-      <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeWidth="2" opacity={0.1} />
-      <circle
-        cx="8"
-        cy="8"
-        r={r}
-        fill="none"
-        stroke="url(#progress-gradient)"
-        strokeWidth="2"
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform="rotate(-90 8 8)"
-        className="transition-all duration-300"
-      />
-    </svg>
-  )
-}
+import { useUrlNavigate } from '~/hooks/use-url-param'
 
 // export function PortalStatus({ url }: { url?: string }) {
 //   const host = url ? new URL(url).origin : ''
@@ -163,7 +133,8 @@ function ServerSelect({
   connected: boolean
   statuses?: Map<number, ServerStatus>
 }) {
-  const { serverIndex, setServerIndex } = useServerIndex()
+  const { serverIndex } = useServerIndex()
+  const navigate = useUrlNavigate()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const current = servers[serverIndex] ?? servers[0]
@@ -209,8 +180,17 @@ function ServerSelect({
                   key={server.url}
                   type="button"
                   onClick={() => {
-                    setServerIndex(index)
                     setOpen(false)
+                    if (isSelected) return
+
+                    // Land on the target server's first pipe when we know it (statuses
+                    // refresh every 3s); when the server is offline/unknown, keep the pipe
+                    // param — the detail view then accurately shows the disconnected panel.
+                    const firstPipeId = statuses?.get(index)?.firstPipeId
+                    navigate({
+                      server: index === 0 ? null : index,
+                      ...(firstPipeId ? { pipe: firstPipeId } : {}),
+                    })
                   }}
                   className={`relative flex items-center gap-2.5 w-full rounded-md px-2.5 py-2 text-left text-foreground transition-colors ${
                     isSelected ? 'bg-[#433485]/30' : 'hover:bg-[#433485]/20'
