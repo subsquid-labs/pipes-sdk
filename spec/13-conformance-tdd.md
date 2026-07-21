@@ -168,7 +168,6 @@ P2 bounded/rare · P3 polish. "First test" = cheapest failing-test-first entry p
 
 | GAP | Statement | Violated | Pri | First test |
 |---|---|---|---|---|
-| GAP-2 | Discriminator-width selection picks a single width per decoder; mixing widths silently omits the others from the portal query — records never fetched; wire-supported d0 is entirely unreachable through the decoder | INV-24, REQ-2, IB-8 | P1 | decoder with 1-byte + 8-byte discriminator instructions; assert both streams arrive |
 | GAP-3 | Class-A repair hook is optional; without it recovery and fork cleanup are silent no-ops while the cursor advances (silent divergence) | RP-42, CN-13, REQ-3 | P1 | crash between data append and cursor append, restart without hook; assert refusal or repair, not divergence (ADR-15) |
 | GAP-4 | Blank-pipe-id guard throws an uncoded error; the documented code exists but is dead | REQ-13, WP-3 | P3 | blank id + sink → assert the coded configuration error |
 | GAP-5 | Malformed NDJSON line vs incomplete line are not discriminated; a partial line can surface as a raw parse crash | WP-16, FM-11 | P2 | simulator splits a line across chunks (must continue) and sends one malformed line (must fail coded) |
@@ -199,6 +198,7 @@ P2 bounded/rare · P3 polish. "First test" = cheapest failing-test-first entry p
 | GAP-32 | Dev-runner coerces `retry: 0` to the default 5 via a falsy-default — fail-fast intent silently ignored (open fix PR #70) | FM-40 | P3 | retry: 0 → assert a single attempt |
 | GAP-33 | Profiling-surface defects: batch spans leak on empty batches and stream end (open fix PR #71); transformer-id dedup collides for 3+ same-id transformers (open fix PR #73) | OB-22 | P3 | span onStart count = onEnd count across empty batches; three same-id transformers get distinct ids |
 | GAP-34 | Observability-server hygiene: CORS accepts any origin containing "localhost" as a substring (and rejects 127.0.0.1); stop() clears the global metrics registry; /profiler hardcodes `enabled: true` | IB-40, IB-43 | P3 | origin `http://localhost.evil.com` → assert rejected |
+| GAP-36 | One-program-per-decoder (ADR-17) is enforced by proxy: `programId` is decoder-level, so nothing binds an instruction definition to its program, and the guards only reject collisions visible in the discriminator set. Two programs with disjoint tracked discriminators still pass and cross-decode | INV-24, REQ-2 | P2 | decoder over `[A, B]` with `{ aSwap: A.swap, bDeposit: B.deposit }`; feed B's on-chain `swap` → assert refusal or no emission under `aSwap`, not a decode |
 | GAP-35 | Parquet data files are named by block window with no pipe-id namespacing while the state sidecar is namespaced (`_sqd_parquet_state.<id>.json`): two pipes covering overlapping ranges in one directory collide on filename and the second fails E2309 — sharing a directory is refused by accident of naming rather than declared policy, and coverage-window naming (GAP-17) collides identically | IB-22, IB-27, INV-35 | P2 | two pipe ids, one directory, overlapping ranges → assert the declared outcome (namespaced files or a coded exclusivity refusal), not a publish collision |
 
 ## Build order
@@ -206,7 +206,7 @@ P2 bounded/rare · P3 polish. "First test" = cheapest failing-test-first entry p
 - **Phase 0 — harness skeleton**: the reference implementation already serves the
   simulator's wire surface from an HTTP fixture (200 NDJSON · 204 · 409 with canonical
   chain · 5xx · head headers, IB-4/IB-5) with a per-request assertion hook — sufficient
-  as-is for request-shape work (GAP-2, GAP-11). The Phase-0 delta is **ledger mode**:
+  as-is for request-shape work (GAP-11). The Phase-0 delta is **ledger mode**:
   derive responses from the request anchor (IB-3) against a held chain instead of
   selecting them by request ordinal. An ordinal script has no answer for the re-request
   a restarted SUT issues from its recovered cursor, so this gates the entire CT-2
@@ -216,7 +216,7 @@ P2 bounded/rare · P3 polish. "First test" = cheapest failing-test-first entry p
   class (K — cheapest, file-based; the only crash imitation today is a pre-commit
   abort, one point of the CT-2 matrix). Exit: CT-1 green on the reference
   implementation for S1, ledger mode answering post-restart re-requests.
-- **Phase 1 — P1 gaps**: GAP-2, GAP-3 (needs ADR-15),
+- **Phase 1 — P1 gaps**: GAP-3 (needs ADR-15),
   GAP-11 (range anchors), GAP-17 (land the coverage PR),
   GAP-14 kill-point harness for class T. Exit: register updated, fixes landed or
   accepted as documented deviations.

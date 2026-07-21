@@ -1,5 +1,6 @@
 import {
   DecodeErrorHook,
+  InstructionDecoderConfigurationError,
   PortalRange,
   ProfilerOptions,
   defaultDecodeError,
@@ -56,13 +57,15 @@ export type DecodedInstruction<D> = {
 }
 
 interface AbiInstruction<A, D> {
-  d0?: string
   d1?: string
   d2?: string
   d4?: string
   d8?: string
   decode(event: any): { accounts: A; data: D }
 }
+
+const DISCRIMINATOR_WIDTHS = ['d1', 'd2', 'd4', 'd8'] as const
+type DiscriminatorWidth = (typeof DISCRIMINATOR_WIDTHS)[number]
 
 export type Instructions = Record<string, AbiInstruction<any, any>>
 
@@ -91,97 +94,99 @@ export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEv
 
   const query = solanaQuery().addFields(decodedEventFields)
 
-  const d1: string[] = []
-  const d2: string[] = []
-  const d4: string[] = []
-  const d8: string[] = []
+  const byWidth: Record<DiscriminatorWidth, string[]> = { d1: [], d2: [], d4: [], d8: [] }
+  const seen = new Map<string, string>()
+  const missing: string[] = []
   for (const name in opts.instructions) {
     const i = opts.instructions[name]
+    const widths = DISCRIMINATOR_WIDTHS.filter((w) => i[w])
+    if (widths.length === 0) {
+      missing.push(name)
+      continue
+    }
 
-    if (i.d1) d1.push(i.d1)
-    if (i.d2) d2.push(i.d2)
-    if (i.d4) d4.push(i.d4)
-    if (i.d8) d8.push(i.d8)
+    if (widths.length > 1) {
+      throw new InstructionDecoderConfigurationError([
+        `Instruction "${name}" sets multiple discriminators (${widths.join(', ')}).`,
+        'An instruction is identified by exactly one discriminator; several mean a malformed ABI',
+        'entry. Pass a single instruction definition carrying one discriminator width.',
+      ])
+    }
+
+    const width = widths[0]
+    const value = i[width]!
+    const previous = seen.get(`${width}:${value}`)
+    if (previous) {
+      throw new InstructionDecoderConfigurationError([
+        `Instructions "${previous}" and "${name}" share the discriminator ${value} (${width}).`,
+        'Solana discriminators are program-independent, so a shared one would decode the same raw',
+        'instruction under both keys. A decoder covers a single program/ABI — split unrelated',
+        'programs into separate solanaInstructionDecoder() calls.',
+      ])
+    }
+
+    seen.set(`${width}:${value}`, name)
+    byWidth[width].push(value)
   }
 
-  if (!d1.length && !d2.length && !d4.length && !d8.length) {
-    throw new Error(
-      [
-        'No valid instruction discriminators found. It looks like one or more instructions in your ABI are missing their decoder configuration.',
-        'This usually happens when you accidentally pass an event instead of an instruction, or when your ABI instruction definitions are incomplete.',
-        'Please check that you are passing correct instruction definitions to "solanaInstructionDecoder":',
-        '--------------------------------------------------',
-        'Example',
-        '',
+  const widthsPresent = DISCRIMINATOR_WIDTHS.filter((w) => byWidth[w].length > 0)
 
-        'import { events as orcaWhirlpool } from "./orca_abi";',
-
-        '',
-        ' // ... omitted logic ....',
-        '',
-
-        'solanaInstructionDecoder({',
-        '  range: { from: 371602677 },',
-        '  programId: orcaWhirlpool.programId,',
-        '  instructions: {',
-        '    initializeConfig: abi.instructions.InitializeConfig,',
-        '    swap: abi.instructions.Swap,',
-        '  },',
-        '})',
-        // TODO add docs link
-      ].join('\n'),
-    )
+  // Ordered before the empty-set message below: when every entry lacks a discriminator
+  // both apply, and only this one names the offending keys.
+  if (missing.length > 0) {
+    throw new InstructionDecoderConfigurationError([
+      `Instruction(s) ${missing.map((n) => `"${n}"`).join(', ')} have no discriminator (d1/d2/d4/d8).`,
+      'An instruction without a discriminator matches every instruction of the program and would',
+      'decode foreign data under its key. Every entry must carry exactly one discriminator — check',
+      'you passed an instruction definition, not an event.',
+    ])
   }
 
-  if (d1.length) {
-    query.addInstructionRequest({
-      range,
-      request: {
-        programId,
-        d1,
-        isCommitted: true,
-        innerInstructions: true,
-        transaction: true,
-        transactionTokenBalances: true,
-      },
-    })
-  } else if (d2.length) {
-    query.addInstructionRequest({
-      range,
-      request: {
-        programId,
-        d2,
-        isCommitted: true,
-        innerInstructions: true,
-        transaction: true,
-        transactionTokenBalances: true,
-      },
-    })
-  } else if (d4.length) {
-    query.addInstructionRequest({
-      range,
-      request: {
-        programId,
-        d4,
-        isCommitted: true,
-        innerInstructions: true,
-        transaction: true,
-        transactionTokenBalances: true,
-      },
-    })
-  } else if (d8.length) {
-    query.addInstructionRequest({
-      range,
-      request: {
-        programId,
-        d8,
-        isCommitted: true,
-        innerInstructions: true,
-        transaction: true,
-        transactionTokenBalances: true,
-      },
-    })
+  if (widthsPresent.length === 0) {
+    throw new InstructionDecoderConfigurationError([
+      'No valid instruction discriminators found. It looks like one or more instructions in your ABI are missing their decoder configuration.',
+      'This usually happens when you accidentally pass an event instead of an instruction, or when your ABI instruction definitions are incomplete.',
+      'Please check that you are passing correct instruction definitions to "solanaInstructionDecoder":',
+      '--------------------------------------------------',
+      'Example',
+      '',
+      'import { events as orcaWhirlpool } from "./orca_abi";',
+      '',
+      ' // ... omitted logic ....',
+      '',
+      'solanaInstructionDecoder({',
+      '  range: { from: 371602677 },',
+      '  programId: orcaWhirlpool.programId,',
+      '  instructions: {',
+      '    initializeConfig: abi.instructions.InitializeConfig,',
+      '    swap: abi.instructions.Swap,',
+      '  },',
+      '})',
+    ])
   }
+
+  if (widthsPresent.length > 1) {
+    throw new InstructionDecoderConfigurationError([
+      `A decoder mixes discriminator widths (${widthsPresent.join(', ')}); the portal rejects more than one width per request.`,
+      'Usually this means unrelated programs were combined into one decoder — a decoder covers a',
+      'single program/ABI, so split them into separate solanaInstructionDecoder() calls. If these',
+      'instructions really are one program (an ABI whose extension instructions carry a wider',
+      'discriminator), split it by width instead: one decoder per width, same programId.',
+    ])
+  }
+
+  const width = widthsPresent[0]
+  query.addInstructionRequest({
+    range,
+    request: {
+      programId,
+      [width]: byWidth[width],
+      isCommitted: true,
+      innerInstructions: true,
+      transaction: true,
+      transactionTokenBalances: true,
+    },
+  })
 
   return query.build().pipe({
     profiler: opts.profiler || { name: 'instruction decoder' },
@@ -212,6 +217,8 @@ export function solanaInstructionDecoder<T extends Instructions>(opts: DecodedEv
 
               const res = {
                 instruction: decoded,
+                // The emitting deployment: a decoder may cover several addresses of one ABI.
+                programId: instruction.programId,
                 rawInstruction: instruction,
                 block: { number: block.header.number, hash: block.header.hash },
                 transaction,

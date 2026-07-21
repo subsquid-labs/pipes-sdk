@@ -61,6 +61,63 @@ invalid date, or a timestamp that can't be resolved to a block. The message name
 **Fix** — ensure `from ≤ to` and use a resolvable bound: `'latest'`, a block number (`'12,000,000'`),
 an ISO date (`'2024-01-01'`), or a `Date`.
 
+### E0003 · Unusable instruction discriminator set
+
+A `solanaInstructionDecoder` was built with a discriminator set it can't use: an instruction with no
+discriminator or with more than one, discriminators of mixed widths across the decoder
+(`d1`/`d2`/`d4`/`d8`), or two instructions sharing a discriminator. A decoder covers a single
+program/ABI — one width, distinct discriminators — because Anchor discriminators are
+program-independent, so a shared one would decode the same raw instruction under both keys.
+
+**Fix** — give each instruction exactly one discriminator, keep a single width per decoder, and split
+unrelated programs into separate `solanaInstructionDecoder()` calls. If the mixed widths really do
+belong to one program — an ABI whose extension instructions carry a wider discriminator than its base
+ones — split it by width instead: one decoder per width, the same `programId`.
+
+**Wrong** — two different programs in one decoder. Their `swap` instructions are unrelated, but Anchor
+derives both discriminators from `sha256("global:swap")`, so they collide and each would decode the
+other's data:
+
+```ts
+solanaInstructionDecoder({
+  range: { from: 'latest' },
+  programId: [jupiter.programId, raydium.programId],
+  instructions: {
+    jupSwap: jupiter.instructions.swap,
+    raySwap: raydium.instructions.swap, // same discriminator as jupSwap → E0003
+  },
+})
+```
+
+**Right** — one decoder per program/ABI:
+
+```ts
+const jup = solanaInstructionDecoder({
+  range: { from: 'latest' },
+  programId: jupiter.programId,
+  instructions: { swap: jupiter.instructions.swap },
+})
+
+const ray = solanaInstructionDecoder({
+  range: { from: 'latest' },
+  programId: raydium.programId,
+  instructions: { swap: raydium.instructions.swap },
+})
+```
+
+**Also right** — one ABI covering several addresses. This is the legitimate array case: the
+instruction has the same discriminator, arguments and account layout at every address, so one
+definition decodes it across all of them. Token and Token-2022 are distinct programs, but Token-2022
+implements Token's instruction set — `transfer` is identical on both:
+
+```ts
+solanaInstructionDecoder({
+  range: { from: 'latest' },
+  programId: [TOKEN_PROGRAM, TOKEN_2022_PROGRAM],
+  instructions: { transfer: tokenProgram.instructions.transfer },
+})
+```
+
 ---
 
 ## Fork handling

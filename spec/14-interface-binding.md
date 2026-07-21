@@ -47,8 +47,8 @@ local schedule P-RETRY-SCHEDULE-MS).
 (address, topic0–3, relational inclusions `transaction`/`transactionTraces`/
 `transactionLogs`/`transactionStateDiffs`), `transactions` (to/from/sighash/type),
 `traces`, `stateDiffs`, `includeAllBlocks`; solana — `instructions` (programId,
-discriminators d0/d1/d2/d4/d8 *(d0 unreachable through the reference decoder —
-GAP-2)*, account slots a0–a9), `transactions`, `logs`, `balances`,
+discriminators d1/d2/d4/d8 — one width per instruction request, an ABI is single-width
+(ADR-17); the wire has no d0 — account slots a0–a9), `transactions`, `logs`, `balances`,
 `tokenBalances`, `rewards`; bitcoin/tron/hyperliquidFills — their reference sets.
 A conforming implementation reproduces these request JSON shapes byte-compatibly.
 
@@ -208,7 +208,7 @@ consumers MUST NOT read it as a block number.
 
 | Band | Area | Codes in use |
 |---|---|---|
-| E0xxx | pipe configuration | E0001 blank/default pipe id *(currently dead — GAP-4)*, E0002 invalid range/date |
+| E0xxx | pipe configuration | E0001 blank/default pipe id *(currently dead — GAP-4)*, E0002 invalid range/date, E0003 unusable instruction discriminator set (mixed widths across the decoder, shared discriminator, or an instruction with none or several) |
 | E1xxx | fork handling | E1001 sink lacks fork support, E1002 empty canonical chain, E1003 ancestor unresolvable, E1004 portal contract violation (canonical below cursor) |
 | E20xx | ClickHouse binding | E2001–E2006 (retention, table name, distributed-rollback, collapse-column, missing sign, rollback-index) |
 | E21xx | Postgres binding | E2101–E2106 (client, config, advisory lock, untracked table, missing PK, FK cycle) |

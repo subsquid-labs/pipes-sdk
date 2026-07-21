@@ -30,12 +30,10 @@ function params(contracts: CustomTemplateParams['contracts']): CustomTemplatePar
 }
 
 describe('SVM custom transformer', () => {
-  it('emits a single decoder when all programs share a range', () => {
+  it('emits one decoder per program even when ranges match (never merges programs)', () => {
     const groups = buildDecoderGroups(params([jupiter({ from: '200000000' }), raydium({ from: '200000000' })]))
-    expect(groups).toHaveLength(1)
-    expect(groups[0]!.decoderId).toBe('custom')
-    expect(groups[0]!.rangeFrom).toBe('200000000')
-    expect(groups[0]!.programs).toHaveLength(2)
+    expect(groups.map((g) => g.decoderId)).toEqual(['customJupiter', 'customRaydium'])
+    expect(groups.every((g) => g.programs.length === 1)).toBe(true)
   })
 
   it('emits per-program decoders when ranges diverge', () => {
@@ -82,18 +80,47 @@ describe('SVM custom transformer', () => {
     ])
   })
 
-  it('disambiguates duplicate instruction names across programs in a shared decoder', () => {
+  it('keeps same-named instructions in separate per-program decoders (no cross-decode)', () => {
     const groups = buildDecoderGroups(params([jupiter({ from: '200000000' }), raydium({ from: '200000000' })]))
-    const keys = groups[0]!.instructions.map((i) => i.uniqueKey)
-    expect(keys).toEqual(['jupiterSwap', 'raydiumSwap'])
+    expect(groups).toHaveLength(2)
+    expect(groups.map((g) => g.instructions.map((i) => i.uniqueKey))).toEqual([['Swap'], ['Swap']])
   })
 
-  it('keeps bare instruction names when no collision exists in the group', () => {
+  it('gives each program its own decoder with its own instructions', () => {
     const groups = buildDecoderGroups(
       params([jupiter({ from: '200000000' }, [swap]), raydium({ from: '200000000' }, [claim])]),
     )
-    const keys = groups[0]!.instructions.map((i) => i.uniqueKey)
-    expect(keys).toEqual(['Swap', 'Claim'])
+    const byId = Object.fromEntries(groups.map((g) => [g.decoderId, g.instructions.map((i) => i.uniqueKey)]))
+    expect(byId).toEqual({ customJupiter: ['Swap'], customRaydium: ['Claim'] })
+  })
+
+  it('never merges distinct programs whose names normalize alike', () => {
+    const contracts = [
+      {
+        contractName: 'Foo Bar',
+        contractEvents: [swap],
+        deployments: [{ address: jupiterAddress, range: { from: '10' } }],
+      },
+      {
+        contractName: 'foo_bar',
+        contractEvents: [claim],
+        deployments: [{ address: raydiumAddress, range: { from: '10' } }],
+      },
+    ]
+    const groups = buildDecoderGroups(params(contracts))
+
+    expect(groups).toHaveLength(2)
+    expect(groups.every((g) => g.programs.length === 1)).toBe(true)
+    expect(new Set(groups.map((g) => g.decoderId)).size).toBe(2)
+    expect(groups.flatMap((g) => g.instructions.map((i) => i.name)).sort()).toEqual(['Claim', 'Swap'])
+
+    // each program keeps its own typegen import, at its own address
+    const importLines = renderTransformer(params(contracts))
+      .split('\n')
+      .filter((l) => l.includes('from "./contracts/'))
+    expect(importLines).toHaveLength(2)
+    expect(importLines.some((l) => l.includes(jupiterAddress))).toBe(true)
+    expect(importLines.some((l) => l.includes(raydiumAddress))).toBe(true)
   })
 })
 

@@ -31,7 +31,7 @@ async function cli() {
       }),
       meteoraDlmm: solanaInstructionDecoder({
         range: { from },
-        programId: meteoraDamm.programId,
+        programId: meteoraDlmm.programId,
         instructions: {
           swaps: meteoraDlmm.instructions.swap,
           swapExactOut: meteoraDlmm.instructions.swapExactOut,

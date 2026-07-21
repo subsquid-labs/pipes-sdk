@@ -5,8 +5,10 @@
  * Validates the banded ID system of spec/: every individually referenced ID must be
  * defined somewhere; range references (WP-10…WP-16) may span banded gaps by design,
  * but their band prefix must exist. Also validates every relative markdown link: the
- * target file must exist, and an anchor must match a heading there. Exit 1 on any
- * dangling reference or broken link.
+ * target file must exist, and an anchor must match a heading there. Finally, checks that
+ * docs/errors.md stays in sync with the codes the SDK actually throws — every thrown
+ * E-code has a documented section, and every documented code is still thrown. Exit 1 on
+ * any dangling reference, broken link, or errors.md drift.
  *
  * Run: node spec/check-spec.mjs
  */
@@ -162,6 +164,58 @@ for (const [f, t] of text) {
   }
 }
 
+// ─── docs/errors.md ↔ thrown-code sync ───────────────────────────────────────
+// docs/errors.md is the user-facing registry every SDK error message links to. Authority
+// is the code: the same error-class sources docs/errors.md names in its header comment.
+// Every code thrown there must have a section, and every documented code must still be
+// thrown — otherwise the reference drifts from reality (as E0003 once did).
+const REPO = resolve(SPEC, '..')
+
+// Discovered, not listed: a hardcoded roster fails open — a new target's errors.ts is
+// simply not scanned, and the check passes while the reference drifts.
+function errorSources(dir) {
+  const found = []
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (e.isDirectory()) {
+      if (e.name === 'node_modules' || e.name === 'dist') continue
+      found.push(...errorSources(join(dir, e.name)))
+    } else if (e.name === 'errors.ts') {
+      found.push(join(dir, e.name))
+    }
+  }
+
+  return found
+}
+
+const sources = errorSources(join(REPO, 'packages'))
+if (sources.length === 0) {
+  errors.push('errors.md sync: no errors.ts sources found under packages/')
+}
+
+const thrownCodes = new Set()
+for (const p of sources) {
+  for (const m of readFileSync(p, 'utf8').matchAll(/'(E\d{4})'/g)) thrownCodes.add(m[1])
+}
+
+const errorsDoc = join(REPO, 'docs/errors.md')
+const documentedCodes = new Set()
+if (!existsSync(errorsDoc)) {
+  errors.push('errors.md sync: docs/errors.md not found')
+} else {
+  for (const m of readFileSync(errorsDoc, 'utf8').matchAll(/^#{2,4}\s+(E\d{4})\b/gm)) documentedCodes.add(m[1])
+}
+
+for (const c of [...thrownCodes].sort()) {
+  if (!documentedCodes.has(c)) {
+    errors.push(`errors.md missing ${c}: thrown in code but has no section in docs/errors.md`)
+  }
+}
+for (const c of [...documentedCodes].sort()) {
+  if (!thrownCodes.has(c)) {
+    errors.push(`errors.md stale ${c}: documented but no source throws it`)
+  }
+}
+
 let total = 0
 const parts = []
 for (const kind of [...definedByKind.keys()].sort()) {
@@ -172,6 +226,7 @@ for (const kind of [...definedByKind.keys()].sort()) {
 console.log(`spec IDs defined: ${total} (${parts.join(' ')})`)
 console.log(`individual references checked: ${individual.size}; range references: ${rangeRefs.length}`)
 console.log(`relative links checked: ${linkCount}`)
+console.log(`error codes: ${thrownCodes.size} thrown, ${documentedCodes.size} documented`)
 
 if (errors.length) {
   console.error(`\n${errors.length} error(s):`)

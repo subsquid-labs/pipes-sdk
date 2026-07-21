@@ -1,11 +1,10 @@
 import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 
-import { ContractMetadata } from '~/services/sqd-abi.js'
 import { svmToClickhouseType } from '~/utils/db-type-map.js'
 
-import { referenceAddress } from '../../../../contract-params.js'
 import { CustomTemplateParams } from '../template.config.js'
+import { ProgramTable, programTables } from './naming.js'
 
 export const customContractChTemplate = `
 {{#contracts}}
@@ -29,29 +28,19 @@ ORDER BY (block_number, transaction_index, instruction_address);
 {{/contracts}}
 `
 
-export function renderClickhouse({ contracts: contractEntries }: CustomTemplateParams) {
-  // Tables are contract-level (shaped by the event set); deployments share them.
-  const contracts = contractEntries.map((c) => ({
-    contractName: c.contractName,
-    contractEvents: c.contractEvents,
-    contractAddress: referenceAddress(c),
-  }))
-  const contractsWithDbTypes = getContractWithDbTypes(contracts)
-
+export function renderClickhouse({ contracts }: CustomTemplateParams) {
   return Mustache.render(customContractChTemplate, {
-    contracts: contractsWithDbTypes,
+    contracts: getContractWithDbTypes(programTables(contracts)),
   })
 }
 
-function getContractWithDbTypes(contracts: ContractMetadata[]) {
-  return contracts.flatMap((c) =>
-    c.contractEvents.map((e) => ({
-      event: e.name,
-      tableName: toSnakeCase(`${c.contractName}_${e.name}`),
-      inputs: e.inputs.map((i) => ({
-        name: toSnakeCase(i.name),
-        dbType: svmToClickhouseType(i.type),
-      })),
+function getContractWithDbTypes(tables: ProgramTable[]) {
+  return tables.map(({ instruction, table }) => ({
+    event: instruction.name,
+    tableName: table,
+    inputs: instruction.inputs.map((i) => ({
+      name: toSnakeCase(i.name),
+      dbType: svmToClickhouseType(i.type),
     })),
-  )
+  }))
 }

@@ -1,8 +1,8 @@
-import { toCamelCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 
 import { flattenContracts } from '../../../../contract-params.js'
 import { CustomTemplateParams } from '../template.config.js'
+import { programIdentifiers } from './naming.js'
 
 interface Program {
   contractName: string
@@ -51,33 +51,51 @@ const {{{decoderId}}} = solanaInstructionDecoder({
 `
 
 export function buildDecoderGroups(params: CustomTemplateParams): DecoderGroup[] {
-  const programs: Program[] = flattenContracts(params.contracts).map((c) => ({
-    contractName: toCamelCase(c.contractName),
+  const flat = flattenContracts(params.contracts)
+  if (flat.length === 0) {
+    return []
+  }
+
+  const identifiers = programIdentifiers(flat)
+
+  const programs: Program[] = flat.map((c) => ({
+    contractName: identifiers.get(c.typegenAddress)!,
     contractAddress: c.contractAddress,
     typegenAddress: c.typegenAddress,
     contractEvents: c.contractEvents,
     range: c.range ?? { from: 'latest' },
   }))
 
-  if (programs.length === 0) return []
-
-  const allSameRange = programs.every(
-    (p) => p.range.from === programs[0]!.range.from && p.range.to === programs[0]!.range.to,
-  )
-
-  if (allSameRange && programs.length > 0) {
-    return [makeGroup('custom', programs)]
+  // One decoder per (program, range). Deployments of the same program share its IDL and
+  // discriminators, so they belong together in one decoder's programId array. Different
+  // programs must never share a decoder: Solana discriminators are program-independent, so
+  // two programs with a same-named instruction would decode each other's data (the decoder
+  // now rejects that config at runtime). Keyed by typegen address so name normalization can't
+  // merge distinct programs.
+  const groups = new Map<string, Program[]>()
+  for (const p of programs) {
+    const key = `${p.typegenAddress}|${p.range.from}|${p.range.to ?? ''}`
+    const list = groups.get(key) ?? []
+    list.push(p)
+    groups.set(key, list)
   }
 
-  // One decoder per (program, deployment); same-name deployments get numeric suffixes.
+  const groupList = [...groups.values()]
+  if (groupList.length === 1) {
+    return [makeGroup('custom', groupList[0]!)]
+  }
+
   const usedIds = new Set<string>()
-  return programs.map((p) => {
-    const suffix = p.contractName.charAt(0).toUpperCase() + p.contractName.slice(1)
+  return groupList.map((deployments) => {
+    const name = deployments[0]!.contractName
+    const suffix = name.charAt(0).toUpperCase() + name.slice(1)
     let decoderId = `custom${suffix}`
-    for (let n = 2; usedIds.has(decoderId); n++) decoderId = `custom${suffix}${n}`
+    for (let n = 2; usedIds.has(decoderId); n++) {
+      decoderId = `custom${suffix}${n}`
+    }
     usedIds.add(decoderId)
 
-    return makeGroup(decoderId, [p])
+    return makeGroup(decoderId, deployments)
   })
 }
 
