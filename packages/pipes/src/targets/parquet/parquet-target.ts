@@ -42,15 +42,11 @@ export type ParquetSettings = {
   /** Default per-column compression. Default `'SNAPPY'`. */
   compression?: Codec
   /**
-   * Segment writer engine. Omitted → the default `parquetjsEngine()`. Pass an engine
-   * instance — `parquetjsEngine()`, `duckdbEngine({...})` (requires the `@duckdb/node-api`
-   * peer, imported from `@subsquid/pipes/targets/parquet/duckdb`), or any own
-   * {@link ParquetEngine} implementation — to switch or tune engines. The duckdb engine
-   * produces value-identical files with slightly different footer metadata (every field is
-   * written OPTIONAL, integer columns gain INT_64/INT_32 annotations, and timestamps
-   * additionally carry a modern `isAdjustedToUTC=false` logical type next to the same legacy
-   * TIMESTAMP_MILLIS annotation). Its byte-based rotation is an estimate calibrated from
-   * previously published segments; row/interval rollovers stay exact.
+   * Segment writer engine. Omitted → the default `parquetjsEngine()`, the SDK's only
+   * built-in. Pass any {@link ParquetEngine} implementation to swap the writer: an engine
+   * translates the declared schema and plain-JS rows privately, stages via `nextTmpPath`,
+   * and publishes through `finalizeSegmentFile`, so file naming, durability and crash
+   * recovery stay engine-invariant (see `engine.ts` for the full contract).
    */
   engine?: ParquetEngine
   /**
@@ -78,9 +74,8 @@ type ParquetTargetMetrics = {
  *
  * **Constant memory.** Finalized rows stream straight to a temp file and the file rotates by byte
  * size, so a multi-gigabyte finalized backfill never lands wholly in RAM (the default parquetjs
- * engine flushes row groups to disk incrementally — verified by the Step 0 spike; the duckdb
- * engine bounds staging via its memory limit). `rowGroupSize` bounds the writer's in-memory
- * buffer.
+ * engine flushes row groups to disk incrementally — verified by the Step 0 spike; alternative
+ * engines own their staging bounds). `rowGroupSize` bounds the writer's in-memory buffer.
  *
  * **Crash safety.** A writer holding ≥1 finalized row is always published at the very next
  * checkpoint, and the persisted cursor advances only at a checkpoint — so no finalized row is ever

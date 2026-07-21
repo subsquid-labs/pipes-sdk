@@ -30,7 +30,7 @@ export type PublishedSegment = {
 
 /**
  * The exact surface `ParquetStore` drives a per-table segment writer through. Every engine
- * implements it — the built-ins (`parquetjsEngine`, `duckdbEngine`) and any external
+ * implements it — the built-in `parquetjsEngine` and any external
  * `ParquetEngine`; everything above the writer — finalization buffers, the durable cursor,
  * `.tmp-*` recovery, collision refusal — are engine-agnostic; external engines reuse
  * `nextTmpPath` and `finalizeSegmentFile` so recovery and collision semantics stay uniform.

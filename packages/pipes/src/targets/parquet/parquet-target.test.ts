@@ -9,7 +9,6 @@ import { createTarget } from '~/core/index.js'
 import { evmPortalStream } from '~/evm/index.js'
 import { type MockPortal, type MockResponse, blockDecoder, mockPortal, testLogger } from '~/testing/index.js'
 
-import { duckdbEngine } from './duckdb/duckdb-engine.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { ParquetState } from './parquet-state.js'
 import { ParquetStore } from './parquet-store.js'
@@ -162,19 +161,6 @@ describe('parquetTarget', () => {
 
       // No bogus block-0 file was published.
       expect(await listDataFiles(dir, 'blocks')).toEqual([])
-    })
-  })
-
-  describe('engine settings', () => {
-    it('accepts the duckdb engine with a uniform codec (construction only, no I/O)', () => {
-      expect(() =>
-        parquetTarget({
-          dir,
-          tables: [BLOCKS_TABLE],
-          settings: { engine: duckdbEngine(), compression: 'GZIP' },
-          onData: () => {},
-        }),
-      ).not.toThrow()
     })
   })
 

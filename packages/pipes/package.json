@@ -50,7 +50,6 @@
   },
   "devDependencies": {
     "@dsnp/parquetjs": "1.8.7",
-    "@duckdb/node-api": "1.5.4-r.1",
     "@google-cloud/bigquery": "8.3.0",
     "@google-cloud/bigquery-storage": "5.1.0",
     "@subsquid/borsh": "0.3.0",
@@ -81,7 +80,6 @@
   },
   "peerDependencies": {
     "@dsnp/parquetjs": "1.8.7",
-    "@duckdb/node-api": "1.5.4-r.1",
     "@clickhouse/client": "1.14.0",
     "@google-cloud/bigquery": "8.3.0",
     "@google-cloud/bigquery-storage": "5.1.0",
@@ -93,9 +91,6 @@
   },
   "peerDependenciesMeta": {
     "@dsnp/parquetjs": {
-      "optional": true
-    },
-    "@duckdb/node-api": {
       "optional": true
     },
     "@opentelemetry/api": {
@@ -181,11 +176,6 @@
       "import": "./dist/targets/parquet/index.js",
       "require": "./dist/targets/parquet/index.cjs"
     },
-    "./targets/parquet/duckdb": {
-      "types": "./dist/targets/parquet/duckdb/index.d.ts",
-      "import": "./dist/targets/parquet/duckdb/index.js",
-      "require": "./dist/targets/parquet/duckdb/index.cjs"
-    },
     "./targets/clickhouse": {
       "types": "./dist/targets/clickhouse/index.d.ts",
       "import": "./dist/targets/clickhouse/index.js",
@@ -259,9 +249,6 @@
       ],
       "targets/parquet": [
         "./dist/targets/parquet/index.d.ts"
-      ],
-      "targets/parquet/duckdb": [
-        "./dist/targets/parquet/duckdb/index.d.ts"
       ],
       "targets/clickhouse": [
         "./dist/targets/clickhouse/index.d.ts"

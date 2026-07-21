@@ -10,8 +10,8 @@ export type Codec = 'UNCOMPRESSED' | 'SNAPPY' | 'GZIP' | 'BROTLI'
 /**
  * Parquet leaf (primitive/logical) column types exposed by this target. This is our own union —
  * the public API carries **no compile-time dependency** on `@dsnp/parquetjs` types; the strings
- * are translated to each engine's native representation internally (see `parquetjs-schema.ts` /
- * `duckdb-schema.ts`).
+ * are translated to each engine's native representation internally (see `parquetjs-schema.ts`;
+ * external engines translate privately).
  *
  * JS → Parquet input contract (what `onData` must put in each row), per the Step 0 spike:
  * - `INT64`      ← `number` **or** `bigint` (reads back as `bigint`)
@@ -102,8 +102,8 @@ export const DEFAULT_CODEC: Codec = 'SNAPPY'
 const SUPPORTED_CODECS = new Set<string>(['UNCOMPRESSED', 'SNAPPY', 'GZIP', 'BROTLI'])
 
 // Every supported leaf type. Engines map these to their native representations
-// (see parquetjs-schema.ts and duckdb-schema.ts); `satisfies` keeps this list
-// compile-checked against the ParquetLeafType union.
+// (see parquetjs-schema.ts); `satisfies` keeps this list compile-checked against
+// the ParquetLeafType union.
 const SUPPORTED_TYPES = new Set<string>([
   'INT64',
   'INT32',
