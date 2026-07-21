@@ -49,9 +49,8 @@ export const PARQUET_ERROR_CODES = {
   NESTED_SCHEMA_INVALID: 'E2315',
   /** duckdb engine: a column declares a per-column codec that differs from the file-level codec. */
   DUCKDB_COLUMN_COMPRESSION: 'E2316',
-  /** `settings.engine` is not a ParquetEngine implementation. */
-  ENGINE_INVALID: 'E2318',
   /** Internal invariant: `publish()` was called on a segment with no rows. */
   SEGMENT_EMPTY: 'E2320',
-  // E2317 and E2319 retired: optional-dependency load errors — engines statically import their libraries.
+  // E2317–E2319 retired: dynamic-load errors (E2317/E2319) — engines statically import their
+  // libraries — and the runtime engine-shape check (E2318) — `settings.engine` is compile-time typed.
 } as const

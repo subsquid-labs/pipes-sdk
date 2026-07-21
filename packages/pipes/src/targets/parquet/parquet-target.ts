@@ -12,9 +12,10 @@ import {
   humanBytes,
 } from '~/core/index.js'
 
-import { type ParquetEngine, resolveEngine } from './engine.js'
+import type { ParquetEngine } from './engine.js'
 import { ParquetState } from './parquet-state.js'
 import { ParquetStore } from './parquet-store.js'
+import { parquetjsEngine } from './parquetjs/parquetjs-engine.js'
 import { type Codec, type ParquetTable, validateTables } from './schema.js'
 
 /** Default rollover byte size — 128 MiB is a good Parquet file size for data-lake query engines. */
@@ -121,9 +122,9 @@ export function parquetTarget<T>(options: {
 
   validateTables(tables)
 
-  // Resolving the engine (and, inside the store constructor, its per-table capability checks)
-  // runs at construction, so config mistakes surface at startup, not deep in the first batch.
-  const engine = resolveEngine(settings.engine)
+  // The store constructor runs the engine's per-table capability checks at construction,
+  // so config mistakes surface at startup, not deep in the first batch.
+  const engine = settings.engine ?? parquetjsEngine()
 
   const rowGroupSize = settings.rowGroupSize ?? DEFAULT_ROW_GROUP_SIZE
   const defaultCodec = settings.compression ?? DEFAULT_CODEC

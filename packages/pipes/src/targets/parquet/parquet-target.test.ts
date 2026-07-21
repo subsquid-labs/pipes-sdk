@@ -166,17 +166,6 @@ describe('parquetTarget', () => {
   })
 
   describe('engine settings', () => {
-    it('rejects an unknown engine at construction', () => {
-      expect(() =>
-        parquetTarget({
-          dir,
-          tables: [BLOCKS_TABLE],
-          settings: { engine: 'polars' as never },
-          onData: () => {},
-        }),
-      ).toThrowError(/settings\.engine must be a ParquetEngine implementation/)
-    })
-
     it('accepts the duckdb engine with a uniform codec (construction only, no I/O)', () => {
       expect(() =>
         parquetTarget({

@@ -1,5 +1,3 @@
-import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
-import { parquetjsEngine } from './parquetjs/parquetjs-engine.js'
 import type { Codec, ParquetTable } from './schema.js'
 import type { SegmentWriter } from './segment.js'
 
@@ -47,26 +45,4 @@ export interface ParquetEngine {
    * declarations this engine cannot honor) and return the table's segment-writer factory.
    */
   table(table: ParquetTable, context: ParquetTableContext): ParquetTableWriter
-}
-
-/**
- * Resolves `settings.engine` to a {@link ParquetEngine}: `undefined` → the default parquetjs
- * engine, an instance → itself. Rejects anything else at construction with `ENGINE_INVALID`.
- */
-export function resolveEngine(engine: ParquetEngine | undefined): ParquetEngine {
-  if (engine === undefined) return parquetjsEngine()
-  if (
-    typeof engine === 'object' &&
-    engine !== null &&
-    typeof engine.table === 'function' &&
-    typeof engine.name === 'string'
-  ) {
-    return engine
-  }
-
-  throw new ParquetTargetError(
-    PARQUET_ERROR_CODES.ENGINE_INVALID,
-    `parquetTarget: settings.engine must be a ParquetEngine implementation ({ name, table() }) ` +
-      `or omitted for the default parquetjs engine, got ${typeof engine === 'string' ? `'${engine}'` : typeof engine}.`,
-  )
 }
