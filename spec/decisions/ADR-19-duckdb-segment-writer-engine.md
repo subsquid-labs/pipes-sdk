@@ -1,41 +1,36 @@
-# ADR-19 — DuckDB-backed Parquet segment writer, adopted on benchmark evidence
+# ADR-19 — DuckDB segment-writer engine ships outside the SDK
 
 Status: Accepted
 
 ## Context
 
-With the engine seam (ADR-17) in place, a native encoder had to earn adoption with
-measurements. Three benchmark tiers ran: a micro-bench (append/publish per engine), a
-deep bench (fresh process per configuration across schema shapes, codecs, segment
-sizes and thread counts), and a full-pipeline offline replay of 16 production indexer
-shapes over recorded portal fixtures
-([deep bench](../../docs/benchmarks/2026-07-16-parquet-engine-deep-bench.md),
-[pipeline bench](../../docs/benchmarks/2026-07-17-parquet-pipeline-bench.md);
-harnesses live in `docs/benchmarks/parquet-engines/`). Findings: the duckdb engine's
-win is native encoding efficiency, not offloading — COPY runs mostly on the calling
-JS thread for SNAPPY/GZIP, and only expensive codecs (BROTLI) measurably parallelize
-onto DuckDB's workers. Flat schemas roughly halve write-path main-thread CPU
-(wide/string schemas gain up to ~6.5× on appends); deeply nested schemas regress;
-the motivating BTC-outputs shape measured ~1.7× effective write throughput.
+With the engine seam (ADR-17) in place, a DuckDB-backed engine was built and
+measured against parquetjs across three benchmark tiers: a micro-bench
+(append/publish per engine), a deep bench (fresh process per configuration across
+schema shapes, codecs, segment sizes and thread counts), and a full-pipeline offline
+replay of 16 production indexer shapes over recorded portal fixtures. Findings: the
+duckdb engine's win is native encoding efficiency, not offloading — COPY runs mostly
+on the calling JS thread for SNAPPY/GZIP, and only expensive codecs (BROTLI)
+measurably parallelize onto DuckDB's workers. Flat schemas roughly halve write-path
+main-thread CPU (wide/string schemas gain up to ~6.5× on appends); deeply nested
+schemas regress; the motivating BTC-outputs shape measured ~1.7× effective write
+throughput. A real but workload-specific win did not justify shipping a native,
+platform-built dependency in the SDK.
 
 ## Decision
 
-Ship the duckdb engine as the opt-in second built-in behind the `/duckdb` entry
-(ADR-18); parquetjs stays the default. The engine stages rows in an in-memory staging
-table on a process-shared DuckDB instance — one instance per distinct
-(threads, memory-limit) setting, bounded so the native thread and memory footprint
-stays fixed regardless of how many tables or pipes a process runs — and publishes
-each segment with a native COPY at the file-level codec, then the shared finalize
-tail. Because no growing temp file exists before COPY, byte-based rotation uses a
-calibrated bytes-per-row estimate, seeded conservatively and corrected from each
-published segment. Per-column compression codecs are rejected at construction (COPY
-encodes one codec per file).
+The SDK ships exactly one engine — parquetjs — and stays engine-agnostic behind the
+ADR-17 seam. The DuckDB engine is maintained by its consumer (the GFS pipeline's
+`@pipeline/core`), implementing the public `ParquetEngine` contract and reusing the
+shared segment toolkit, with no SDK involvement. The engine-comparison benchmark
+harness, its reports, and the extracted engine source are archived with the consumer
+(`sqd/360/google/parquet-engine-benchmarks/`).
 
 ## Consequences
 
-An interrupted COPY leaves only a temp file that startup recovery already deletes —
-IB-22 state formats and CN-32 fork mechanics are unchanged. Byte rotation is
-approximate (it was always a soft, batch-boundary target); common-codec publishes
-stall the JS thread in proportion to segment size, so segment sizing gains an
-explicit latency trade; deeply nested schemas should stay on parquetjs. The engine
-adds an optional native dependency with platform-specific builds.
+The SDK carries no native optional dependency and no duckdb-specific error code
+(E2316 retired, number unassigned). The seam is the compatibility contract: changes
+to `ParquetEngine`, `SegmentWriter` or the segment toolkit are breaking for external
+engines and must be versioned accordingly. DuckDB-specific behaviors
+(estimate-based byte rotation, single file-level codec, publish-time JS-thread
+stalls) are documented where the engine lives.
