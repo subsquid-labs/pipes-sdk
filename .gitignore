@@ -41,4 +41,3 @@ local/
 .agents
 
 scaffolds/
-docs/benchmarks/parquet-engines/bench-pipeline/.fixtures/

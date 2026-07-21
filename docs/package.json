@@ -8,12 +8,9 @@
     "test": "vitest"
   },
   "devDependencies": {
-    "@dsnp/parquetjs": "1.8.7",
     "@types/node": "^22.18.13",
-    "bitcoinjs-lib": "^6.1.7",
     "drizzle-kit": "^0.31.6",
     "pino": "^9.14.0",
-    "tiny-secp256k1": "^2.2.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
