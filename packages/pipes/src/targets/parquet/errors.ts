@@ -50,7 +50,7 @@ export const PARQUET_ERROR_CODES = {
   /** Internal invariant: `publish()` was called on a segment with no rows. */
   SEGMENT_EMPTY: 'E2320',
   // E2316–E2319 retired, numbers left unassigned (ADR-4): E2316 moved out with the DuckDB
-  // engine's per-column-compression check (the engine ships outside the SDK, see ADR-19);
+  // engine's per-column-compression check (the engine ships outside the SDK, see ADR-18);
   // E2317/E2319 were dynamic-load errors — engines statically import their libraries;
   // E2318 was the runtime engine-shape check — `settings.engine` is compile-time typed.
 } as const

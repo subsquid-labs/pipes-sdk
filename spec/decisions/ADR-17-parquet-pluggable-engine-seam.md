@@ -24,7 +24,11 @@ construction. Every engine stages via the shared temp-naming helper and publishe
 through the shared finalize tail (fsync → collision check → atomic rename → dir
 fsync), so durability, crash recovery and file naming are engine-invariant.
 `settings.engine` takes an engine instance; omitted selects the default parquetjs
-engine.
+engine. The core entry statically imports `@dsnp/parquetjs`, so the module graph —
+not a runtime loader — enforces its optional-peer status: importing the entry without
+the package installed fails at import time with the runtime's own module-not-found
+error. Alternative engines live in their own packages and import their own libraries;
+the SDK never references them.
 
 ## Consequences
 

@@ -1,4 +1,4 @@
-# ADR-19 — DuckDB segment-writer engine ships outside the SDK
+# ADR-18 — DuckDB segment-writer engine ships outside the SDK
 
 Status: Accepted
 
