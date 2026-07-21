@@ -18,6 +18,14 @@ export function formatBlock(value: number | string) {
   return typeof value === 'number' ? formatNumber(value) : value
 }
 
+export function datasetLabel(pipe: Pipe | undefined) {
+  if (!pipe) return undefined
+
+  return (
+    pipe.dataset?.metadata?.display_name || pipe.dataset?.dataset || pipe.portal.url.replace(/^[\w.\/:]+datasets\//, '')
+  )
+}
+
 export function displayEstimatedTime(pipe: Pipe, { etaLabel = 'ETA: ' }: { etaLabel?: string } = {}) {
   if (pipe.status !== PipeStatus.Syncing) {
     return pipe.status // unknown

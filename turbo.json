@@ -36,6 +36,11 @@
       "outputs": [],
       "outputLogs": "new-only"
     },
+    "@subsquid/pipes-ui#test": {
+      "inputs": ["app/**/*.ts", "app/**/*.tsx", "package.json", "tsconfig.json", "vitest.config.ts"],
+      "outputs": [],
+      "outputLogs": "new-only"
+    },
     "@sqd-pipes/docs#build": {
       "inputs": ["examples/**/*.ts", "tsconfig.json"],
       "dependsOn": ["@subsquid/pipes#build"],
