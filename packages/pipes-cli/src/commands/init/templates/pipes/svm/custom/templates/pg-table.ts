@@ -1,12 +1,10 @@
-import { toSnakeCase } from 'drizzle-orm/casing'
 import Mustache from 'mustache'
 
-import { ContractMetadata, RawAbiItem } from '~/services/sqd-abi.js'
 import { svmToPostgresType } from '~/utils/db-type-map.js'
 
 import { tableToSchemaName } from '../../../../../builders/schema-builder/index.js'
-import { referenceAddress } from '../../../../contract-params.js'
 import { CustomTemplateParams } from '../template.config.js'
+import { ProgramTable, programTables } from './naming.js'
 
 export const customContractPgTemplate = `
 import {
@@ -45,17 +43,8 @@ export const {{schemaName}} = pgTable(
 {{/contracts}}
 `
 
-export const eventTableName = (contract: ContractMetadata, event: RawAbiItem) =>
-  toSnakeCase(`${contract.contractName}_${event.name}`)
-
-export function renderSchema({ contracts: contractEntries }: CustomTemplateParams) {
-  // Tables are contract-level (shaped by the event set); deployments share them.
-  const contracts = contractEntries.map((c) => ({
-    contractName: c.contractName,
-    contractEvents: c.contractEvents,
-    contractAddress: referenceAddress(c),
-  }))
-  const contractsWithDbTypes = getContractWithDbTypes(contracts)
+export function renderSchema({ contracts }: CustomTemplateParams) {
+  const contractsWithDbTypes = getContractWithDbTypes(programTables(contracts))
 
   return Mustache.render(customContractPgTemplate, {
     typeImports: generateDrizzleImports(contractsWithDbTypes),
@@ -63,25 +52,20 @@ export function renderSchema({ contracts: contractEntries }: CustomTemplateParam
   })
 }
 
-export function getContractWithDbTypes(contracts: ContractMetadata[]) {
-  return contracts.flatMap((c) =>
-    c.contractEvents.map((e) => {
-      const tableName = eventTableName(c, e)
-      return {
-        event: e.name,
-        schemaName: tableToSchemaName(tableName),
-        tableName,
-        inputs: e.inputs.map((i) => ({
-          ...i,
-          dbType: svmToPostgresType(i.type),
-        })),
-      }
-    }),
-  )
+export function getContractWithDbTypes(tables: ProgramTable[]) {
+  return tables.map(({ instruction, table }) => ({
+    event: instruction.name,
+    schemaName: tableToSchemaName(table),
+    tableName: table,
+    inputs: instruction.inputs.map((i) => ({
+      ...i,
+      dbType: svmToPostgresType(i.type),
+    })),
+  }))
 }
 
 function generateDrizzleImports(contracts: ReturnType<typeof getContractWithDbTypes>) {
-  return contracts.flatMap((c) => c.inputs.map((i) => extractDrizzleType(i.dbType)))
+  return [...new Set(contracts.flatMap((c) => c.inputs.map((i) => extractDrizzleType(i.dbType))))]
 }
 
 const TYPE_REGEX = /^\s*([A-Za-z_$][\w$]*)\s*(?=\()/
