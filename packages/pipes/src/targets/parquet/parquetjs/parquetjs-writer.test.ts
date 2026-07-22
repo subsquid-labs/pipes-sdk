@@ -48,9 +48,9 @@ describe('parquetjsEngine', () => {
     const tableWriter = engine.table(TRANSFERS, { dir: tableDir, rowGroupSize: 100, codec: 'SNAPPY' })
 
     const writer = tableWriter.createSegment()
-    await writer.appendRow({ blockNumber: 1, to: '0xa', tags: ['x', 'y'] }, 1)
-    await writer.appendRow({ blockNumber: 2, to: '0xb', tags: ['z'] }, 2)
-    const published = await writer.publish()
+    await writer.appendRow({ blockNumber: 1, to: '0xa', tags: ['x', 'y'] })
+    await writer.appendRow({ blockNumber: 2, to: '0xb', tags: ['z'] })
+    const published = await writer.publish({ from: 1, to: 2 })
 
     expect(published.path).toBe(path.join(tableDir, '000000000001-000000000002.parquet'))
     expect(published.rows).toBe(2)
@@ -70,12 +70,12 @@ describe('parquetjsEngine', () => {
     const tableWriter = parquetjsEngine().table(TRANSFERS, { dir: tableDir, rowGroupSize: 100, codec: 'SNAPPY' })
 
     const first = tableWriter.createSegment()
-    await first.appendRow({ blockNumber: 1, to: '0xa', tags: [] }, 1)
-    await first.publish()
+    await first.appendRow({ blockNumber: 1, to: '0xa', tags: [] })
+    await first.publish({ from: 1, to: 1 })
 
     const second = tableWriter.createSegment()
-    await second.appendRow({ blockNumber: 2, to: '0xb', tags: [] }, 2)
-    const published = await second.publish()
+    await second.appendRow({ blockNumber: 2, to: '0xb', tags: [] })
+    const published = await second.publish({ from: 2, to: 2 })
 
     expect(published.path).toBe(path.join(tableDir, '000000000002-000000000002.parquet'))
     expect((await readAllRows(published.path)).length).toBe(1)

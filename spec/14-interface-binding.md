@@ -47,8 +47,8 @@ local schedule P-RETRY-SCHEDULE-MS).
 (address, topic0–3, relational inclusions `transaction`/`transactionTraces`/
 `transactionLogs`/`transactionStateDiffs`), `transactions` (to/from/sighash/type),
 `traces`, `stateDiffs`, `includeAllBlocks`; solana — `instructions` (programId,
-discriminators d0/d1/d2/d4/d8 *(d0 unreachable through the reference decoder —
-GAP-2)*, account slots a0–a9), `transactions`, `logs`, `balances`,
+discriminators d1/d2/d4/d8 — one width per instruction request, an ABI is single-width
+(ADR-17); the wire has no d0 — account slots a0–a9), `transactions`, `logs`, `balances`,
 `tokenBalances`, `rewards`; bitcoin/tron/hyperliquidFills — their reference sets.
 A conforming implementation reproduces these request JSON shapes byte-compatibly.
 
@@ -96,10 +96,10 @@ finalized?, coverage: {<table>: next-window-start}}`, written temp-file → fsyn
 rename → dir-fsync. Data files `<table>/<from>-<to>.parquet`, names zero-padded to 12
 digits, window = coverage (DEF-14) not row min/max; publish refuses to overwrite
 (coded). Recovery deletes `*.tmp-*` always and any file with `to > cursor`; a file
-straddling the cursor is a coded refusal. *(Coverage naming, the `coverage` state map,
-and the straddle refusal are the contract target — the current mainline names files by
-row min/max, persists no coverage map, and deletes straddling files; GAP-17.)* Column
-types: INT64/INT32/UTF8/BYTE_ARRAY/BOOLEAN/DOUBLE/
+straddling the cursor is a coded refusal unless its `from` equals the table's recorded
+coverage start, which makes it the interrupted checkpoint's own file. A recorded coverage
+start ahead of what the cursor allows is clamped with a warning, not refused. Column types:
+INT64/INT32/UTF8/BYTE_ARRAY/BOOLEAN/DOUBLE/
 TIMESTAMP(millis)/DATE/JSON/LIST/STRUCT; DECIMAL deliberately unsupported; block
 column INT64/INT32 required non-null. Compression: SNAPPY (default), GZIP, BROTLI,
 UNCOMPRESSED.
@@ -208,12 +208,12 @@ consumers MUST NOT read it as a block number.
 
 | Band | Area | Codes in use |
 |---|---|---|
-| E0xxx | pipe configuration | E0001 blank/default pipe id *(currently dead — GAP-4)*, E0002 invalid range/date |
+| E0xxx | pipe configuration | E0001 blank/default pipe id *(currently dead — GAP-4)*, E0002 invalid range/date, E0003 unusable instruction discriminator set (mixed widths across the decoder, shared discriminator, or an instruction with none or several) |
 | E1xxx | fork handling | E1001 sink lacks fork support, E1002 empty canonical chain, E1003 ancestor unresolvable, E1004 portal contract violation (canonical below cursor) |
 | E20xx | ClickHouse binding | E2001–E2006 (retention, table name, distributed-rollback, collapse-column, missing sign, rollback-index) |
 | E21xx | Postgres binding | E2101–E2106 (client, config, advisory lock, untracked table, missing PK, FK cycle) |
 | E22xx | BigQuery binding | E2201–E2213 (schema/partition guards, orphan data E2212, append rejection E2213) |
-| E23xx | Parquet binding | E2301–E2315 in use (schema/config; file collision E2309, state corrupt E2310, recovery delete failure E2314, nested-schema E2315); E2316/E2317 reserved for the coverage guards (GAP-17) |
+| E23xx | Parquet binding | E2301–E2317 in use (schema/config; file collision E2309, state corrupt E2310, recovery delete failure E2314, nested-schema E2315; coverage guards E2316 invalid range, E2317 state/data disagreement) |
 
 **IB-51 — Transport errors.** Non-coded, typed: HTTP error (with response), request
 timeout, body-stall timeout. Retryability: request timeouts and connection-class errors

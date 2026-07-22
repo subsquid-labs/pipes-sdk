@@ -230,7 +230,6 @@ export type Discriminator = Hex
 
 export type InstructionRequest = {
   programId?: Base58[]
-  d0?: Discriminator[]
   d1?: Discriminator[]
   d2?: Discriminator[]
   d4?: Discriminator[]

@@ -1,10 +1,10 @@
-# ADR-18 — DuckDB segment-writer engine ships outside the SDK
+# ADR-19 — DuckDB segment-writer engine ships outside the SDK
 
 Status: Accepted
 
 ## Context
 
-With the engine seam (ADR-17) in place, a DuckDB-backed engine was built and
+With the engine seam (ADR-18) in place, a DuckDB-backed engine was built and
 measured against parquetjs across three benchmark tiers: a micro-bench
 (append/publish per engine), a deep bench (fresh process per configuration across
 schema shapes, codecs, segment sizes and thread counts), and a full-pipeline offline
@@ -20,7 +20,7 @@ platform-built dependency in the SDK.
 ## Decision
 
 The SDK ships exactly one engine — parquetjs — and stays engine-agnostic behind the
-ADR-17 seam. The DuckDB engine is maintained by its consumer (the GFS pipeline's
+ADR-18 seam. The DuckDB engine is maintained by its consumer (the GFS pipeline's
 `@pipeline/core`), implementing the public `ParquetEngine` contract and reusing the
 shared segment toolkit, with no SDK involvement. The engine-comparison benchmark
 harness, its reports, and the extracted engine source are archived with the consumer

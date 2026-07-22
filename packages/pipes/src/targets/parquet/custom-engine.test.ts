@@ -15,7 +15,7 @@ import { type SegmentWriter, finalizeSegmentFile, nextTmpPath } from './segment.
  * A minimal third-party engine built ONLY from the public extension surface: it buffers rows
  * in memory and publishes them as JSON through the shared segment toolkit. (A real engine
  * must write actual Parquet — JSON keeps this test dependency-free while still exercising
- * naming, fsync, collision and recovery semantics via finalizeSegmentFile.)
+ * coverage naming, fsync, collision and recovery semantics via finalizeSegmentFile.)
  */
 function jsonEngine(calls: string[]): ParquetEngine {
   return {
@@ -27,8 +27,6 @@ function jsonEngine(calls: string[]): ParquetEngine {
         createSegment(): SegmentWriter {
           const rows: Record<string, unknown>[] = []
           const tmpPath = nextTmpPath(context.dir)
-          let minBlock: number | undefined
-          let maxBlock: number | undefined
 
           return {
             get isOpen() {
@@ -37,29 +35,21 @@ function jsonEngine(calls: string[]): ParquetEngine {
             get rowCount() {
               return rows.length
             },
-            get minBlock() {
-              return minBlock
-            },
-            get maxBlock() {
-              return maxBlock
-            },
-            async appendRow(row, blockNumber) {
+            async appendRow(row) {
               rows.push(row)
-              if (minBlock === undefined || blockNumber < minBlock) minBlock = blockNumber
-              if (maxBlock === undefined || blockNumber > maxBlock) maxBlock = blockNumber
             },
             async size() {
               return JSON.stringify(rows).length
             },
-            async publish() {
+            async publish(range) {
+              // A zero-row publish is part of the contract (tail closing) and still writes a file.
               await writeFile(tmpPath, JSON.stringify(rows))
 
               return finalizeSegmentFile({
                 dir: context.dir,
                 tmpPath,
                 rows: rows.length,
-                minBlock: minBlock!,
-                maxBlock: maxBlock!,
+                range,
               })
             },
             async discard() {
@@ -120,11 +110,12 @@ describe('parquetTarget with a custom engine', () => {
     // table() received the declared table plus resolved defaults, once, at construction.
     expect(calls).toEqual(['table:blocks:rowGroupSize=100000:codec=SNAPPY'])
 
-    // Only the finalized rows (1-3) published, named by the shared toolkit.
+    // Only the finalized rows (1-3) published; the file is named for the coverage window the
+    // store passed to publish() — from the configured start (0) to the finalized boundary (3).
     const files = (await readdir(path.join(dir, 'blocks'))).sort()
-    expect(files).toEqual(['000000000001-000000000003.parquet'])
+    expect(files).toEqual(['000000000000-000000000003.parquet'])
 
-    // Rows arrived in the engine-neutral plain shape, in order, with block numbers intact.
+    // Rows arrived in the engine-neutral plain shape, in order.
     const content = JSON.parse(await readFile(path.join(dir, 'blocks', files[0]!), 'utf8'))
     expect(content).toEqual([
       { blockNumber: 1, hash: '0x1' },

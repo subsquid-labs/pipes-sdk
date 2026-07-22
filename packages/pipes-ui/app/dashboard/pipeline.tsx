@@ -1,7 +1,5 @@
 'use client'
 
-import { useMemo } from 'react'
-
 import NumberFlow from '@number-flow/react'
 import { Terminal } from 'lucide-react'
 // @ts-ignore
@@ -9,7 +7,7 @@ import { Sparklines, SparklinesLine } from 'react-sparklines'
 
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
-import { humanBytes } from '~/dashboard/formatters'
+import { datasetLabel, humanBytes } from '~/dashboard/formatters'
 import { PipelineDisconnected } from '~/dashboard/pipeline-disconnected'
 import { Profiler } from '~/dashboard/profiler'
 import { QueryPreview } from '~/dashboard/query-preview'
@@ -32,14 +30,6 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
   })
 
   const pipe = data?.pipes.find((pipe) => pipe.id === pipeId)
-
-  const datasetLabel = useMemo(() => {
-    return (
-      pipe?.dataset?.metadata?.display_name ||
-      pipe?.dataset?.dataset ||
-      pipe?.portal.url.replace(/^[\w.\/:]+datasets\//, '')
-    )
-  }, [pipe?.dataset, pipe?.portal.url])
 
   if (!pipe) return <PipelineDisconnected />
 
@@ -80,7 +70,7 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
             {pipe.dataset?.metadata?.logo_url && (
               <img src={pipe.dataset.metadata.logo_url} alt="" className="w-4 h-4" />
             )}
-            <span>{datasetLabel}</span>
+            <span>{datasetLabel(pipe)}</span>
             {pipe.dataset?.metadata?.evm?.chain_id != null && (
               <span className="text-muted-foreground/60">{pipe.dataset.metadata.evm.chain_id}</span>
             )}
@@ -137,7 +127,7 @@ export function Pipeline({ pipeId }: { pipeId: string }) {
               </Sparklines>
             </div>
             <div>
-              <div className="font-normal">Process Memory</div>
+              <div className="font-normal">Process memory</div>
               <div>{data?.usage.memory && humanBytes(data.usage.memory)}</div>
             </div>
           </div>

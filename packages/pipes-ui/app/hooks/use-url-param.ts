@@ -15,6 +15,11 @@ type Options<T extends ParamType> = {
   validate?: (value: T) => boolean
 }
 
+type ParamMetadata = {
+  raw: string | null
+  isValid: boolean
+}
+
 /**
  * Syncs a single URL query param with React state.
  * - Reads via `useSearchParams` (no `window`, SSR-safe).
@@ -28,13 +33,13 @@ export function useUrlParam<T extends ParamType>(
   key: string,
   defaultValue: T,
   options: Options<Widen<T>> = {},
-): [Widen<T>, (value: Widen<T>) => void] {
+): [Widen<T>, (value: Widen<T>) => void, ParamMetadata] {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
   const raw = searchParams.get(key)
-  const value = parseValue(raw, defaultValue as Widen<T>, options.validate)
+  const { value, isValid } = parseValue(raw, defaultValue as Widen<T>, options.validate)
 
   const setValue = useCallback(
     (next: Widen<T>) => {
@@ -50,27 +55,65 @@ export function useUrlParam<T extends ParamType>(
     [defaultValue, key, pathname, router, searchParams],
   )
 
-  return [value, setValue]
+  return [value, setValue, { raw, isValid }]
 }
 
-function parseValue<T extends ParamType>(raw: string | null, defaultValue: T, validate?: (value: T) => boolean): T {
-  if (raw === null) return defaultValue
+type UrlUpdates = Record<string, string | number | null>
+
+/**
+ * Applies several query-param changes as one atomic history operation —
+ * sequential `useUrlParam` setters would clobber each other because each
+ * snapshots `searchParams` before writing.
+ * `null` removes a param; `push: true` creates a history entry (default replaces).
+ */
+export function useUrlNavigate() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  return useCallback(
+    (updates: UrlUpdates, { push = false }: { push?: boolean } = {}) => {
+      const params = new URLSearchParams(searchParams.toString())
+      for (const [key, value] of Object.entries(updates)) {
+        if (value === null) params.delete(key)
+        else params.set(key, String(value))
+      }
+
+      const query = params.toString()
+      const url = query ? `${pathname}?${query}` : pathname
+
+      if (push) router.push(url, { scroll: false })
+      else router.replace(url, { scroll: false })
+    },
+    [pathname, router, searchParams],
+  )
+}
+
+function parseValue<T extends ParamType>(
+  raw: string | null,
+  defaultValue: T,
+  validate?: (value: T) => boolean,
+): { value: T; isValid: boolean } {
+  if (raw === null) return { value: defaultValue, isValid: true }
 
   let parsed: ParamType
   if (typeof defaultValue === 'number') {
+    if (raw.trim() === '') return { value: defaultValue, isValid: false }
+
     const n = Number(raw)
-    parsed = Number.isFinite(n) ? n : defaultValue
+    if (!Number.isFinite(n)) return { value: defaultValue, isValid: false }
+    parsed = n
   } else if (typeof defaultValue === 'boolean') {
     // Only accept explicit truthy/falsy tokens; fall back to default for anything else.
     if (raw === '1' || raw === 'true') parsed = true
     else if (raw === '0' || raw === 'false') parsed = false
-    else parsed = defaultValue
+    else return { value: defaultValue, isValid: false }
   } else {
     parsed = raw
   }
 
-  if (validate && !validate(parsed as T)) return defaultValue
-  return parsed as T
+  if (validate && !validate(parsed as T)) return { value: defaultValue, isValid: false }
+  return { value: parsed as T, isValid: true }
 }
 
 function serializeValue(value: ParamType): string {

@@ -164,6 +164,12 @@ describe('Portal cache', () => {
                 },
                 "initial": 0,
                 "last": 5,
+                "ranges": [
+                  {
+                    "from": 0,
+                    "to": 5,
+                  },
+                ],
                 "rollbackChain": [],
               },
             },
@@ -300,6 +306,12 @@ describe('Portal cache', () => {
                 },
                 "initial": 0,
                 "last": 5,
+                "ranges": [
+                  {
+                    "from": 0,
+                    "to": 5,
+                  },
+                ],
                 "rollbackChain": [],
               },
             },
@@ -425,6 +437,12 @@ describe('Portal cache', () => {
                 },
                 "initial": 0,
                 "last": 5,
+                "ranges": [
+                  {
+                    "from": 0,
+                    "to": 5,
+                  },
+                ],
                 "rollbackChain": [
                   {
                     "hash": "0x3",
@@ -501,6 +519,12 @@ describe('Portal cache', () => {
                 },
                 "initial": 0,
                 "last": 5,
+                "ranges": [
+                  {
+                    "from": 0,
+                    "to": 5,
+                  },
+                ],
                 "rollbackChain": [],
               },
             },
@@ -562,6 +586,12 @@ describe('Portal cache', () => {
                 },
                 "initial": 0,
                 "last": 5,
+                "ranges": [
+                  {
+                    "from": 0,
+                    "to": 5,
+                  },
+                ],
                 "rollbackChain": [],
               },
             },

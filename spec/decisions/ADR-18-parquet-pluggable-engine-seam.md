@@ -1,4 +1,4 @@
-# ADR-17 — Parquet sink: pluggable segment-writer engine seam
+# ADR-18 — Parquet sink: pluggable segment-writer engine seam
 
 Status: Accepted
 

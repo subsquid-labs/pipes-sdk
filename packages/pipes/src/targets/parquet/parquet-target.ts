@@ -6,6 +6,7 @@ import {
   type HookContext,
   type Logger,
   type Metrics,
+  type Range,
   createTarget,
   formatBlock,
   formatNumber,
@@ -72,10 +73,37 @@ type ParquetTargetMetrics = {
  * {@link finalizationBuffer}) and only appends a row once its block is at or below the
  * portal's finalized head. A reorg drops the in-memory buffer; published files are never touched.
  *
+ * **Key a row at the last block it depends on.** The buffer holds a row until *its own block
+ * column* finalizes — that column is the row's declaration of "I am safe once this block can no
+ * longer reorg". For a plain per-event row that is simply the event's block. For an **aggregate**
+ * (an OHLC candle, a rolling sum) it must be the *last* block in the window, not the first: a candle
+ * over blocks 1–5 keyed at block 1 is released as soon as block 1 finalizes, so if blocks 2–5 later
+ * reorg the already-written file keeps a candle computed from a dead chain (and a recomputed one is
+ * appended beside it). Keyed at block 5 it stays buffered until the whole window finalizes, and a
+ * reorg drops and recomputes it cleanly.
+ *
  * **Constant memory.** Finalized rows stream straight to a temp file and the file rotates by byte
  * size, so a multi-gigabyte finalized backfill never lands wholly in RAM (the default parquetjs
  * engine flushes row groups to disk incrementally — verified by the Step 0 spike; alternative
  * engines own their staging bounds). `rowGroupSize` bounds the writer's in-memory buffer.
+ *
+ * **Coverage-named files.** Files are named `<from>-<to>.parquet` for the block window they
+ * **cover** — the window the pipe processed — not for the min/max block of the rows inside. Within
+ * a configured query range, a table's files tile it end to end: a table with no rows for a while
+ * publishes nothing and names the whole span when it next writes, and whatever span is still owed
+ * when the stream ends is claimed by a zero-row file. So for files written by this version, a block
+ * range absent from a table means "not indexed", never "indexed, no data".
+ *
+ * Three things that follow, and are easy to get wrong:
+ * - Gaps **between** configured ranges stay absent — those blocks are never fetched, so no file
+ *   claims them. That is the same statement, not an exception to it.
+ * - The name bounds coverage, not content. `onData` may key a row outside the window that emitted
+ *   it (an aggregate stamped with its window's first block), so do not use the filename to locate
+ *   a given block's rows — use the row-group statistics in the footer, which is what DuckDB, Spark
+ *   and Athena prune on anyway.
+ * - Files written **before** this version were named for their rows' min/max, are indistinguishable
+ *   by name, and their gaps are not healed retroactively. The guarantee covers the range written
+ *   from the upgrade onward.
  *
  * **Crash safety.** A writer holding ≥1 finalized row is always published at the very next
  * checkpoint, and the persisted cursor advances only at a checkpoint — so no finalized row is ever
@@ -92,6 +120,8 @@ type ParquetTargetMetrics = {
  * Known trade-offs:
  * - One busy table's checkpoint rotates **all** open writers, so low-volume tables get smaller
  *   files (the "small files" problem) — inherent to a single global cursor.
+ * - A table that produces no rows at all still gets one zero-row file per run (and one per query
+ *   range), which is the price of coverage being readable off the filenames.
  * - Byte-only rotation can stall the cursor on a slow live tail (finalized data stays invisible
  *   until the file closes; a crash re-fetches more). Set `rollover.intervalMs`/`intervalBlocks`
  *   for live tailing.
@@ -155,14 +185,32 @@ export function parquetTarget<T>(options: {
         // Captured for the checkpoint closure's metric labels — assigned on the first batch.
         let metricsId = ''
         let lastBoundary: BlockCursor | undefined = startCursor
+        // The configured range the stream is currently inside; a change means a gap was skipped.
+        let openRange: Range | undefined
         // Latest (source-clamped) finalized head, persisted alongside the cursor at each checkpoint
         // so the source can re-seed its watermark after an unclean restart. Seeded from resume state.
         let lastFinalized: BlockCursor | undefined = resumeState?.finalized ?? undefined
 
-        const checkpoint = async (cursor: BlockCursor | undefined, reason: string): Promise<void> => {
+        const checkpoint = async (
+          cursor: BlockCursor,
+          reason: string,
+          closeTails = false,
+          owingTables?: string[],
+        ): Promise<void> => {
           const startedMs = Date.now()
-          const published = await store.publishAll()
-          if (cursor) await state.saveCursor(cursor, lastFinalized)
+          // Files are named for the window they cover, which ends at the cursor being committed —
+          // so publish must see the same cursor that is about to be persisted.
+          const published = await store.publishAll(cursor.number, { closeTails, tables: owingTables })
+
+          // A stalled boundary can re-trigger rotation on every batch while no writer has a window
+          // to name yet; rewriting an identical state file (two fsyncs) each time buys nothing.
+          if (published.length === 0 && cursor.number === lastCheckpointBlock) {
+            lastCheckpointMs = Date.now()
+
+            return
+          }
+
+          await state.saveCursor(cursor, lastFinalized, store.coverage())
 
           if (metrics) {
             for (const file of published) {
@@ -173,16 +221,16 @@ export function parquetTarget<T>(options: {
           }
 
           lastCheckpointMs = Date.now()
-          if (cursor) lastCheckpointBlock = cursor.number
+          lastCheckpointBlock = cursor.number
 
           if (published.length > 0) {
             const rows = published.reduce((s, f) => s + f.rows, 0)
             const bytes = published.reduce((s, f) => s + f.bytes, 0)
             logger.info({
-              message: `checkpoint (${reason}): published ${published.length} file(s), ${formatNumber(rows)} rows / ${humanBytes(bytes)}${cursor ? `, cursor → block ${formatBlock(cursor.number)}` : ''}`,
+              message: `checkpoint (${reason}): published ${published.length} file(s), ${formatNumber(rows)} rows / ${humanBytes(bytes)}, cursor → block ${formatBlock(cursor.number)}`,
               files: published.map((f) => f.path),
             })
-          } else if (cursor) {
+          } else {
             logger.debug(`checkpoint (${reason}): no open files, cursor → block ${formatBlock(cursor.number)}`)
           }
         }
@@ -191,6 +239,57 @@ export function parquetTarget<T>(options: {
           if (!metrics) {
             metrics = registerParquetMetrics(ctx.metrics)
             metricsId = ctx.id
+            // Seeded on the first batch because `stream.state` only exists once the source has
+            // resolved its ranges. Fallback for a table the state doesn't cover yet:
+            //   - Resuming: cursor + 1. `initial` is the *configured* query start (pre-resume), so
+            //     using it here would let the first file claim blocks an earlier run already wrote.
+            //   - Cold start: `initial` — the stream's configured start. Hardcoding 0 instead would
+            //     make a backfill from block N claim to cover 0..N of blocks it never looked at.
+            const clamped = store.seedCoverage(
+              state.coverage,
+              startCursor ? startCursor.number + 1 : ctx.stream.state.initial,
+              ctx.stream.state.ranges,
+            )
+            for (const { table, persisted, seeded } of clamped) {
+              logger.warn(
+                `Persisted coverage for table '${table}' starts at block ${formatBlock(persisted)}, ahead of ` +
+                  `block ${formatBlock(seeded)} — the furthest a file could start for the committed cursor. ` +
+                  `Seeding ${formatBlock(seeded)} instead, so the blocks after the cursor stay claimed. This is ` +
+                  `expected if the configured query ranges changed since the state file was written.`,
+              )
+            }
+          }
+
+          // Crossing from one configured range into a later one: the blocks between them are never
+          // fetched, so every table must close its coverage at the old range's end before anything
+          // names a window on the far side of the gap. The tail closes at `lastBoundary` itself and
+          // never at a re-labelled copy of it — a cursor pairing one block's number with another
+          // block's hash would be persisted, and the next resume would hand the portal that hash as
+          // its parent. `lastBoundary` is the previous batch's min(finalized, current) and
+          // `openRange` is the range that batch's `current` fell in, so it is inside the range;
+          // the guard covers `openRange` having gone stale over a batch outside every range.
+          const range = rangeOf(ctx.stream.state.ranges, ctx.stream.state.current.number)
+          const tail = lastBoundary
+          if (
+            openRange !== undefined &&
+            range !== undefined &&
+            range.from > openRange.from &&
+            tail !== undefined &&
+            tail.number <= (openRange.to ?? Number.POSITIVE_INFINITY)
+          ) {
+            const owing = store.tablesOwingCoverage(tail.number)
+            if (owing.length > 0) {
+              await checkpoint(tail, 'range-end', true, owing)
+            }
+          }
+          openRange = range ?? openRange
+
+          // A configured range the stream skipped entirely (it yielded no batch, so the crossing
+          // above never fired for it) must not be folded into the next file's coverage. Advance any
+          // table still lagging below the current range's start up to it — this also runs on the
+          // first batch after a restart, where there is no `openRange` transition to detect.
+          if (range !== undefined) {
+            store.advanceCoverageInto(range.from)
           }
 
           // 1. user stages rows via store.insert(...)
@@ -226,9 +325,24 @@ export function parquetTarget<T>(options: {
           if (reasons.length > 0) await checkpoint(boundaryCursor, reasons.join('+'))
         }
 
-        // 5. stream end — flush any open writers and persist the final cursor.
-        if (lastBoundary !== undefined && (store.hasOpenWriters || lastBoundary.number > lastCheckpointBlock)) {
-          await checkpoint(lastBoundary, 'stream-end')
+        // 5. stream end — flush open writers, close every table's trailing coverage and persist the
+        //    final cursor. Tails must close here: stretching only claims a sat-out window once the
+        //    table publishes again, and after the stream ends it never will.
+        if (lastBoundary !== undefined) {
+          // A resume can complete without a single batch (backfill already done), leaving the
+          // first-batch seeding unrun while the persisted map still owes a tail from a run that
+          // crashed between its last checkpoint and stream end. Seed from the map alone: an owed
+          // [coverage, cursor] pair never spans an un-queried gap (coverage is advanced into a
+          // range before any checkpoint inside it), and the next run that does see batches
+          // re-clamps every start through the real ranges.
+          if (!metrics && startCursor) {
+            store.seedCoverage(state.coverage, startCursor.number + 1)
+          }
+
+          const owing = store.tablesOwingCoverage(lastBoundary.number)
+          if (owing.length > 0 || store.hasOpenWriters || lastBoundary.number > lastCheckpointBlock) {
+            await checkpoint(lastBoundary, 'stream-end', true, owing)
+          }
         }
       } finally {
         await store.close()
@@ -239,6 +353,11 @@ export function parquetTarget<T>(options: {
     // Published files and open writers hold only finalized rows, so they are never rolled back.
     resolveFork: (canonicalBlocks) => store.resolveFork(canonicalBlocks),
   })
+}
+
+/** The configured range `block` falls in, or `undefined` when no ranges are recorded. */
+function rangeOf(ranges: Range[], block: number): Range | undefined {
+  return ranges.find((r) => block >= r.from && (r.to === undefined || block <= r.to))
 }
 
 function registerParquetMetrics(metrics: Metrics): ParquetTargetMetrics {

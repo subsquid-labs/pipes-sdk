@@ -19,57 +19,74 @@ export function nextTmpPath(dir: string): string {
   return path.join(dir, `${TMP_PREFIX}${(segmentSeq++).toString().padStart(6, '0')}.parquet`)
 }
 
+/**
+ * Block range a published file **covers** — the window the pipe processed, not the rows' own
+ * min/max. The two are independent: the window's edge blocks may carry no data, and a row may be
+ * keyed outside the window that emitted it. That is the point — the filename states coverage, not
+ * content.
+ */
+export type SegmentRange = { from: number; to: number }
+
 /** Summary of a segment that was just published to its final path. */
 export type PublishedSegment = {
   path: string
   rows: number
   bytes: number
-  minBlock: number
-  maxBlock: number
 }
 
 /**
  * The exact surface `ParquetStore` drives a per-table segment writer through. Every engine
- * implements it — the built-in `parquetjsEngine` and any external
- * `ParquetEngine`; everything above the writer — finalization buffers, the durable cursor,
- * `.tmp-*` recovery, collision refusal — are engine-agnostic; external engines reuse
- * `nextTmpPath` and `finalizeSegmentFile` so recovery and collision semantics stay uniform.
+ * implements it — the built-in `parquetjsEngine` and any external `ParquetEngine`; everything
+ * above the writer — finalization buffers, coverage tracking, the durable cursor, `.tmp-*`
+ * recovery, collision refusal — is engine-agnostic; external engines reuse `nextTmpPath` and
+ * `finalizeSegmentFile` so recovery and collision semantics stay uniform.
  */
 export interface SegmentWriter {
-  /** Whether the segment has been opened (i.e. at least one row was appended). */
+  /** Whether the segment's file has been opened (i.e. at least one row was appended). */
   readonly isOpen: boolean
   readonly rowCount: number
-  readonly minBlock: number | undefined
-  readonly maxBlock: number | undefined
-  appendRow(row: Record<string, unknown>, blockNumber: number): Promise<void>
+  appendRow(row: Record<string, unknown>): Promise<void>
   size(): Promise<number>
-  publish(): Promise<PublishedSegment>
+  /**
+   * Finalizes and publishes the segment, named for the coverage window `range`. Must succeed
+   * with **zero appended rows** — a zero-row window still publishes a real (schema-only)
+   * Parquet file; that is how a table claims a window it produced nothing in.
+   */
+  publish(range: SegmentRange): Promise<PublishedSegment>
   discard(): Promise<void>
 }
 
 /**
- * Shared publish tail for every engine: fsync the finished temp file so its content is durable
- * before the rename makes it visible, refuse to overwrite an existing `<min>-<max>.parquet`
- * (a collision means two segments claimed the same block range, which would silently drop
- * data), atomically rename into place, then fsync the directory so the rename is durable.
+ * Shared publish tail for every engine: refuse an inverted coverage range, fsync the finished
+ * temp file so its content is durable before the rename makes it visible, refuse to overwrite an
+ * existing `<from>-<to>.parquet` (a collision means two segments claimed the same window, which
+ * would silently drop data), atomically rename into place, then fsync the directory so the
+ * rename is durable.
  */
 export async function finalizeSegmentFile(options: {
   dir: string
   tmpPath: string
   rows: number
-  minBlock: number
-  maxBlock: number
+  range: SegmentRange
 }): Promise<PublishedSegment> {
-  const { dir, tmpPath, rows, minBlock, maxBlock } = options
+  const { dir, tmpPath, rows, range } = options
+
+  if (range.from > range.to) {
+    throw new ParquetTargetError(
+      PARQUET_ERROR_CODES.COVERAGE_RANGE_INVALID,
+      `Internal: refusing to publish segment in '${dir}' with an inverted coverage range ` +
+        `${range.from}-${range.to}.`,
+    )
+  }
 
   await fsyncFile(tmpPath)
 
-  const finalPath = path.join(dir, `${pad(minBlock)}-${pad(maxBlock)}.parquet`)
+  const finalPath = path.join(dir, `${pad(range.from)}-${pad(range.to)}.parquet`)
   if (await pathExists(finalPath)) {
     throw new ParquetTargetError(
       PARQUET_ERROR_CODES.FILE_COLLISION,
-      `Refusing to overwrite existing Parquet file '${finalPath}'. A file for block range ` +
-        `${minBlock}-${maxBlock} already exists — this indicates overlapping segments ` +
+      `Refusing to overwrite existing Parquet file '${finalPath}'. A file covering block range ` +
+        `${range.from}-${range.to} already exists — this indicates overlapping segments ` +
         `or a dirty output directory.`,
     )
   }
@@ -81,7 +98,7 @@ export async function finalizeSegmentFile(options: {
     .then((s) => s.size)
     .catch(() => 0)
 
-  return { path: finalPath, rows, bytes, minBlock, maxBlock }
+  return { path: finalPath, rows, bytes }
 }
 
 function pad(block: number): string {

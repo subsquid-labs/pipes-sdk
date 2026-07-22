@@ -1,6 +1,12 @@
 import path from 'node:path'
 
-import { type BlockCursor, type Finalization, type FinalizationBuffer, finalizationBuffer } from '~/core/index.js'
+import {
+  type BlockCursor,
+  type Finalization,
+  type FinalizationBuffer,
+  type Range,
+  finalizationBuffer,
+} from '~/core/index.js'
 
 import type { ParquetEngine, ParquetTableWriter } from './engine.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
@@ -13,6 +19,15 @@ import {
   blockColumnOf,
 } from './schema.js'
 import { type PublishedSegment, type SegmentWriter } from './segment.js'
+
+/** Per-table first block the next published file will cover, keyed by table name. */
+export type CoverageStarts = Record<string, number>
+
+/** A published segment plus the table and coverage window it belongs to. */
+export type PublishedFile = PublishedSegment & { table: string; from: number; to: number }
+
+/** A persisted coverage start that could not be honoured, and what was seeded instead. */
+export type ClampedCoverage = { table: string; persisted: number; seeded: number }
 
 type Row = Record<string, unknown>
 
@@ -56,6 +71,11 @@ export class ParquetStore {
   readonly #staged = new Map<string, Row[]>()
   // The current open segment per table — at most one. Reset (published/discarded) at checkpoints.
   readonly #writers = new Map<string, SegmentWriter>()
+  // First block each table's NEXT published file will claim to cover. Seeded by `seedCoverage`
+  // and advanced only when that table actually publishes — see `publishAll`.
+  readonly #coverageStart = new Map<string, number>()
+  // Configured query ranges, ascending. Empty means "one implicit range" (no gaps to skip).
+  #ranges: Range[] = []
   // Per-cell type checking is a hot-path cost, so it only runs outside production.
   readonly #validateValues = process.env.NODE_ENV !== 'production'
 
@@ -129,7 +149,7 @@ export class ParquetStore {
       if (released.length > 0) {
         const writer = this.#getOrCreateWriter(table, config)
         for (const row of released) {
-          await writer.appendRow(row, config.getBlockNumber(row))
+          await writer.appendRow(row)
         }
         stats.push({ table, rows: released.length })
       }
@@ -156,19 +176,173 @@ export class ParquetStore {
   }
 
   /**
-   * Publishes every currently-open segment writer (each holds ≥1 finalized row by lazy-open) and
-   * resets them, returning each published file's stats. Call immediately before persisting the
-   * checkpoint cursor.
+   * Seeds each table's next-file coverage start and records the configured query ranges (which
+   * `publishAll` needs to skip blocks the pipe will never fetch).
+   *
+   * `persisted` wins; a table absent from it — a cold start, a newly declared table, or state
+   * written before coverage was tracked — falls back to `fallbackStart`, which the caller must set
+   * to the first block this run may publish (NOT the source's `initial`, which is the configured
+   * query start and ignores any resume).
+   *
+   * A persisted value that isn't a non-negative integer is treated as absent rather than trusted:
+   * `pad(-5)` renders as `0000000000-5`, which the data-file pattern cannot parse, so crash
+   * recovery would go blind to that file and let it duplicate rows.
+   *
+   * Whichever start is chosen is clamped forward to the first actually-queried block, so a
+   * `fallbackStart` of `cursor + 1` (or a persisted value) that lands in an un-queried gap between
+   * ranges can't seed a file that names blocks the pipe never fetched.
+   *
+   * A persisted value ahead of `nextQueriedBlock(fallbackStart)` — the furthest a file could
+   * consistently start for the resume point — is clamped back down to it rather than trusted:
+   * honouring it would leave the blocks between the cursor and that start claimed by no file at
+   * all. The two things that produce it are both handled by clamping — the query ranges were
+   * edited since the state was written (the recorded start refers to a gap that no longer exists,
+   * and the clamped value covers the newly-queried blocks correctly), or the cursor was rewound by
+   * hand (recovery has already deleted the files above it, so re-indexing from the clamp is exactly
+   * right). Returns what it clamped so the caller can say so out loud.
+   *
+   * @internal — lifecycle, driven by the target.
    */
-  async publishAll(): Promise<(PublishedSegment & { table: string })[]> {
-    const published: (PublishedSegment & { table: string })[] = []
+  seedCoverage(persisted: CoverageStarts | undefined, fallbackStart: number, ranges: Range[] = []): ClampedCoverage[] {
+    this.#ranges = [...ranges].sort((a, b) => a.from - b.from)
 
-    for (const [table, writer] of this.#writers) {
-      published.push({ table, ...(await writer.publish()) })
+    const ceiling = this.#nextQueriedBlock(fallbackStart)
+    const clamped: ClampedCoverage[] = []
+
+    for (const table of this.#configs.keys()) {
+      const start = persisted?.[table]
+      const valid = Number.isInteger(start) && (start as number) >= 0
+
+      if (valid && (start as number) > ceiling) {
+        clamped.push({ table, persisted: start as number, seeded: ceiling })
+        this.#coverageStart.set(table, ceiling)
+        continue
+      }
+
+      this.#coverageStart.set(table, this.#nextQueriedBlock(valid ? (start as number) : fallbackStart))
     }
-    this.#writers.clear()
+
+    return clamped
+  }
+
+  /**
+   * Bumps every table whose next-file start still sits below `rangeFrom` up to it. Called on entry
+   * to a configured range so a range the stream skipped entirely — it produced no batch, so no tail
+   * was closed for it — is not folded into the next file's coverage, which would claim the
+   * un-queried gap after it. A table owing a window *within* the current range (start already at or
+   * past `rangeFrom`) is left untouched.
+   *
+   * @internal — lifecycle, driven by the target.
+   */
+  advanceCoverageInto(rangeFrom: number): void {
+    const target = this.#nextQueriedBlock(rangeFrom)
+    for (const [table, start] of this.#coverageStart) {
+      if (start < target) {
+        this.#coverageStart.set(table, target)
+      }
+    }
+  }
+
+  /**
+   * Per-table coverage starts, to persist alongside the checkpoint cursor.
+   *
+   * @internal — lifecycle, driven by the target.
+   */
+  coverage(): CoverageStarts {
+    return Object.fromEntries(this.#coverageStart)
+  }
+
+  /**
+   * Tables whose coverage has fallen behind `to` — i.e. that owe a file for a window they sat out.
+   *
+   * @internal — lifecycle, driven by the target.
+   */
+  tablesOwingCoverage(to: number): string[] {
+    return [...this.#configs.keys()].filter((table) => {
+      const from = this.#coverageStart.get(table)
+
+      return from !== undefined && from <= to
+    })
+  }
+
+  /**
+   * Publishes a segment per table for the window ending at `to`, and resets the open writers.
+   * Call immediately before persisting the checkpoint cursor.
+   *
+   * Each file is named for the **window it covers** — `[the table's coverage start, to]` — not the
+   * min/max block of its rows, so a consumer reads coverage off the filename instead of guessing
+   * whether a gap means "no data" or "not indexed yet".
+   *
+   * By default only tables with an open writer publish; a table with no rows keeps its coverage
+   * start, so the next file it does publish stretches back across the windows it sat out. That
+   * keeps a sparse table gap-free without a tiny file per window.
+   *
+   * With `closeTails`, every table still owing coverage publishes — writing an **empty** segment if
+   * it has no rows. Stretching alone can't close a table's final window (there is no next file to
+   * stretch), so the caller must force this where coverage would otherwise end: at stream end, and
+   * before crossing into a later query range.
+   *
+   * `tables` lets a caller that has already computed the owing set (via {@link tablesOwingCoverage})
+   * pass it in rather than have it recomputed here.
+   *
+   * A writer this call does not publish — its table was left out of `tables`, or its coverage start
+   * is still ahead of `to` (the boundary cursor has not advanced since it last published, so there
+   * is no window to name yet) — is deliberately left **open**, to be published by a later
+   * checkpoint or discarded by {@link close}. Dropping it here would lose its finalized rows and
+   * orphan its temp file.
+   *
+   * @internal — lifecycle, driven by the target.
+   */
+  async publishAll(to: number, options: { closeTails?: boolean; tables?: string[] } = {}): Promise<PublishedFile[]> {
+    const published: PublishedFile[] = []
+    const tables = options.tables ?? (options.closeTails ? this.tablesOwingCoverage(to) : [...this.#writers.keys()])
+
+    for (const table of tables) {
+      const from = this.#coverageStart.get(table)
+      if (from === undefined) {
+        throw new ParquetTargetError(
+          PARQUET_ERROR_CODES.COVERAGE_RANGE_INVALID,
+          `Internal: table '${table}' has an open writer but no coverage start — seedCoverage() ` +
+            `must run before the first publish.`,
+        )
+      }
+      if (from > to) continue
+
+      // Only tail-closing invents a writer for a table that has none; a plain checkpoint publishes
+      // what is open and nothing else, so it never writes a zero-row file.
+      const open = this.#writers.get(table)
+      if (!open && !options.closeTails) continue
+
+      const config = this.#configs.get(table)!
+      const writer = open ?? this.#getOrCreateWriter(table, config)
+
+      published.push({ table, from, to, ...(await writer.publish({ from, to })) })
+      this.#writers.delete(table)
+      this.#coverageStart.set(table, this.#nextQueriedBlock(to + 1))
+    }
 
     return published
+  }
+
+  /**
+   * The first block at or after `block` that the pipe actually queries.
+   *
+   * Coverage must never advance into the gap between two configured ranges: those blocks are never
+   * fetched, so a later file naming itself across them would claim to cover data the pipe never
+   * looked at — the exact inverse of the guarantee the naming exists to give. With no ranges
+   * recorded (a single implicit range) `block` is already correct.
+   */
+  #nextQueriedBlock(block: number): number {
+    if (this.#ranges.length === 0) return block
+
+    for (const range of this.#ranges) {
+      if (range.to !== undefined && block > range.to) continue
+
+      return Math.max(block, range.from)
+    }
+
+    // Past every configured range — nothing further will be queried, so leave it where it is.
+    return block
   }
 
   /**

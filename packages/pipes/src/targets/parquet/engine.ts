@@ -21,17 +21,20 @@ export interface ParquetTableWriter {
  * A pluggable segment-writer engine for `parquetTarget`.
  *
  * The target owns everything around the writer — staging, finalization buffering, rotation
- * triggers, checkpointing, crash recovery, fork handling and metrics. An engine owns exactly
- * one thing: turning finalized rows into a Parquet file on disk. The SDK's declared schema
- * model ({@link ParquetTable}) plus the plain-JS row contract (see the `ParquetLeafType`
- * JSDoc) is the complete input; engines translate both to their native representation
- * internally, so there is no engine-specific schema mechanism at the API surface.
+ * triggers, coverage tracking, checkpointing, crash recovery, fork handling and metrics. An
+ * engine owns exactly one thing: turning finalized rows into a Parquet file on disk. The SDK's
+ * declared schema model ({@link ParquetTable}) plus the plain-JS row contract (see the
+ * `ParquetLeafType` JSDoc) is the complete input; engines translate both to their native
+ * representation internally, so there is no engine-specific schema mechanism at the API surface.
  *
  * Implementations MUST:
  * - produce real Parquet files — downstream readers rely on it;
  * - name segment temp files via `nextTmpPath` (startup recovery deletes `.tmp-*` files);
  * - publish through `finalizeSegmentFile` (fsync → collision check → atomic rename → dir
- *   fsync), the durability tail that checkpoints depend on;
+ *   fsync), the durability tail that checkpoints depend on, named for the coverage window the
+ *   store passes to `publish(range)` — never for the rows' own block numbers;
+ * - publish a valid (schema-only) Parquet file even with **zero appended rows** — tail closing
+ *   claims a table's final window with an empty segment;
  * - keep `table()` synchronous and cheap;
  * - accept rows in the plain-JS shape (`LIST` cells are plain arrays, `STRUCT` cells plain
  *   objects) — any library-specific row reshaping happens inside the engine.

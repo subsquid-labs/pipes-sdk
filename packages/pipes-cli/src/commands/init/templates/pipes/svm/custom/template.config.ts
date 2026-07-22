@@ -1,10 +1,10 @@
-import { toSnakeCase } from 'drizzle-orm/casing'
 import { z } from 'zod'
 
 import { ContractSchema } from '../../../contract-params.js'
 import { customContractsPrompt, customTypegenPostSetup } from '../../../custom-template-shared.js'
 import { defineTemplate } from '../../../define-template.js'
 import { renderClickhouse } from './templates/clickhouse-table.sql.js'
+import { programTables } from './templates/naming.js'
 import { renderSchema } from './templates/pg-table.js'
 import { buildDecoderGroups, renderTransformer } from './templates/transformer.js'
 
@@ -30,6 +30,13 @@ export const customTemplate = defineTemplate({
   postSetup: customTypegenPostSetup('svm'),
   render(params) {
     const groups = buildDecoderGroups(params)
+
+    // Same derivation the schema and DDL use, keyed by program identity — a decoder's
+    // insert target must be a table the generated schema actually declares.
+    const tableByInstruction = new Map(
+      programTables(params.contracts).map((t) => [`${t.typegenAddress}|${t.instruction.name}`, t.table]),
+    )
+
     return {
       transformer: renderTransformer(params),
       postgresSchema: renderSchema(params),
@@ -38,7 +45,7 @@ export const customTemplate = defineTemplate({
       tables: groups.flatMap((group) =>
         group.instructions.map((instruction) => ({
           decoderId: group.decoderId,
-          table: toSnakeCase(`${instruction.contractName}_${instruction.name}`),
+          table: tableByInstruction.get(`${group.programs[0]!.typegenAddress}|${instruction.name}`)!,
           event: instruction.uniqueKey,
         })),
       ),

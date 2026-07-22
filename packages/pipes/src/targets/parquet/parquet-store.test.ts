@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -254,6 +254,150 @@ describe('ParquetStore', () => {
           { blockNumber: 2, user: nullProto, tags: null },
         ]),
       ).not.toThrow()
+    })
+  })
+
+  describe('coverage', () => {
+    it('seeds from persisted starts and falls back for tables the state does not mention', () => {
+      const other: ParquetTable = { table: 'other', schema: { blockNumber: { type: 'INT64' } } }
+      const store = new ParquetStore({
+        dir,
+        tables: [BLOCKS_TABLE, other],
+        rowGroupSize: 1,
+        defaultCodec: 'SNAPPY',
+        engine: parquetjsEngine(),
+      })
+
+      // `blocks` owes an earlier window (start 5) while this run resumes at 7; `other` was declared
+      // after the state was written, so it falls back to where this run does.
+      store.seedCoverage({ blocks: 5 }, 7)
+
+      expect(store.coverage()).toEqual({ blocks: 5, other: 7 })
+    })
+
+    it.each([
+      ['non-numeric', 'garbage' as unknown as number],
+      ['NaN', Number.NaN],
+      // pad(-5) renders as "0000000000-5", so the filename would gain an extra dash and stop
+      // matching the data-file pattern — crash recovery would never see that file again.
+      ['negative', -5],
+      ['fractional', 2.5],
+    ])('ignores a %s persisted start rather than steering the filename with it', (_label, value) => {
+      const store = new ParquetStore({
+        dir,
+        tables: [BLOCKS_TABLE],
+        rowGroupSize: 1,
+        defaultCodec: 'SNAPPY',
+        engine: parquetjsEngine(),
+      })
+
+      store.seedCoverage({ blocks: value }, 7)
+
+      expect(store.coverage()).toEqual({ blocks: 7 })
+    })
+
+    it('skips the gap between disjoint ranges when advancing past a publish', async () => {
+      await mkdir(path.join(dir, 'blocks'), { recursive: true })
+      const store = new ParquetStore({
+        dir,
+        tables: [BLOCKS_TABLE],
+        rowGroupSize: 1,
+        defaultCodec: 'SNAPPY',
+        engine: parquetjsEngine(),
+      })
+      store.seedCoverage(undefined, 0, [
+        { from: 0, to: 1 },
+        { from: 5, to: 6 },
+      ])
+      store.insert('blocks', [{ blockNumber: 1, hash: '0x1', timestamp: 1 }])
+      await store.flushBatch({ finalized: { number: 1, hash: '0x1' }, rollbackChain: [] })
+
+      await store.publishAll(1)
+
+      // Blocks 2-4 are never queried, so the next file must start at 5 — not 2.
+      expect(store.coverage()).toEqual({ blocks: 5 })
+    })
+
+    it('keeps a writer it could not name a window for, and publishes it once the boundary moves', async () => {
+      // The boundary cursor does not advance while the finalized head is stuck, so a second
+      // checkpoint at the same block has no window to name (coverage start 2 > to 1). The rows
+      // released in between — an aggregate keyed back at block 1 — must stay in the open writer:
+      // dropping it here would lose them and orphan its temp file.
+      await mkdir(path.join(dir, 'blocks'), { recursive: true })
+      const store = new ParquetStore({
+        dir,
+        tables: [BLOCKS_TABLE],
+        rowGroupSize: 1,
+        defaultCodec: 'SNAPPY',
+        engine: parquetjsEngine(),
+      })
+      store.seedCoverage(undefined, 0)
+      const stuck = { finalized: { number: 1, hash: '0x1' }, rollbackChain: [] }
+
+      store.insert('blocks', [{ blockNumber: 1, hash: '0x1', timestamp: 1 }])
+      await store.flushBatch(stuck)
+      await store.publishAll(1)
+
+      store.insert('blocks', [{ blockNumber: 1, hash: '0x1', timestamp: 1 }])
+      await store.flushBatch(stuck)
+      expect(await store.publishAll(1)).toEqual([])
+      expect(store.hasOpenWriters).toBe(true)
+
+      // Once the head moves the window exists, and the held row is in the file that names it.
+      const published = await store.publishAll(3)
+      expect(published.map((p) => `${p.from}-${p.to}`)).toEqual(['2-3'])
+      expect(published[0].rows).toBe(1)
+    })
+
+    it('does not drop the writers of tables left out of an explicit publish set', async () => {
+      // The range-end checkpoint passes only the tables that owe coverage. Any other open writer
+      // belongs to a later window, not to the bin.
+      const other: ParquetTable = { table: 'other', schema: { blockNumber: { type: 'INT64' } } }
+      for (const table of ['blocks', 'other']) {
+        await mkdir(path.join(dir, table), { recursive: true })
+      }
+      const store = new ParquetStore({
+        dir,
+        tables: [BLOCKS_TABLE, other],
+        rowGroupSize: 1,
+        defaultCodec: 'SNAPPY',
+        engine: parquetjsEngine(),
+      })
+      store.seedCoverage(undefined, 0)
+
+      store.insert('blocks', [{ blockNumber: 1, hash: '0x1', timestamp: 1 }])
+      store.insert('other', [{ blockNumber: 1 }])
+      await store.flushBatch({ finalized: { number: 1, hash: '0x1' }, rollbackChain: [] })
+
+      const published = await store.publishAll(1, { closeTails: true, tables: ['blocks'] })
+
+      expect(published.map((p) => p.table)).toEqual(['blocks'])
+      expect(store.hasOpenWriters).toBe(true)
+      expect((await store.publishAll(2)).map((p) => `${p.table} ${p.from}-${p.to}`)).toEqual(['other 0-2'])
+    })
+
+    it('refuses to publish before coverage is seeded rather than inventing a range', async () => {
+      // The target gets its table dirs from ParquetState.getCursor(); this test drives the store
+      // directly, so it has to make them itself.
+      await mkdir(path.join(dir, 'blocks'), { recursive: true })
+      const store = new ParquetStore({
+        dir,
+        tables: [BLOCKS_TABLE],
+        rowGroupSize: 1,
+        defaultCodec: 'SNAPPY',
+        engine: parquetjsEngine(),
+      })
+      store.insert('blocks', [{ blockNumber: 1, hash: '0x1', timestamp: 1 }])
+      await store.flushBatch({ finalized: { number: 1, hash: '0x1' }, rollbackChain: [] })
+
+      expect.assertions(1)
+      try {
+        await store.publishAll(1)
+      } catch (e) {
+        expect((e as ParquetTargetError).code).toBe(PARQUET_ERROR_CODES.COVERAGE_RANGE_INVALID)
+      } finally {
+        await store.close()
+      }
     })
   })
 })

@@ -2,9 +2,9 @@
  * Parquet target — write a stream to rotating, finalized-only Parquet files.
  *
  * Indexes ERC20 Transfer + Approval events from Ethereum mainnet into local Parquet files
- * under `<OUT>/transfers/` and `<OUT>/approvals/`. Each file is named by its block range
- * (`<min>-<max>.parquet`) and is immutable once published — the standard columnar format read
- * directly by DuckDB, Spark, Athena and ClickHouse `s3()` (no import step).
+ * under `<OUT>/transfers/` and `<OUT>/approvals/`. Each file is named for the block range it
+ * covers (`<from>-<to>.parquet`) and is immutable once published — the standard columnar format
+ * read directly by DuckDB, Spark, Athena and ClickHouse `s3()` (no import step).
  *
  * Why this target:
  *   - **Finalized-only.** A row is written only once its block is at/below the portal's
@@ -16,6 +16,10 @@
  *     bounds the writer's in-memory buffer.
  *   - **Crash-safe.** A durable cursor (`<OUT>/_sqd_parquet_state.json`) advances only at a
  *     checkpoint; on restart, any file above the cursor is dropped and re-fetched.
+ *   - **Coverage you can read off the filename.** `<from>-<to>` is the window the file covers,
+ *     not the min/max block of the rows in it, so a table that goes quiet for a stretch still
+ *     names those blocks in whatever it writes next. A missing range means "not indexed", never
+ *     "indexed, no data" — and the files of one table are contiguous.
  *
  * Note: `onData` must be a pure function of the batch for finalized blocks (no wall-clock / RNG
  * affecting a row's identity) — recovery re-processes finalized blocks and relies on

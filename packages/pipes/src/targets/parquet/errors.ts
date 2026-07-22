@@ -47,10 +47,13 @@ export const PARQUET_ERROR_CODES = {
   RECOVERY_DELETE_FAILED: 'E2314',
   /** A nested column declaration is malformed (empty STRUCT fields, LIST without element, over-deep nesting). */
   NESTED_SCHEMA_INVALID: 'E2315',
-  /** Internal invariant: `publish()` was called on a segment with no rows. */
-  SEGMENT_EMPTY: 'E2320',
-  // E2316–E2319 retired, numbers left unassigned (ADR-4): E2316 moved out with the DuckDB
-  // engine's per-column-compression check (the engine ships outside the SDK, see ADR-18);
-  // E2317/E2319 were dynamic-load errors — engines statically import their libraries;
-  // E2318 was the runtime engine-shape check — `settings.engine` is compile-time typed.
+  /** A segment's coverage range could not be formed or is inverted (internal invariant). */
+  COVERAGE_RANGE_INVALID: 'E2316',
+  /** The persisted coverage map disagrees with the cursor stored beside it. */
+  STATE_COVERAGE_INVALID: 'E2317',
+  // E2318–E2319 retired, numbers left unassigned (ADR-4): they were dynamic-load / runtime
+  // engine-shape errors — engines statically import their libraries and `settings.engine` is
+  // compile-time typed. (The duckdb per-column-compression check moved out with its engine,
+  // see ADR-19; coverage naming makes zero-row segments legitimate, so no empty-segment code
+  // exists either.)
 } as const

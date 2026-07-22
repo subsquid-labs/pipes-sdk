@@ -46,6 +46,20 @@ export class BlockRangeConfigurationError extends PipeError {
   }
 }
 
+/**
+ * E0003: Thrown when an instruction decoder is built with an unusable discriminator set:
+ * an instruction with no discriminator (it would match every instruction of the program) or
+ * with more than one (a malformed ABI entry — an instruction has exactly one), discriminators
+ * of mixed widths across the decoder (a decoder covers one ABI, which is single-width), or two
+ * instructions sharing a discriminator (Anchor discriminators are program-independent, so a
+ * shared one decodes the same raw instruction under both keys).
+ */
+export class InstructionDecoderConfigurationError extends PipeError {
+  constructor(message: string | string[]) {
+    super('E0003', SdkErrorName.PipeConfiguration, message)
+  }
+}
+
 // ─── Fork handling errors (E1xxx) ─────────────────────────────────────────────
 
 /**

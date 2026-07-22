@@ -1,4 +1,6 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+
+import type { Server } from '~/hooks/use-servers'
 
 type HttpResponse<T> = {
   payload: T
@@ -103,6 +105,30 @@ function getHistory(serverKey: string, pipeId: string) {
   return history
 }
 
+function pushHistory(serverKey: string, pipeId: string, sample: PipeHistory): PipeHistory[] {
+  const history = [...getHistory(serverKey, pipeId), sample].slice(-MAX_HISTORY)
+  histories.get(serverKey)?.set(pipeId, history)
+
+  return history
+}
+
+function enrichPipe(serverKey: string, pipe: ApiPipe, memory: number): Pipe {
+  const history = pushHistory(serverKey, pipe.id, {
+    blocksPerSecond: pipe.speed.blocksPerSecond,
+    bytesPerSecond: pipe.speed.bytesPerSecond,
+    memory,
+  })
+
+  let status = PipeStatus.Syncing
+  if (pipe.progress.percent === 0) {
+    status = PipeStatus.Calculating
+  } else if (pipe.progress.etaSeconds < 1) {
+    status = PipeStatus.Synced
+  }
+
+  return { ...pipe, status, history }
+}
+
 type StatsResult = Omit<ApiStats, 'pipes'> & {
   status: ApiStatus
   pipes: Pipe[]
@@ -114,50 +140,23 @@ export function useStats(serverIndex: number) {
 
   return useQuery({
     queryKey: ['pipe/stats', serverIndex],
-    queryFn: async (): Promise<StatsResult> => {
+    queryFn: async ({ signal }): Promise<StatsResult> => {
       try {
-        const res = await fetch(`/api/metrics/stats?_server=${serverIndex}`)
+        const res = await fetch(`/api/metrics/stats?_server=${serverIndex}`, { signal })
 
         if (!res.ok) throw new Error('Failed to fetch stats')
 
         const data: HttpResponse<ApiStats> = await res.json()
+        signal.throwIfAborted()
 
         return {
           ...data.payload,
           status: ApiStatus.Connected,
-          pipes: data.payload.pipes.map((pipe): Pipe => {
-            let history = getHistory(serverKey, pipe.id)
-
-            history.push({
-              bytesPerSecond: pipe.speed.bytesPerSecond,
-              blocksPerSecond: pipe.speed.blocksPerSecond,
-              memory: data.payload.usage.memory,
-            })
-
-            history = history.slice(-MAX_HISTORY)
-
-            let serverHistories = histories.get(serverKey)
-            if (!serverHistories) {
-              serverHistories = new Map()
-              histories.set(serverKey, serverHistories)
-            }
-            serverHistories.set(pipe.id, history)
-
-            let status = PipeStatus.Syncing
-            if (pipe.progress.percent === 0) {
-              status = PipeStatus.Calculating
-            } else if (pipe.progress.etaSeconds < 1) {
-              status = PipeStatus.Synced
-            }
-
-            return {
-              ...pipe,
-              status,
-              history,
-            }
-          }),
+          pipes: data.payload.pipes.map((pipe) => enrichPipe(serverKey, pipe, data.payload.usage.memory)),
         }
       } catch {
+        signal.throwIfAborted()
+
         const prev = queryClient.getQueryData<StatsResult>(['pipe/stats', serverIndex])
         if (prev) {
           return {
@@ -185,6 +184,7 @@ export type ServerStatus = {
   progress?: number
   syncingCount: number
   pipeCount: number
+  firstPipeId?: string
 }
 
 export function useServerStatuses(count: number) {
@@ -215,6 +215,7 @@ export function useServerStatuses(count: number) {
           progress,
           syncingCount: syncing.length,
           pipeCount: pipes.length,
+          firstPipeId: pipes[0]?.id,
         })
       }
       return map
@@ -222,6 +223,56 @@ export function useServerStatuses(count: number) {
     refetchInterval: 3000,
     retry: false,
   })
+}
+
+export type FleetServer = {
+  serverIndex: number
+  name?: string
+  url: string
+  online: boolean
+  memory: number
+  pipes: Pipe[]
+}
+
+export function useFleetStats(servers: Server[] | undefined) {
+  const results = useQueries({
+    queries: (servers ?? []).map((server, serverIndex) => ({
+      queryKey: ['fleet/stats', serverIndex, server.url],
+      queryFn: async ({ signal }): Promise<FleetServer> => {
+        const base = { serverIndex, name: server.name, url: server.url }
+
+        try {
+          const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(3000)])
+          const res = await fetch(`/api/metrics/stats?_server=${serverIndex}`, { signal: requestSignal })
+          if (!res.ok) throw new Error('not ok')
+          const data: HttpResponse<ApiStats> = await res.json()
+          signal.throwIfAborted()
+
+          return {
+            ...base,
+            online: true,
+            memory: data.payload.usage.memory,
+            pipes: data.payload.pipes.map((pipe) =>
+              enrichPipe(`server-${serverIndex}`, pipe, data.payload.usage.memory),
+            ),
+          }
+        } catch {
+          signal.throwIfAborted()
+
+          return { ...base, online: false, memory: 0, pipes: [] }
+        }
+      },
+      refetchInterval: 2000,
+      retry: false,
+    })),
+  })
+
+  if (!servers) return { data: undefined, isLoading: true }
+  if (servers.length === 0) return { data: [], isLoading: false }
+
+  const data = results.flatMap((result) => (result.data ? [result.data] : []))
+
+  return { data, isLoading: data.length === 0 }
 }
 
 export function usePipe(serverIndex: number, id: string) {
