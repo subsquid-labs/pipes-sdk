@@ -1,7 +1,8 @@
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { ParquetReader, ParquetSchema, ParquetWriter } from '@dsnp/parquetjs'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { evmPortalStream } from '~/evm/index.js'
@@ -11,17 +12,25 @@ import type { ParquetEngine } from './engine.js'
 import { parquetTarget } from './parquet-target.js'
 
 /**
- * A minimal third-party engine built ONLY from the public extension surface: it buffers rows in
- * memory and writes them as JSON wrapped in the Parquet magic bytes at the target-assigned temp
- * path. (A real engine must write actual Parquet — the magic-byte wrapper keeps this test
- * dependency-free while passing the target's output verification, so it still exercises
- * target-owned naming, publication and cursor persistence end to end.)
+ * A minimal third-party engine built ONLY from the SDK's public extension surface plus a
+ * Parquet library of its own choosing (`@dsnp/parquetjs` used directly here, the way an
+ * external engine would use its native writer). It buffers rows in memory and writes a real
+ * Parquet file at the target-assigned temp path on `finish()` — so the published output is
+ * readable by actual Parquet readers and passes the target's envelope verification honestly.
+ * Flat leaf schemas only; that is all this test needs.
  */
-function jsonEngine(calls: string[]): ParquetEngine {
+function tinyParquetEngine(calls: string[]): ParquetEngine {
   return {
-    name: 'json-test',
+    name: 'tiny-test',
     table(table) {
       calls.push(`table:${table.table}`)
+      const schema = new ParquetSchema(
+        // Flat leaf columns only (see the engine doc) — the SDK leaf names used here (INT64,
+        // UTF8) are also valid parquetjs type names.
+        Object.fromEntries(
+          Object.entries(table.schema).map(([name, column]) => [name, { type: column.type as 'INT64' | 'UTF8' }]),
+        ),
+      )
 
       return {
         createSegment(tmpPath) {
@@ -32,11 +41,13 @@ function jsonEngine(calls: string[]): ParquetEngine {
               rows.push(...batch)
             },
             async size() {
-              return JSON.stringify(rows).length
+              // An estimate is fine for rotation feedback — this engine stages in memory.
+              return rows.length * 64
             },
             async finish() {
-              // A zero-row finish is part of the contract (tail closing) and still writes a file.
-              await writeFile(tmpPath, `PAR1${JSON.stringify(rows)}PAR1`)
+              const writer = await ParquetWriter.openFile(schema, tmpPath)
+              for (const row of rows) await writer.appendRow(row)
+              await writer.close()
             },
             async abort() {
               rows.length = 0
@@ -48,8 +59,12 @@ function jsonEngine(calls: string[]): ParquetEngine {
   }
 }
 
-/** An engine that ignores the output contract: its finished file is not Parquet. */
-function brokenEngine(): ParquetEngine {
+/**
+ * An engine that ignores the output contract: its finished file is arbitrary JSON wrapped in
+ * the Parquet magic bytes — the exact spoof the envelope check's footer-length validation
+ * exists to refuse.
+ */
+function magicWrappedJsonEngine(): ParquetEngine {
   return {
     name: 'broken-test',
     table() {
@@ -65,7 +80,7 @@ function brokenEngine(): ParquetEngine {
               return JSON.stringify(rows).length
             },
             async finish() {
-              await writeFile(tmpPath, JSON.stringify(rows))
+              await writeFile(tmpPath, `PAR1${JSON.stringify(rows)}PAR1`)
             },
             async abort() {},
           }
@@ -73,6 +88,17 @@ function brokenEngine(): ParquetEngine {
       }
     },
   }
+}
+
+async function readAllRows(file: string): Promise<Record<string, unknown>[]> {
+  const reader = await ParquetReader.openFile(file)
+  const cursor = reader.getCursor()
+  const rows: Record<string, unknown>[] = []
+  let row: Record<string, unknown> | null
+  while ((row = (await cursor.next()) as Record<string, unknown> | null)) rows.push(row)
+  await reader.close()
+
+  return rows
 }
 
 function blocksResponse(numbers: number[], finalized?: number): MockResponse {
@@ -110,7 +136,7 @@ describe('parquetTarget with a custom engine', () => {
             schema: { blockNumber: { type: 'INT64' }, hash: { type: 'UTF8' } },
           },
         ],
-        settings: { engine: jsonEngine(calls) },
+        settings: { engine: tinyParquetEngine(calls) },
         onData: ({ store, data }) => {
           store.insert(
             'blocks',
@@ -130,13 +156,13 @@ describe('parquetTarget with a custom engine', () => {
     const files = (await readdir(path.join(dir, 'blocks'))).sort()
     expect(files).toEqual(['000000000000-000000000003.parquet'])
 
-    // Rows arrived in the engine-neutral plain shape, in order.
-    const raw = await readFile(path.join(dir, 'blocks', files[0]!), 'utf8')
-    const content = JSON.parse(raw.slice(4, -4))
-    expect(content).toEqual([
-      { blockNumber: 1, hash: '0x1' },
-      { blockNumber: 2, hash: '0x2' },
-      { blockNumber: 3, hash: '0x3' },
+    // The published file is real Parquet, readable by an actual reader, with the rows the
+    // engine received — in order, in the engine-neutral plain shape.
+    const rows = await readAllRows(path.join(dir, 'blocks', files[0]!))
+    expect(rows.map((r) => [r['blockNumber'], r['hash']])).toEqual([
+      [1n, '0x1'],
+      [2n, '0x2'],
+      [3n, '0x3'],
     ])
 
     // The checkpoint that published the segment also persisted the cursor.
@@ -144,7 +170,7 @@ describe('parquetTarget with a custom engine', () => {
     expect(stateFiles).toHaveLength(1)
   })
 
-  it('refuses to publish an engine output that is not a Parquet file', async () => {
+  it('refuses an engine output that merely wraps non-Parquet bytes in the magic', async () => {
     portal = await mockPortal([blocksResponse([1, 2, 3], 3)])
 
     await expect(
@@ -152,7 +178,7 @@ describe('parquetTarget with a custom engine', () => {
         parquetTarget({
           dir,
           tables: [{ table: 'blocks', schema: { blockNumber: { type: 'INT64' } } }],
-          settings: { engine: brokenEngine() },
+          settings: { engine: magicWrappedJsonEngine() },
           onData: ({ store, data }) => {
             store.insert(
               'blocks',
@@ -161,7 +187,7 @@ describe('parquetTarget with a custom engine', () => {
           },
         }),
       ),
-    ).rejects.toThrowError(/Parquet magic bytes/)
+    ).rejects.toThrowError(/complete Parquet files/)
 
     // Nothing was published, the temp file was cleaned up, and no cursor was persisted —
     // the run is fully recoverable.

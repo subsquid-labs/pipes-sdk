@@ -117,10 +117,14 @@ const PARQUET_MAGIC = Buffer.from('PAR1')
 const PARQUET_MIN_BYTES = 12
 
 /**
- * Verifies the finished segment file starts and ends with the Parquet magic bytes (`PAR1`).
- * This is the runtime check behind the engine contract's "must produce real Parquet files":
- * a truncated or non-Parquet output is refused here, at the checkpoint, instead of surfacing
- * as a corrupt file in a downstream reader.
+ * Verifies the finished segment file has the Parquet envelope: it starts and ends with the
+ * magic bytes (`PAR1`), and the footer length field (the little-endian uint32 immediately
+ * before the trailing magic) describes a footer that actually fits inside the file. This is
+ * the runtime check behind the engine contract's "must produce real Parquet files": a
+ * truncated, non-Parquet, or magic-wrapped-garbage output is refused here, at the checkpoint,
+ * instead of surfacing as a corrupt file in a downstream reader. (It is an envelope check,
+ * not a decode — an engine writing structurally valid Parquet with wrong *contents* is beyond
+ * cheap verification.)
  */
 async function assertParquetMagic(tmpPath: string, engine: string): Promise<void> {
   const refuse = (problem: string): never => {
@@ -145,11 +149,19 @@ async function assertParquetMagic(tmpPath: string, engine: string): Promise<void
     }
 
     const head = Buffer.alloc(4)
-    const tail = Buffer.alloc(4)
+    // The last 8 bytes: footer metadata length (LE uint32) followed by the trailing magic.
+    const tail = Buffer.alloc(8)
     await fh.read(head, 0, 4, 0)
-    await fh.read(tail, 0, 4, size - 4)
-    if (!head.equals(PARQUET_MAGIC) || !tail.equals(PARQUET_MAGIC)) {
+    await fh.read(tail, 0, 8, size - 8)
+    if (!head.equals(PARQUET_MAGIC) || !tail.subarray(4).equals(PARQUET_MAGIC)) {
       return refuse('it does not start and end with the Parquet magic bytes (PAR1)')
+    }
+
+    // The footer must be non-empty and fit between the header magic and its own length field —
+    // this is what rejects arbitrary payloads merely wrapped in PAR1.
+    const footerLength = tail.readUInt32LE(0)
+    if (footerLength < 1 || footerLength > size - PARQUET_MIN_BYTES) {
+      return refuse(`its footer length field claims ${footerLength} byte(s), which cannot fit in a ${size}-byte file`)
     }
   } finally {
     await fh.close()

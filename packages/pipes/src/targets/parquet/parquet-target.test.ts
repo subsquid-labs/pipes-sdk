@@ -1320,6 +1320,21 @@ describe('parquetTarget', () => {
       // The junk file was not renamed into a published name.
       expect((await readdir(segDir)).sort()).toEqual(['.tmp-junk.parquet'])
     })
+
+    it('refuses arbitrary bytes merely wrapped in the magic (footer length check)', async () => {
+      const segDir = path.join(dir, 'seg')
+      await mkdir(segDir, { recursive: true })
+
+      // Correct magic at both ends, but the 4 bytes before the trailing magic — the footer
+      // length field — are payload, not a length that fits inside the file.
+      const tmpPath = path.join(segDir, '.tmp-spoof.parquet')
+      await writeFile(tmpPath, 'PAR1this is not a parquet footer PAR1')
+
+      await expect(
+        finalizeSegmentFile({ dir: segDir, tmpPath, rows: 1, range: { from: 0, to: 1 }, engine: 'test' }),
+      ).rejects.toThrowError(/footer length field/)
+      expect((await readdir(segDir)).sort()).toEqual(['.tmp-spoof.parquet'])
+    })
   })
 
   describe('ParquetState', () => {
