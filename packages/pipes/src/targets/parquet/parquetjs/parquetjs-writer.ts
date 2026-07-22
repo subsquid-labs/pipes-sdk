@@ -1,22 +1,16 @@
 import type { WriteStream } from 'node:fs'
-import { stat, unlink } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 
 import { ParquetSchema, ParquetWriter } from '@dsnp/parquetjs'
 
 import { openWriteStream } from '../fs-durable.js'
-import {
-  type PublishedSegment,
-  type SegmentRange,
-  type SegmentWriter,
-  finalizeSegmentFile,
-  nextTmpPath,
-} from '../segment.js'
+import { type SegmentWriter } from '../segment.js'
 
 type Row = Record<string, unknown>
 
 export type ParquetjsSegmentWriterOptions = {
-  /** The table's directory: `<baseDir>/<table>`. Created by the state layer before writes. */
-  dir: string
+  /** The target-assigned temp path this segment writes to. */
+  tmpPath: string
   /** The compiled library schema, shared by every segment of the table. */
   schema: ParquetSchema
   /** Rows per row group — the "split size" that bounds the writer's in-memory buffer. */
@@ -27,65 +21,43 @@ export type ParquetjsSegmentWriterOptions = {
 }
 
 /**
- * Wraps a single open `ParquetWriter` writing **one** output file (a "segment") for one table.
+ * Wraps a single open `ParquetWriter` writing **one** segment file at the temp path the target
+ * assigned. The writer's whole job is rows → Parquet bytes at that path: the target tracks row
+ * counts, assigns the coverage window, names/publishes the finished file and deletes it on the
+ * error path.
  *
- * The underlying file is **lazy-opened on the first `appendRow`** (or at `publish` for a
- * zero-row segment). The writer tracks the row count it has seen, exposes the growing temp
- * file size for byte-based rotation, and publishes atomically through the shared segment
- * toolkit:
- *
- *   `close()` (footer) → fsync file → atomic `rename` temp → `<dir>/<from>-<to>.parquet` → fsync dir
- *
- * The published name comes from the {@link SegmentRange} the caller passes to `publish()` — the
- * window the pipe processed. The writer never inspects the rows' own block numbers; it has no way
- * to know which blocks it was *responsible* for, only which ones happened to produce rows.
- *
- * A published file is immutable and contains only finalized rows, so it is never rewritten.
+ * The underlying file is **lazy-opened on the first `append`** (or at `finish` for a zero-row
+ * segment — tail closing publishes real, schema-only files). The writer never inspects the
+ * rows' block numbers: the published name states the coverage window, which only the target
+ * knows, and per-block min/max lands in each row group's footer statistics anyway (what
+ * DuckDB/Spark/Athena prune on).
  */
 export class ParquetSegmentWriter implements SegmentWriter {
-  readonly #dir: string
+  readonly #tmpPath: string
   readonly #schema: ParquetSchema
   readonly #rowGroupSize: number
   readonly #wrapRow: ((row: Row) => Row) | undefined
-  readonly #tmpPath: string
 
   #writer: ParquetWriter | undefined
   // We own the underlying stream (rather than ParquetWriter.openFile owning it) so the error path
   // can force the fd shut — ParquetWriter.close() flips `closed` first and never reaches the
   // stream's close() if a footer write throws, which would otherwise leak the descriptor.
   #stream: WriteStream | undefined
-  #rowCount = 0
   #closed = false
 
   constructor(options: ParquetjsSegmentWriterOptions) {
-    this.#dir = options.dir
+    this.#tmpPath = options.tmpPath
     this.#schema = options.schema
     this.#rowGroupSize = options.rowGroupSize
     this.#wrapRow = options.wrapRow
-    this.#tmpPath = nextTmpPath(options.dir)
   }
 
-  /** Whether the underlying file has been opened (i.e. at least one row was appended). */
-  get isOpen(): boolean {
-    return this.#writer !== undefined
-  }
-
-  get rowCount(): number {
-    return this.#rowCount
-  }
-
-  /**
-   * Appends one row, lazy-opening the temp file on first use.
-   *
-   * The writer tracks no block range of its own: the filename comes from the coverage window the
-   * caller passes to {@link publish}, and per-block min/max is already written into each row group's
-   * statistics by the Parquet footer (what DuckDB/Spark/Athena prune on).
-   */
-  async appendRow(row: Row): Promise<void> {
+  /** Appends a batch of rows, lazy-opening the temp file on first use. */
+  async append(rows: readonly Row[]): Promise<void> {
     await this.#ensureOpen()
-    await this.#writer!.appendRow(this.#wrapRow ? this.#wrapRow(row) : row)
-
-    this.#rowCount++
+    for (const row of rows) {
+      await this.#writer!.appendRow(this.#wrapRow ? this.#wrapRow(row) : row)
+    }
   }
 
   async #ensureOpen(): Promise<void> {
@@ -118,44 +90,29 @@ export class ParquetSegmentWriter implements SegmentWriter {
   }
 
   /**
-   * Finalizes the segment: writes the Parquet footer, then publishes through the shared
-   * `finalizeSegmentFile` tail (fsync → collision check → atomic rename to
-   * `<dir>/<from>-<to>.parquet` → dir fsync). Returns the published file's path, row count and
-   * byte size.
-   *
-   * `range` is the window the caller assigns; the file is named for it so consumers read coverage
-   * off the filename. Publishing with **no rows** is legitimate and how a table claims a window it
-   * was present for but produced nothing in — the file carries the schema and an empty row set.
+   * Completes the segment file: opens it if no row ever arrived (a zero-row window still
+   * produces a real, schema-only segment), flushes the last row group, writes the Parquet
+   * footer and releases the fd. The target verifies and publishes the file afterwards.
    */
-  async publish(range: SegmentRange): Promise<PublishedSegment> {
-    // Opens the file if no row ever arrived, so a zero-row window still produces a real segment.
+  async finish(): Promise<void> {
     await this.#ensureOpen()
 
     await this.#writer!.close()
     this.#closed = true
     // close() ended the stream (via the library's envelopeWriter.close → stream.end), so its fd is
-    // already released; drop the reference so discard()/GC don't touch a finished stream.
+    // already released; drop the reference so abort()/GC don't touch a finished stream.
     this.#stream = undefined
-
-    return finalizeSegmentFile({
-      dir: this.#dir,
-      tmpPath: this.#tmpPath,
-      rows: this.#rowCount,
-      range,
-    })
   }
 
   /**
-   * Best-effort cleanup of an unpublished segment: releases the open fd and deletes the temp file.
-   * Used on the error path — the temp file holds finalized-but-not-checkpointed rows that will be
-   * regenerated from the portal on the next run, since the cursor never advanced.
-   *
-   * We `destroy()` the stream directly instead of `ParquetWriter.close()`-ing it: the file is about
-   * to be unlinked, so there is no point flushing a footer, and `close()` could leak the fd (it
-   * flips `closed` before the stream is ended, so a throw mid-footer skips the end) or hang on a
-   * footer flush against a full disk. `destroy()` frees the descriptor immediately and can't hang.
+   * Error-path teardown: releases the open fd without finishing the file (the target deletes the
+   * temp file). We `destroy()` the stream directly instead of `ParquetWriter.close()`-ing it: the
+   * file is about to be unlinked, so there is no point flushing a footer, and `close()` could
+   * leak the fd (it flips `closed` before the stream is ended, so a throw mid-footer skips the
+   * end) or hang on a footer flush against a full disk. `destroy()` frees the descriptor
+   * immediately and can't hang.
    */
-  async discard(): Promise<void> {
+  async abort(): Promise<void> {
     if (this.#stream && !this.#closed) {
       this.#closed = true
       // A destroyed stream can emit 'error' for an in-flight write; swallow it so it never surfaces
@@ -165,11 +122,5 @@ export class ParquetSegmentWriter implements SegmentWriter {
     }
     this.#writer = undefined
     this.#stream = undefined
-
-    try {
-      await unlink(this.#tmpPath)
-    } catch {
-      // best-effort — the temp file may not exist yet (never opened) or already be gone
-    }
   }
 }

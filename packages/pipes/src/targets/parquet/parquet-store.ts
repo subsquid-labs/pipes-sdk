@@ -1,3 +1,4 @@
+import { unlink } from 'node:fs/promises'
 import path from 'node:path'
 
 import {
@@ -18,7 +19,7 @@ import {
   type ParquetTable,
   blockColumnOf,
 } from './schema.js'
-import { type PublishedSegment, type SegmentWriter } from './segment.js'
+import { type PublishedSegment, type SegmentWriter, finalizeSegmentFile, nextTmpPath } from './segment.js'
 
 /** Per-table first block the next published file will cover, keyed by table name. */
 export type CoverageStarts = Record<string, number>
@@ -41,6 +42,17 @@ type TableConfig = {
   dir: string
   /** Creates this table's segment writers; engine-specific state lives behind it. */
   tableWriter: ParquetTableWriter
+}
+
+/**
+ * A table's currently-open segment: the engine's writer plus the bookkeeping the target owns —
+ * the temp path it assigned and the row count that drives rotation and the published-file
+ * stats. Engines never see or report any of these.
+ */
+type OpenSegment = {
+  writer: SegmentWriter
+  tmpPath: string
+  rows: number
 }
 
 /** Rotation thresholds checked at each batch boundary. */
@@ -70,7 +82,9 @@ export class ParquetStore {
   readonly #buffers = new Map<string, FinalizationBuffer<Row>>()
   readonly #staged = new Map<string, Row[]>()
   // The current open segment per table — at most one. Reset (published/discarded) at checkpoints.
-  readonly #writers = new Map<string, SegmentWriter>()
+  readonly #segments = new Map<string, OpenSegment>()
+  // For error messages in the publish tail.
+  readonly #engineName: string
   // First block each table's NEXT published file will claim to cover. Seeded by `seedCoverage`
   // and advanced only when that table actually publishes — see `publishAll`.
   readonly #coverageStart = new Map<string, number>()
@@ -86,6 +100,7 @@ export class ParquetStore {
     defaultCodec: Codec
     engine: ParquetEngine
   }) {
+    this.#engineName = options.engine.name
     for (const table of options.tables) {
       const blockColumn = blockColumnOf(table)
       const getBlockNumber = (row: Row): number => readBlockNumber(table.table, blockColumn, row)
@@ -96,9 +111,8 @@ export class ParquetStore {
         columns: table.schema,
         dir,
         tableWriter: options.engine.table(table, {
-          dir,
           rowGroupSize: options.rowGroupSize,
-          codec: options.defaultCodec,
+          defaultCompression: options.defaultCodec,
         }),
       })
       this.#buffers.set(table.table, finalizationBuffer<Row>({ getBlockNumber }))
@@ -147,10 +161,9 @@ export class ParquetStore {
       const released = buffer.push(staged, finalization)
 
       if (released.length > 0) {
-        const writer = this.#getOrCreateWriter(table, config)
-        for (const row of released) {
-          await writer.appendRow(row)
-        }
+        const segment = this.#getOrCreateSegment(table, config)
+        await segment.writer.append(released)
+        segment.rows += released.length
         stats.push({ table, rows: released.length })
       }
     }
@@ -162,9 +175,9 @@ export class ParquetStore {
 
   /** True if any open writer has reached the byte or row rotation threshold. */
   async shouldRotate(limits: RotationLimits): Promise<boolean> {
-    for (const writer of this.#writers.values()) {
-      if (limits.maxRows !== undefined && writer.rowCount >= limits.maxRows) return true
-      if ((await writer.size()) >= limits.maxBytes) return true
+    for (const segment of this.#segments.values()) {
+      if (limits.maxRows !== undefined && segment.rows >= limits.maxRows) return true
+      if ((await segment.writer.size()) >= limits.maxBytes) return true
     }
 
     return false
@@ -172,7 +185,7 @@ export class ParquetStore {
 
   /** Whether any segment writer is currently open (has buffered ≥1 finalized row on disk). */
   get hasOpenWriters(): boolean {
-    return this.#writers.size > 0
+    return this.#segments.size > 0
   }
 
   /**
@@ -295,7 +308,7 @@ export class ParquetStore {
    */
   async publishAll(to: number, options: { closeTails?: boolean; tables?: string[] } = {}): Promise<PublishedFile[]> {
     const published: PublishedFile[] = []
-    const tables = options.tables ?? (options.closeTails ? this.tablesOwingCoverage(to) : [...this.#writers.keys()])
+    const tables = options.tables ?? (options.closeTails ? this.tablesOwingCoverage(to) : [...this.#segments.keys()])
 
     for (const table of tables) {
       const from = this.#coverageStart.get(table)
@@ -308,16 +321,28 @@ export class ParquetStore {
       }
       if (from > to) continue
 
-      // Only tail-closing invents a writer for a table that has none; a plain checkpoint publishes
+      // Only tail-closing invents a segment for a table that has none; a plain checkpoint publishes
       // what is open and nothing else, so it never writes a zero-row file.
-      const open = this.#writers.get(table)
+      const open = this.#segments.get(table)
       if (!open && !options.closeTails) continue
 
       const config = this.#configs.get(table)!
-      const writer = open ?? this.#getOrCreateWriter(table, config)
+      const segment = open ?? this.#getOrCreateSegment(table, config)
 
-      published.push({ table, from, to, ...(await writer.publish({ from, to })) })
-      this.#writers.delete(table)
+      // The engine only completes the temp file; the publish tail — magic-bytes check, fsync,
+      // collision refusal, atomic rename to the coverage-window name, dir fsync — runs here, so
+      // naming and durability are engine-invariant.
+      await segment.writer.finish()
+      const file = await finalizeSegmentFile({
+        dir: config.dir,
+        tmpPath: segment.tmpPath,
+        rows: segment.rows,
+        range: { from, to },
+        engine: this.#engineName,
+      })
+
+      published.push({ table, from, to, ...file })
+      this.#segments.delete(table)
       this.#coverageStart.set(table, this.#nextQueriedBlock(to + 1))
     }
 
@@ -369,26 +394,30 @@ export class ParquetStore {
   }
 
   /**
-   * Best-effort teardown for the error path: discards (closes + deletes) every open segment's
-   * temp file. The discarded rows are finalized-but-not-checkpointed, so they regenerate from the
-   * portal on the next run since the cursor never advanced past them.
+   * Best-effort teardown for the error path: aborts every open segment's writer (releasing its
+   * resources) and deletes its temp file — file removal is target-owned, like naming. The
+   * discarded rows are finalized-but-not-checkpointed, so they regenerate from the portal on the
+   * next run since the cursor never advanced past them.
    */
   async close(): Promise<void> {
-    for (const writer of this.#writers.values()) {
-      await writer.discard()
+    for (const segment of this.#segments.values()) {
+      await segment.writer.abort().catch(() => {})
+      // Best-effort — the engine may never have created the file, or it may already be gone.
+      await unlink(segment.tmpPath).catch(() => {})
     }
-    this.#writers.clear()
+    this.#segments.clear()
     this.#staged.clear()
   }
 
-  #getOrCreateWriter(table: string, config: TableConfig): SegmentWriter {
-    let writer = this.#writers.get(table)
-    if (!writer) {
-      writer = config.tableWriter.createSegment()
-      this.#writers.set(table, writer)
+  #getOrCreateSegment(table: string, config: TableConfig): OpenSegment {
+    let segment = this.#segments.get(table)
+    if (!segment) {
+      const tmpPath = nextTmpPath(config.dir)
+      segment = { writer: config.tableWriter.createSegment(tmpPath), tmpPath, rows: 0 }
+      this.#segments.set(table, segment)
     }
 
-    return writer
+    return segment
   }
 }
 

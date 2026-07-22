@@ -45,9 +45,11 @@ export type ParquetSettings = {
   /**
    * Segment writer engine. Omitted → the default `parquetjsEngine()`, the SDK's only
    * built-in. Pass any {@link ParquetEngine} implementation to swap the writer: an engine
-   * translates the declared schema and plain-JS rows privately, stages via `nextTmpPath`,
-   * and publishes through `finalizeSegmentFile`, so file naming, durability and crash
-   * recovery stay engine-invariant (see `engine.ts` for the full contract).
+   * translates the declared schema and plain-JS rows privately and writes each segment file
+   * at a temp path the target assigns; the target names files for their coverage window,
+   * verifies engine output (Parquet magic bytes) and owns publication, so naming, durability
+   * and crash recovery are engine-invariant by construction (see `engine.ts` for the full
+   * contract).
    */
   engine?: ParquetEngine
   /**

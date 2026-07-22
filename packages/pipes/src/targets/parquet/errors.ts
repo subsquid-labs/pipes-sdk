@@ -56,4 +56,6 @@ export const PARQUET_ERROR_CODES = {
   // compile-time typed. (The duckdb per-column-compression check moved out with its engine,
   // see ADR-19; coverage naming makes zero-row segments legitimate, so no empty-segment code
   // exists either.)
+  /** An engine's finished segment file failed the Parquet magic-bytes check at publication. */
+  SEGMENT_NOT_PARQUET: 'E2320',
 } as const

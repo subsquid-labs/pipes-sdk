@@ -213,7 +213,7 @@ consumers MUST NOT read it as a block number.
 | E20xx | ClickHouse binding | E2001–E2006 (retention, table name, distributed-rollback, collapse-column, missing sign, rollback-index) |
 | E21xx | Postgres binding | E2101–E2106 (client, config, advisory lock, untracked table, missing PK, FK cycle) |
 | E22xx | BigQuery binding | E2201–E2213 (schema/partition guards, orphan data E2212, append rejection E2213) |
-| E23xx | Parquet binding | E2301–E2317 in use (schema/config; file collision E2309, state corrupt E2310, recovery delete failure E2314, nested-schema E2315; coverage guards E2316 invalid range, E2317 state/data disagreement) |
+| E23xx | Parquet binding | E2301–E2317 and E2320 in use (schema/config; file collision E2309, state corrupt E2310, recovery delete failure E2314, nested-schema E2315; coverage guards E2316 invalid range, E2317 state/data disagreement; engine-output verification E2320 non-Parquet segment refused). E2318–E2319 retired, unassigned |
 
 **IB-51 — Transport errors.** Non-coded, typed: HTTP error (with response), request
 timeout, body-stall timeout. Retryability: request timeouts and connection-class errors

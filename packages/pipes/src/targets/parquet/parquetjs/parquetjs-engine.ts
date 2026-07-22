@@ -16,13 +16,13 @@ export function parquetjsEngine(): ParquetEngine {
   return {
     name: 'parquetjs',
     table(table, context) {
-      const schema = new ParquetSchema(toParquetSchemaShape(table, context.codec))
+      const schema = new ParquetSchema(toParquetSchemaShape(table, context.defaultCompression))
       const wrapRow = buildRowWrapper(table.schema)
 
       return {
-        createSegment: () =>
+        createSegment: (tmpPath) =>
           new ParquetSegmentWriter({
-            dir: context.dir,
+            tmpPath,
             schema,
             rowGroupSize: context.rowGroupSize,
             wrapRow,

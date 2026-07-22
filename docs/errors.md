@@ -474,3 +474,15 @@ furthest block a file could consistently cover from for the resume cursor, it is
 that block and logged as a warning. The usual cause is an edit to the configured query ranges
 (a gap the recorded start referred to no longer exists), and clamping keeps the blocks after the
 cursor claimed by a file.
+
+### E2320 · Engine output is not a Parquet file
+
+A segment writer engine (`settings.engine`) finished a segment file that fails the Parquet
+magic-bytes check — the file does not start and end with `PAR1`, or is smaller than any valid
+Parquet file. The target refuses to publish it at the checkpoint, before the file gets a
+published name, so downstream readers never see it and the run is fully recoverable (the cursor
+never advanced past the affected rows).
+
+**Fix** — the engine implementation is broken: it must write a complete Parquet file (including
+the footer) to the temp path it was given before resolving `finish()`. The built-in
+`parquetjsEngine` cannot produce this error.

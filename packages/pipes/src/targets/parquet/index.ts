@@ -11,10 +11,4 @@ export {
   type ParquetLeafType,
   type ParquetTable,
 } from './schema.js'
-export {
-  type PublishedSegment,
-  type SegmentRange,
-  type SegmentWriter,
-  finalizeSegmentFile,
-  nextTmpPath,
-} from './segment.js'
+export { type PublishedSegment, type SegmentWriter } from './segment.js'
