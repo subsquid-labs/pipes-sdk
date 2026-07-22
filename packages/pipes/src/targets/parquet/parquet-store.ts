@@ -12,7 +12,6 @@ import {
 import type { ParquetEngine, ParquetTableWriter } from './engine.js'
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import {
-  type Codec,
   type ParquetColumn,
   type ParquetColumns,
   type ParquetLeafType,
@@ -93,13 +92,7 @@ export class ParquetStore {
   // Per-cell type checking is a hot-path cost, so it only runs outside production.
   readonly #validateValues = process.env.NODE_ENV !== 'production'
 
-  constructor(options: {
-    dir: string
-    tables: ParquetTable[]
-    rowGroupSize: number
-    defaultCodec: Codec
-    engine: ParquetEngine
-  }) {
+  constructor(options: { dir: string; tables: ParquetTable[]; engine: ParquetEngine }) {
     this.#engineName = options.engine.name
     for (const table of options.tables) {
       const blockColumn = blockColumnOf(table)
@@ -110,10 +103,7 @@ export class ParquetStore {
         getBlockNumber,
         columns: table.schema,
         dir,
-        tableWriter: options.engine.table(table, {
-          rowGroupSize: options.rowGroupSize,
-          defaultCompression: options.defaultCodec,
-        }),
+        tableWriter: options.engine.table(table),
       })
       this.#buffers.set(table.table, finalizationBuffer<Row>({ getBlockNumber }))
     }

@@ -38,6 +38,17 @@ non-structural contract is minimal: the bytes an engine writes must be real Parq
 (checked at publication) and rows arrive in the documented plain-JS shape (an input
 format, not an honor-system rule).
 
+Encoding options are engine-owned, applying the same principle to configuration. The
+sink consumes neither row-group size nor compression — it only forwarded them, in a
+fixed vocabulary that was simultaneously too wide for some engines (per-column codecs
+a file-level backend must refuse) and too narrow for others (codecs the neutral union
+omits because the parquetjs build lacks them). Each engine factory now declares its
+own option type (`parquetjsEngine({ rowGroupSize, compression })`), typed to what it
+can actually honor, so a capability mismatch on these options is unrepresentable
+rather than refused at runtime. `engine.table(table)` takes no context; the one
+capability gate it retains is per-column `compression` overrides, which live in the
+neutral schema declaration and are refused by engines that cannot honor them.
+
 `settings.engine` takes an engine instance; omitted selects the default parquetjs
 engine. The core entry statically imports `@dsnp/parquetjs`, so the module graph —
 not a runtime loader — enforces its optional-peer status: importing the entry without

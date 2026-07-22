@@ -340,7 +340,7 @@ describe('parquetTarget', () => {
         parquetTarget({
           dir,
           tables: [BLOCKS_TABLE],
-          settings: { rollover: { maxBytes: 1 }, rowGroupSize: 1 },
+          settings: { rollover: { maxBytes: 1 }, engine: parquetjsEngine({ rowGroupSize: 1 }) },
           onData: insertBlocks,
         }),
       )
@@ -577,7 +577,7 @@ describe('parquetTarget', () => {
         parquetTarget({
           dir,
           tables: [BLOCKS_TABLE, sparseTable],
-          settings: { rollover: { maxBytes: 1 }, rowGroupSize: 1 },
+          settings: { rollover: { maxBytes: 1 }, engine: parquetjsEngine({ rowGroupSize: 1 }) },
           onData: ({ store, data }) => {
             insertBlocks({ store, data })
             const rows = data.filter((b) => b.number === 1 || b.number === 6)
@@ -886,7 +886,7 @@ describe('parquetTarget', () => {
         parquetTarget({
           dir,
           tables: [BLOCKS_TABLE],
-          settings: { rollover: { maxBytes: 1 }, rowGroupSize: 1 },
+          settings: { rollover: { maxBytes: 1 }, engine: parquetjsEngine({ rowGroupSize: 1 }) },
           onData: ({ store, data }) => {
             // Every row keyed at block 1 (an aggregate re-stamped to an already-final block), so
             // rows keep releasing while the boundary cursor stays pinned at 1.
@@ -913,9 +913,7 @@ describe('parquetTarget', () => {
       return new ParquetStore({
         dir,
         tables: [BLOCKS_TABLE],
-        rowGroupSize: 100,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 100 }),
       })
     }
 
@@ -1034,7 +1032,7 @@ describe('parquetTarget', () => {
         parquetTarget({
           dir,
           tables: [BLOCKS_TABLE, emptyTable],
-          settings: { rollover: { maxBytes: 1 }, rowGroupSize: 1 },
+          settings: { rollover: { maxBytes: 1 }, engine: parquetjsEngine({ rowGroupSize: 1 }) },
           onData: insertBlocks,
         }),
       )

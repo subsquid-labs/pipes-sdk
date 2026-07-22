@@ -1,27 +1,5 @@
-import type { Codec, ParquetTable } from './schema.js'
+import type { ParquetTable } from './schema.js'
 import type { SegmentWriter } from './segment.js'
-
-/**
- * Resolved per-table write settings every engine receives. Both are *encoding requests*, not
- * target invariants: the target's correctness (naming, durability, recovery) never depends on
- * them. An engine should honor them at least approximately, and must refuse (throw from
- * `table()`) a declaration it cannot honor rather than silently ignore it.
- */
-export type ParquetTableContext = {
-  /**
-   * Rows per row group — a row count, not bytes. Writer-side it is the in-memory flush
-   * threshold (how many rows are buffered before a row group is encoded to disk), reader-side
-   * the pruning granularity. It is how users bound an engine's staging memory.
-   */
-  rowGroupSize: number
-  /**
-   * Compression codec for columns that do not declare their own — the resolved
-   * `settings.compression` default. Individual columns may override it via
-   * `column.compression` in the declared schema; an engine limited to one file-level codec
-   * (e.g. DuckDB's COPY) must throw from `table()` when a column declares an override.
-   */
-  defaultCompression: Codec
-}
 
 /** Per-table handle created once at target startup; creates one writer per segment file. */
 export interface ParquetTableWriter {
@@ -47,6 +25,14 @@ export interface ParquetTableWriter {
  * target also verifies the finished file's Parquet magic bytes before publishing it, so a
  * non-Parquet output fails loudly at the checkpoint instead of reaching downstream readers.
  *
+ * **Encoding options belong to the engine, not the target.** Row-group size, compression and
+ * any backend tuning are declared by each engine's own factory (`parquetjsEngine({...})`,
+ * `duckdbEngine({...})`) and typed to what that engine can actually do — the target neither
+ * consumes nor forwards them, so an engine can never be asked for an encoding it cannot
+ * honor. The one capability gate left is {@link table}: the declared schema may carry
+ * per-column `compression` overrides from the neutral model, and an engine that cannot honor
+ * a declaration must throw there rather than silently ignore it.
+ *
  * The SDK's declared schema model ({@link ParquetTable}) plus the plain-JS row contract (see
  * the `ParquetLeafType` JSDoc) is the complete input: `LIST` cells arrive as plain arrays,
  * `STRUCT` cells as plain objects, and any library-specific schema or row reshaping happens
@@ -58,7 +44,8 @@ export interface ParquetEngine {
   /**
    * Called once per declared table at target construction, after the model-level schema
    * validation. Validate engine capability limits here (throw `ParquetTargetError` for
-   * declarations this engine cannot honor) and return the table's segment-writer factory.
+   * declarations this engine cannot honor — e.g. per-column `compression` overrides on a
+   * backend with one file-level codec) and return the table's segment-writer factory.
    */
-  table(table: ParquetTable, context: ParquetTableContext): ParquetTableWriter
+  table(table: ParquetTable): ParquetTableWriter
 }

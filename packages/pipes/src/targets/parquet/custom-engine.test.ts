@@ -20,8 +20,8 @@ import { parquetTarget } from './parquet-target.js'
 function jsonEngine(calls: string[]): ParquetEngine {
   return {
     name: 'json-test',
-    table(table, context) {
-      calls.push(`table:${table.table}:rowGroupSize=${context.rowGroupSize}:compression=${context.defaultCompression}`)
+    table(table) {
+      calls.push(`table:${table.table}`)
 
       return {
         createSegment(tmpPath) {
@@ -120,8 +120,9 @@ describe('parquetTarget with a custom engine', () => {
       }),
     )
 
-    // table() received the declared table plus resolved defaults, once, at construction.
-    expect(calls).toEqual(['table:blocks:rowGroupSize=100000:compression=SNAPPY'])
+    // table() received the declared table, once, at construction. Encoding options are the
+    // engine's own business (its factory), so no context travels across the seam.
+    expect(calls).toEqual(['table:blocks'])
 
     // Only the finalized rows (1-3) published; the file is named by the target for the coverage
     // window — from the configured start (0) to the finalized boundary (3). The engine never saw

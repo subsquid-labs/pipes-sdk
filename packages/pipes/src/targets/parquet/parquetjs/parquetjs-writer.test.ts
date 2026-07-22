@@ -41,10 +41,10 @@ describe('parquetjsEngine', () => {
   })
 
   it('round-trips plain rows (LIST cells as plain arrays) through a finished segment', async () => {
-    const engine = parquetjsEngine()
+    const engine = parquetjsEngine({ rowGroupSize: 100 })
     expect(engine.name).toBe('parquetjs')
 
-    const tableWriter = engine.table(TRANSFERS, { rowGroupSize: 100, defaultCompression: 'SNAPPY' })
+    const tableWriter = engine.table(TRANSFERS)
 
     const tmpPath = path.join(dir, 'transfers', '.tmp-000000.parquet')
     const writer = tableWriter.createSegment(tmpPath)
@@ -67,7 +67,7 @@ describe('parquetjsEngine', () => {
 
   it('finish() with no appended rows still writes a real, readable schema-only file', async () => {
     // Tail closing claims a window a table produced nothing in — the zero-row contract.
-    const tableWriter = parquetjsEngine().table(TRANSFERS, { rowGroupSize: 100, defaultCompression: 'SNAPPY' })
+    const tableWriter = parquetjsEngine({ rowGroupSize: 100 }).table(TRANSFERS)
 
     const tmpPath = path.join(dir, 'transfers', '.tmp-empty.parquet')
     const writer = tableWriter.createSegment(tmpPath)
@@ -80,7 +80,7 @@ describe('parquetjsEngine', () => {
   })
 
   it('reuses the compiled library schema across successive segments', async () => {
-    const tableWriter = parquetjsEngine().table(TRANSFERS, { rowGroupSize: 100, defaultCompression: 'SNAPPY' })
+    const tableWriter = parquetjsEngine({ rowGroupSize: 100 }).table(TRANSFERS)
 
     const firstPath = path.join(dir, 'transfers', '.tmp-first.parquet')
     const first = tableWriter.createSegment(firstPath)
