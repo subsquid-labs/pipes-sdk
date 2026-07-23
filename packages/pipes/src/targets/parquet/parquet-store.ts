@@ -301,6 +301,17 @@ export class ParquetStore {
     const tables = options.tables ?? (options.closeTails ? this.tablesOwingCoverage(to) : [...this.#segments.keys()])
 
     for (const table of tables) {
+      // A declared table always has a config; checking it first keeps the two failure modes of a
+      // caller-supplied `tables` entry distinct — unknown table vs. declared-but-never-seeded.
+      const config = this.#configs.get(table)
+      if (config === undefined) {
+        throw new ParquetTargetError(
+          PARQUET_ERROR_CODES.UNREGISTERED_TABLE,
+          `Internal: publishAll() was asked to publish table '${table}', which is not declared. ` +
+            `Declared tables: ${[...this.#configs.keys()].sort().join(', ')}.`,
+        )
+      }
+
       const from = this.#coverageStart.get(table)
       if (from === undefined) {
         throw new ParquetTargetError(
@@ -316,7 +327,6 @@ export class ParquetStore {
       const open = this.#segments.get(table)
       if (!open && !options.closeTails) continue
 
-      const config = this.#configs.get(table)!
       const segment = open ?? this.#getOrCreateSegment(table, config)
 
       // The engine only completes the temp file; the publish tail — magic-bytes check, fsync,
