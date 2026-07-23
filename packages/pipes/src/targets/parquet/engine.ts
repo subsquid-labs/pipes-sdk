@@ -1,43 +1,42 @@
-import type { Codec, ParquetTable } from './schema.js'
+import type { ParquetTable } from './schema.js'
 import type { SegmentWriter } from './segment.js'
-
-/** Resolved per-table write settings every engine receives. */
-export type ParquetTableContext = {
-  /** The table's output directory (`<dir>/<table>`), created by the state layer before writes. */
-  dir: string
-  /** Rows per row group. */
-  rowGroupSize: number
-  /** File-level default compression codec. */
-  codec: Codec
-}
 
 /** Per-table handle created once at target startup; creates one writer per segment file. */
 export interface ParquetTableWriter {
-  /** Creates the writer for this table's NEXT segment file. Called once per file rotation. */
-  createSegment(): SegmentWriter
+  /**
+   * Creates the writer for one segment file, writing to `tmpPath` — a target-chosen temp path
+   * inside the table's output directory. Called once per file rotation. A segment may finish
+   * with **zero rows appended** (tail closing claims a window the table produced nothing in),
+   * so `finish()` must produce a valid schema-only Parquet file even if `append` never ran.
+   */
+  createSegment(tmpPath: string): SegmentWriter
 }
 
 /**
  * A pluggable segment-writer engine for `parquetTarget`.
  *
  * The target owns everything around the writer — staging, finalization buffering, rotation
- * triggers, coverage tracking, checkpointing, crash recovery, fork handling and metrics. An
- * engine owns exactly one thing: turning finalized rows into a Parquet file on disk. The SDK's
- * declared schema model ({@link ParquetTable}) plus the plain-JS row contract (see the
- * `ParquetLeafType` JSDoc) is the complete input; engines translate both to their native
- * representation internally, so there is no engine-specific schema mechanism at the API surface.
+ * triggers, coverage tracking, temp-file naming, publication (fsync → collision check → atomic
+ * rename → dir fsync), checkpointing, crash recovery, fork handling and metrics. An engine owns
+ * exactly one thing: writing finalized rows into a Parquet file at the temp path it is given.
+ * It never names, renames, fsyncs or deletes files, and it never sees a block number or
+ * coverage window — published files are named for the window the pipe processed, which only
+ * the target knows — so naming, durability and recovery semantics cannot vary per engine. The
+ * target also verifies the finished file's Parquet magic bytes before publishing it, so a
+ * non-Parquet output fails loudly at the checkpoint instead of reaching downstream readers.
  *
- * Implementations MUST:
- * - produce real Parquet files — downstream readers rely on it;
- * - name segment temp files via `nextTmpPath` (startup recovery deletes `.tmp-*` files);
- * - publish through `finalizeSegmentFile` (fsync → collision check → atomic rename → dir
- *   fsync), the durability tail that checkpoints depend on, named for the coverage window the
- *   store passes to `publish(range)` — never for the rows' own block numbers;
- * - publish a valid (schema-only) Parquet file even with **zero appended rows** — tail closing
- *   claims a table's final window with an empty segment;
- * - keep `table()` synchronous and cheap;
- * - accept rows in the plain-JS shape (`LIST` cells are plain arrays, `STRUCT` cells plain
- *   objects) — any library-specific row reshaping happens inside the engine.
+ * **Encoding options belong to the engine, not the target.** Row-group size, compression and
+ * any backend tuning are declared by each engine's own factory (`parquetjsEngine({...})`,
+ * `duckdbEngine({...})`) and typed to what that engine can actually do — the target neither
+ * consumes nor forwards them, so an engine can never be asked for an encoding it cannot
+ * honor. The one capability gate left is {@link table}: the declared schema may carry
+ * per-column `compression` overrides from the neutral model, and an engine that cannot honor
+ * a declaration must throw there rather than silently ignore it.
+ *
+ * The SDK's declared schema model ({@link ParquetTable}) plus the plain-JS row contract (see
+ * the `ParquetLeafType` JSDoc) is the complete input: `LIST` cells arrive as plain arrays,
+ * `STRUCT` cells as plain objects, and any library-specific schema or row reshaping happens
+ * inside the engine — there is no engine-specific schema mechanism at the API surface.
  */
 export interface ParquetEngine {
   /** Engine name, used in logs and error messages. */
@@ -45,7 +44,8 @@ export interface ParquetEngine {
   /**
    * Called once per declared table at target construction, after the model-level schema
    * validation. Validate engine capability limits here (throw `ParquetTargetError` for
-   * declarations this engine cannot honor) and return the table's segment-writer factory.
+   * declarations this engine cannot honor — e.g. per-column `compression` overrides on a
+   * backend with one file-level codec) and return the table's segment-writer factory.
    */
-  table(table: ParquetTable, context: ParquetTableContext): ParquetTableWriter
+  table(table: ParquetTable): ParquetTableWriter
 }

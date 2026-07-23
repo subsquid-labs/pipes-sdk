@@ -39,9 +39,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [bytesTable],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
       expect.assertions(1)
       try {
@@ -55,9 +53,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [BLOCKS_TABLE],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
       expect.assertions(1)
       try {
@@ -71,9 +67,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [bytesTable],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
       expect(() => store.insert('t', [{ blockNumber: 1n, raw: Buffer.from('deadbeef', 'hex') }])).not.toThrow()
     })
@@ -92,9 +86,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [stampsTable],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
       expect(() =>
         store.insert('stamps', [
@@ -114,9 +106,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [stampsTable],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
       // 19723.5: not whole days; -1: the library rejects negatives; 1704067200000: epoch millis
       // passed by mistake (would crash the int32 encoder at flush time); pre-1970 Date: the
@@ -136,9 +126,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [stampsTable],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
       const circular: Record<string, unknown> = {}
       circular['self'] = circular
@@ -168,9 +156,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [nestedTable],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
       expect(() =>
         store.insert('n', [
@@ -185,9 +171,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [nestedTable],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
       // [row, expected message fragment]: scalar where a struct object is expected; missing
       // required nested field; non-array LIST; null element under a required element decl;
@@ -214,9 +198,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [nestedTable],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
       // The writer shreds structs via `value[field]`, so Map/Set entries read as undefined:
       // required fields fail with a misleading "required but undefined" and optional fields
@@ -237,9 +219,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [nestedTable],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
       // Both expose their fields to property access, so they write correctly — the STRUCT
       // check must not tighten to a prototype test that would reject them.
@@ -263,9 +243,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [BLOCKS_TABLE, other],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
 
       // `blocks` owes an earlier window (start 5) while this run resumes at 7; `other` was declared
@@ -286,9 +264,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [BLOCKS_TABLE],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
 
       store.seedCoverage({ blocks: value }, 7)
@@ -301,9 +277,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [BLOCKS_TABLE],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
       store.seedCoverage(undefined, 0, [
         { from: 0, to: 1 },
@@ -327,9 +301,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [BLOCKS_TABLE],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
       store.seedCoverage(undefined, 0)
       const stuck = { finalized: { number: 1, hash: '0x1' }, rollbackChain: [] }
@@ -359,9 +331,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [BLOCKS_TABLE, other],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
       store.seedCoverage(undefined, 0)
 
@@ -383,9 +353,7 @@ describe('ParquetStore', () => {
       const store = new ParquetStore({
         dir,
         tables: [BLOCKS_TABLE],
-        rowGroupSize: 1,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
       })
       store.insert('blocks', [{ blockNumber: 1, hash: '0x1', timestamp: 1 }])
       await store.flushBatch({ finalized: { number: 1, hash: '0x1' }, rollbackChain: [] })

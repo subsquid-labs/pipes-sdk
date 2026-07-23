@@ -21,16 +21,18 @@ platform-built dependency in the SDK.
 
 The SDK ships exactly one engine — parquetjs — and stays engine-agnostic behind the
 ADR-18 seam. The DuckDB engine is maintained by its consumer (the GFS pipeline's
-`@pipeline/core`), implementing the public `ParquetEngine` contract and reusing the
-shared segment toolkit, with no SDK involvement. The engine-comparison benchmark
+`@pipeline/core`), implementing the public `ParquetEngine` contract — writing each
+segment at the sink-assigned temp path, with naming, verification and publication
+staying sink-side per ADR-18 — with no SDK involvement. The engine-comparison benchmark
 harness, its reports, and the extracted engine source are archived with the consumer
 (`sqd/360/google/parquet-engine-benchmarks/`).
 
 ## Consequences
 
 The SDK carries no native optional dependency and no duckdb-specific error code
-(E2316 retired, number unassigned). The seam is the compatibility contract: changes
-to `ParquetEngine`, `SegmentWriter` or the segment toolkit are breaking for external
-engines and must be versioned accordingly. DuckDB-specific behaviors
+(its per-column-compression check moved out with the engine; E2318–E2319 retired,
+numbers unassigned). The seam is the compatibility contract: changes to
+`ParquetEngine` or `SegmentWriter` are breaking for external engines and must be
+versioned accordingly. DuckDB-specific behaviors
 (estimate-based byte rotation, single file-level codec, publish-time JS-thread
 stalls) are documented where the engine lives.

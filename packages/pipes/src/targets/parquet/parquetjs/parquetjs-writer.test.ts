@@ -40,22 +40,22 @@ describe('parquetjsEngine', () => {
     await rm(dir, { recursive: true, force: true })
   })
 
-  it('round-trips plain rows (LIST cells as plain arrays) through a published segment', async () => {
-    const engine = parquetjsEngine()
+  it('round-trips plain rows (LIST cells as plain arrays) through a finished segment', async () => {
+    const engine = parquetjsEngine({ rowGroupSize: 100 })
     expect(engine.name).toBe('parquetjs')
 
-    const tableDir = path.join(dir, 'transfers')
-    const tableWriter = engine.table(TRANSFERS, { dir: tableDir, rowGroupSize: 100, codec: 'SNAPPY' })
+    const tableWriter = engine.table(TRANSFERS)
 
-    const writer = tableWriter.createSegment()
-    await writer.appendRow({ blockNumber: 1, to: '0xa', tags: ['x', 'y'] })
-    await writer.appendRow({ blockNumber: 2, to: '0xb', tags: ['z'] })
-    const published = await writer.publish({ from: 1, to: 2 })
+    const tmpPath = path.join(dir, 'transfers', '.tmp-000000.parquet')
+    const writer = tableWriter.createSegment(tmpPath)
+    await writer.append([
+      { blockNumber: 1, to: '0xa', tags: ['x', 'y'] },
+      { blockNumber: 2, to: '0xb', tags: ['z'] },
+    ])
+    await writer.finish()
 
-    expect(published.path).toBe(path.join(tableDir, '000000000001-000000000002.parquet'))
-    expect(published.rows).toBe(2)
-
-    const rows = await readAllRows(published.path)
+    // The engine wrote a complete Parquet file exactly at the target-assigned temp path.
+    const rows = await readAllRows(tmpPath)
     expect(rows.map((r) => [r['blockNumber'], r['to']])).toEqual([
       [1n, '0xa'],
       [2n, '0xb'],
@@ -65,19 +65,34 @@ describe('parquetjsEngine', () => {
     expect(rows[0]?.['tags']).toEqual({ list: [{ element: 'x' }, { element: 'y' }] })
   })
 
+  it('finish() with no appended rows still writes a real, readable schema-only file', async () => {
+    // Tail closing claims a window a table produced nothing in — the zero-row contract.
+    const tableWriter = parquetjsEngine({ rowGroupSize: 100 }).table(TRANSFERS)
+
+    const tmpPath = path.join(dir, 'transfers', '.tmp-empty.parquet')
+    const writer = tableWriter.createSegment(tmpPath)
+    await writer.finish()
+
+    const reader = await ParquetReader.openFile(tmpPath)
+    expect(Number(reader.getRowCount())).toBe(0)
+    expect(reader.getSchema().fieldList.length).toBeGreaterThan(0)
+    await reader.close()
+  })
+
   it('reuses the compiled library schema across successive segments', async () => {
-    const tableDir = path.join(dir, 'transfers')
-    const tableWriter = parquetjsEngine().table(TRANSFERS, { dir: tableDir, rowGroupSize: 100, codec: 'SNAPPY' })
+    const tableWriter = parquetjsEngine({ rowGroupSize: 100 }).table(TRANSFERS)
 
-    const first = tableWriter.createSegment()
-    await first.appendRow({ blockNumber: 1, to: '0xa', tags: [] })
-    await first.publish({ from: 1, to: 1 })
+    const firstPath = path.join(dir, 'transfers', '.tmp-first.parquet')
+    const first = tableWriter.createSegment(firstPath)
+    await first.append([{ blockNumber: 1, to: '0xa', tags: [] }])
+    await first.finish()
 
-    const second = tableWriter.createSegment()
-    await second.appendRow({ blockNumber: 2, to: '0xb', tags: [] })
-    const published = await second.publish({ from: 2, to: 2 })
+    const secondPath = path.join(dir, 'transfers', '.tmp-second.parquet')
+    const second = tableWriter.createSegment(secondPath)
+    await second.append([{ blockNumber: 2, to: '0xb', tags: [] }])
+    await second.finish()
 
-    expect(published.path).toBe(path.join(tableDir, '000000000002-000000000002.parquet'))
-    expect((await readAllRows(published.path)).length).toBe(1)
+    expect((await readAllRows(firstPath)).length).toBe(1)
+    expect((await readAllRows(secondPath)).length).toBe(1)
   })
 })

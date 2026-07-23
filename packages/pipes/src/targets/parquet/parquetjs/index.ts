@@ -1,1 +1,1 @@
-export { parquetjsEngine } from './parquetjs-engine.js'
+export { type ParquetjsEngineOptions, parquetjsEngine } from './parquetjs-engine.js'

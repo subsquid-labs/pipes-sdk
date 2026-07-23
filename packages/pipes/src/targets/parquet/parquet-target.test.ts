@@ -16,6 +16,7 @@ import { parquetTarget } from './parquet-target.js'
 import { parquetjsEngine } from './parquetjs/parquetjs-engine.js'
 import { ParquetSegmentWriter } from './parquetjs/parquetjs-writer.js'
 import type { ParquetTable } from './schema.js'
+import { finalizeSegmentFile } from './segment.js'
 
 // ---------------------------------------------------------------------------------------------
 // Helpers
@@ -339,7 +340,7 @@ describe('parquetTarget', () => {
         parquetTarget({
           dir,
           tables: [BLOCKS_TABLE],
-          settings: { rollover: { maxBytes: 1 }, rowGroupSize: 1 },
+          settings: { rollover: { maxBytes: 1 }, engine: parquetjsEngine({ rowGroupSize: 1 }) },
           onData: insertBlocks,
         }),
       )
@@ -576,7 +577,7 @@ describe('parquetTarget', () => {
         parquetTarget({
           dir,
           tables: [BLOCKS_TABLE, sparseTable],
-          settings: { rollover: { maxBytes: 1 }, rowGroupSize: 1 },
+          settings: { rollover: { maxBytes: 1 }, engine: parquetjsEngine({ rowGroupSize: 1 }) },
           onData: ({ store, data }) => {
             insertBlocks({ store, data })
             const rows = data.filter((b) => b.number === 1 || b.number === 6)
@@ -885,7 +886,7 @@ describe('parquetTarget', () => {
         parquetTarget({
           dir,
           tables: [BLOCKS_TABLE],
-          settings: { rollover: { maxBytes: 1 }, rowGroupSize: 1 },
+          settings: { rollover: { maxBytes: 1 }, engine: parquetjsEngine({ rowGroupSize: 1 }) },
           onData: ({ store, data }) => {
             // Every row keyed at block 1 (an aggregate re-stamped to an already-final block), so
             // rows keep releasing while the boundary cursor stays pinned at 1.
@@ -912,9 +913,7 @@ describe('parquetTarget', () => {
       return new ParquetStore({
         dir,
         tables: [BLOCKS_TABLE],
-        rowGroupSize: 100,
-        defaultCodec: 'SNAPPY',
-        engine: parquetjsEngine(),
+        engine: parquetjsEngine({ rowGroupSize: 100 }),
       })
     }
 
@@ -1033,7 +1032,7 @@ describe('parquetTarget', () => {
         parquetTarget({
           dir,
           tables: [BLOCKS_TABLE, emptyTable],
-          settings: { rollover: { maxBytes: 1 }, rowGroupSize: 1 },
+          settings: { rollover: { maxBytes: 1 }, engine: parquetjsEngine({ rowGroupSize: 1 }) },
           onData: insertBlocks,
         }),
       )
@@ -1177,113 +1176,164 @@ describe('parquetTarget', () => {
   })
 
   describe('ParquetSegmentWriter', () => {
-    it('lazy-opens, tracks rowCount, and names the file for the coverage range it is given', async () => {
+    it('lazy-opens, grows the temp file, and finish() completes a readable Parquet file', async () => {
       const segDir = path.join(dir, 'seg')
       await mkdir(segDir, { recursive: true })
       const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
 
-      const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
-      expect(writer.isOpen).toBe(false)
+      const tmpPath = path.join(segDir, '.tmp-writer.parquet')
+      const writer = new ParquetSegmentWriter({ tmpPath, schema, rowGroupSize: 1 })
       expect(await writer.size()).toBe(0)
 
-      await writer.appendRow({ blockNumber: 5 })
-      await writer.appendRow({ blockNumber: 8 })
-      expect(writer.isOpen).toBe(true)
-      expect(writer.rowCount).toBe(2)
+      await writer.append([{ blockNumber: 5 }, { blockNumber: 8 }])
       expect(await writer.size()).toBeGreaterThan(0)
 
+      await writer.finish()
+      const reader = await ParquetReader.openFile(tmpPath)
+      expect(Number(reader.getRowCount())).toBe(2)
+      await reader.close()
+    })
+
+    it('finish() with no appended rows writes a real, schema-only file (tail closing)', async () => {
+      const segDir = path.join(dir, 'seg')
+      await mkdir(segDir, { recursive: true })
+      const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
+
+      const tmpPath = path.join(segDir, '.tmp-empty.parquet')
+      const writer = new ParquetSegmentWriter({ tmpPath, schema, rowGroupSize: 1 })
+      await writer.finish()
+
+      const reader = await ParquetReader.openFile(tmpPath)
+      expect(Number(reader.getRowCount())).toBe(0)
+      expect(reader.getSchema().fieldList.length).toBe(1)
+      await reader.close()
+    })
+
+    it('abort() releases the stream and is safe to call twice', async () => {
+      // Exercises the error-path fd cleanup: destroy the owned stream, idempotently, with no throw.
+      // Deleting the temp file is the target's job, not the writer's.
+      const segDir = path.join(dir, 'seg')
+      await mkdir(segDir, { recursive: true })
+      const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
+
+      const writer = new ParquetSegmentWriter({
+        tmpPath: path.join(segDir, '.tmp-abort.parquet'),
+        schema,
+        rowGroupSize: 1,
+      })
+      await writer.append([{ blockNumber: 1 }])
+      await writer.abort()
+      await writer.abort()
+    })
+  })
+
+  describe('finalizeSegmentFile', () => {
+    /** Writes a finished single-column segment at `tmpPath` via the parquetjs writer. */
+    async function writeSegment(tmpPath: string, blockNumbers: number[]): Promise<void> {
+      const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
+      const writer = new ParquetSegmentWriter({ tmpPath, schema, rowGroupSize: 1 })
+      if (blockNumbers.length > 0) await writer.append(blockNumbers.map((blockNumber) => ({ blockNumber })))
+      await writer.finish()
+    }
+
+    it('names the file for the coverage range, not the rows inside it', async () => {
+      const segDir = path.join(dir, 'seg')
+      await mkdir(segDir, { recursive: true })
+
       // Rows span 5–8, but the window covered is 2–10: the name follows the window.
-      const published = await writer.publish({ from: 2, to: 10 })
+      const tmpPath = path.join(segDir, '.tmp-pub.parquet')
+      await writeSegment(tmpPath, [5, 8])
+
+      const published = await finalizeSegmentFile({
+        dir: segDir,
+        tmpPath,
+        rows: 2,
+        range: { from: 2, to: 10 },
+        engine: 'test',
+      })
       expect(published.path.endsWith('000000000002-000000000010.parquet')).toBe(true)
       expect(published.rows).toBe(2)
       expect(published.bytes).toBeGreaterThan(0)
-    })
-
-    it('accepts rows keyed outside the window, since the name states coverage not content', async () => {
-      const segDir = path.join(dir, 'seg')
-      await mkdir(segDir, { recursive: true })
-      const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
-
-      const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
-      // An aggregate stamped with its window's first block, emitted while covering a later window.
-      await writer.appendRow({ blockNumber: 1 })
-
-      const published = await writer.publish({ from: 6, to: 10 })
-      expect(published.path.endsWith('000000000006-000000000010.parquet')).toBe(true)
-      expect(published.rows).toBe(1)
+      expect((await readdir(segDir)).sort()).toEqual(['000000000002-000000000010.parquet'])
     })
 
     it('publishes a zero-row segment so a table can claim a window it produced nothing in', async () => {
       const segDir = path.join(dir, 'seg')
       await mkdir(segDir, { recursive: true })
-      const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
 
-      const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
-      expect(writer.isOpen).toBe(false)
+      const tmpPath = path.join(segDir, '.tmp-zero.parquet')
+      await writeSegment(tmpPath, [])
 
-      const published = await writer.publish({ from: 2, to: 4 })
+      const published = await finalizeSegmentFile({
+        dir: segDir,
+        tmpPath,
+        rows: 0,
+        range: { from: 2, to: 4 },
+        engine: 'test',
+      })
       expect(published.path.endsWith('000000000002-000000000004.parquet')).toBe(true)
       expect(published.rows).toBe(0)
 
       // A real, readable Parquet file — schema and footer present, just no rows.
       const reader = await ParquetReader.openFile(published.path)
       expect(Number(reader.getRowCount())).toBe(0)
-      expect(reader.getSchema().fieldList.length).toBe(1)
       await reader.close()
     })
 
     it('refuses an inverted coverage range', async () => {
       const segDir = path.join(dir, 'seg')
       await mkdir(segDir, { recursive: true })
-      const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
 
-      const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
-      await writer.appendRow({ blockNumber: 5 })
+      const tmpPath = path.join(segDir, '.tmp-inv.parquet')
+      await writeSegment(tmpPath, [5])
 
-      await expect(writer.publish({ from: 10, to: 4 })).rejects.toThrowError(/inverted coverage range/)
-      await writer.discard()
-      expect((await readdir(segDir)).filter((f) => f.startsWith('.tmp-'))).toEqual([])
+      await expect(
+        finalizeSegmentFile({ dir: segDir, tmpPath, rows: 1, range: { from: 10, to: 4 }, engine: 'test' }),
+      ).rejects.toThrowError(/inverted coverage range/)
     })
 
     it('refuses to overwrite an existing file (collision)', async () => {
       const segDir = path.join(dir, 'seg')
       await mkdir(segDir, { recursive: true })
-      const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
 
-      const first = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
-      await first.appendRow({ blockNumber: 1 })
-      await first.publish({ from: 0, to: 1 })
+      const firstTmp = path.join(segDir, '.tmp-first.parquet')
+      await writeSegment(firstTmp, [1])
+      await finalizeSegmentFile({ dir: segDir, tmpPath: firstTmp, rows: 1, range: { from: 0, to: 1 }, engine: 'test' })
 
-      const second = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
-      await second.appendRow({ blockNumber: 1 })
-      await expect(second.publish({ from: 0, to: 1 })).rejects.toThrowError(/Refusing to overwrite/)
-      await second.discard()
+      const secondTmp = path.join(segDir, '.tmp-second.parquet')
+      await writeSegment(secondTmp, [1])
+      await expect(
+        finalizeSegmentFile({ dir: segDir, tmpPath: secondTmp, rows: 1, range: { from: 0, to: 1 }, engine: 'test' }),
+      ).rejects.toThrowError(/Refusing to overwrite/)
     })
 
-    it('discard() removes the temp file of an unpublished segment', async () => {
+    it('refuses a finished file that is not Parquet (magic-bytes check)', async () => {
       const segDir = path.join(dir, 'seg')
       await mkdir(segDir, { recursive: true })
-      const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
 
-      const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
-      await writer.appendRow({ blockNumber: 1 })
-      await writer.discard()
+      const tmpPath = path.join(segDir, '.tmp-junk.parquet')
+      await writeFile(tmpPath, 'this is definitely not a parquet file')
 
-      expect((await readdir(segDir)).filter((f) => f.startsWith('.tmp-'))).toEqual([])
+      await expect(
+        finalizeSegmentFile({ dir: segDir, tmpPath, rows: 1, range: { from: 0, to: 1 }, engine: 'test' }),
+      ).rejects.toThrowError(/Parquet magic bytes/)
+      // The junk file was not renamed into a published name.
+      expect((await readdir(segDir)).sort()).toEqual(['.tmp-junk.parquet'])
     })
 
-    it('discard() releases the stream and is safe to call twice', async () => {
-      // Exercises the error-path fd cleanup: destroy the owned stream, idempotently, with no throw.
+    it('refuses arbitrary bytes merely wrapped in the magic (footer length check)', async () => {
       const segDir = path.join(dir, 'seg')
       await mkdir(segDir, { recursive: true })
-      const schema = new ParquetSchema({ blockNumber: { type: 'INT64' } })
 
-      const writer = new ParquetSegmentWriter({ dir: segDir, schema, rowGroupSize: 1 })
-      await writer.appendRow({ blockNumber: 1 })
-      await writer.discard()
-      await writer.discard()
+      // Correct magic at both ends, but the 4 bytes before the trailing magic — the footer
+      // length field — are payload, not a length that fits inside the file.
+      const tmpPath = path.join(segDir, '.tmp-spoof.parquet')
+      await writeFile(tmpPath, 'PAR1this is not a parquet footer PAR1')
 
-      expect((await readdir(segDir)).filter((f) => f.startsWith('.tmp-'))).toEqual([])
+      await expect(
+        finalizeSegmentFile({ dir: segDir, tmpPath, rows: 1, range: { from: 0, to: 1 }, engine: 'test' }),
+      ).rejects.toThrowError(/footer length field/)
+      expect((await readdir(segDir)).sort()).toEqual(['.tmp-spoof.parquet'])
     })
   })
 
