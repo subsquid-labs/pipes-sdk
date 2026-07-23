@@ -478,10 +478,19 @@ cursor claimed by a file.
 ### E2320 · Engine output is not a Parquet file
 
 A segment writer engine (`settings.engine`) finished a segment file that fails the Parquet
-magic-bytes check — the file does not start and end with `PAR1`, or is smaller than any valid
-Parquet file. The target refuses to publish it at the checkpoint, before the file gets a
-published name, so downstream readers never see it and the run is fully recoverable (the cursor
-never advanced past the affected rows).
+envelope check. The refusal names which condition failed:
+
+- the file is smaller than any valid Parquet file (12 bytes);
+- it does not start **and** end with the `PAR1` magic bytes;
+- its footer length field — the little-endian uint32 immediately before the trailing magic —
+  claims a footer that cannot fit inside the file (this is what rejects arbitrary bytes merely
+  wrapped in `PAR1`);
+- or the file could not be opened or read at all during verification.
+
+The target refuses to publish at the checkpoint, before the file gets a published name, so
+downstream readers never see it and the run is fully recoverable (the cursor never advanced
+past the affected rows). This is an envelope check, not a decode: a structurally valid Parquet
+file with wrong contents is beyond it.
 
 **Fix** — the engine implementation is broken: it must write a complete Parquet file (including
 the footer) to the temp path it was given before resolving `finish()`. The built-in

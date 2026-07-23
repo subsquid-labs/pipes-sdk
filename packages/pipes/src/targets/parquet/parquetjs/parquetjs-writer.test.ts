@@ -19,13 +19,17 @@ const TRANSFERS: ParquetTable = {
 
 async function readAllRows(file: string): Promise<Record<string, unknown>[]> {
   const reader = await ParquetReader.openFile(file)
-  const cursor = reader.getCursor()
-  const rows: Record<string, unknown>[] = []
-  let row: Record<string, unknown> | null
-  while ((row = (await cursor.next()) as Record<string, unknown> | null)) rows.push(row)
-  await reader.close()
+  try {
+    const cursor = reader.getCursor()
+    const rows: Record<string, unknown>[] = []
+    let row: Record<string, unknown> | null
+    while ((row = (await cursor.next()) as Record<string, unknown> | null)) rows.push(row)
 
-  return rows
+    return rows
+  } finally {
+    // Close even when iteration throws, so a failing test doesn't leak the fd.
+    await reader.close()
+  }
 }
 
 describe('parquetjsEngine', () => {

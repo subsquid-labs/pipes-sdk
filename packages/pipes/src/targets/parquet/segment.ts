@@ -135,15 +135,24 @@ async function assertParquetMagic(tmpPath: string, engine: string): Promise<void
     )
   }
 
+  const describeError = (error: unknown): string => (error instanceof Error ? error.message : String(error))
+
   let fh: Awaited<ReturnType<typeof fsOpen>>
   try {
     fh = await fsOpen(tmpPath, 'r')
   } catch (error) {
-    return refuse(`the file cannot be opened (${error instanceof Error ? error.message : String(error)})`)
+    return refuse(`the file cannot be opened (${describeError(error)})`)
   }
 
   try {
-    const { size } = await fh.stat()
+    // Every I/O step refuses with the coded error too — a raw FS error here would be just as
+    // much a failed verification, but without the E2320 context the operator acts on.
+    let size: number
+    try {
+      size = (await fh.stat()).size
+    } catch (error) {
+      return refuse(`its size cannot be read (${describeError(error)})`)
+    }
     if (size < PARQUET_MIN_BYTES) {
       return refuse(`the file is ${size} byte(s), smaller than any valid Parquet file`)
     }
@@ -151,8 +160,12 @@ async function assertParquetMagic(tmpPath: string, engine: string): Promise<void
     const head = Buffer.alloc(4)
     // The last 8 bytes: footer metadata length (LE uint32) followed by the trailing magic.
     const tail = Buffer.alloc(8)
-    await fh.read(head, 0, 4, 0)
-    await fh.read(tail, 0, 8, size - 8)
+    try {
+      await fh.read(head, 0, 4, 0)
+      await fh.read(tail, 0, 8, size - 8)
+    } catch (error) {
+      return refuse(`its bytes cannot be read (${describeError(error)})`)
+    }
     if (!head.equals(PARQUET_MAGIC) || !tail.subarray(4).equals(PARQUET_MAGIC)) {
       return refuse('it does not start and end with the Parquet magic bytes (PAR1)')
     }
@@ -164,7 +177,9 @@ async function assertParquetMagic(tmpPath: string, engine: string): Promise<void
       return refuse(`its footer length field claims ${footerLength} byte(s), which cannot fit in a ${size}-byte file`)
     }
   } finally {
-    await fh.close()
+    // Best-effort: the verification verdict (pass or refusal) matters more than a failed close
+    // of a read-only fd.
+    await fh.close().catch(() => {})
   }
 }
 
