@@ -143,7 +143,8 @@ export type TraceCreateActionFields = {
 export type TraceCreateResultFields = {
   gasUsed: bigint
   code?: Hex
-  address: Hex
+  /** `null` on a reverted CREATE — no contract was deployed. */
+  address: Hex | null
 }
 
 export type TraceCallFields = TraceBaseFields & {
@@ -170,9 +171,9 @@ export type TraceSuicideFields = TraceBaseFields & {
 }
 
 export type TraceSuicideActionFields = {
-  address: Hex
+  address: Hex | null
   refundAddress: Hex | null
-  balance: bigint
+  balance: bigint | null
 }
 
 export type TraceRewardFields = TraceBaseFields & {
@@ -611,7 +612,7 @@ const TraceCreateActionShape: ObjectValidatorShape<TraceCreateActionFields> = {
 const TraceCreateResultShape: ObjectValidatorShape<TraceCreateResultFields> = {
   gasUsed: QTY,
   code: option(BYTES),
-  address: BYTES,
+  address: nullable(BYTES),
 }
 
 const TraceCallActionShape: ObjectValidatorShape<TraceCallActionFields> = {
@@ -630,9 +631,9 @@ const TraceCallResultShape: ObjectValidatorShape<TraceCallResultFields> = {
 }
 
 const TraceSuicideActionShape: ObjectValidatorShape<TraceSuicideActionFields> = {
-  address: BYTES,
+  address: nullable(BYTES),
   refundAddress: nullable(BYTES),
-  balance: QTY,
+  balance: nullable(QTY),
 }
 
 const TraceRewardActionShape: ObjectValidatorShape<TraceRewardActionFields> = {
