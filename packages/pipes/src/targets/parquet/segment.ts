@@ -161,8 +161,14 @@ async function assertParquetMagic(tmpPath: string, engine: string): Promise<void
     // The last 8 bytes: footer metadata length (LE uint32) followed by the trailing magic.
     const tail = Buffer.alloc(8)
     try {
-      await fh.read(head, 0, 4, 0)
-      await fh.read(tail, 0, 8, size - 8)
+      // A short read (a concurrently truncated file) leaves the zero-filled buffers partially
+      // unwritten — zeros can never pass the magic check, so no false accept is possible, but
+      // checking bytesRead names the actual problem instead of a misleading magic mismatch.
+      const headRead = await fh.read(head, 0, 4, 0)
+      const tailRead = await fh.read(tail, 0, 8, size - 8)
+      if (headRead.bytesRead !== 4 || tailRead.bytesRead !== 8) {
+        return refuse(`it changed size while being verified (short read at ${size} bytes)`)
+      }
     } catch (error) {
       return refuse(`its bytes cannot be read (${describeError(error)})`)
     }
