@@ -13,15 +13,14 @@ import {
   humanBytes,
 } from '~/core/index.js'
 
+import type { ParquetEngine } from './engine.js'
 import { ParquetState } from './parquet-state.js'
 import { ParquetStore } from './parquet-store.js'
-import { type Codec, type ParquetTable, validateTables } from './schema.js'
+import { parquetjsEngine } from './parquetjs/parquetjs-engine.js'
+import { type ParquetTable, validateTables } from './schema.js'
 
 /** Default rollover byte size — 128 MiB is a good Parquet file size for data-lake query engines. */
 const DEFAULT_MAX_BYTES = 128 * 1024 * 1024
-/** Default rows per row group — the in-memory "split size" that bounds writer memory. */
-const DEFAULT_ROW_GROUP_SIZE = 100_000
-const DEFAULT_CODEC: Codec = 'SNAPPY'
 
 export type ParquetRollover = {
   /** Soft byte cap per file — checked at each batch boundary, so a huge batch can overshoot. Default 128 MiB. */
@@ -36,10 +35,21 @@ export type ParquetRollover = {
 
 export type ParquetSettings = {
   rollover?: ParquetRollover
-  /** Rows per row group — bounds writer memory. Default 100_000. */
-  rowGroupSize?: number
-  /** Default per-column compression. Default `'SNAPPY'`. */
-  compression?: Codec
+  /**
+   * Segment writer engine. Omitted → the default `parquetjsEngine()`, the SDK's only
+   * built-in. Pass any {@link ParquetEngine} implementation to swap the writer: an engine
+   * translates the declared schema and plain-JS rows privately and writes each segment file
+   * at a temp path the target assigns; the target names files for their coverage window,
+   * verifies engine output (Parquet magic bytes) and owns publication, so naming, durability
+   * and crash recovery are engine-invariant by construction (see `engine.ts` for the full
+   * contract).
+   *
+   * Encoding options (row-group size, compression, backend tuning) are engine-owned: pass
+   * them to the engine's factory — `parquetjsEngine({ rowGroupSize, compression })` — where
+   * they are typed to what that engine can actually do. The target neither consumes nor
+   * forwards them.
+   */
+  engine?: ParquetEngine
   /**
    * Namespace for the state file, so multiple pipes can share one `dir`. Defaults to the
    * pipe's source `id`; set explicitly only to pin the state file independent of the source id.
@@ -73,9 +83,12 @@ type ParquetTargetMetrics = {
  * reorg drops and recomputes it cleanly.
  *
  * **Constant memory.** Finalized rows stream straight to a temp file and the file rotates by byte
- * size, so a multi-gigabyte finalized backfill never lands wholly in RAM (`@dsnp/parquetjs`
- * flushes row groups to disk incrementally — verified by the Step 0 spike). `rowGroupSize` bounds
- * the writer's in-memory buffer.
+ * size, so a multi-gigabyte finalized backfill never lands wholly in RAM (the default parquetjs
+ * engine flushes row groups to disk incrementally — verified by the Step 0 spike — with its
+ * `rowGroupSize` factory option bounding the in-memory buffer; alternative engines own their
+ * staging bounds through their own factory options). For an engine whose byte reporting is
+ * estimated rather than measured, `rollover.maxRows` is an exact, engine-independent backstop —
+ * the target counts appended rows itself.
  *
  * **Coverage-named files.** Files are named `<from>-<to>.parquet` for the block window they
  * **cover** — the window the pipe processed — not for the min/max block of the rows inside. Within
@@ -137,12 +150,14 @@ export function parquetTarget<T>(options: {
 
   validateTables(tables)
 
-  const rowGroupSize = settings.rowGroupSize ?? DEFAULT_ROW_GROUP_SIZE
-  const defaultCodec = settings.compression ?? DEFAULT_CODEC
+  // The store constructor runs the engine's per-table capability checks at construction,
+  // so config mistakes surface at startup, not deep in the first batch.
+  const engine = settings.engine ?? parquetjsEngine()
+
   const maxBytes = settings.rollover?.maxBytes ?? DEFAULT_MAX_BYTES
   const { maxRows, intervalMs, intervalBlocks } = settings.rollover ?? {}
 
-  const store = new ParquetStore({ dir, tables, rowGroupSize, defaultCodec })
+  const store = new ParquetStore({ dir, tables, engine })
 
   return createTarget<T>({
     write: async ({ read, logger, id }) => {

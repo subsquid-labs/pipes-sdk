@@ -12,8 +12,8 @@
  *     already-finalized range, so every row is written immediately; on a live `from: 'latest'`
  *     range the unfinalized tail is held in memory until it finalizes.
  *   - **Constant memory.** Rows stream to a temp file that rotates by byte size
- *     (`rollover.maxBytes`), so a multi-GB backfill never lands wholly in RAM. `rowGroupSize`
- *     bounds the writer's in-memory buffer.
+ *     (`rollover.maxBytes`), so a multi-GB backfill never lands wholly in RAM. The engine's
+ *     `rowGroupSize` factory option bounds the writer's in-memory buffer.
  *   - **Crash-safe.** A durable cursor (`<OUT>/_sqd_parquet_state.json`) advances only at a
  *     checkpoint; on restart, any file above the cursor is dropped and re-fetched.
  *   - **Coverage you can read off the filename.** `<from>-<to>` is the window the file covers,
@@ -41,7 +41,7 @@
  */
 
 import { commonAbis, evmEventDecoder, evmPortalStream } from '@subsquid/pipes/evm'
-import { parquetTarget } from '@subsquid/pipes/targets/parquet'
+import { parquetTarget, parquetjsEngine } from '@subsquid/pipes/targets/parquet'
 
 const OUT = process.env['PARQUET_OUT'] ?? './parquet-out'
 
@@ -102,8 +102,10 @@ async function main() {
         // Small cap so the example rotates into several files instead of one big one. Production
         // defaults to 128 MiB. `maxBytes` is a soft cap, checked at each batch boundary.
         rollover: { maxBytes: 8 * 1024 * 1024 },
-        // SNAPPY (the default) is a good speed/ratio tradeoff; GZIP / BROTLI compress harder.
-        compression: 'SNAPPY',
+        // Encoding options belong to the engine (this is the default engine, spelled out to
+        // show where they go). SNAPPY (the default) is a good speed/ratio tradeoff; GZIP /
+        // BROTLI compress harder. `rowGroupSize` (default 100k rows) bounds staging memory.
+        engine: parquetjsEngine({ compression: 'SNAPPY' }),
       },
       onData: ({ store, data, ctx }) => {
         ctx.logger.debug(`batch: ${data.transfers.length} transfers, ${data.approvals.length} approvals`)

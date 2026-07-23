@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { ParquetStore } from './parquet-store.js'
+import { parquetjsEngine } from './parquetjs/parquetjs-engine.js'
 import type { ParquetTable } from './schema.js'
 
 const BLOCKS_TABLE: ParquetTable = {
@@ -35,7 +36,11 @@ describe('ParquetStore', () => {
     }
 
     it('rejects a hex string handed to a BYTE_ARRAY column', () => {
-      const store = new ParquetStore({ dir, tables: [bytesTable], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [bytesTable],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
       expect.assertions(1)
       try {
         store.insert('t', [{ blockNumber: 1, raw: '0xdeadbeef' }])
@@ -45,7 +50,11 @@ describe('ParquetStore', () => {
     })
 
     it('rejects an INT64 number above 2^53 (precision already lost)', () => {
-      const store = new ParquetStore({ dir, tables: [BLOCKS_TABLE], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [BLOCKS_TABLE],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
       expect.assertions(1)
       try {
         store.insert('blocks', [{ blockNumber: 2 ** 53, hash: '0x1', timestamp: 1 }])
@@ -55,7 +64,11 @@ describe('ParquetStore', () => {
     })
 
     it('accepts a Buffer for BYTE_ARRAY and a bigint for INT64', () => {
-      const store = new ParquetStore({ dir, tables: [bytesTable], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [bytesTable],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
       expect(() => store.insert('t', [{ blockNumber: 1n, raw: Buffer.from('deadbeef', 'hex') }])).not.toThrow()
     })
 
@@ -70,7 +83,11 @@ describe('ParquetStore', () => {
     }
 
     it('accepts Date/epoch-millis TIMESTAMP, Date/integer-days/null DATE and JSON-serializable values', () => {
-      const store = new ParquetStore({ dir, tables: [stampsTable], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [stampsTable],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
       expect(() =>
         store.insert('stamps', [
           {
@@ -86,7 +103,11 @@ describe('ParquetStore', () => {
     })
 
     it('rejects fractional, negative, epoch-millis-magnitude and pre-1970 DATE values', () => {
-      const store = new ParquetStore({ dir, tables: [stampsTable], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [stampsTable],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
       // 19723.5: not whole days; -1: the library rejects negatives; 1704067200000: epoch millis
       // passed by mistake (would crash the int32 encoder at flush time); pre-1970 Date: the
       // library truncates toward zero, landing on the wrong day.
@@ -102,7 +123,11 @@ describe('ParquetStore', () => {
     })
 
     it('rejects JSON values the writer cannot serialize (bigint, circular)', () => {
-      const store = new ParquetStore({ dir, tables: [stampsTable], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [stampsTable],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
       const circular: Record<string, unknown> = {}
       circular['self'] = circular
       // The library would crash mid-flush with a context-free "Do not know how to serialize a
@@ -128,7 +153,11 @@ describe('ParquetStore', () => {
     }
 
     it('accepts plain nested objects for STRUCT and plain arrays for LIST', () => {
-      const store = new ParquetStore({ dir, tables: [nestedTable], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [nestedTable],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
       expect(() =>
         store.insert('n', [
           { blockNumber: 1, user: { name: 'alice', age: 30 }, tags: ['a', 'b'] },
@@ -139,7 +168,11 @@ describe('ParquetStore', () => {
     })
 
     it('rejects bad nested values with the offending path in the message', () => {
-      const store = new ParquetStore({ dir, tables: [nestedTable], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [nestedTable],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
       // [row, expected message fragment]: scalar where a struct object is expected; missing
       // required nested field; non-array LIST; null element under a required element decl;
       // wrong element type.
@@ -162,7 +195,11 @@ describe('ParquetStore', () => {
     })
 
     it('rejects Map and Set STRUCT values (entries are invisible to property access)', () => {
-      const store = new ParquetStore({ dir, tables: [nestedTable], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [nestedTable],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
       // The writer shreds structs via `value[field]`, so Map/Set entries read as undefined:
       // required fields fail with a misleading "required but undefined" and optional fields
       // silently write null — reject the container itself instead.
@@ -179,7 +216,11 @@ describe('ParquetStore', () => {
     })
 
     it('accepts class instances and null-prototype objects for STRUCT', () => {
-      const store = new ParquetStore({ dir, tables: [nestedTable], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [nestedTable],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
       // Both expose their fields to property access, so they write correctly — the STRUCT
       // check must not tighten to a prototype test that would reject them.
       class User {
@@ -199,7 +240,11 @@ describe('ParquetStore', () => {
   describe('coverage', () => {
     it('seeds from persisted starts and falls back for tables the state does not mention', () => {
       const other: ParquetTable = { table: 'other', schema: { blockNumber: { type: 'INT64' } } }
-      const store = new ParquetStore({ dir, tables: [BLOCKS_TABLE, other], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [BLOCKS_TABLE, other],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
 
       // `blocks` owes an earlier window (start 5) while this run resumes at 7; `other` was declared
       // after the state was written, so it falls back to where this run does.
@@ -216,7 +261,11 @@ describe('ParquetStore', () => {
       ['negative', -5],
       ['fractional', 2.5],
     ])('ignores a %s persisted start rather than steering the filename with it', (_label, value) => {
-      const store = new ParquetStore({ dir, tables: [BLOCKS_TABLE], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [BLOCKS_TABLE],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
 
       store.seedCoverage({ blocks: value }, 7)
 
@@ -225,7 +274,11 @@ describe('ParquetStore', () => {
 
     it('skips the gap between disjoint ranges when advancing past a publish', async () => {
       await mkdir(path.join(dir, 'blocks'), { recursive: true })
-      const store = new ParquetStore({ dir, tables: [BLOCKS_TABLE], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [BLOCKS_TABLE],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
       store.seedCoverage(undefined, 0, [
         { from: 0, to: 1 },
         { from: 5, to: 6 },
@@ -245,7 +298,11 @@ describe('ParquetStore', () => {
       // released in between — an aggregate keyed back at block 1 — must stay in the open writer:
       // dropping it here would lose them and orphan its temp file.
       await mkdir(path.join(dir, 'blocks'), { recursive: true })
-      const store = new ParquetStore({ dir, tables: [BLOCKS_TABLE], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [BLOCKS_TABLE],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
       store.seedCoverage(undefined, 0)
       const stuck = { finalized: { number: 1, hash: '0x1' }, rollbackChain: [] }
 
@@ -271,7 +328,11 @@ describe('ParquetStore', () => {
       for (const table of ['blocks', 'other']) {
         await mkdir(path.join(dir, table), { recursive: true })
       }
-      const store = new ParquetStore({ dir, tables: [BLOCKS_TABLE, other], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [BLOCKS_TABLE, other],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
       store.seedCoverage(undefined, 0)
 
       store.insert('blocks', [{ blockNumber: 1, hash: '0x1', timestamp: 1 }])
@@ -289,7 +350,11 @@ describe('ParquetStore', () => {
       // The target gets its table dirs from ParquetState.getCursor(); this test drives the store
       // directly, so it has to make them itself.
       await mkdir(path.join(dir, 'blocks'), { recursive: true })
-      const store = new ParquetStore({ dir, tables: [BLOCKS_TABLE], rowGroupSize: 1, defaultCodec: 'SNAPPY' })
+      const store = new ParquetStore({
+        dir,
+        tables: [BLOCKS_TABLE],
+        engine: parquetjsEngine({ rowGroupSize: 1 }),
+      })
       store.insert('blocks', [{ blockNumber: 1, hash: '0x1', timestamp: 1 }])
       await store.flushBatch({ finalized: { number: 1, hash: '0x1' }, rollbackChain: [] })
 

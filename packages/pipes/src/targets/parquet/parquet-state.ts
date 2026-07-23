@@ -5,7 +5,7 @@ import { type BlockCursor, type Logger, type TargetState, formatBlock } from '~/
 
 import { PARQUET_ERROR_CODES, ParquetTargetError } from './errors.js'
 import { fsyncDir, fsyncFile } from './fs-durable.js'
-import { TMP_PREFIX } from './writer.js'
+import { TMP_PREFIX } from './segment.js'
 
 /** Base name of the durable state file living at the root of the output dir. */
 const STATE_BASENAME = '_sqd_parquet_state'

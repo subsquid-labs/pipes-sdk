@@ -474,3 +474,24 @@ furthest block a file could consistently cover from for the resume cursor, it is
 that block and logged as a warning. The usual cause is an edit to the configured query ranges
 (a gap the recorded start referred to no longer exists), and clamping keeps the blocks after the
 cursor claimed by a file.
+
+### E2320 · Engine output is not a Parquet file
+
+A segment writer engine (`settings.engine`) finished a segment file that fails the Parquet
+envelope check. The refusal names which condition failed:
+
+- the file is smaller than any valid Parquet file (12 bytes);
+- it does not start **and** end with the `PAR1` magic bytes;
+- its footer length field — the little-endian uint32 immediately before the trailing magic —
+  claims a footer that cannot fit inside the file (this is what rejects arbitrary bytes merely
+  wrapped in `PAR1`);
+- or the file could not be opened or read at all during verification.
+
+The target refuses to publish at the checkpoint, before the file gets a published name, so
+downstream readers never see it and the run is fully recoverable (the cursor never advanced
+past the affected rows). This is an envelope check, not a decode: a structurally valid Parquet
+file with wrong contents is beyond it.
+
+**Fix** — the engine implementation is broken: it must write a complete Parquet file (including
+the footer) to the temp path it was given before resolving `finish()`. The built-in
+`parquetjsEngine` cannot produce this error.

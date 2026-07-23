@@ -51,4 +51,11 @@ export const PARQUET_ERROR_CODES = {
   COVERAGE_RANGE_INVALID: 'E2316',
   /** The persisted coverage map disagrees with the cursor stored beside it. */
   STATE_COVERAGE_INVALID: 'E2317',
+  // E2318–E2319 retired, numbers left unassigned (ADR-4): they were dynamic-load / runtime
+  // engine-shape errors — engines statically import their libraries and `settings.engine` is
+  // compile-time typed. (The duckdb per-column-compression check moved out with its engine,
+  // see ADR-19; coverage naming makes zero-row segments legitimate, so no empty-segment code
+  // exists either.)
+  /** An engine's finished segment file failed the Parquet magic-bytes check at publication. */
+  SEGMENT_NOT_PARQUET: 'E2320',
 } as const
