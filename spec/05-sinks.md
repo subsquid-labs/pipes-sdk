@@ -90,8 +90,10 @@ tables are untouched (INV-35).
 **RP-42 — Delegated repair.** [MUST] Where the class delegates data repair to author
 code (class A recovery/rollback hooks), the sink invokes the hook with reason
 (`recovery` | `fork`) and the safe cursor before advancing past it. Intent: a class-A
-sink without a repair hook cannot meet REQ-3 — the hook is normatively required
-*(currently optional in one binding: silent divergence, GAP-3; ratification ADR-15/OQ-3)*.
+sink without a repair hook cannot meet REQ-3 — the hook is normatively required. The
+binding cannot supply it itself (schema-blind by design), so where it is omitted the
+sink makes the exposure loud rather than silent — startup warning + coded fork refusal
+*(the no-hook recovery window is warned, not repaired: an accepted deviation, ADR-15)*.
 
 **RP-43 — Portal-contract guard.** [MUST] If the canonical chain's maximum block is
 below the persisted cursor, the sink MUST refuse (coded portal-contract violation)

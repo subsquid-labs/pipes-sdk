@@ -29,4 +29,6 @@ export const CLICKHOUSE_ERROR_CODES = {
   ROLLBACK_MISSING_SIGN: 'E2005',
   /** `ensureRollbackIndex` was given a column name that is not a plain identifier. */
   INVALID_ROLLBACK_INDEX_COLUMN: 'E2006',
+  /** A chain fork arrived but no `onRollback` handler is configured to remove the orphaned rows. */
+  MISSING_ROLLBACK_ON_FORK: 'E2007',
 } as const

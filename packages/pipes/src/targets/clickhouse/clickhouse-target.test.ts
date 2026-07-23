@@ -2,7 +2,7 @@ import { createClient } from '@clickhouse/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { evmPortalStream } from '~/evm/index.js'
-import { MockPortal, MockResponse, blockDecoder, mockPortal } from '~/testing/index.js'
+import { MockPortal, MockResponse, blockDecoder, mockPortal, testLogger } from '~/testing/index.js'
 
 import { ClickhouseStore } from './clickhouse-store.js'
 import { clickhouseTarget } from './clickouse-target.js'
@@ -1103,5 +1103,84 @@ describe('Clickhouse state', () => {
         ]
       `)
     })
+  })
+})
+
+describe('clickhouseTarget missing-rollback diagnostic', () => {
+  // Enough of a client for write() to reach the end: the first cursor read reports a missing
+  // table, which getCursor answers by creating it and returning no cursor.
+  function stubClient() {
+    return {
+      connectionParams: { database: 'default' },
+      query: vi.fn().mockRejectedValue(Object.assign(new Error('no table'), { type: 'UNKNOWN_TABLE' })),
+      command: vi.fn().mockResolvedValue(undefined),
+      insert: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+    } as any
+  }
+
+  async function run({ finalized, onRollback }: { finalized: boolean; onRollback?: () => void }) {
+    const logger = testLogger()
+    const warn = vi.spyOn(logger, 'warn')
+
+    const target = clickhouseTarget<unknown>({ client: stubClient(), onData: async () => {}, onRollback })
+
+    await target.write({
+      id: 'test-pipe',
+      finalized,
+      logger,
+      read: async function* () {},
+    })
+
+    return warn.mock.calls.flat().join(' ')
+  }
+
+  it('warns and flags the fork risk on the hot stream when no rollback handler is configured', async () => {
+    const warning = await run({ finalized: false })
+    expect(warning).toContain('No onRollback handler is configured')
+    expect(warning).toContain('chain fork')
+  })
+
+  it('warns about the recovery window on a finalized stream too, but omits the fork note', async () => {
+    // The recovery crash window is stream-independent — an unclean restart re-delivers rows on a
+    // finalized stream as well. Only the fork half is hot-stream-specific.
+    const warning = await run({ finalized: true })
+    expect(warning).toContain('No onRollback handler is configured')
+    expect(warning).not.toContain('chain fork')
+  })
+
+  it('stays silent when a rollback handler is configured', async () => {
+    expect(await run({ finalized: false, onRollback: () => {} })).not.toContain('No onRollback handler is configured')
+  })
+
+  it('fails a fork with a coded error when no rollback handler is configured', async () => {
+    const target = clickhouseTarget<unknown>({ client: stubClient(), onData: async () => {} })
+
+    await expect(target.resolveFork?.([{ number: 10, hash: '0xa' }])).rejects.toMatchObject({
+      code: 'E2007',
+    })
+  })
+
+  it('does not preempt a fork with the coded error when a handler is present', async () => {
+    const onRollback = vi.fn()
+    // A handler is present, so resolveFork proceeds to resolve the fork cursor. With no stored
+    // rollback records it resolves to a dead-end (null) — not the E2007 refusal, and the handler
+    // is never reached. The point is only that E2007 is not thrown here.
+    const emptyRecordsClient = {
+      connectionParams: { database: 'default' },
+      query: vi.fn().mockResolvedValue({ stream: async function* () {} }),
+      command: vi.fn().mockResolvedValue(undefined),
+      insert: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+    } as any
+
+    const target = clickhouseTarget<unknown>({
+      client: emptyRecordsClient,
+      onData: async () => {},
+      onRollback,
+    })
+
+    await expect(target.resolveFork?.([{ number: 10, hash: '0xa' }])).resolves.toBeNull()
+    expect(onRollback).not.toHaveBeenCalled()
   })
 })

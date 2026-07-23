@@ -135,12 +135,12 @@ known-suspect in the current implementation (see gap register).
 | RP-1…RP-6 (write loop) | CT-1 | C | per-target state suites |
 | RP-21, RP-22, INV-4 (coverage) | CT-7 | C | parquet coverage-naming suites: sparse stretch, trailing empty unit, disjoint-range gap, resume mid-gap |
 | RP-30…RP-32 (keying, migration) | CT-8 | P ⚠ | happy path C; concurrent migration U (GAP-7) |
-| RP-42 (delegated repair) | CT-2 | U ⚠ | hook optional today (GAP-3) |
+| RP-42 (delegated repair) | CT-2 | U ⚠ | hook optional by design, absence made loud (ADR-15); no-hook recovery kill-point owed (GAP-14) |
 | RP-43 (contract guard) | CT-3 | P ⚠ | one binding only (GAP-9) |
 | CN-10 T atomicity | CT-2 | P ⚠ | live tx tests; kill-points U (GAP-14) |
 | CN-11 W protocol | CT-2 | P | unit/lifecycle C; integration gated off CI |
 | CN-12 K protocol | CT-2 | C | crash-safety + recovery suites; straddle refusal asserted (E2317) |
-| CN-13 A protocol | CT-2 | U ⚠ | crash window untested (GAP-3) |
+| CN-13 A protocol | CT-2 | U ⚠ | recovery/fork with a hook untested; no-hook window is an accepted deviation (ADR-15); kill-point owed (GAP-14) |
 | CN-34 (fork commit point) | CT-2 | U ⚠ | crash-during-fork untested; class A persists nothing at fork (GAP-21) |
 | CN-45 (cross-impl, clock indep.) | CT-5 | U ⚠ | single implementation; clock ordering in two bindings (GAP-10); cache codec undiscriminated (GAP-27) |
 | INV-2, INV-12 (floor) | CT-1/2 | C | adversarial regression/genesis tests |
@@ -161,14 +161,13 @@ known-suspect in the current implementation (see gap register).
 | IB-40…IB-46 observability | CT-5 | U ⚠ | consumed by dashboard, no golden scrapes (GAP-16) |
 | IB-50…IB-52 error registry | CT-5 | U ⚠ | no registry-sync test (GAP-13) |
 
-## Gap register (2026-07-20)
+## Gap register (2026-07-23)
 
 Priorities: P0 active production risk · P1 correctness hole, plausible trigger ·
 P2 bounded/rare · P3 polish. "First test" = cheapest failing-test-first entry point.
 
 | GAP | Statement | Violated | Pri | First test |
 |---|---|---|---|---|
-| GAP-3 | Class-A repair hook is optional; without it recovery and fork cleanup are silent no-ops while the cursor advances (silent divergence) | RP-42, CN-13, REQ-3 | P1 | crash between data append and cursor append, restart without hook; assert refusal or repair, not divergence (ADR-15) |
 | GAP-4 | Blank-pipe-id guard throws an uncoded error; the documented code exists but is dead | REQ-13, WP-3 | P3 | blank id + sink → assert the coded configuration error |
 | GAP-5 | Malformed NDJSON line vs incomplete line are not discriminated; a partial line can surface as a raw parse crash | WP-16, FM-11 | P2 | simulator splits a line across chunks (must continue) and sends one malformed line (must fail coded) |
 | GAP-6 | Fork below the finalized floor is an acknowledged open TODO; halt is provisional intent (OQ-2) | WP-44 | P2 | canonical chain entirely below floor → coded halt, state intact |
@@ -182,7 +181,7 @@ P2 bounded/rare · P3 polish. "First test" = cheapest failing-test-first entry p
 | GAP-14 | Crash-recovery kill-point coverage exists only for class K; classes T/W/A have no kill-point tests | INV-40…INV-42 | P1 | Phase-0 ledger mode first (an ordinal script cannot answer the post-restart re-request), then the kill-point harness at the T transaction boundary |
 | GAP-15 | Indistinguishable-output collision (duplicate event signature) only logs in the evm module and is entirely undetected in solana; later outputs silently miss records | WP-24 | P2 | two outputs, same signature → startup diagnostic asserted fatal (pending OQ-6) |
 | GAP-16 | Observability payloads are consumed by the dashboard but have no golden fixtures; shapes drift silently (a version-drift accommodation already exists in the dashboard) | IB-40…IB-46 | P3 | golden scrape of /stats, /metrics, preview against a scripted run |
-| GAP-20 | The orphan-data guard is table-wide where it must be key-scoped: the write-ahead binding (E2212) probes the tracked table with no key filter while reading its sync row by key, so a co-resident pipe's legitimate first run into a populated shared table is refused — one pipe's startup made dependent on another's data, blocking a configuration INV-35/RP-41 support. The other bindings run no guard at all and restart from scratch over genuinely orphan data | CN-44, INV-35, REQ-3 | P1 | second pipe id, first run into a table another pipe populates → assert start, not refusal; then on declared-exclusive tables delete cursor state and assert coded refusal per binding |
+| GAP-20 | The orphan-data guard is table-wide where it must be key-scoped: the write-ahead binding (E2212) probes the tracked table with no key filter while reading its sync row by key, so a co-resident pipe's legitimate first run into a populated shared table is refused — one pipe's startup made dependent on another's data, blocking a configuration INV-35/RP-41 support. The other bindings run no guard at all and restart from scratch over genuinely orphan data | CN-44, INV-35, REQ-3 | P2 | second pipe id, first run into a table another pipe populates → assert start, not refusal; then on declared-exclusive tables delete cursor state and assert coded refusal per binding |
 | GAP-21 | Append-lagged fork completion persists nothing (no rewound cursor row); a crash after resolveFork and before the next commit resumes from pre-fork state | CN-34 | P2 | kill between resolveFork and the next commit; assert recovered C = ancestor |
 | GAP-22 | A fork tears down and restarts the whole lifecycle (stop + start hooks, metrics server) per streaming segment — hooks fire per segment, not exactly once per run | WP-30, INV-17 | P2 | count start/stop hook invocations across one resolved fork; assert one each |
 | GAP-23 | Head-only (204) responses are dropped before the progress tracker (no per-signal OB-2 emission) and their finalized-head report is discarded — the floor stalls while idle at head, delaying hold-back release on quiet chains | WP-13, DEF-6 | P2 | serve 204 with a raised finalized header; assert floor advance + progress emission |
@@ -215,9 +214,9 @@ P2 bounded/rare · P3 polish. "First test" = cheapest failing-test-first entry p
   class (K — cheapest, file-based; the only crash imitation today is a pre-commit
   abort, one point of the CT-2 matrix). Exit: CT-1 green on the reference
   implementation for S1, ledger mode answering post-restart re-requests.
-- **Phase 1 — P1 gaps**: GAP-3 (needs ADR-15), GAP-11 (range anchors),
-  GAP-14 kill-point harness for class T. Exit: register updated, fixes landed or
-  accepted as documented deviations.
+- **Phase 1 — P1 gaps**: GAP-11 (range anchors), GAP-14 kill-point harness for class T
+  (and the class-A no-hook recovery window, now an accepted deviation under ADR-15). Exit:
+  register updated, fixes landed or accepted as documented deviations.
 - **Phase 2 — correctness core**: full CT-2 matrix all classes; CT-3 fork suite; CT-5
   format round-trips (this unblocks the second-language implementation). Exit: matrix
   rows for INV/CN/WP ≥ P everywhere, C on the fork/recovery core.

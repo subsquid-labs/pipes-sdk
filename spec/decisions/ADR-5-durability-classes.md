@@ -21,5 +21,5 @@ guarantee: effective exactly-once after recovery (REQ-3).
 
 Each store gets the strongest protocol it supports; conformance tests are class-
 parameterized (CT-2 kill-point matrix per class). Cost: four recovery paths to verify
-instead of one, and class A delegates repair to author code — the weakest link
-(GAP-3, ADR-15). Shapes CN-10…CN-14, 05, 06.
+instead of one, and class A delegates repair to author code — the weakest link, its
+absence made loud (ADR-15). Shapes CN-10…CN-14, 05, 06.

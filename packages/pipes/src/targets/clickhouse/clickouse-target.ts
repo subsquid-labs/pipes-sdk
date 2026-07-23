@@ -4,6 +4,7 @@ import { BlockCursor, HookContext, Logger, createTarget } from '~/core/index.js'
 
 import { ClickhouseState } from './clickhouse-state.js'
 import { ClickhouseStore } from './clickhouse-store.js'
+import { CLICKHOUSE_ERROR_CODES, ClickhouseTargetError } from './errors.js'
 
 /**
  * Configuration options for ClickhouseState.
@@ -79,11 +80,24 @@ export function clickhouseTarget<T>({
   const state = new ClickhouseState(store, settings)
 
   return createTarget<T>({
-    write: async ({ read, logger, id }) => {
+    write: async ({ read, logger, id, finalized }) => {
       // Key the cursor by the pipe's source id (unless an explicit settings.id was given), so
       // progress is isolated per pipe. Must run before getCursor so read and write agree.
       state.bindCursorKey(id, logger)
       store.bindLogger(logger)
+
+      // The recovery crash window applies to any restart, finalized stream included — the
+      // data-then-cursor write is non-atomic regardless of finality. The fork half is hot-only.
+      if (!onRollback) {
+        const forkNote = finalized
+          ? ''
+          : ' On the hot stream a chain fork will be refused (E2007) rather than rolled back.'
+        logger.warn(
+          'No onRollback handler is configured. Rows written above the saved cursor are not removed ' +
+            'on recovery, so an unclean restart re-delivers them as duplicates.' +
+            forkNote,
+        )
+      }
 
       await onStart?.({ store, logger })
       const cursor = await state.getCursor()
@@ -120,10 +134,22 @@ export function clickhouseTarget<T>({
       await store.close()
     },
     resolveFork: async (canonicalBlocks) => {
+      // A fork requires removing rows written above the fork point. Without a handler that
+      // cleanup cannot happen, so returning a rewound cursor would strand diverged data —
+      // refuse loudly instead. The startup warning announced this; here it becomes fatal.
+      if (!onRollback) {
+        throw new ClickhouseTargetError(
+          CLICKHOUSE_ERROR_CODES.MISSING_ROLLBACK_ON_FORK,
+          'A chain fork was detected, but no onRollback handler is configured to remove the rows ' +
+            'written above the fork point. Configure onRollback on the ClickHouse target to make it ' +
+            'fork-safe.',
+        )
+      }
+
       const cursor = await state.fork(canonicalBlocks)
       if (!cursor) return cursor
 
-      await onRollback?.({
+      await onRollback({
         reason: 'fork',
         store,
         safeCursor: cursor,

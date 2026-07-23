@@ -76,7 +76,13 @@ Collapsing-family engines → net-cancel rows computed via `sum(sign)` grouping 
 insert-dedup and pre-merge-collapse disabled on those inserts); other engines →
 lightweight DELETE (materialized views keep rolled-back rows — warned);
 `Distributed` engines → refused (coded). A minmax skip index on the block-number
-column is auto-created for rollback pruning.
+column is auto-created for rollback pruning. Repair (recovery + fork) is delegated to
+an author `onRollback` handler (RP-42; the binding is schema-blind and cannot enumerate
+the tables to clean — ADR-15). When it is absent, the binding logs a startup warning
+(the recovery crash window applies to any restart, finalized stream included); and on the
+hot stream a fork that actually arrives is refused (coded, E2007) rather than silently
+returning an un-rolled-back cursor *(the no-hook recovery window is warned, not repaired —
+an accepted deviation, ADR-15)*.
 
 **IB-21 — Postgres binding (class T).** Sync table (default `public.sync`):
 `id text, current_number numeric, current_hash text, "current_timestamp" timestamptz,
@@ -210,7 +216,7 @@ consumers MUST NOT read it as a block number.
 |---|---|---|
 | E0xxx | pipe configuration | E0001 blank/default pipe id *(currently dead — GAP-4)*, E0002 invalid range/date, E0003 unusable instruction discriminator set (mixed widths across the decoder, shared discriminator, or an instruction with none or several) |
 | E1xxx | fork handling | E1001 sink lacks fork support, E1002 empty canonical chain, E1003 ancestor unresolvable, E1004 portal contract violation (canonical below cursor) |
-| E20xx | ClickHouse binding | E2001–E2006 (retention, table name, distributed-rollback, collapse-column, missing sign, rollback-index) |
+| E20xx | ClickHouse binding | E2001–E2007 (retention, table name, distributed-rollback, collapse-column, missing sign, rollback-index, fork-without-rollback-handler) |
 | E21xx | Postgres binding | E2101–E2106 (client, config, advisory lock, untracked table, missing PK, FK cycle) |
 | E22xx | BigQuery binding | E2201–E2213 (schema/partition guards, orphan data E2212, append rejection E2213) |
 | E23xx | Parquet binding | E2301–E2317 and E2320 in use (schema/config; file collision E2309, state corrupt E2310, recovery delete failure E2314, nested-schema E2315; coverage guards E2316 invalid range, E2317 state/data disagreement; engine-output verification E2320 non-Parquet segment refused). E2318–E2319 retired, unassigned |
