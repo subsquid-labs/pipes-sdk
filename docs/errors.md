@@ -195,6 +195,18 @@ The column passed to `ensureRollbackIndex` is not a plain identifier.
 
 **Fix** — pass a plain identifier (letters, digits, underscores; no spaces or expressions).
 
+### E2007 · Chain fork with no rollback handler
+
+A chain fork was detected, but the ClickHouse target has no `onRollback` handler, so the rows
+written above the fork point cannot be removed. Returning a rewound cursor without removing them
+would leave diverged data, so the target refuses instead. On the hot stream a startup warning
+announces this risk before a fork ever arrives.
+
+**Fix** — configure `onRollback` on the ClickHouse target. The typical implementation calls
+`store.removeAllRows` with `where: 'block_number > {latest:UInt32}'` and
+`params: { latest: safeCursor.number }`. A pipe reading `/finalized-stream` never forks and does
+not need one.
+
 ---
 
 ## Postgres (Drizzle) target

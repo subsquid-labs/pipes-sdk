@@ -451,6 +451,7 @@ export class PortalStream<Q extends QueryBuilder<any>, T = any> {
 
     return target.write({
       id: this.#id,
+      finalized: this.#portal.finalized,
       logger: this.#logger,
       read: async function* (state?: TargetState, options?: ReadOptions) {
         await self.configure()

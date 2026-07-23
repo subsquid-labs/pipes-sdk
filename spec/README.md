@@ -41,7 +41,7 @@ lives in [13-conformance-tdd.md](13-conformance-tdd.md).
 
 | Binding | Durability class | State format | Fork mechanics | Sink-specific decisions |
 |---|---|---|---|---|
-| ClickHouse | [A — append-lagged](06-consistency-durability.md#durability-classes-adr-5) | [IB-20](14-interface-binding.md#persisted-state-formats) | [CN-33](06-consistency-durability.md#fork-mechanics-per-class) | [ADR-7 — sign-netting rollback](decisions/ADR-7-clickhouse-sign-netting-rollback.md) · [ADR-15 — mandatory repair hook](decisions/ADR-15-mandatory-repair-hook.md) *(proposed)* |
+| ClickHouse | [A — append-lagged](06-consistency-durability.md#durability-classes-adr-5) | [IB-20](14-interface-binding.md#persisted-state-formats) | [CN-33](06-consistency-durability.md#fork-mechanics-per-class) | [ADR-7 — sign-netting rollback](decisions/ADR-7-clickhouse-sign-netting-rollback.md) · [ADR-15 — class-A repair ownership](decisions/ADR-15-mandatory-repair-hook.md) |
 | Postgres | [T — transactional](06-consistency-durability.md#durability-classes-adr-5) | [IB-21](14-interface-binding.md#persisted-state-formats) | [CN-30](06-consistency-durability.md#fork-mechanics-per-class) | — |
 | Parquet | [K — checkpointed-immutable](06-consistency-durability.md#durability-classes-adr-5) | [IB-22](14-interface-binding.md#persisted-state-formats) | [CN-32](06-consistency-durability.md#fork-mechanics-per-class) | [ADR-6 — coverage-window naming](decisions/ADR-6-coverage-window-naming.md) |
 | BigQuery | [W — write-ahead](06-consistency-durability.md#durability-classes-adr-5) | [IB-23](14-interface-binding.md#persisted-state-formats) | [CN-31](06-consistency-durability.md#fork-mechanics-per-class) | — |

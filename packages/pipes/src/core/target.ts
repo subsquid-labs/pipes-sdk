@@ -40,6 +40,12 @@ export type Target<In> = {
      * supplies it.
      */
     id?: string
+    /**
+     * True when the source reads `/finalized-stream`: no fork can arrive, so a target may
+     * skip diagnostics that only matter for reorg handling. Says nothing about the crash
+     * window — data written above the cursor survives a restart on either stream.
+     */
+    finalized?: boolean
     read: (state?: TargetState, options?: ReadOptions) => AsyncIterableIterator<PortalBatch<In>>
     logger: Logger
   }) => Promise<void>

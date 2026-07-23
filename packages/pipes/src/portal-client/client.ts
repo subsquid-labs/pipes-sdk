@@ -137,6 +137,11 @@ export class PortalClient {
     }
   }
 
+  /** Whether this client reads `/finalized-stream`, i.e. never sees a fork. */
+  get finalized(): boolean {
+    return this.#options.finalized
+  }
+
   getUrl() {
     return this.#url.toString()
   }

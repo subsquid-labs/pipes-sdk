@@ -36,7 +36,8 @@ record is appended **after**, non-atomically. Crash window: data committed above
 cursor. Recovery: on every resume the sink invokes the repair hook (`recovery`, safe
 cursor) which MUST remove rows above the cursor before streaming resumes. Delivery:
 at-least-once at the storage layer, effectively exactly-once **iff** the repair
-obligation (RP-42) is met. *(Hook currently optional in the binding — GAP-3.)*
+obligation (RP-42) is met. *(Hook optional by design — the binding is schema-blind; its
+absence is warned, not repaired: an accepted deviation, ADR-15.)*
 
 **CN-14 — Class ∅ (ephemeral).** No persistence; every run is a cold start; only
 finalized rows are emitted to author code. Exists as the executable minimal model of

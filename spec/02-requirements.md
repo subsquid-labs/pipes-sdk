@@ -143,7 +143,6 @@ Deliberately left open — conformance tests MUST NOT pin these:
 | # | Question | Owner |
 |---|---|---|
 | OQ-2 | Defined behavior for a fork reaching below the finalized floor (currently a coded fatal; is halt the intent?) — GAP-6. | SDK team |
-| OQ-3 | Are append-lagged sinks (CN-13) allowed to keep the repair hook optional, or does REQ-3 force it mandatory? (GAP-3, ADR-15 proposed). | SDK team |
 | OQ-4 | SLO targets for SLI-1…SLI-7 are unratified (⚠ in 15-parameters). | SDK team |
 | OQ-5 | Cache growth policy: unbounded append-only accepted, or add eviction/versioning? (HZ-6). | SDK team |
 | OQ-6 | Must a duplicate output signature be a fatal startup error, or stay a logged report? (WP-24, GAP-15). | SDK team |
