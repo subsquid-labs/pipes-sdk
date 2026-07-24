@@ -55,7 +55,7 @@ export type BlockHeaderFields = {
   gasUsed: bigint
   difficulty: bigint
   totalDifficulty?: bigint
-  baseFeePerGas: bigint
+  baseFeePerGas?: bigint
   blobGasUsed: bigint
   excessBlobGas: bigint
   l1BlockNumber?: number
@@ -95,6 +95,8 @@ export type TransactionFields = {
   status: number
   logsBloom?: Hex
   blobVersionedHashes?: Hex[]
+  blobGasUsed?: bigint
+  blobGasPrice?: bigint
   accessList?: {
     address: Hex
     storageKeys: Hex[]
@@ -443,7 +445,7 @@ const BlockHeaderShape: ObjectValidatorShape<BlockHeaderFields> = {
   gasUsed: QTY,
   difficulty: QTY,
   totalDifficulty: option(QTY),
-  baseFeePerGas: QTY,
+  baseFeePerGas: option(QTY),
   blobGasUsed: QTY,
   excessBlobGas: QTY,
   l1BlockNumber: option(NAT),
@@ -487,6 +489,8 @@ const TransactionShape: ObjectValidatorShape<TransactionFields> = {
   status: NAT,
   logsBloom: option(BYTES),
   blobVersionedHashes: option(array(BYTES)),
+  blobGasUsed: option(QTY),
+  blobGasPrice: option(QTY),
   accessList: option(array(object({ address: BYTES, storageKeys: array(BYTES) }))),
   l1Fee: option(QTY),
   l1FeeScalar: option(NAT),
