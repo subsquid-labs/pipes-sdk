@@ -230,22 +230,22 @@ describe('BlockHeaderFields optional pre-fork fields', () => {
   }
 
   it('accepts a header without baseFeePerGas (pre-London) when the field is selected', () => {
-    expect(castHeader({ baseFeePerGas: true }, {}).baseFeePerGas).toBeUndefined()
+    expect(castHeader({ baseFeePerGas: true }, {})['baseFeePerGas']).toBeUndefined()
   })
 
   it('casts baseFeePerGas hex QTY to bigint when present', () => {
-    expect(castHeader({ baseFeePerGas: true }, { baseFeePerGas: '0x7' }).baseFeePerGas).toBe(7n)
+    expect(castHeader({ baseFeePerGas: true }, { baseFeePerGas: '0x7' })['baseFeePerGas']).toBe(7n)
   })
 
   it('accepts a header without blobGasUsed/excessBlobGas (pre-Cancun) when selected', () => {
     const h = castHeader({ blobGasUsed: true, excessBlobGas: true }, {})
-    expect(h.blobGasUsed).toBeUndefined()
-    expect(h.excessBlobGas).toBeUndefined()
+    expect(h['blobGasUsed']).toBeUndefined()
+    expect(h['excessBlobGas']).toBeUndefined()
   })
 
   it('casts blobGasUsed/excessBlobGas hex QTY to bigint when present', () => {
     const h = castHeader({ blobGasUsed: true, excessBlobGas: true }, { blobGasUsed: '0x10', excessBlobGas: '0x20' })
-    expect(h.blobGasUsed).toBe(16n)
-    expect(h.excessBlobGas).toBe(32n)
+    expect(h['blobGasUsed']).toBe(16n)
+    expect(h['excessBlobGas']).toBe(32n)
   })
 })
