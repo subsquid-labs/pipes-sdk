@@ -132,6 +132,78 @@ describe('TraceSuicideAction.refundAddress validation', () => {
   })
 })
 
+describe('Trace result gasUsed validation (null on failed create/call frames)', () => {
+  function castCreateResult(gasUsed: unknown) {
+    const schema = getBlockSchema({
+      trace: {
+        type: true,
+        transactionIndex: true,
+        traceAddress: true,
+        subtraces: true,
+        error: true,
+        createResultGasUsed: true,
+        createResultCode: true,
+        createResultAddress: true,
+      },
+    })
+    const block = {
+      header: {},
+      traces: [
+        {
+          type: 'create',
+          transactionIndex: 0,
+          traceAddress: [],
+          subtraces: 0,
+          error: 'execution reverted',
+          result: { gasUsed, code: null, address: null },
+        },
+      ],
+    }
+    return cast(schema, block).traces[0] as { result: { gasUsed: unknown } }
+  }
+
+  function castCallResult(gasUsed: unknown) {
+    const schema = getBlockSchema({
+      trace: {
+        type: true,
+        transactionIndex: true,
+        traceAddress: true,
+        subtraces: true,
+        error: true,
+        callResultGasUsed: true,
+        callResultOutput: true,
+      },
+    })
+    const block = {
+      header: {},
+      traces: [
+        {
+          type: 'call',
+          transactionIndex: 0,
+          traceAddress: [],
+          subtraces: 0,
+          error: 'execution reverted',
+          result: { gasUsed, output: null },
+        },
+      ],
+    }
+    return cast(schema, block).traces[0] as { result: { gasUsed: unknown } }
+  }
+
+  it('accepts null gasUsed on a create result', () => {
+    expect(castCreateResult(null).result.gasUsed).toBeNull()
+  })
+
+  it('accepts null gasUsed on a call result', () => {
+    expect(castCallResult(null).result.gasUsed).toBeNull()
+  })
+
+  it('still parses a present gasUsed as a bigint', () => {
+    expect(castCreateResult('0x5208').result.gasUsed).toBe(21000n)
+    expect(castCallResult('0x5208').result.gasUsed).toBe(21000n)
+  })
+})
+
 function castLogsBloom(logsBloom: unknown) {
   const schema = getBlockSchema({ transaction: { logsBloom: true } })
   return cast(schema, { header: {}, transactions: [{ logsBloom }] }).transactions[0].logsBloom

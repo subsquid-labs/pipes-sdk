@@ -141,7 +141,8 @@ export type TraceCreateActionFields = {
 }
 
 export type TraceCreateResultFields = {
-  gasUsed: bigint
+  /** `null` on a failed/reverted CREATE — the frame has an error and no gas is attributed to its result. */
+  gasUsed: bigint | null
   code?: Hex
   /** `null` on a reverted CREATE — no contract was deployed. */
   address: Hex | null
@@ -162,7 +163,8 @@ export type TraceCallActionFields = {
 }
 
 export type TraceCallResultFields = {
-  gasUsed: bigint
+  /** `null` on a failed/reverted CALL — the frame has an error and no gas is attributed to its result. */
+  gasUsed: bigint | null
   output?: Hex
 }
 
@@ -610,7 +612,7 @@ const TraceCreateActionShape: ObjectValidatorShape<TraceCreateActionFields> = {
 }
 
 const TraceCreateResultShape: ObjectValidatorShape<TraceCreateResultFields> = {
-  gasUsed: QTY,
+  gasUsed: nullable(QTY),
   code: option(BYTES),
   address: nullable(BYTES),
 }
@@ -626,7 +628,7 @@ const TraceCallActionShape: ObjectValidatorShape<TraceCallActionFields> = {
 }
 
 const TraceCallResultShape: ObjectValidatorShape<TraceCallResultFields> = {
-  gasUsed: QTY,
+  gasUsed: nullable(QTY),
   output: option(BYTES),
 }
 
