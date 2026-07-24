@@ -56,8 +56,8 @@ export type BlockHeaderFields = {
   difficulty: bigint
   totalDifficulty?: bigint
   baseFeePerGas?: bigint
-  blobGasUsed: bigint
-  excessBlobGas: bigint
+  blobGasUsed?: bigint
+  excessBlobGas?: bigint
   l1BlockNumber?: number
   uncles?: Hex[]
   withdrawalsRoot?: Hex
@@ -446,8 +446,8 @@ const BlockHeaderShape: ObjectValidatorShape<BlockHeaderFields> = {
   difficulty: QTY,
   totalDifficulty: option(QTY),
   baseFeePerGas: option(QTY),
-  blobGasUsed: QTY,
-  excessBlobGas: QTY,
+  blobGasUsed: option(QTY),
+  excessBlobGas: option(QTY),
   l1BlockNumber: option(NAT),
   uncles: option(array(BYTES)),
   withdrawalsRoot: option(BYTES),
